@@ -1,0 +1,11 @@
+[gd_resource type="StandardMaterial3D" format=3 uid="uid://blyd0ek7wq44w"]
+
+[ext_resource type="Texture2D" path="res://assets/models/rocks/rock_07/textures/rock_07_diff_2k.jpg" id="1_6xg6g"]
+[ext_resource type="Texture2D" path="res://assets/models/rocks/rock_07/textures/rock_07_nor_gl_2k.exr" id="2_nor2k"]
+[ext_resource type="Texture2D" path="res://assets/models/rocks/rock_07/textures/rock_07_rough_2k.exr" id="3_rgh2k"]
+
+[resource]
+albedo_texture = ExtResource("1_6xg6g")
+normal_enabled = true
+normal_texture = ExtResource("2_nor2k")
+roughness_texture = ExtResource("3_rgh2k")

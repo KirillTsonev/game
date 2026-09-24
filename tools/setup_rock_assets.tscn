@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://yigyu64ym6ak"]
+
+[ext_resource type="Script" uid="uid://dutq3yt1nyu5i" path="res://tools/setup_rock_assets.gd" id="1_o5g8w"]
+
+[node name="SetupRockAssets" type="Node" unique_id=1941248840]
+script = ExtResource("1_o5g8w")

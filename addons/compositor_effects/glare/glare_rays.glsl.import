@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://bycmknrka3icm"
+path="res://.godot/imported/glare_rays.glsl-b92ef9a1673f3f9730db3193a2102b87.res"
+
+[deps]
+
+source_file="res://addons/compositor_effects/glare/glare_rays.glsl"
+dest_files=["res://.godot/imported/glare_rays.glsl-b92ef9a1673f3f9730db3193a2102b87.res"]
+
+[params]
+

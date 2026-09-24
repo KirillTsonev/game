@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://clurxhrjlq4o3"]
+
+[ext_resource type="Script" uid="uid://dabr12twbycbf" path="res://tools/setup_tree_assets.gd" id="1_m34ch"]
+
+[node name="Node" type="Node" unique_id=836974997]
+script = ExtResource("1_m34ch")

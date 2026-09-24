@@ -1,0 +1,14 @@
+# Godot 4+ editor cache — regenerated automatically, never version this
+.godot/
+
+# godot-mcp addon's own screenshot/scratch cache (not project content)
+addons/godot_mcp
+
+# OS cruft
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Common export output (uncomment if you export builds into the project)
+# /builds/
+# /export/

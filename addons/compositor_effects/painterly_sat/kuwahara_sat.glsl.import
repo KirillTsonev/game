@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://78mihk6qev4y"
+path="res://.godot/imported/kuwahara_sat.glsl-0ece9232eb24d64ba7376afbaa34b3ac.res"
+
+[deps]
+
+source_file="res://addons/compositor_effects/painterly_sat/kuwahara_sat.glsl"
+dest_files=["res://.godot/imported/kuwahara_sat.glsl-0ece9232eb24d64ba7376afbaa34b3ac.res"]
+
+[params]
+

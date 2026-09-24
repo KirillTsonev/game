@@ -1,0 +1,15 @@
+[gd_resource type="StandardMaterial3D" format=3 uid="uid://clge6ytb44t6p"]
+
+[ext_resource type="Texture2D" path="res://assets/models/rocks/stone_01/textures/stone_01_diff_2k.jpg" id="1_3b2gm"]
+[ext_resource type="Texture2D" path="res://assets/models/rocks/stone_01/textures/stone_01_nor_gl_2k.exr" id="2_nor2k"]
+[ext_resource type="Texture2D" path="res://assets/models/rocks/stone_01/textures/stone_01_rough_2k.exr" id="3_rgh2k"]
+[ext_resource type="Texture2D" path="res://assets/models/rocks/stone_01/textures/stone_01_mask_2k.png" id="4_ao2k"]
+
+[resource]
+albedo_texture = ExtResource("1_3b2gm")
+normal_enabled = true
+normal_texture = ExtResource("2_nor2k")
+roughness_texture = ExtResource("3_rgh2k")
+ao_enabled = true
+ao_texture = ExtResource("4_ao2k")
+ao_texture_channel = 0

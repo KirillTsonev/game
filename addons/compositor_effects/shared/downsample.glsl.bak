@@ -1,0 +1,26 @@
+#[compute]
+#version 450
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(rgba16f, set = 0, binding = 0) uniform restrict readonly image2D source_img;
+layout(rgba16f, set = 1, binding = 0) uniform restrict writeonly image2D dest_img;
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 dest_size = imageSize(dest_img);
+    if (coord.x >= dest_size.x || coord.y >= dest_size.y) return;
+
+    ivec2 src_size = imageSize(source_img);
+    ivec2 base = coord * 2;
+
+    ivec2 c00 = min(base, src_size - 1);
+    ivec2 c10 = min(base + ivec2(1, 0), src_size - 1);
+    ivec2 c01 = min(base + ivec2(0, 1), src_size - 1);
+    ivec2 c11 = min(base + ivec2(1, 1), src_size - 1);
+
+    vec4 sum = imageLoad(source_img, c00) + imageLoad(source_img, c10)
+             + imageLoad(source_img, c01) + imageLoad(source_img, c11);
+
+    imageStore(dest_img, coord, sum * 0.25);
+}

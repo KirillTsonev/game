@@ -1,0 +1,8 @@
+[gd_scene format=3 uid="uid://d21adhtxo6t83"]
+
+[ext_resource type="ArrayMesh" uid="uid://dkljpjhkf6t4w" path="res://assets/models/candidates/vegetation/trees/PackPineC2.res" id="1_xh4r7"]
+
+[node name="PackPineC2" type="Node3D" unique_id=1968920670]
+
+[node name="LOD0" type="MeshInstance3D" parent="." unique_id=57942290]
+mesh = ExtResource("1_xh4r7")

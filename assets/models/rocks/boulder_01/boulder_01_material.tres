@@ -1,0 +1,11 @@
+[gd_resource type="StandardMaterial3D" format=3 uid="uid://2qnbj31li50a"]
+
+[ext_resource type="Texture2D" uid="uid://c11a5rajnatdl" path="res://assets/models/rocks/boulder_01/textures/boulder_01_diff_2k.jpg" id="1_1f5gy"]
+[ext_resource type="Texture2D" uid="uid://bob244d616ivk" path="res://assets/models/rocks/boulder_01/textures/boulder_01_nor_gl_2k.exr" id="2_nor2k"]
+[ext_resource type="Texture2D" uid="uid://bix7v3bswke1h" path="res://assets/models/rocks/boulder_01/textures/boulder_01_rough_2k.exr" id="3_rgh2k"]
+
+[resource]
+albedo_texture = ExtResource("1_1f5gy")
+roughness_texture = ExtResource("3_rgh2k")
+normal_enabled = true
+normal_texture = ExtResource("2_nor2k")

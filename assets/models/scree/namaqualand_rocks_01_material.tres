@@ -1,0 +1,8 @@
+[gd_resource type="StandardMaterial3D" format=3 uid="uid://cmpksmc8qtaqw"]
+
+[ext_resource type="Texture2D" uid="uid://n038mcxavx0k" path="res://assets/models/scree/textures/namaqualand_rocks_01_diff_2k.jpg" id="1_i7fbw"]
+
+[resource]
+albedo_texture = ExtResource("1_i7fbw")
+metallic_specular = 0.3
+normal_enabled = true

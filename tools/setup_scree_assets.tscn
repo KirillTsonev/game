@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://dc1adpgxclra0"]
+
+[ext_resource type="Script" uid="uid://c15glus58sqfv" path="res://tools/setup_scree_assets.gd" id="1_w6ngi"]
+
+[node name="SetupScreeAssets" type="Node" unique_id=2131700379]
+script = ExtResource("1_w6ngi")

@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://08grc2qs4fed"
+path="res://.godot/imported/prefix_sum_h.glsl-21686272bac1c424d5e21b55c14313c7.res"
+
+[deps]
+
+source_file="res://addons/compositor_effects/painterly_sat/prefix_sum_h.glsl"
+dest_files=["res://.godot/imported/prefix_sum_h.glsl-21686272bac1c424d5e21b55c14313c7.res"]
+
+[params]
+

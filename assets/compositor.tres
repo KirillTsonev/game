@@ -1,0 +1,95 @@
+[gd_resource type="Compositor" format=3 uid="uid://ba4aobty4rx34"]
+
+[ext_resource type="Script" uid="uid://dk77vawewq31r" path="res://addons/compositor_effects/noise/post_process_noise.gd" id="1_6ernk"]
+[ext_resource type="Script" uid="uid://crqq888jou23a" path="res://addons/compositor_effects/radial_blur/post_process_radial_blur.gd" id="2_wka8c"]
+[ext_resource type="Script" uid="uid://ci84hj0vexfsg" path="res://addons/compositor_effects/unreal_bloom/post_process_unreal_bloom.gd" id="3_sbucg"]
+[ext_resource type="Script" uid="uid://n5qw85m6y0x4" path="res://addons/compositor_effects/glare/post_process_glare.gd" id="4_6je8x"]
+[ext_resource type="Script" uid="uid://dhn1jpwhyc0f4" path="res://addons/compositor_effects/gaussian_blur/post_process_gaussian_blur.gd" id="6_gaus"]
+[ext_resource type="Script" uid="uid://dj82xf0p8oxi7" path="res://addons/compositor_effects/painterly_sat/post_process_painterly_sat.gd" id="7_sat"]
+
+[sub_resource type="CompositorEffect" id="CompositorEffect_sat"]
+resource_local_to_scene = false
+resource_name = ""
+enabled = true
+effect_callback_type = 4
+needs_motion_vectors = false
+needs_normal_roughness = false
+script = ExtResource("7_sat")
+intensity = 0.75
+edge_sharpness = 0.4
+
+[sub_resource type="CompositorEffect" id="CompositorEffect_85g3d"]
+resource_local_to_scene = false
+resource_name = ""
+enabled = true
+effect_callback_type = 4
+needs_motion_vectors = false
+needs_normal_roughness = false
+script = ExtResource("2_wka8c")
+blur_strength = 0.05
+blur_power = 1.89
+metadata/_custom_type_script = "uid://crqq888jou23a"
+
+[sub_resource type="CompositorEffect" id="CompositorEffect_gaus"]
+resource_local_to_scene = false
+resource_name = ""
+enabled = true
+effect_callback_type = 4
+needs_motion_vectors = false
+needs_normal_roughness = false
+script = ExtResource("6_gaus")
+blur_radius = 1.0
+strength = 0.2
+sigma = 10.0
+gamma_correct = true
+
+[sub_resource type="CompositorEffect" id="CompositorEffect_6ernk"]
+resource_local_to_scene = false
+resource_name = ""
+enabled = true
+effect_callback_type = 4
+needs_motion_vectors = false
+needs_normal_roughness = false
+script = ExtResource("1_6ernk")
+strength = 0.175
+chromaticity = 1.0
+blend_mode = 1
+shadow_noise = 1.0
+midtone_noise = 2.0
+highlight_noise = 3.0
+grain_size = 1.8
+response_curve = 2
+metadata/_custom_type_script = "uid://dk77vawewq31r"
+
+[sub_resource type="CompositorEffect" id="CompositorEffect_eb6dy"]
+resource_local_to_scene = false
+resource_name = ""
+enabled = true
+effect_callback_type = 4
+needs_motion_vectors = false
+needs_normal_roughness = false
+script = ExtResource("3_sbucg")
+intensity = 0.4
+threshold = 0.6
+sky_occlusion = 1.0
+metadata/_custom_type_script = "uid://ci84hj0vexfsg"
+
+[sub_resource type="CompositorEffect" id="CompositorEffect_sbucg"]
+resource_local_to_scene = false
+resource_name = ""
+enabled = false
+effect_callback_type = 4
+needs_motion_vectors = false
+needs_normal_roughness = false
+script = ExtResource("4_6je8x")
+intensity = 0.1
+glare_size = 100.0
+rotation_degrees = 45.0
+samples_per_arm = 8
+falloff_curve = 3.6
+asymmetry = 0.26
+chroma_shift = 0.03
+metadata/_custom_type_script = "uid://n5qw85m6y0x4"
+
+[resource]
+compositor_effects = Array[CompositorEffect]([SubResource("CompositorEffect_sat"), SubResource("CompositorEffect_85g3d"), SubResource("CompositorEffect_gaus"), SubResource("CompositorEffect_6ernk"), SubResource("CompositorEffect_eb6dy"), SubResource("CompositorEffect_sbucg")])

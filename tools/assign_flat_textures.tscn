@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://cd8myelmpwnvb"]
+
+[ext_resource type="Script" uid="uid://bvv44w05b88m" path="res://tools/assign_flat_textures.gd" id="1_87ixw"]
+
+[node name="AssignFlatTextures" type="Node" unique_id=335310919]
+script = ExtResource("1_87ixw")

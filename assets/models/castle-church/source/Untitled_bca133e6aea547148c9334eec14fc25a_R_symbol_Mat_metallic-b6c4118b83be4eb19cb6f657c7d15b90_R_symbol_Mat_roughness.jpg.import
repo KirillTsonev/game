@@ -1,0 +1,44 @@
+[remap]
+
+importer="texture"
+type="CompressedTexture2D"
+uid="uid://dm7xdwx7mfeee"
+path.s3tc="res://.godot/imported/Untitled_bca133e6aea547148c9334eec14fc25a_R_symbol_Mat_metallic-b6c4118b83be4eb19cb6f657c7d15b90_R_symbol_Mat_roughness.jpg-071ddfe5dbaf563b5605d1c45e3ca678.s3tc.ctex"
+metadata={
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
+}
+generator_parameters={
+"md5": "29c5b509c341cba11c870c51397b7359"
+}
+
+[deps]
+
+source_file="res://assets/models/castle-church/source/Untitled_bca133e6aea547148c9334eec14fc25a_R_symbol_Mat_metallic-b6c4118b83be4eb19cb6f657c7d15b90_R_symbol_Mat_roughness.jpg"
+dest_files=["res://.godot/imported/Untitled_bca133e6aea547148c9334eec14fc25a_R_symbol_Mat_metallic-b6c4118b83be4eb19cb6f657c7d15b90_R_symbol_Mat_roughness.jpg-071ddfe5dbaf563b5605d1c45e3ca678.s3tc.ctex"]
+
+[params]
+
+compress/mode=2
+compress/high_quality=false
+compress/lossy_quality=0.7
+compress/uastc_level=0
+compress/rdo_quality_loss=0.0
+compress/hdr_compression=1
+compress/normal_map=0
+compress/channel_pack=0
+mipmaps/generate=true
+mipmaps/limit=-1
+roughness/mode=0
+roughness/src_normal=""
+process/channel_remap/red=0
+process/channel_remap/green=1
+process/channel_remap/blue=2
+process/channel_remap/alpha=3
+process/fix_alpha_border=true
+process/premult_alpha=false
+process/normal_map_invert_y=false
+process/hdr_as_srgb=false
+process/hdr_clamp_exposure=false
+process/size_limit=0
+detect_3d/compress_to=0
