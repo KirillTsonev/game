@@ -753,7 +753,7 @@ automatically) -- a local copy also lives at
 
 ## Cliff/outcrop collision -- current runtime setup, and a deferred alternative (2026-09-21)
 
-- Current setup: `_add_cliff_collision_recursive` in `terrain_gen.gd`, used by BOTH cliff
+- Current setup: `add_cliff_collision_recursive` in `scripts/terrain/cliff_instancer.gd`, used by BOTH cliff
   dressing and the rock outcrops. The cliff GLBs ship their own LOD chain as sibling
   `MeshInstance3D`s (`<name>_LOD0` .. `_LOD3`, each ~half the triangles of the previous).
   Collision is built for ONE level per chain only (`CLIFF_COLLISION_LOD`, default 2, used
@@ -780,3 +780,17 @@ automatically) -- a local copy also lives at
     load in ~0.03s, and the physics engine's registration cost happens either way.
   - If revisited: set up ONE GLB first, verify in a run, then do the rest, then strip the
     runtime collision code for those models.
+
+## Terrain generation code layout (since 2026-09-25)
+
+`scripts/terrain_gen.gd` (the WorldGenerator node) is only the orchestrator; every system is a
+static-only module under `scripts/terrain/` -- see the table in terrain_gen.gd's header. Older
+notes in this file that say "in `terrain_gen.gd`" refer to code that now lives in those modules,
+and functions called across modules lost their leading underscore
+(e.g. `_dress_cliff_faces` -> `CliffInstancer.dress_cliff_faces`).
+- New system: new file in `scripts/terrain/` with `class_name`, `extends RefCounted`, static funcs;
+  call it from `WorldGenerator._ready()`.
+- Constants used by one module live in it; only shared ones go in `TerrainConfig`.
+- Per-run mutable state (caches, debug buffers) = `static var`, reset in the module's
+  `reset_run_state()`, which `_ready()` calls first.
+- Functions that add nodes to the scene take `parent_node: Node` (WorldGenerator passes `get_parent()`).

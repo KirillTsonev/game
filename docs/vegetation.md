@@ -26,7 +26,7 @@ realistic too.
   standalone mesh (base at y=0), fixes materials, saves `trees/<name>.res` + `<name>.tscn`
   and registers the Terrain3D mesh asset (single LOD, visible to `PACK_LOD0_RANGE` = 600 m,
   24 m fade).
-- **Keep in sync:** `PACK_TREES` ids <-> `TREE_IDS_FAB_PACK` in `scripts/terrain_gen.gd`.
+- **Keep in sync:** `PACK_TREES` ids <-> `TREE_IDS_FAB_PACK` in `scripts/terrain/tree_scatter.gd`.
   (The old Poly Haven fir/pine trees, ids 14-19, were removed 2026-09-24 and the pack trees
   renumbered from 20-33.)
 - Collision: **every** tree gets an upright trunk cylinder (`TREE_TRUNK_RADIUS`,
@@ -61,7 +61,7 @@ realistic too.
 
 ---
 
-## Placement (`scripts/terrain_gen.gd`, `_scatter_trees` / `_place_one_tree`)
+## Placement (`scripts/terrain/tree_scatter.gd`, `scatter_trees` / `_place_one_tree`)
 
 Trees are placed in **stands** (clumps) plus **lone** trees. Counts are per 256x256 m and
 scale with the whole map area (the map is 256x512, so x2).

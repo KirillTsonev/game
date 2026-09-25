@@ -63,7 +63,7 @@ Ids are a contiguous list: a new asset is appended at the next id (**28**).
 5. Run, in the editor (`call_method`, `runtime:false`, scene `tools/setup_rock_assets.tscn`,
    node `.`): `setup_materials()`, then `setup_mesh_assets()`. For a heavy LOD0
    (> ~20k tris) add its id to `ROCK_LOD_RANGES` and run `configure_rock_lods()`.
-6. In `scripts/terrain_gen.gd`: add the id to `ROCK_MESH_IDS` and its glb to
+6. In `scripts/terrain/rock_scatter.gd`: add the id to `ROCK_MESH_IDS` and its glb to
    `ROCK_SCENE_PATHS` -- the collision hull is built at runtime from that glb's `LOD0` mesh
    (`create_convex_shape(true, true)`, simplified to ~32 points).
 7. Verify: `debug_print_mesh_sizes()` and `debug_print_mesh_assets()` in the rock tool, then
@@ -74,15 +74,16 @@ Ids are a contiguous list: a new asset is appended at the next id (**28**).
 1. Put `<name>_2k.glb` in `assets/models/cliffs/<name>/`, source textures in its
    `textures/` (EXRs checked per rule 2).
 2. The glb's LOD levels must be sibling nodes named `*_LOD0` .. `*_LOD3`:
-   `_apply_cliff_lod_ranges()` gives each a distance band (`CLIFF_LOD_END`) so only one
+   `apply_cliff_lod_ranges()` (`scripts/terrain/cliff_instancer.gd`) gives each a distance band (`CLIFF_LOD_END`) so only one
    draws at a time.
-3. Add a definition in `scripts/terrain_gen.gd` next to the existing ones
-   (`CLIFF_DRESSING_DEFS` for cliff faces, the outcrop list for flat outcrops): `glb`,
+3. Add a definition next to the existing ones (`CLIFF_DRESSING_DEFS` in
+   `scripts/terrain/terrain_config.gd` for cliff faces, `OUTCROP_DEFS` in
+   `scripts/terrain/outcrops.gd` for flat outcrops): `glb`,
    `diff`, `nor`, `rough` paths plus the size fields the existing entries use.
 4. Optional repair textures: `<name>_<kind>_diff.png` (kind = `patch`, `fill`, ...) next to
    the diffuse -- found by string replacement on the diffuse path.
 5. Collision is added per mesh node as trimesh on one LOD (`_should_add_cliff_collision`,
-   `_add_cliff_collision_recursive`) -- check the new model's node names match what those
+   `add_cliff_collision_recursive`, both in `scripts/terrain/cliff_instancer.gd`) -- check the new model's node names match what those
    expect.
 6. Verify in-game: placement, textures, LOD switching (no visible pop at 40 / 90 m) and
    collision.
