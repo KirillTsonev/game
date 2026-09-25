@@ -24,8 +24,68 @@ realistic too.
   `call_method`, `runtime:false`, scene `tools/setup_tree_assets.tscn`, node `.`). For each
   row of `PACK_TREES` (`id`, FBX `node`, `name`) it bakes the node's rotation/scale into a
   standalone mesh (base at y=0), fixes materials, saves `trees/<name>.res` + `<name>.tscn`
-  and registers the Terrain3D mesh asset (single LOD, visible to `PACK_LOD0_RANGE` = 600 m,
-  24 m fade).
+  and registers the Terrain3D mesh asset. With a baked impostor (always, since 2026-09-25):
+  LOD0 = full tree to 150 m, LOD1 = impostor to 100 km (never culled), 10 m cross-fade,
+  `last_shadow_lod = 0`. Without one it falls back to a single LOD visible to
+  `PACK_LOD0_RANGE` = 600 m.
+- **Far impostors** (2026-09-25). Measured before: trees beyond 150 m cost ~10 M tris, ~3.3k
+  draw calls, ~3.9 ms GPU + ~3 ms CPU of a 10.9 ms GPU frame. After, same kind of view:
+  7.0 ms GPU, 10.9 M tris (was 21.4 M), 4.5k draws (was 7.2k), and the forest now reaches the
+  map edge instead of ending at 600 m.
+  - `bake_tree_impostors()` renders each baked tree unlit (bark = UNSHADED copy of its
+    material, leaves = `foliage_impostor_capture.gdshader` with the vertex tint) from 4 angles
+    (0/45/90/135 deg) with an orthographic camera in an editor SubViewport, at 4x supersampling
+    box-averaged down, so thin needles become partial alpha instead of aliasing away. Alpha =
+    coverage x 2 (`TREE_IMPOSTOR_ALPHA_GAIN`), so 25 % leaf cover survives the 0.5 cutout.
+    Empty pixels get the mean leaf colour (no dark mip fringes). Output per tree:
+    `trees/<name>_impostor.png` (256 px tall per view, width from crown/height), `.res`
+    (4 vertical planes through the trunk = 8 tris), `_impostor_material.tres`.
+  - Material: `foliage_impostor.gdshader` with **baked normals** (`use_normal_tex`,
+    `<name>_impostor_normal.png`, lossless + mips). The bake renders a second pass per view that
+    writes the object-space normal (back faces flipped, as when the real tree is lit). The shader
+    rotates it by the instance transform (`MODELVIEW_MATRIX` in `vertex()`), so each impostor
+    pixel is lit like the real crown for any sun direction. History: pure UP normals (what the
+    understory impostors use) glowed lime/orange next to dark real crowns; a camera tilt
+    (`view_normal_mix`) only helped looking into the light, and the user still saw a very
+    noticeable switch. Bake self-check: raw |n| = 1.000 (the sRGB round-trip is exact) and
+    n . camera 0.5-0.66 (the flip works). Understory impostors are unchanged (flag off).
+  - Matching at the switch (user before/after screenshots, 2026-09-25): mean brightness already
+    matched (moon behind 69 vs 67), but the impostors were more saturated (0.66 vs 0.58) and
+    fuller. Fix: `saturation` uniform (trees 0.9, `TREE_IMPOSTOR_SATURATION`) and
+    `TREE_IMPOSTOR_ALPHA_GAIN` 2.0 -> 1.4. The gain is now a shader uniform (`alpha_gain`); the
+    atlas stores true coverage (`TREE_IMPOSTOR_BAKE_GAIN` = 1).
+  - **Cross-fade band, as Godot really draws it:** Terrain3D sets real tree end 160 / impostor
+    begin 140, both margin 10, and Godot fades symmetrically around each limit
+    (renderer_scene_cull.cpp: limit +/- margin). So the impostor fades in over 130-150 m and the
+    real tree fades out over 150-170 m, with both fully drawn at 150. Distances are radial to
+    each batch's AABB centre.
+  - **Distance fullness:** `alpha_gain` applies at 130 m and `alpha_gain_far` at 170 m and
+    beyond, smooth in between. Coarser mips thin the impostor with distance, so one gain can't fit
+    both ends. The understory keeps `alpha_gain_far = -1` (off).
+  - **Dry trees** (ids 14, 16, 17, 19, 22, 24, 26: sparse brown twig cards, no leaves): the shared
+    gains turned their twigs into solid brown canopies, so they get their own near/far pair
+    (`TREE_IMPOSTOR_DRY_ALPHA_GAIN` / `_FAR`, materials tagged meta `impostor_group = "dry"`).
+  - User-tuned values (2026-09-25, final): green trees saturation 1.00, near 0.30, far 2.20,
+    brightness 0.80; dry trees near 0.15, far 1.05.
+  - Tuned with temporary PerfDebug live keys and a one-of-each tree row with LOD lines (all
+    removed 2026-09-25). To retune, edit the TREE_IMPOSTOR_* constants and rerun
+    `tree_impostor_import()`; no rebake is needed.
+    edit all tree impostor materials in-game, with an on-screen readout. Nothing is saved: copy
+    the values into `TREE_IMPOSTOR_SATURATION` / `_ALPHA_GAIN` / `_TINT` and rerun
+    `tree_impostor_import()` + `build_pack_trees()` (no rebake needed).
+  - Back-side flip (shader): each plane shows the same image from both sides, but its normals
+    face the bake camera. Seen from behind, the impostor went black with the sun behind the
+    player while the real crown was lit green. The shader now mirrors the normal through the
+    plane when viewed from its back (`normal_views` must equal `TREE_IMPOSTOR_VIEWS`), like
+    Godot's side check does for real double-sided leaves.
+  - The impostor casts no shadow. Sun shadows end at 150 m anyway (docs/shadows.md).
+  - Pipeline: `bake_tree_impostors()` -> rescan -> `tree_impostor_import()` (VRAM + mips,
+    materials) -> `build_pack_trees()`. Rerun all of it after changing a tree mesh.
+  - Gotchas: `lod1_range = 0` ("unlimited") makes Terrain3D clamp `fade_margin` to 0, hence
+    the 100 km range. After editing the shader, `tree_impostor_import()` loads it with
+    CACHE_MODE_REPLACE, because the editor's stale copy silently drops parameters for new
+    uniforms. PackPineB2 and PackDecidB are sparse brown (dead-looking) trees; that is their
+    real vertex tint, not a bake fault.
 - **Keep in sync:** `PACK_TREES` ids <-> `TREE_IDS_FAB_PACK` in `scripts/terrain/tree_scatter.gd`.
   (The old Poly Haven fir/pine trees, ids 14-19, were removed 2026-09-24 and the pack trees
   renumbered from 20-33.)

@@ -24,6 +24,13 @@ number): ~18 M tris / ~6.5k draw calls per frame vs ~11-16 M with 2 splits to 25
 tree is drawn into 4 shadow passes. Levers if it gets too heavy: shorter max distance, fewer
 splits, Terrain3D `last_shadow_lod` / shadow impostors on the trees.
 
+**Tree impostors (2026-09-25):** pack trees swap to an 8-tri impostor at 150 m, the same distance
+where sun shadows end, so the impostor LOD casts nothing (`last_shadow_lod = 0`) and loses no
+visible shadow. The 10 m cross-fade sits beyond the shadow range, so the "fade self"
+shadow-drop issue (Godot #91671) doesn't show. After: ~7.0 ms GPU / 10.9 M tris / 4.5k draws
+(was 10.9 ms / 21.4 M / 7.2k). If max distance is ever raised past 150 m, raise
+`TREE_IMPOSTOR_RANGE` in `tools/setup_tree_assets.gd` with it. See `docs/vegetation.md`.
+
 How these were chosen: temporary debug keys (first-split distance, 2/4 splits, atlas 4096/8192,
 max distance 250/150/100, blur 1/0.5/0) toggled live in-game; the 4096 atlas was kept.
 | `lights_and_shadows/directional_shadow/size` | 4096 | `project.godot` | default; shared by the splits |

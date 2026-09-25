@@ -230,6 +230,18 @@ func build_pack_trees() -> String:
 		lod0.mesh = load(mesh_path)
 		root.add_child(lod0)
 		lod0.owner = root
+		# Far impostor as LOD1, if bake_tree_impostors() has made one (2026-09-25).
+		var imp_base := PACK_OUT_DIR + "%s_impostor" % entry.name
+		var has_impostor := ResourceLoader.exists(imp_base + ".res") and ResourceLoader.exists(imp_base + "_material.tres")
+		if has_impostor:
+			var imesh: ArrayMesh = ResourceLoader.load(imp_base + ".res", "", ResourceLoader.CACHE_MODE_REPLACE)
+			imesh.surface_set_material(0, load(imp_base + "_material.tres"))
+			ResourceSaver.save(imesh, imp_base + ".res")
+			var lod1 := MeshInstance3D.new()
+			lod1.name = "LOD1"
+			lod1.mesh = imesh
+			root.add_child(lod1)
+			lod1.owner = root
 		var ps := PackedScene.new()
 		ps.pack(root)
 		var scene_path := PACK_OUT_DIR + "%s.tscn" % entry.name
@@ -247,8 +259,19 @@ func build_pack_trees() -> String:
 		a.set_density(0.05)
 		if is_new:
 			assets.set_mesh_asset(entry.id, a)
-		a.set_lod0_range(PACK_LOD0_RANGE)
-		a.set_fade_margin(TREE_FADE_MARGIN)
+		if has_impostor:
+			# Full tree to TREE_IMPOSTOR_RANGE, then the 8-tri impostor out to 100 km (= never culled).
+			# Not range 0 ('unlimited'): Terrain3D clamps fade_margin to half the gap to the next range,
+			# and with 0 there is no gap -> fade forced to 0 -> hard swap at 150 m.
+			# Impostor casts no shadow (sun shadows end at 150 m anyway -- docs/shadows.md).
+			a.set_lod_range(0, TREE_IMPOSTOR_RANGE)
+			a.set_lod_range(1, TREE_IMPOSTOR_FAR)
+			a.set_last_lod(1)
+			a.set_last_shadow_lod(0)
+			a.set_fade_margin(TREE_IMPOSTOR_FADE)
+		else:
+			a.set_lod0_range(PACK_LOD0_RANGE)
+			a.set_fade_margin(TREE_FADE_MARGIN)
 		a.set_shadow_impostor(0)
 		out.append("id=%d %s <- %s: %d tris, %.1f m tall, last_lod=%d" % [
 			entry.id, entry.name, entry.node, tris, am.get_aabb().size.y, a.get_last_lod()])
@@ -258,4 +281,331 @@ func build_pack_trees() -> String:
 	return "\n".join(out)
 
 ## Dithered cross-fade (metres) at the pack trees' cull distance -- used by build_pack_trees().
+## (Without an impostor the asset is single-LOD, and Terrain3D clamps the fade to 0 anyway.)
 const TREE_FADE_MARGIN := 24.0
+
+## -- Far tree impostors (2026-09-25) --
+## Measured in one view (same run): trees beyond 150 m cost ~10 M tris, ~3.3k draw calls, ~3.9 ms
+## GPU + ~3 ms CPU of a 10.9 ms GPU frame. Each tree gets a 4-view impostor: 4 vertical planes at
+## 0/45/90/135 deg crossing at the trunk (8 tris), texture = unlit captures of the baked tree.
+## Pipeline: bake_tree_impostors() -> rescan -> tree_impostor_import() -> build_pack_trees().
+const TREE_IMPOSTOR_RANGE := 150.0  ## full tree up to here (= sun shadow max distance)
+const TREE_IMPOSTOR_FAR := 100000.0  ## impostor end range -- effectively never culled
+const TREE_IMPOSTOR_FADE := 10.0  ## cross-fade full tree <-> impostor (shadows are gone out there anyway)
+const TREE_IMPOSTOR_VIEWS := 4
+const TREE_IMPOSTOR_RES_H := 256  ## px per view, height; width follows the crown/height ratio
+const TREE_IMPOSTOR_SS := 4  ## capture supersampling (power of 2) -- coverage becomes alpha
+## Up-normal impostors glowed when looking toward the sun/moon while the real crowns around them
+## were dark silhouettes (magenta-tint test, 2026-09-25). Tilting the normal toward the camera
+## darkens them into the light and brightens them with the light behind -- like a crown.
+## Superseded the same day by baked normals (<name>_impostor_normal.png, use_normal_tex): the tilt
+## only helped looking into the light; user still saw a very noticeable switch. Kept as the
+## fallback when no normal atlas exists (0 = off).
+const TREE_IMPOSTOR_VIEW_NORMAL := 0.0
+const TREE_IMPOSTOR_TINT := Color(0.8, 0.8, 0.8)  ## impostor albedo multiplier, for matching the full trees
+## Saturation of the impostor colour (1 = as baked). 0.9: at the switch the impostors measured
+## 0.66 vs the real crowns' 0.58 (user before/after screenshots, 2026-09-25).
+const TREE_IMPOSTOR_SATURATION := 1.0
+## Leaf-coverage boost, applied in the SHADER (alpha_gain) so it can be tuned live with the
+## PerfDebug keys; the bake stores true coverage (TREE_IMPOSTOR_BAKE_GAIN = 1). Was 2.0 baked:
+## impostors came out fuller/smoother than the real trees at the switch. 1.4 = >= ~36 % leaf
+## cover survives the 0.5 cutout at full res.
+## User-tuned in-game with the PerfDebug keys, 2026-09-25: saturation 1.00, near 0.30,
+## far 2.20, brightness 0.80.
+const TREE_IMPOSTOR_ALPHA_GAIN := 0.3  ## fullness at TREE_IMPOSTOR_GAIN_NEAR_DIST
+## Fullness at TREE_IMPOSTOR_GAIN_FAR_DIST and beyond (shader blends between): coarser mips thin
+## the impostor with distance -- 1.4 looked right at 130 m but nearly invisible at 170 m (user).
+const TREE_IMPOSTOR_ALPHA_GAIN_FAR := 2.2
+## Dry trees: sparse brown twig cards, no leaves (user: ids 14, 16, 17, 19, 22, 24, 26). The green
+## gains turned their thin twigs into full brown canopies, so they get their own near/far pair
+## (tagged meta impostor_group = "dry" for the PerfDebug keys). User-tuned in-game 2026-09-25.
+const TREE_IMPOSTOR_DRY_NAMES: Array[String] = ["PackPineA", "PackPineC", "PackPineD", "PackPineB2", "PackDecidA", "PackDecidB", "PackDecidC"]
+const TREE_IMPOSTOR_DRY_ALPHA_GAIN := 0.15
+const TREE_IMPOSTOR_DRY_ALPHA_GAIN_FAR := 1.05
+## The cross-fade band as Godot actually draws it: impostor fades in 130-150, real tree out
+## 150-170 (symmetric margins around begin 140 / end 160 -- see docs/vegetation.md).
+const TREE_IMPOSTOR_GAIN_NEAR_DIST := 130.0
+const TREE_IMPOSTOR_GAIN_FAR_DIST := 170.0
+const TREE_IMPOSTOR_BAKE_GAIN := 1.0  ## alpha = coverage x gain, so >= 25 % leaf cover survives the 0.5 cutout
+const TREE_IMPOSTOR_CAPTURE_SHADER := "res://shaders/foliage/foliage_impostor_capture.gdshader"
+const TREE_IMPOSTOR_SHADER := "res://shaders/foliage/foliage_impostor.gdshader"
+
+## Renders every baked pack tree (PACK_OUT_DIR/<name>.res) unlit -- bark via an UNSHADED copy of its
+## material (keeps the world-triplanar bark), leaf cards via the capture shader (albedo x vertex
+## colour, hard cutout) -- from TREE_IMPOSTOR_VIEWS angles with an orthographic camera in an editor
+## SubViewport. Saves <name>_impostor.png (views side by side) + <name>_impostor.res (the planes).
+## Frame = crown radius R (max horizontal vertex distance from the trunk axis) x tree height.
+func bake_tree_impostors() -> String:
+	var out: Array[String] = []
+	var vp := SubViewport.new()
+	vp.transparent_bg = true
+	vp.own_world_3d = true
+	vp.world_3d = World3D.new()
+	vp.msaa_3d = Viewport.MSAA_DISABLED
+	vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	EditorInterface.get_base_control().add_child(vp)
+	var cam := Camera3D.new()
+	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
+	cam.keep_aspect = Camera3D.KEEP_HEIGHT
+	cam.near = 0.1
+	cam.far = 400.0
+	vp.add_child(cam)
+	cam.current = true
+	var mi := MeshInstance3D.new()
+	vp.add_child(mi)
+	var cap_shader: Shader = ResourceLoader.load(TREE_IMPOSTOR_CAPTURE_SHADER, "", ResourceLoader.CACHE_MODE_REPLACE)
+	for entry: Dictionary in PACK_TREES:
+		var mesh: Mesh = ResourceLoader.load(PACK_OUT_DIR + "%s.res" % entry.name, "", ResourceLoader.CACHE_MODE_IGNORE)
+		if mesh == null:
+			out.append("%s: no baked mesh -- run build_pack_trees() first" % entry.name)
+			continue
+		mi.mesh = mesh
+		var r := 0.0
+		var alb_mats: Array[Material] = []
+		var nrm_mats: Array[Material] = []
+		for si in mesh.get_surface_count():
+			var m := mesh.surface_get_material(si)
+			var cm: Material
+			var nm: Material
+			if m is ShaderMaterial:
+				var sm := ShaderMaterial.new()
+				sm.shader = cap_shader
+				sm.set_shader_parameter("albedo_tex", (m as ShaderMaterial).get_shader_parameter("albedo_tex"))
+				var col = (m as ShaderMaterial).get_shader_parameter("albedo_color")
+				sm.set_shader_parameter("albedo_color", col if col != null else Color.WHITE)
+				sm.set_shader_parameter("use_vertex_color", (m as ShaderMaterial).get_shader_parameter("use_vertex_color") == true)
+				cm = sm
+				var sn := sm.duplicate() as ShaderMaterial
+				sn.set_shader_parameter("normal_pass", true)
+				nm = sn
+			elif m is BaseMaterial3D:
+				var bm := (m as BaseMaterial3D).duplicate() as BaseMaterial3D
+				bm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+				cm = bm
+				var bn := ShaderMaterial.new()  # bark: opaque, normals only
+				bn.shader = cap_shader
+				bn.set_shader_parameter("opaque", true)
+				bn.set_shader_parameter("normal_pass", true)
+				nm = bn
+			alb_mats.append(cm)
+			nrm_mats.append(nm)
+			for v: Vector3 in mesh.surface_get_arrays(si)[Mesh.ARRAY_VERTEX]:
+				r = maxf(r, Vector2(v.x, v.z).length())
+		var aabb := mesh.get_aabb()
+		var y0 := aabb.position.y
+		var h := aabb.size.y * 1.01
+		r *= 1.02
+		var res_h := TREE_IMPOSTOR_RES_H
+		var res_w := maxi(16, int(ceil(float(res_h) * (2.0 * r) / h / 4.0)) * 4)
+		vp.size = Vector2i(res_w, res_h) * TREE_IMPOSTOR_SS
+		cam.size = h
+		var atlas := Image.create(res_w * TREE_IMPOSTOR_VIEWS, res_h, false, Image.FORMAT_RGBA8)
+		var natlas := Image.create(res_w * TREE_IMPOSTOR_VIEWS, res_h, false, Image.FORMAT_RGB8)
+		var opaque := 0
+		var nlen := 0.0  # mean raw |n| at full res -- ~1.0 if the colour-space handling is right
+		var nface := 0.0  # mean n . toward-camera -- clearly > 0 if back faces got flipped
+		for k in TREE_IMPOSTOR_VIEWS:
+			var ang := PI * float(k) / float(TREE_IMPOSTOR_VIEWS)
+			var axis := Vector3(sin(ang), 0.0, cos(ang))
+			var target := Vector3(0.0, y0 + h * 0.5, 0.0)
+			cam.look_at_from_position(target + axis * 150.0, target, Vector3.UP)
+			cam.force_update_transform()  # else force_draw renders from the previous pose
+			_tree_capture_set(mi, alb_mats)
+			var img := _tree_capture_draw(vp)
+			atlas.blit_rect(_tree_impostor_downsample(img, res_w, res_h), Rect2i(0, 0, res_w, res_h), Vector2i(k * res_w, 0))
+			_tree_capture_set(mi, nrm_mats)
+			var nimg := _tree_capture_draw(vp)
+			var nres := _tree_impostor_downsample_normal(nimg, res_w, res_h, axis)
+			natlas.blit_rect(nres[0], Rect2i(0, 0, res_w, res_h), Vector2i(k * res_w, 0))
+			nlen += nres[1] / TREE_IMPOSTOR_VIEWS
+			nface += nres[2] / TREE_IMPOSTOR_VIEWS
+		for y in range(0, res_h, 4):
+			for x in range(0, res_w * TREE_IMPOSTOR_VIEWS, 4):
+				if atlas.get_pixel(x, y).a > 0.5:
+					opaque += 1
+		var base := PACK_OUT_DIR + "%s_impostor" % entry.name
+		var err := atlas.save_png(ProjectSettings.globalize_path(base + ".png"))
+		err = maxi(err, natlas.save_png(ProjectSettings.globalize_path(base + "_normal.png")))
+		var err2 := ResourceSaver.save(_tree_impostor_mesh(r, y0, h), base + ".res")
+		out.append("%s: %dx%d px/view, opaque %.0f%%, normals |n| %.3f facing %.2f, png err=%d, mesh err=%d" % [
+			entry.name, res_w, res_h, 100.0 * opaque / float((res_h / 4) * (res_w * TREE_IMPOSTOR_VIEWS / 4)), nlen, nface, err, err2])
+	vp.queue_free()
+	return "\n".join(out)
+
+func _tree_capture_set(mi: MeshInstance3D, mats: Array[Material]) -> void:
+	for si in mats.size():
+		mi.set_surface_override_material(si, mats[si])
+
+## One capture: UPDATE_ONCE + force_draw (twice, as the original single-pass bake did).
+func _tree_capture_draw(vp: SubViewport) -> Image:
+	vp.render_target_update_mode = SubViewport.UPDATE_ONCE
+	RenderingServer.force_draw(false)
+	RenderingServer.force_draw(false)
+	var img := vp.get_texture().get_image()
+	img.convert(Image.FORMAT_RGBA8)
+	return img
+
+## Normal-pass capture -> [RGB8 image w x h, mean raw |n| (full res), mean n . axis].
+## Box-average like the albedo (premultiplied by coverage), un-premultiply, decode, renormalise,
+## re-encode. Empty pixels get the view's mean normal (keeps mips at the silhouette sane).
+## axis = direction from the tree toward the capture camera.
+func _tree_impostor_downsample_normal(src: Image, w: int, h: int, axis: Vector3) -> Array:
+	var lsum := 0.0
+	var fsum := 0.0
+	var lcnt := 0
+	for y in range(0, src.get_height(), 3):
+		for x in range(0, src.get_width(), 3):
+			var s := src.get_pixel(x, y)
+			if s.a > 0.99:
+				var sn := Vector3(s.r, s.g, s.b) * 2.0 - Vector3.ONE
+				lsum += sn.length()
+				fsum += sn.normalized().dot(axis)
+				lcnt += 1
+	var img := src
+	var cw := src.get_width()
+	var ch := src.get_height()
+	while cw > w:
+		cw /= 2
+		ch /= 2
+		img = img.duplicate() as Image
+		img.resize(cw, ch, Image.INTERPOLATE_BILINEAR)
+	var out := Image.create(w, h, false, Image.FORMAT_RGB8)
+	var mean := Vector3.ZERO
+	var empty: Array[Vector2i] = []
+	for y in h:
+		for x in w:
+			var c := img.get_pixel(x, y)
+			if c.a > 0.004:
+				var n := Vector3(c.r / c.a, c.g / c.a, c.b / c.a) * 2.0 - Vector3.ONE
+				n = n.normalized() if n.length() > 1e-4 else axis
+				mean += n
+				out.set_pixel(x, y, Color(n.x * 0.5 + 0.5, n.y * 0.5 + 0.5, n.z * 0.5 + 0.5))
+			else:
+				empty.append(Vector2i(x, y))
+	mean = mean.normalized() if mean.length() > 1e-4 else axis
+	var fill := Color(mean.x * 0.5 + 0.5, mean.y * 0.5 + 0.5, mean.z * 0.5 + 0.5)
+	for p in empty:
+		out.set_pixel(p.x, p.y, fill)
+	return [out, lsum / maxi(lcnt, 1), fsum / maxi(lcnt, 1)]
+
+## Supersampled capture -> box average. The capture background is (0,0,0,0) and every drawn pixel is
+## opaque, so the average is premultiplied colour + coverage. Un-premultiply, then alpha = coverage *
+## TREE_IMPOSTOR_ALPHA_GAIN (thin needles cover ~20-40% of a final pixel; without the gain they vanish
+## under the 0.5 cutout). Empty pixels get the view's mean leaf colour so mip filtering doesn't
+## pull dark fringes into the silhouette.
+func _tree_impostor_downsample(src: Image, w: int, h: int) -> Image:
+	var img := src
+	var cw := src.get_width()
+	var ch := src.get_height()
+	while cw > w:  # exact halvings -> 2x2 box average each step
+		cw /= 2
+		ch /= 2
+		img = img.duplicate() as Image
+		img.resize(cw, ch, Image.INTERPOLATE_BILINEAR)
+	var sum := Color(0, 0, 0, 0)
+	var cnt := 0
+	for y in h:
+		for x in w:
+			var c := img.get_pixel(x, y)
+			if c.a > 0.004:
+				var u := Color(c.r / c.a, c.g / c.a, c.b / c.a, minf(1.0, c.a * TREE_IMPOSTOR_BAKE_GAIN))
+				img.set_pixel(x, y, u)
+				sum += Color(u.r, u.g, u.b, 0.0)
+				cnt += 1
+	var fill := Color(sum.r / maxi(cnt, 1), sum.g / maxi(cnt, 1), sum.b / maxi(cnt, 1), 0.0)
+	for y in h:
+		for x in w:
+			if img.get_pixel(x, y).a <= 0.004:
+				img.set_pixel(x, y, fill)
+	return img
+
+## TREE_IMPOSTOR_VIEWS vertical planes through the trunk axis matching bake_tree_impostors(): plane
+## k faces the view direction (sin a, 0, cos a), a = PI*k/VIEWS; it spans -R..R along
+## right = UP x axis (image left = -right), y0..y0+H; UV u = k/V .. (k+1)/V. Normals UP.
+func _tree_impostor_mesh(r: float, y0: float, h: float) -> ArrayMesh:
+	var v := PackedVector3Array()
+	var uv := PackedVector2Array()
+	var n := PackedVector3Array()
+	var idx := PackedInt32Array()
+	for k in TREE_IMPOSTOR_VIEWS:
+		var ang := PI * float(k) / float(TREE_IMPOSTOR_VIEWS)
+		var axis := Vector3(sin(ang), 0.0, cos(ang))
+		var right := Vector3.UP.cross(axis) * r
+		var u0 := float(k) / float(TREE_IMPOSTOR_VIEWS)
+		var u1 := float(k + 1) / float(TREE_IMPOSTOR_VIEWS)
+		var b := v.size()
+		v.append_array([-right + Vector3(0, y0 + h, 0), right + Vector3(0, y0 + h, 0), right + Vector3(0, y0, 0), -right + Vector3(0, y0, 0)])
+		uv.append_array([Vector2(u0, 0.0), Vector2(u1, 0.0), Vector2(u1, 1.0), Vector2(u0, 1.0)])
+		for i in 4:
+			n.append(Vector3.UP)
+		idx.append_array([b, b + 1, b + 2, b, b + 2, b + 3])
+	var arr := []
+	arr.resize(Mesh.ARRAY_MAX)
+	arr[Mesh.ARRAY_VERTEX] = v
+	arr[Mesh.ARRAY_NORMAL] = n
+	arr[Mesh.ARRAY_TEX_UV] = uv
+	arr[Mesh.ARRAY_INDEX] = idx
+	var am := ArrayMesh.new()
+	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+	return am
+
+## Impostor PNGs -> VRAM-compressed with mipmaps (forced reimport), then one impostor material per
+## tree (<name>_impostor_material.tres, foliage_impostor.gdshader, no backlight). Run after
+## bake_tree_impostors() + a filesystem rescan.
+func tree_impostor_import() -> String:
+	var out: Array[String] = []
+	var paths := PackedStringArray()
+	for entry: Dictionary in PACK_TREES:
+		var png := PACK_OUT_DIR + "%s_impostor.png" % entry.name
+		var cfg := ConfigFile.new()
+		if cfg.load(png + ".import") != OK:
+			out.append("%s: no .import yet -- rescan first" % entry.name)
+			continue
+		cfg.set_value("params", "compress/mode", 2)
+		cfg.set_value("params", "mipmaps/generate", true)
+		cfg.set_value("params", "detect_3d/compress_to", 0)
+		cfg.save(png + ".import")
+		paths.append(png)
+		# Normal atlas: lossless + mips (VRAM compression visibly bends normals).
+		var npng := PACK_OUT_DIR + "%s_impostor_normal.png" % entry.name
+		var ncfg := ConfigFile.new()
+		if ncfg.load(npng + ".import") != OK:
+			out.append("%s: no normal .import yet -- rescan first" % entry.name)
+			continue
+		ncfg.set_value("params", "compress/mode", 0)
+		ncfg.set_value("params", "mipmaps/generate", true)
+		ncfg.set_value("params", "detect_3d/compress_to", 0)
+		ncfg.save(npng + ".import")
+		paths.append(npng)
+	EditorInterface.get_resource_filesystem().reimport_files(paths)
+	for entry: Dictionary in PACK_TREES:
+		var base := PACK_OUT_DIR + "%s_impostor" % entry.name
+		var tex: Texture2D = load(base + ".png")
+		if tex == null:
+			out.append("%s: impostor texture failed to load" % entry.name)
+			continue
+		var mat := ShaderMaterial.new()
+		mat.resource_name = "%s_impostor_material" % entry.name
+		# CACHE_MODE_REPLACE: the editor otherwise keeps a stale shader after an external edit and
+		# silently drops parameters for new uniforms (view_normal_mix vanished that way).
+		mat.shader = ResourceLoader.load(TREE_IMPOSTOR_SHADER, "", ResourceLoader.CACHE_MODE_REPLACE)
+		mat.set_shader_parameter("albedo_tex", tex)
+		mat.set_shader_parameter("backlight_color", Color.BLACK)
+		mat.set_shader_parameter("albedo_color", TREE_IMPOSTOR_TINT)
+		mat.set_shader_parameter("saturation", TREE_IMPOSTOR_SATURATION)
+		var dry: bool = entry.name in TREE_IMPOSTOR_DRY_NAMES
+		mat.set_shader_parameter("alpha_gain", TREE_IMPOSTOR_DRY_ALPHA_GAIN if dry else TREE_IMPOSTOR_ALPHA_GAIN)
+		mat.set_shader_parameter("alpha_gain_far", TREE_IMPOSTOR_DRY_ALPHA_GAIN_FAR if dry else TREE_IMPOSTOR_ALPHA_GAIN_FAR)
+		mat.set_shader_parameter("gain_near_dist", TREE_IMPOSTOR_GAIN_NEAR_DIST)
+		mat.set_shader_parameter("gain_far_dist", TREE_IMPOSTOR_GAIN_FAR_DIST)
+		mat.set_meta("impostor_group", "dry" if dry else "green")
+		mat.set_shader_parameter("view_normal_mix", TREE_IMPOSTOR_VIEW_NORMAL)
+		var ntex: Texture2D = load(base + "_normal.png")
+		mat.set_shader_parameter("normal_tex", ntex)
+		mat.set_shader_parameter("use_normal_tex", ntex != null)
+		mat.set_shader_parameter("alpha_cutoff", UNDERSTORY_TOOL.ALPHA_SCISSOR)
+		mat.set_shader_parameter("mip_alpha_scale", UNDERSTORY_TOOL.MIP_ALPHA_SCALE)
+		mat.set_shader_parameter("shadow_alpha_cutoff", UNDERSTORY_TOOL.SHADOW_ALPHA_CUTOFF)
+		mat.set_shader_parameter("shadow_mip_alpha_scale", UNDERSTORY_TOOL.SHADOW_MIP_ALPHA_SCALE)
+		out.append("%s: material err=%d" % [entry.name, ResourceSaver.save(mat, base + "_material.tres")])
+	return "reimported %d png(s)\n%s" % [paths.size(), "\n".join(out)]

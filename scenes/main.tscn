@@ -4,8 +4,6 @@
 [ext_resource type="Compositor" uid="uid://ba4aobty4rx34" path="res://assets/compositor.tres" id="1_tbgi4"]
 [ext_resource type="Texture2D" uid="uid://dl10rdiciotsc" path="res://assets/color_grades/grade_nighttime_brown_sage.tres" id="1_tefeu"]
 [ext_resource type="PackedScene" uid="uid://dgnelkt1o1lo0" path="res://scenes/player.tscn" id="2_player"]
-[ext_resource type="PackedScene" uid="uid://nhxmbbc2qn1n" path="res://assets/models/castle-church/source/Untitled.glb" id="6_tefeu"]
-[ext_resource type="Script" uid="uid://b8g15uxwkevc" path="res://scripts/church_material_tint.gd" id="7_o6xl0"]
 [ext_resource type="Script" uid="uid://bpjrhatsexkdf" path="res://scripts/terrain_gen.gd" id="8_tipki"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
@@ -651,7 +649,3 @@ directional_shadow_split_2 = 0.44444445
 directional_shadow_split_3 = 0.7222222
 directional_shadow_blend_splits = true
 directional_shadow_max_distance = 150.0
-
-[node name="Church" parent="." unique_id=1060377975 instance=ExtResource("6_tefeu")]
-transform = Transform3D(-1.3037721, 0, 1.5166341, 0, 2, 0, -1.5166341, 0, -1.3037721, -109.21715, 4.8066278, -13.319129)
-script = ExtResource("7_o6xl0")

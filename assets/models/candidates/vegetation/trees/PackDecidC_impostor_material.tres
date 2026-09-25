@@ -1,0 +1,28 @@
+[gd_resource type="ShaderMaterial" format=3 uid="uid://dt1birvh7i4"]
+
+[ext_resource type="Shader" uid="uid://yqspkhsaqiya" path="res://shaders/foliage/foliage_impostor.gdshader" id="1_uqu5g"]
+[ext_resource type="Texture2D" uid="uid://ncsohkbkt0yy" path="res://assets/models/candidates/vegetation/trees/PackDecidC_impostor.png" id="2_mjtpc"]
+[ext_resource type="Texture2D" uid="uid://dymkchng20kqp" path="res://assets/models/candidates/vegetation/trees/PackDecidC_impostor_normal.png" id="3_mjtpc"]
+
+[resource]
+resource_name = "PackDecidC_impostor_material"
+render_priority = 0
+shader = ExtResource("1_uqu5g")
+shader_parameter/albedo_tex = ExtResource("2_mjtpc")
+shader_parameter/albedo_color = Color(0.8, 0.8, 0.8, 1)
+shader_parameter/saturation = 1.0
+shader_parameter/alpha_gain = 0.15
+shader_parameter/alpha_gain_far = 1.05
+shader_parameter/gain_near_dist = 130.0
+shader_parameter/gain_far_dist = 170.0
+shader_parameter/roughness = 0.9
+shader_parameter/backlight_color = Color(0, 0, 0, 1)
+shader_parameter/alpha_cutoff = 0.5
+shader_parameter/mip_alpha_scale = 0.25
+shader_parameter/shadow_alpha_cutoff = 0.35
+shader_parameter/shadow_mip_alpha_scale = 0.6
+shader_parameter/view_normal_mix = 0.0
+shader_parameter/use_normal_tex = true
+shader_parameter/normal_views = 4
+shader_parameter/normal_tex = ExtResource("3_mjtpc")
+metadata/impostor_group = "dry"

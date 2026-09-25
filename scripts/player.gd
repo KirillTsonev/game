@@ -60,7 +60,7 @@ func _snap_to_ground() -> void:
 	# clipped a hair into the ground.
 	const SPAWN_CLEARANCE := 0.1
 	global_position.y = ground_height + SPAWN_CLEARANCE
-	#global_position.y = 150
+	#global_position.y = 15
 
 func _unhandled_input(event: InputEvent) -> void:
 	# Mouse look, only while the cursor is captured.

@@ -1,8 +1,12 @@
 [gd_scene format=3 uid="uid://cuyrxh1ujcvil"]
 
 [ext_resource type="ArrayMesh" uid="uid://dcg8gxy32ut6b" path="res://assets/models/candidates/vegetation/trees/PackPineB.res" id="1_ifnxx"]
+[ext_resource type="ArrayMesh" uid="uid://22t01fgsov6p" path="res://assets/models/candidates/vegetation/trees/PackPineB_impostor.res" id="2_mocs2"]
 
-[node name="PackPineB" type="Node3D" unique_id=335771769]
+[node name="PackPineB" type="Node3D" unique_id=1407433624]
 
-[node name="LOD0" type="MeshInstance3D" parent="." unique_id=1671366486]
+[node name="LOD0" type="MeshInstance3D" parent="." unique_id=1901829294]
 mesh = ExtResource("1_ifnxx")
+
+[node name="LOD1" type="MeshInstance3D" parent="." unique_id=676239770]
+mesh = ExtResource("2_mocs2")
