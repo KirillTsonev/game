@@ -16,12 +16,14 @@ Last reviewed: 2026-09-24.
 | `assets/models/cliffs/<name>/` | cliff / outcrop set dressing (namaqualand_cliff_01/02, mountainside): `<name>_2k.glb`, `textures/` incl. `_patch_diff.png` / `_fill_diff.png` repair textures |
 | `assets/models/scree/` | scree rock/stone sets |
 | `assets/models/candidates/vegetation/` | the Fab vegetation pack (see `docs/vegetation.md`) |
+| `assets/models/understory/<dir>/` | understory shrubs + ferns, kept apart from the trees: `<dir>.fbx`, `<dir>_material.tres`, `textures/<dir>_{diffuse,normal,translucency}.tga` -- set up by `tools/setup_understory_assets.gd` (see `docs/vegetation.md`) |
 | `assets/models/castle-church/` | the church model placed in `main.tscn` |
 | `tools/` | editor-only `@tool` setup scripts + their one-node scenes (never loaded by the game) |
 | `terrain_assets.tres` | the Terrain3D asset list (textures + mesh ids) |
 
-**Terrain3D mesh ids (as of 2026-09-24):** 0 placeholder, 1-4 rocks, 5-13 scree, 14-27 trees.
-Ids are a contiguous list: a new asset is appended at the next id (**28**).
+**Terrain3D mesh ids (as of 2026-09-25):** 0 placeholder, 1-4 rocks, 5-13 scree, 14-27 trees,
+28-32 understory (Fern02, Bush01, Bush02Green, Bush04, Bush05).
+Ids are a contiguous list: a new asset is appended at the next id (**33**).
 
 ---
 

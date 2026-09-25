@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://cjwuns5sspwqi"]
+
+[ext_resource type="Script" uid="uid://c3rqo7f7eocli" path="res://tools/setup_understory_assets.gd" id="1_und"]
+
+[node name="SetupUnderstoryAssets" type="Node" unique_id=85455704]
+script = ExtResource("1_und")

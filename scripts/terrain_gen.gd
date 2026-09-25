@@ -11,6 +11,7 @@
 ##   TerrainOutcrops outcrops.gd         flat rock outcrops
 ##   RockScatter     rock_scatter.gd     boulders, erratics, scree
 ##   TreeScatter     tree_scatter.gd     trees + debug_tree_probe
+##   UnderstoryScatter understory_scatter.gd  shrubs + ferns, density from canopy + shaded cliff feet
 ##   TerrainUtil     terrain_util.gd     height/normal sampling, zone ranges, mesh helpers
 ## New system -> new module there (class_name + extends RefCounted + static funcs), called from
 ## _ready() below. Per-run mutable state = static vars reset in the module's reset_run_state().
@@ -22,6 +23,7 @@ func _ready() -> void:
 	CliffInstancer.reset_run_state()
 	RockScatter.reset_run_state()
 	TreeScatter.reset_run_state()
+	UnderstoryScatter.reset_run_state()
 	# Whole-_ready() timing (2026-09-16): the earlier per-stage prints only
 	# covered _build_heightmap (noise/erosion/smoothing/road) -- this covers
 	# the REST of _ready() too (Terrain3D import, boulder scattering, player
@@ -138,6 +140,14 @@ func _ready() -> void:
 	tree_rng.seed = resolved_seed ^ 0x54524545 # 'TREE' salt -- own cosmetic stream
 	TreeScatter.scatter_trees(get_parent(), terrain, maps.heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, heightmap_corner, tree_rng, maps.road_weight, maps.road_path, maps.cliff_dressing_plan, maps.cliff_dressing_top_profiles, maps.outcrop_plan)
 	print("TERRAIN_GEN: tree scattering (%.2fs)" % ((Time.get_ticks_msec() - t_ready_stage) / 1000.0))
+	t_ready_stage = Time.get_ticks_msec()
+
+	# Understory (shrubs + ferns): density reads the canopy just placed (TreeScatter.tree_points)
+	# plus shaded cliff feet -- must run after trees + boulders. Own cosmetic stream.
+	var understory_rng := RandomNumberGenerator.new()
+	understory_rng.seed = resolved_seed ^ 0x554E4452 # 'UNDR' salt
+	UnderstoryScatter.scatter_understory(get_parent(), terrain, maps.heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, heightmap_corner, understory_rng, maps.road_weight, maps.cliff_features, maps.cliff_dressing_plan, maps.cliff_dressing_top_profiles, maps.outcrop_plan)
+	print("TERRAIN_GEN: understory scattering (%.2fs)" % ((Time.get_ticks_msec() - t_ready_stage) / 1000.0))
 	t_ready_stage = Time.get_ticks_msec()
 
 	# Planned + terrain-fitted in _build_heightmap (round 2) -- instancing only here.

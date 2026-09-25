@@ -2,7 +2,7 @@
 
 [ext_resource type="ArrayMesh" uid="uid://y7tjujqvrbgi" path="res://assets/models/candidates/vegetation/trees/PackPineD.res" id="1_pftn7"]
 
-[node name="PackPineD" type="Node3D" unique_id=1799477989]
+[node name="PackPineD" type="Node3D" unique_id=598687302]
 
-[node name="LOD0" type="MeshInstance3D" parent="." unique_id=2087415468]
+[node name="LOD0" type="MeshInstance3D" parent="." unique_id=732292751]
 mesh = ExtResource("1_pftn7")

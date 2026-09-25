@@ -1,0 +1,16 @@
+[gd_scene format=3 uid="uid://c81kvs8p1isaa"]
+
+[ext_resource type="ArrayMesh" uid="uid://c4jho52sdpwhd" path="res://assets/models/understory/fern_02/fern_02_fern_plant_v_2_lod_2.res" id="1_1qqn4"]
+[ext_resource type="ArrayMesh" uid="uid://cuyhavtl1od3w" path="res://assets/models/understory/fern_02/fern_02_fern_plant_v_2_lod_4.res" id="3_0lcbd"]
+[ext_resource type="ArrayMesh" uid="uid://un6c5as5jdiu" path="res://assets/models/understory/fern_02/fern_02_impostor.res" id="3_1qqn4"]
+
+[node name="Fern02" type="Node3D" unique_id=80725944]
+
+[node name="LOD0" type="MeshInstance3D" parent="." unique_id=706008323]
+mesh = ExtResource("1_1qqn4")
+
+[node name="LOD1" type="MeshInstance3D" parent="." unique_id=1780899652]
+mesh = ExtResource("3_0lcbd")
+
+[node name="LOD2" type="MeshInstance3D" parent="." unique_id=1113379048]
+mesh = ExtResource("3_1qqn4")

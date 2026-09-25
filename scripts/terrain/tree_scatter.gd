@@ -48,6 +48,14 @@ const TREE_SCALE_MAX := 1.25
 const TREE_EMBED_DEPTH := 0.20 ## sink the base slightly so the trunk root meets the ground rather than floating on uneven terrain
 const TREE_LEAN_MAX_DEG := 4.0 ## max random lean off vertical -- a touch of wind-bent character, never a full ground-align
 const TREE_KEEPOUT_RADIUS := 1.2 ## trunk footprint radius for cliff-mesh / outcrop keep-outs (so trunks never spawn inside rock)
+## Tree-vs-tree spacing (2026-09-25): each tree claims a circle of this radius * its scale, and
+## two trees must not overlap circles -- so at scale 1.0 trunks are at least 2x this apart
+## (centre to centre). Before this, stand trees were placed with no check against each other
+## and could land fused together. Raise for airier stands, lower for denser ones; canopies
+## may still interleave (that reads as a natural forest), only trunks are kept apart.
+## Higher values also reject more candidate spots, so stands come out with fewer trees.
+const TREE_MIN_SPACING_RADIUS := 1.5
+const TREE_SPACING_CELL := TREE_MIN_SPACING_RADIUS * TREE_SCALE_MAX * 2.0 ## spatial-grid cell = largest possible pair distance, so a 3x3 cell lookup is enough
 const TREE_STAND_LOWGROUND_SAMPLES := 1 ## pick each stand centre as the lowest of this many floor candidates -- a cheap "wetter, lower ground" density bias with no moisture map
 ## Where trees may go, as fractions of the map (clump centres, lone trees and each tree's
 ## jitter are all clamped to this). 2026-09-24: trees used to reuse the valley "floor"
@@ -72,6 +80,9 @@ const TREE_TRUNK_HEIGHT := 6.0 ## upright cylinder height at scale 1.0 -- the pl
 ## debug_tree_probe() can re-run the exact placement checks at any spot (PerfDebug key T).
 ## ~1 MB (height + road maps). Remove with debug_tree_probe once no longer needed.
 static var _tree_debug: Dictionary = {}
+## Every tree placed this run as Vector3(px, pz, scale) in heightmap-pixel space (1 px = 1 m).
+## Read by UnderstoryScatter to build its canopy density map (2026-09-25). Reset per run.
+static var tree_points: PackedVector3Array = PackedVector3Array()
 
 ## Canopy tree scatter -- see the TREE_* const block for the design. Floor-based
 ## clumped stands, upright, gameplay-range trunk colliders. Same timing contract
@@ -149,6 +160,7 @@ static func scatter_trees(parent_node: Node, terrain: Terrain3D, heights: Packed
 	var stand_count := maxi(1, int(round(rng.randf_range(TREE_STAND_COUNT_MIN_BASE, TREE_STAND_COUNT_MAX_BASE) * area_scale)))
 	var lone_count := maxi(0, int(round(rng.randf_range(TREE_LONE_COUNT_MIN_BASE, TREE_LONE_COUNT_MAX_BASE) * area_scale)))
 	var tree_total := 0
+	var spacing_grid: Dictionary = {} # see TREE_MIN_SPACING_RADIUS -- shared by stand AND lone trees
 
 	# Stand centres: each is the best of TREE_STAND_SPACING_CANDIDATES candidates -- the one
 	# farthest from the stands already placed (evens out coverage, fewer big random voids).
@@ -181,19 +193,19 @@ static func scatter_trees(parent_node: Node, terrain: Terrain3D, heights: Packed
 		"heights": heights, "width": width, "length": length, "import_position": import_position,
 		"road_weight": road_weight, "keep_rects": keep_rects, "keep_circles": keep_circles,
 		"fx_lo": fx_lo, "fx_hi": fx_hi, "fz_lo": fz_lo, "fz_hi": fz_hi,
-		"stand_centres": stand_centres, "lone_count": lone_count,
+		"stand_centres": stand_centres, "lone_count": lone_count, "spacing_grid": spacing_grid,
 	}
 
 	for centre in stand_centres:
 		var per := rng.randi_range(TREE_PER_STAND_MIN, TREE_PER_STAND_MAX)
 		for i in per:
 			var target := Vector2(rng.randfn(centre.x, TREE_STAND_SPREAD), rng.randfn(centre.y, TREE_STAND_SPREAD))
-			if _place_one_tree(target, heights, width, length, import_position, rng, road_weight, keep_rects, keep_circles, fx_lo, fx_hi, fz_lo, fz_hi, active_ids, transforms_by_mesh, colors_by_mesh, road_path, collider_container):
+			if _place_one_tree(target, heights, width, length, import_position, rng, road_weight, keep_rects, keep_circles, fx_lo, fx_hi, fz_lo, fz_hi, active_ids, transforms_by_mesh, colors_by_mesh, road_path, collider_container, spacing_grid):
 				tree_total += 1
 
 	for i in lone_count:
 		var target := Vector2(rng.randf_range(fx_lo, fx_hi), rng.randf_range(fz_lo, fz_hi))
-		if _place_one_tree(target, heights, width, length, import_position, rng, road_weight, keep_rects, keep_circles, fx_lo, fx_hi, fz_lo, fz_hi, active_ids, transforms_by_mesh, colors_by_mesh, road_path, collider_container):
+		if _place_one_tree(target, heights, width, length, import_position, rng, road_weight, keep_rects, keep_circles, fx_lo, fx_hi, fz_lo, fz_hi, active_ids, transforms_by_mesh, colors_by_mesh, road_path, collider_container, spacing_grid):
 			tree_total += 1
 
 	for id in active_ids:
@@ -201,6 +213,7 @@ static func scatter_trees(parent_node: Node, terrain: Terrain3D, heights: Packed
 			instancer.add_transforms(id, transforms_by_mesh[id], colors_by_mesh[id], true)
 
 	print("TERRAIN_GEN: scattered %d tree(s) across %d stand(s) + %d lone (%d with trunk colliders, %d variant id(s) active)" % [tree_total, stand_count, lone_count, collider_container.get_child_count(), active_ids.size()])
+	print("TERRAIN_GEN: closest trunk-to-trunk distance %.2f m (TREE_MIN_SPACING_RADIUS=%.2f -> floor %.2f m at smallest scale)" % [_closest_tree_pair(spacing_grid), TREE_MIN_SPACING_RADIUS, TREE_MIN_SPACING_RADIUS * TREE_SCALE_MIN * 2.0])
 
 ## Places one upright tree at (or near) `target` pixel spot: retries a few times
 ## on steep / on-road / keep-out-blocked ground, and on success appends an
@@ -209,8 +222,9 @@ static func scatter_trees(parent_node: Node, terrain: Terrain3D, heights: Packed
 ## tree was placed. (Mutates transforms_by_mesh / colors_by_mesh /
 ## collider_container by reference.) `road_path` is currently unused -- kept
 ## in the signature from the removed road-range collider gate.
-static func _place_one_tree(target: Vector2, heights: PackedFloat32Array, width: int, length: int, import_position: Vector3, rng: RandomNumberGenerator, road_weight: PackedFloat32Array, keep_rects: Array[Dictionary], keep_circles: Array[Vector3], fx_lo: float, fx_hi: float, fz_lo: float, fz_hi: float, active_ids: Array[int], transforms_by_mesh: Dictionary, colors_by_mesh: Dictionary, road_path: PackedVector2Array, collider_container: Node3D) -> bool:
+static func _place_one_tree(target: Vector2, heights: PackedFloat32Array, width: int, length: int, import_position: Vector3, rng: RandomNumberGenerator, road_weight: PackedFloat32Array, keep_rects: Array[Dictionary], keep_circles: Array[Vector3], fx_lo: float, fx_hi: float, fz_lo: float, fz_hi: float, active_ids: Array[int], transforms_by_mesh: Dictionary, colors_by_mesh: Dictionary, road_path: PackedVector2Array, collider_container: Node3D, spacing_grid: Dictionary) -> bool:
 	var scale := rng.randf_range(TREE_SCALE_MIN, TREE_SCALE_MAX)
+	var spacing_radius := TREE_MIN_SPACING_RADIUS * scale
 	var px := 0.0
 	var pz := 0.0
 	var height := 0.0
@@ -226,11 +240,14 @@ static func _place_one_tree(target: Vector2, heights: PackedFloat32Array, width:
 		var sample_idx := clampi(int(round(pz)), 0, length - 1) * width + clampi(int(round(px)), 0, width - 1)
 		var on_road := road_weight[sample_idx] > 0.0
 		if normal.y >= TREE_MAX_SLOPE_NORMAL_Y and not on_road:
-			if not RockScatter.boulder_blocked(px, pz, TREE_KEEPOUT_RADIUS * scale, keep_rects, keep_circles):
+			if not RockScatter.boulder_blocked(px, pz, TREE_KEEPOUT_RADIUS * scale, keep_rects, keep_circles) \
+					and _tree_spacing_gap(spacing_grid, px, pz, spacing_radius) >= 0.0:
 				found = true
 				break
 	if not found:
 		return false
+	_add_to_spacing_grid(spacing_grid, px, pz, spacing_radius)
+	tree_points.append(Vector3(px, pz, scale))
 
 	var tree_pos := Vector3(import_position.x + px, height - TREE_EMBED_DEPTH, import_position.z + pz)
 	# Upright: random yaw + a tiny lean, never normal-aligned.
@@ -306,6 +323,11 @@ static func debug_tree_probe(world_pos: Vector3) -> String:
 	lines.append("  rock keep-outs (cliffs / outcrops / boulders, scale 1.0): %s" % ["FAIL -- inside a keep-out" if blocked else "PASS"])
 	if blocked: fails.append("keep-out")
 
+	var spacing_gap := _tree_spacing_gap(d.get("spacing_grid", {}), cpx, cpz, TREE_MIN_SPACING_RADIUS)
+	var spacing_ok := spacing_gap >= 0.0
+	lines.append("  tree spacing (scale 1.0, radius %.2f): %s" % [TREE_MIN_SPACING_RADIUS, ("PASS" if is_inf(spacing_gap) else "PASS (%.2f m clear)" % spacing_gap) if spacing_ok else "FAIL -- %.2f m too close to an existing tree" % -spacing_gap])
+	if not spacing_ok: fails.append("tree spacing")
+
 	var centres: Array[Vector2] = d.stand_centres
 	var nearest := INF
 	var close := 0
@@ -325,8 +347,44 @@ static func debug_tree_probe(world_pos: Vector3) -> String:
 		lines.append("  VERDICT: no tree can grow at this exact spot -- failing: %s" % ", ".join(fails))
 	return "\n".join(lines)
 
+## Tree-spacing grid: Dictionary Vector2i(cell) -> Array[Vector3(px, pz, spacing_radius)].
+static func _spacing_cell(px: float, pz: float) -> Vector2i:
+	return Vector2i(floori(px / TREE_SPACING_CELL), floori(pz / TREE_SPACING_CELL))
+
+## Distance from (px, pz) to the nearest placed tree's edge-to-edge gap, i.e. the
+## centre distance minus both spacing radii. Negative = the two spacing circles overlap.
+## INF when no tree is within the 3x3 neighbourhood.
+static func _tree_spacing_gap(grid: Dictionary, px: float, pz: float, radius: float) -> float:
+	var c := _spacing_cell(px, pz)
+	var gap := INF
+	for dz in range(-1, 2):
+		for dx in range(-1, 2):
+			var bucket: Array = grid.get(Vector2i(c.x + dx, c.y + dz), [])
+			for t in bucket:
+				gap = minf(gap, Vector2(px - t.x, pz - t.y).length() - (radius + t.z))
+	return gap
+
+## Smallest centre-to-centre distance between any two placed trees (INF if < 2 trees).
+static func _closest_tree_pair(grid: Dictionary) -> float:
+	var best := INF
+	for c in grid:
+		for t in grid[c]:
+			for dz in range(-1, 2):
+				for dx in range(-1, 2):
+					for u in grid.get(Vector2i(c.x + dx, c.y + dz), []):
+						if u != t:
+							best = minf(best, Vector2(t.x - u.x, t.y - u.y).length())
+	return best
+
+static func _add_to_spacing_grid(grid: Dictionary, px: float, pz: float, radius: float) -> void:
+	var c := _spacing_cell(px, pz)
+	if not grid.has(c):
+		grid[c] = []
+	grid[c].append(Vector3(px, pz, radius))
+
 ## Restores this module's static state (caches, debug buffers, counters) to its initial
 ## values. Called at the start of every WorldGenerator run so each run starts clean, the
 ## same as when these were per-instance member variables on WorldGenerator.
 static func reset_run_state() -> void:
 	_tree_debug = {}
+	tree_points = PackedVector3Array()

@@ -1,0 +1,12 @@
+[gd_scene format=3 uid="uid://denfqjc54cs8"]
+
+[ext_resource type="ArrayMesh" uid="uid://b6ushnxjb4ux6" path="res://assets/models/understory/bush_01/bush_01_bush_01.res" id="1_p13w0"]
+[ext_resource type="ArrayMesh" uid="uid://b34u58l2n2goc" path="res://assets/models/understory/bush_01/bush_01_impostor.res" id="2_w0l4o"]
+
+[node name="Bush01" type="Node3D" unique_id=242844474]
+
+[node name="LOD0" type="MeshInstance3D" parent="." unique_id=937618057]
+mesh = ExtResource("1_p13w0")
+
+[node name="LOD1" type="MeshInstance3D" parent="." unique_id=1415224058]
+mesh = ExtResource("2_w0l4o")

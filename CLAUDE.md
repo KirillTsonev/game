@@ -14,6 +14,9 @@ automatically) -- a local copy also lives at
   props, cliffs and large set dressing, folder layout, Terrain3D id list, general rules.
 - `docs/vegetation.md` -- the tree canopy (Fab pack baking, `PACK_TREES`, bark, ids),
   placement knobs, the tree probe (PerfDebug T), pack contents and the understory plan.
+- `docs/shadows.md` -- how the sun's shadows are set up and why (25 m first cascade, bias),
+  why thin foliage shadows vanish/fade, the foliage cutout shader (`IN_SHADOW_PASS`), Godot
+  shadow research + sources. Read before touching the DirectionalLight3D or leaf materials.
 - This file stays the reference for pitfalls and *why* things are done the way they are.
 
 ## Local tooling paths (this machine)

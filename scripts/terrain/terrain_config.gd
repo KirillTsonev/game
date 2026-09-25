@@ -23,7 +23,7 @@ extends RefCounted
 ##                  run). Useful while tuning a specific result, or for
 ##                  pinning down a bug tied to one particular seed.
 const MASTER_SEED := -1
-#const MASTER_SEED := 1195801279
+#const MASTER_SEED := 1053712953
 
 ## World-space size of the area to (re)generate, in world units --
 ## independent X (width) and Z (length) so it doesn't have to be square.

@@ -97,6 +97,61 @@ func _apply_pack_bark(bm: BaseMaterial3D, key: String) -> String:
 	bm.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	return "bark %s: world triplanar, uv1=(%.2f, %.2f, %.2f) sharpness=%.1f old_tint=%s" % [key, sx, sy, sx, PACK_BARK_TRIPLANAR_SHARPNESS, old_tint.to_html(false)]
 
+## Foliage cutout shader for the pack's leaf/branch cards (2026-09-25, docs/shadows.md): mip-scaled
+## alpha + separate shadow-pass cutoff so canopy shadows don't fade out ~20 m ahead. Built from the
+## card's StandardMaterial3D: same texture, tint, vertex-colour tinting (the pack tints cards via
+## vertex colours), roughness and normal map. No backlight (the trees never had any). Cutoff/boost
+## values come from the understory tool so both layers stay in sync.
+const UNDERSTORY_TOOL := preload("res://tools/setup_understory_assets.gd")
+
+func _foliage_leaf_material(bm: BaseMaterial3D) -> ShaderMaterial:
+	var mat := ShaderMaterial.new()
+	mat.resource_name = "%s_foliage" % (bm.albedo_texture.resource_path.get_file().get_basename() if bm.albedo_texture else "leaf")
+	mat.shader = load(UNDERSTORY_TOOL.FOLIAGE_SHADER_DOUBLE)
+	mat.set_shader_parameter("albedo_tex", bm.albedo_texture)
+	mat.set_shader_parameter("albedo_color", bm.albedo_color)
+	mat.set_shader_parameter("use_vertex_color", bm.vertex_color_use_as_albedo)
+	mat.set_shader_parameter("roughness", bm.roughness)
+	if bm.normal_enabled and bm.normal_texture:
+		mat.set_shader_parameter("normal_tex", bm.normal_texture)
+		mat.set_shader_parameter("normal_scale", bm.normal_scale)
+	mat.set_shader_parameter("alpha_cutoff", UNDERSTORY_TOOL.ALPHA_SCISSOR)
+	mat.set_shader_parameter("mip_alpha_scale", UNDERSTORY_TOOL.MIP_ALPHA_SCALE)
+	mat.set_shader_parameter("shadow_alpha_cutoff", UNDERSTORY_TOOL.SHADOW_ALPHA_CUTOFF)
+	mat.set_shader_parameter("shadow_mip_alpha_scale", UNDERSTORY_TOOL.SHADOW_MIP_ALPHA_SCALE)
+	return mat
+
+## Diagnostic (2026-09-25, before moving leaf cards to the foliage shader): every distinct
+## alpha-scissor (leaf/branch card) material across the baked pack trees and what it sets.
+func debug_print_leaf_materials() -> String:
+	var seen := {}
+	var out: Array[String] = []
+	for entry: Dictionary in PACK_TREES:
+		var mesh: Mesh = ResourceLoader.load(PACK_OUT_DIR + "%s.res" % entry.name, "", ResourceLoader.CACHE_MODE_IGNORE)
+		if mesh == null:
+			out.append("%s: no baked mesh" % entry.name)
+			continue
+		for si in mesh.get_surface_count():
+			var m := mesh.surface_get_material(si)
+			var desc := "null"
+			if m is BaseMaterial3D:
+				var bm := m as BaseMaterial3D
+				if bm.transparency != BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR:
+					continue
+				desc = "alb=%s color=%s normal=%s(%s) rough=%.2f/%s metal=%.2f spec=%.2f vcol_albedo=%s backlight=%s rim=%s cull=%d filter=%d scissor=%.2f shading=%d" % [
+					bm.albedo_texture.resource_path.get_file() if bm.albedo_texture else "-", bm.albedo_color.to_html(), bm.normal_texture.resource_path.get_file() if bm.normal_texture else "-", bm.normal_enabled,
+					bm.roughness, bm.roughness_texture.resource_path.get_file() if bm.roughness_texture else "-", bm.metallic, bm.metallic_specular, bm.vertex_color_use_as_albedo,
+					bm.backlight_enabled, bm.rim_enabled, bm.cull_mode, bm.texture_filter, bm.alpha_scissor_threshold, bm.shading_mode]
+			else:
+				desc = m.get_class() if m else "null"
+			var key := desc
+			if not seen.has(key):
+				seen[key] = []
+			seen[key].append("%s s%d (%d tris)" % [entry.name, si, (mesh.surface_get_arrays(si)[Mesh.ARRAY_INDEX] as PackedInt32Array).size() / 3])
+	for k in seen:
+		out.append("%s\n    used by: %s" % [k, ", ".join(seen[k])])
+	return "\n".join(out)
+
 func build_pack_trees() -> String:
 	var src: Node = (load(PACK_FBX) as PackedScene).instantiate()
 	var assets: Terrain3DAssets = load(ASSETS_PATH)
@@ -152,16 +207,20 @@ func build_pack_trees() -> String:
 			if mat is BaseMaterial3D:
 				var bm := (mat as BaseMaterial3D).duplicate() as BaseMaterial3D
 				var tex := bm.albedo_texture.resource_path.get_file() if bm.albedo_texture else ""
+				var leaf_mat: Material = null
 				if tex.contains("Branch") or tex.contains("Tree_B") or tex.contains("Grass"):
 					bm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
 					bm.alpha_scissor_threshold = 0.5
 					bm.cull_mode = BaseMaterial3D.CULL_DISABLED
+					# 2026-09-25: leaf cards go on the foliage cutout shader (docs/shadows.md) --
+					# their canopy shadows faded out ~20 m ahead like the understory's did.
+					leaf_mat = _foliage_leaf_material(bm)
 				else:
 					bm.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
 					bm.cull_mode = BaseMaterial3D.CULL_BACK
 					if bark_key != "":
 						out.append("  %s s%d: %s" % [entry.name, si, _apply_pack_bark(bm, bark_key)])
-				am.surface_set_material(am.get_surface_count() - 1, bm)
+				am.surface_set_material(am.get_surface_count() - 1, leaf_mat if leaf_mat else bm)
 		var mesh_path := PACK_OUT_DIR + "%s.res" % entry.name
 		ResourceSaver.save(am, mesh_path)
 		var root := Node3D.new()

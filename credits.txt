@@ -1,3 +1,8 @@
 textures
 
-Charlotte Baglioni
+Charlotte Baglioni - bark
+golukumar - church model
+
+models
+
+Yughues - bushes and ferns - https://www.artstation.com/yughues

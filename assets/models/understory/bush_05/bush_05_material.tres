@@ -1,0 +1,22 @@
+[gd_resource type="ShaderMaterial" format=3 uid="uid://bsc5g2pnc2w74"]
+
+[ext_resource type="Texture2D" uid="uid://80xjo5bvrwfk" path="res://assets/models/understory/bush_05/textures/bush_05_diffuse.tga" id="1_um7s1"]
+[ext_resource type="Shader" uid="uid://bfwcquu5ovbu1" path="res://shaders/foliage/foliage_cutout_double.gdshader" id="1_v6uf1"]
+[ext_resource type="Texture2D" uid="uid://d02x86jxstjxg" path="res://assets/models/understory/bush_05/textures/bush_05_translucency.tga" id="2_v6uf1"]
+[ext_resource type="Texture2D" uid="uid://bf5762nx7k62t" path="res://assets/models/understory/bush_05/textures/bush_05_normal.tga" id="3_g5rvq"]
+
+[resource]
+resource_name = "bush_05_material"
+render_priority = 0
+shader = ExtResource("1_v6uf1")
+shader_parameter/albedo_tex = ExtResource("1_um7s1")
+shader_parameter/albedo_color = Color(0.65, 0.65, 0.65, 1)
+shader_parameter/normal_tex = ExtResource("3_g5rvq")
+shader_parameter/normal_scale = 1.0
+shader_parameter/roughness = 0.85
+shader_parameter/backlight_color = Color(0.79, 0.79, 0.79, 1)
+shader_parameter/backlight_tex = ExtResource("2_v6uf1")
+shader_parameter/alpha_cutoff = 0.5
+shader_parameter/mip_alpha_scale = 0.25
+shader_parameter/shadow_alpha_cutoff = 0.35
+shader_parameter/shadow_mip_alpha_scale = 0.6

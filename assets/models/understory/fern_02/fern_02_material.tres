@@ -1,0 +1,20 @@
+[gd_resource type="ShaderMaterial" format=3 uid="uid://c464p2tpn3v7s"]
+
+[ext_resource type="Shader" uid="uid://crlec8eq3t7yq" path="res://shaders/foliage/foliage_cutout_back.gdshader" id="1_kbprf"]
+[ext_resource type="Texture2D" uid="uid://bw4u6kdy448k8" path="res://assets/models/understory/fern_02/textures/fern_02_diffuse.tga" id="1_y5cds"]
+[ext_resource type="Texture2D" uid="uid://bchk6s6gplcnl" path="res://assets/models/understory/fern_02/textures/fern_02_normal.tga" id="2_kbprf"]
+
+[resource]
+resource_name = "fern_02_material"
+render_priority = 0
+shader = ExtResource("1_kbprf")
+shader_parameter/albedo_tex = ExtResource("1_y5cds")
+shader_parameter/albedo_color = Color(1, 1, 1, 1)
+shader_parameter/normal_tex = ExtResource("2_kbprf")
+shader_parameter/normal_scale = 1.0
+shader_parameter/roughness = 0.85
+shader_parameter/backlight_color = Color(0.28, 0.36, 0.12, 1)
+shader_parameter/alpha_cutoff = 0.5
+shader_parameter/mip_alpha_scale = 0.25
+shader_parameter/shadow_alpha_cutoff = 0.35
+shader_parameter/shadow_mip_alpha_scale = 0.6

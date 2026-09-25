@@ -1,0 +1,17 @@
+[gd_resource type="ShaderMaterial" format=3 uid="uid://qkdjhn0avqfe"]
+
+[ext_resource type="Shader" uid="uid://yqspkhsaqiya" path="res://shaders/foliage/foliage_impostor.gdshader" id="1_su1yp"]
+[ext_resource type="Texture2D" uid="uid://c03yxsyat7cmt" path="res://assets/models/understory/bush_01/bush_01_impostor.png" id="2_7aqjm"]
+
+[resource]
+resource_name = "Bush01_impostor_material"
+render_priority = 0
+shader = ExtResource("1_su1yp")
+shader_parameter/albedo_tex = ExtResource("2_7aqjm")
+shader_parameter/albedo_color = Color(1, 1, 1, 1)
+shader_parameter/roughness = 0.9
+shader_parameter/backlight_color = Color(0.28, 0.36, 0.12, 1)
+shader_parameter/alpha_cutoff = 0.5
+shader_parameter/mip_alpha_scale = 0.25
+shader_parameter/shadow_alpha_cutoff = 0.35
+shader_parameter/shadow_mip_alpha_scale = 0.6
