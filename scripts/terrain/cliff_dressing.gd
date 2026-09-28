@@ -779,6 +779,35 @@ static func raise_terrain_behind_cliff_dressing(plan: Array[Dictionary], heights
 	_raise_debug_entry_index.resize(width * length)
 	for i in _raise_debug_entry_index.size():
 		_raise_debug_entry_index[i] = -1
+	# 2026-09-28 (Kirill: "ridge of sharp protrusions" in the join gap between two
+	# namaqualand_cliff_01 placements, seed 4176228882, pixel ~(37, 452)): overlapping entries
+	# used to combine by "tallest blended height wins" (round 19). That's only right while every
+	# plateau sits ABOVE the natural ground. Behind a valley-facing mesh on a hillside the natural
+	# ground is often HIGHER than the mesh top, so this pass carves DOWN -- and then the entry
+	# with the SMALLEST weight (the outer fringe of its lateral fade, ~untouched natural height)
+	# beat a neighbor's fully-applied lower plateau, leaving a 1-2 px ring of near-natural
+	# ground standing up out of the carved shelf (5.2 m single-pixel jumps, confirmed by the
+	# SPIKE_DEBUG stage dump: smooth after flatten, spiky only after this pass, spike pixels =
+	# exactly the pixels the fringe entry "won"). Now every entry ACCUMULATES instead, and one
+	# continuous blend is applied after the loop (see the commit loop at the end):
+	#   target   = weight-averaged plateau height of all contributing entries
+	#   coverage = 1 - prod(1 - w_i)   (any single full-weight entry => fully applied)
+	#   height   = lerp(natural, target, coverage) + bump noise
+	# A pixel touched by only ONE entry gets exactly the same result as before (target = its
+	# plateau, coverage = its weight), so isolated placements are unchanged; overlaps of two
+	# different plateau heights now ramp between them instead of seaming.
+	var raise_w_sum := PackedFloat32Array()
+	raise_w_sum.resize(width * length)
+	raise_w_sum.fill(0.0)
+	var raise_wp_sum := PackedFloat32Array()
+	raise_wp_sum.resize(width * length)
+	raise_wp_sum.fill(0.0)
+	var raise_keep := PackedFloat32Array() ## running prod(1 - w_i) per pixel
+	raise_keep.resize(width * length)
+	raise_keep.fill(1.0)
+	var raise_best_w := PackedFloat32Array() ## debug only: highest single-entry weight, for _raise_debug_entry_index
+	raise_best_w.resize(width * length)
+	raise_best_w.fill(0.0)
 	var defs_by_name: Dictionary = {}
 	for def in TerrainConfig.CLIFF_DRESSING_DEFS:
 		defs_by_name[def.name] = def
@@ -1133,44 +1162,39 @@ static func raise_terrain_behind_cliff_dressing(plan: Array[Dictionary], heights
 				var plateau_height := origin_y + top_local_y * scale_jitter + CLIFF_DRESSING_RAISE_TOP_LIFT
 
 				var idx := qz * width + qx
-				# 2026-09-18 debug (Kirill: "comment temporarily the script generating the terrain,
-				# instead of that, generate yellow debug boxes, with the same logic"): same exact
-				# weight/height computation as before, just recorded for visualization instead of
-				# written into the real heightmap, so we can see the shape of this logic's effect
-				# without another guess-and-regenerate round trip. Restore the commented line and
-				# delete the debug recording once the shape is confirmed correct.
 				var raise_w := depth_weight * lateral_weight
-				var blended_height := lerpf(heights[idx], plateau_height, raise_w)
-				# round 20: mid-slope bumps -- zero at w=0 (natural ground) and w=1 (plateau).
-				var bump_amp := minf(CLIFF_DRESSING_RAISE_BUMP_MAX, absf(plateau_height - heights[idx]) * CLIFF_DRESSING_RAISE_BUMP_FRACTION)
-				blended_height += raise_bump_noise.get_noise_2d(qx, qz) * bump_amp * 4.0 * raise_w * (1.0 - raise_w)
-				# heights[idx] = blended_height
-				# 2026-09-18 debug hypothesis test (Kirill, standing between mountainside and
-				# namaqualand_cliff_01: "ideally it would have to be following the pink line,
-				# instead of how it is now" -- the yellow surface showed jagged, disconnected,
-				# overlapping facets instead of one smooth ridge): each plan entry is processed as
-				# its own independent pass over the SAME shared heights/heights-debug array, and a
-				# pixel where two nearby placements' reach overlaps (exactly the region between two
-				# neighbors the JOIN logic above is meant to bridge) previously just got
-				# unconditionally overwritten by whichever entry happened to run LAST in the plan
-				# array -- an arbitrary seam at that boundary, with each side's own independently-
-				# sampled top-profile height, not one shared ridge. Taking the max of what's already
-				# there instead makes overlapping placements combine by "tallest wins" rather than
-				# "processed-last wins", which should read as one continuous mound between them
-				# instead of a jagged patchwork. Testing this via the debug surface before touching
-				# real terrain.
-				if _raise_debug_heights[idx] <= RAISE_DEBUG_UNSET + 1.0 or blended_height > _raise_debug_heights[idx]:
-					_raise_debug_heights[idx] = blended_height
+				# 2026-09-28: accumulate instead of blending+max-combining per entry -- see the
+				# raise_w_sum/raise_keep comment at the top of this function. The blend (and the
+				# round-20 mid-slope bump noise) is applied once per pixel in the commit loop below.
+				raise_w_sum[idx] += raise_w
+				raise_wp_sum[idx] += raise_w * plateau_height
+				raise_keep[idx] *= (1.0 - raise_w)
+				if raise_w > raise_best_w[idx]:
+					raise_best_w[idx] = raise_w
 					_raise_debug_entry_index[idx] = entry_index
 
-	# 2026-09-18 round 19 (Kirill: "ok, looks good, let's make the debug panels into terrain
-	# now"): commit the previewed surface into the real heightmap. Applied once, AFTER every
-	# entry has been accumulated, so the result is exactly the approved preview -- writing inside
-	# the loop instead would make later entries blend from terrain earlier entries had already
-	# raised, which isn't what the preview showed.
-	for i in range(_raise_debug_heights.size()):
-		if _raise_debug_heights[i] > RAISE_DEBUG_UNSET + 1.0:
-			heights[i] = _raise_debug_heights[i]
+	# Commit: one continuous blend per touched pixel, applied AFTER every entry has accumulated
+	# (round 19's reason still holds -- writing inside the entry loop would make later entries
+	# blend from terrain earlier entries had already moved). History: round 18 had "processed-last
+	# wins" (arbitrary seams), round 19 "tallest wins" (fringe rings wherever the pass carves
+	# down -- the 2026-09-28 spike ridge), now weighted blend (continuous; see top of function).
+	# _raise_debug_heights still receives the final value so the optional RAISE_DEBUG_SHOW_SURFACE
+	# overlay keeps working unchanged.
+	for i in range(raise_w_sum.size()):
+		var w_sum := raise_w_sum[i]
+		if w_sum <= 0.0:
+			continue
+		var natural := heights[i]
+		var target := raise_wp_sum[i] / w_sum
+		var coverage := 1.0 - raise_keep[i]
+		var blended_height := lerpf(natural, target, coverage)
+		# round 20: mid-slope bumps -- zero at coverage 0 (natural ground) and 1 (plateau). Same
+		# world-grid noise sample as before, so single-entry pixels match the old result (up to
+		# float32 rounding in the accumulators).
+		var bump_amp := minf(CLIFF_DRESSING_RAISE_BUMP_MAX, absf(target - natural) * CLIFF_DRESSING_RAISE_BUMP_FRACTION)
+		blended_height += raise_bump_noise.get_noise_2d(i % width, floori(float(i) / float(width))) * bump_amp * 4.0 * coverage * (1.0 - coverage)
+		_raise_debug_heights[i] = blended_height
+		heights[i] = blended_height
 
 ## Restores this module's static state (caches, debug buffers, counters) to its initial
 ## values. Called at the start of every WorldGenerator run so each run starts clean, the

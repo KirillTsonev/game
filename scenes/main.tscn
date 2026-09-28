@@ -635,7 +635,6 @@ script = ExtResource("8_tipki")
 
 [node name="Player" parent="." unique_id=313949835 instance=ExtResource("2_player")]
 transform = Transform3D(0.99888444, 0.04720238, -0.0017926504, 0.019217469, -0.37142542, 0.92826396, 0.043150645, -0.9272622, -0.3719184, -124.76501, 28.531517, -8.0424385)
-speed = 15.0
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=1103997712]
 transform = Transform3D(-0.26986122, 0.93281305, 0.23881906, 0.8673005, 0.1277328, 0.4811173, 0.4182875, 0.33696285, -0.8434994, -112.68039, 120.22815, -1066.3844)

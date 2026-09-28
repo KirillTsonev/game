@@ -72,7 +72,15 @@ func _unhandled_input(event: InputEvent) -> void:
 	# Esc is now handled by the PauseMenu autoload (opens the pause menu and
 	# releases the mouse itself). Click back into the window to re-capture
 	# the mouse during normal play (e.g. after alt-tabbing).
-	if event is InputEventMouseButton and event.pressed:
+	# L = lantern on/off (the OmniLight3D "Lantern" on the belt, player.tscn).
+	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_L:
+		var lantern := get_node_or_null("Lantern") as Light3D
+		if lantern:
+			lantern.visible = not lantern.visible
+
+	# Left click only (2026-09-27): the mouse WHEEL is also an InputEventMouseButton, and
+	# re-capturing on it stole the cursor from UI like the grass tuning panel.
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 ## Plain, standard CharacterBody3D FPS pattern (the same shape used by

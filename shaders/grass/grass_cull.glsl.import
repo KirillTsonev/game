@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://n0bibmcaiqdo"
+path="res://.godot/imported/grass_cull.glsl-46aaa37799d9272a91f25974d338b12d.res"
+
+[deps]
+
+source_file="res://shaders/grass/grass_cull.glsl"
+dest_files=["res://.godot/imported/grass_cull.glsl-46aaa37799d9272a91f25974d338b12d.res"]
+
+[params]
+

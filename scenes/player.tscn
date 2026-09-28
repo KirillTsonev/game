@@ -8,6 +8,7 @@ height = 1.8
 
 [node name="Player" type="CharacterBody3D" unique_id=779426116]
 script = ExtResource("1")
+speed = 7.5
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1762986721]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
@@ -16,3 +17,12 @@ shape = SubResource("CapsuleShape3D_1")
 [node name="Camera3D" type="Camera3D" parent="." unique_id=678708874]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
 current = true
+
+[node name="Lantern" type="OmniLight3D" parent="." unique_id=413361556]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.22, 1.15, -0.12)
+light_color = Color(1, 0.7647059, 0.36862746, 1)
+light_energy = 1.5
+light_specular = 0.3
+shadow_enabled = true
+omni_range = 25.0
+omni_attenuation = 0.0

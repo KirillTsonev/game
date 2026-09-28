@@ -24,6 +24,7 @@ func _ready() -> void:
 	RockScatter.reset_run_state()
 	TreeScatter.reset_run_state()
 	UnderstoryScatter.reset_run_state()
+	GrassScatter.reset_run_state()
 	# Whole-_ready() timing (2026-09-16): the earlier per-stage prints only
 	# covered _build_heightmap (noise/erosion/smoothing/road) -- this covers
 	# the REST of _ready() too (Terrain3D import, boulder scattering, player
@@ -150,6 +151,24 @@ func _ready() -> void:
 	print("TERRAIN_GEN: understory scattering (%.2fs)" % ((Time.get_ticks_msec() - t_ready_stage) / 1000.0))
 	t_ready_stage = Time.get_ticks_msec()
 
+	# Grass step 1: bake the groundcover density/dry/tall texture (no instances -- the GPU
+	# renderer reads it). Reads rock_keep_circles + the canopy, so after boulders/trees. Own stream.
+	var grass_rng := RandomNumberGenerator.new()
+	grass_rng.seed = resolved_seed ^ 0x47525353 # 'GRSS' salt
+	GrassScatter.bake(get_parent(), maps, heightmap_corner, grass_rng)
+	# Grass step 2: the player-following GPU renderer that reads that bake (added deferred).
+	GrassField.spawn(get_parent())
+	print("TERRAIN_GEN: grass density bake (%.2fs)" % ((Time.get_ticks_msec() - t_ready_stage) / 1000.0))
+	t_ready_stage = Time.get_ticks_msec()
+
+	# Ground texturing (2026-09-27): rewrites the control map in place -- Grass texture from the
+	# grass coverage bake, rock/scree rings around cliffs, road kept. Needs the bake, so here.
+	var paint_rng := RandomNumberGenerator.new()
+	paint_rng.seed = resolved_seed ^ 0x50414E54 # 'PANT' salt
+	TerrainGroundPaint.paint(get_parent(), terrain, maps, heightmap_corner, paint_rng)
+	print("TERRAIN_GEN: ground painting (%.2fs)" % ((Time.get_ticks_msec() - t_ready_stage) / 1000.0))
+	t_ready_stage = Time.get_ticks_msec()
+
 	# Planned + terrain-fitted in _build_heightmap (round 2) -- instancing only here.
 	TerrainOutcrops.place_outcrops(get_parent(), maps.outcrop_plan, maps.outcrop_models, heightmap_corner)
 	print("TERRAIN_GEN: outcrop placement (%.2fs)" % ((Time.get_ticks_msec() - t_ready_stage) / 1000.0))
@@ -209,6 +228,7 @@ func _ready() -> void:
 		await RenderingServer.frame_post_draw
 	var t_settled := Time.get_ticks_msec()
 	print("TERRAIN_GEN_STARTUP: 4th frame drawn at t=%.2fs since process start (frames 2-4 took %.2fs -- a big number here means shader compile stalls spilling past frame 1) | pipelines so far: %s" % [t_settled / 1000.0, (t_settled - t_first_draw) / 1000.0, _pipeline_counts_str()])
+
 
 ## 2026-09-21 startup-time probe: cumulative GPU pipeline compilations by source. mesh/surface
 ## are compiled when materials/meshes load; draw/specialization are compiled on demand while

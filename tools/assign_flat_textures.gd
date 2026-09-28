@@ -47,8 +47,19 @@ const ASSETS_PATH := "res://terrain_assets.tres"
 ## actually shows. A real green grass texture, if/when sourced, should get
 ## its own id rather than reusing this one.
 const TEXTURES_BY_ID := {
-	0: {"name": "Ground", "albedo": "res://textures/source/ground_albedo_1k.png", "normal": "res://textures/source/ground_normal_1k.png", "uv_scale": 2.5, "detiling_rotation": 1.0, "detiling_shift": 1.0},
-	1: {"name": "Road", "albedo": "res://textures/source/road_albedo_1k.png", "normal": "res://textures/source/road_normal_1k.png", "uv_scale": 1.0, "detiling_rotation": 1.0, "detiling_shift": 1.0},
+	## 2026-09-27: ALL layers switched to Terrain3D's packed format -- albedo RGB + HEIGHT in
+	## alpha (*_albedo_height_1k.png), normal (OpenGL) RGB + ROUGHNESS in alpha
+	## (*_normal_roughness_1k.png) -- so height blending between layers and per-texture
+	## roughness work. Every layer MUST stay the same size + format (1024 RGBA, imported
+	## VRAM-compressed high-quality, normal_map=0, fix_alpha_border=false -- that last one
+	## would recolour albedo wherever height is 0). Packed from the raw sources in
+	## raw-assets/textures (height normalised to the full 0..1 range per texture). The old
+	## RGB-only *_albedo_1k/*_normal_1k files are no longer referenced.
+	## "roughness" (optional) = Terrain3D's per-texture roughness OFFSET (-1..1, added to the packed
+	## roughness in the shader). Ground106's roughness map averages ~0.64 (min 0.40) -> shiny/plastic
+	## once roughness started being read (2026-09-27); +0.3 brings it to ~0.94 like the other layers.
+	0: {"name": "Ground", "albedo": "res://textures/source/ground_albedo_height_1k.png", "normal": "res://textures/source/ground_normal_roughness_1k.png", "uv_scale": 2.5, "detiling_rotation": 1.0, "detiling_shift": 1.0, "roughness": 0.3},
+	1: {"name": "Road", "albedo": "res://textures/source/road_albedo_height_1k.png", "normal": "res://textures/source/road_normal_roughness_1k.png", "uv_scale": 1.0, "detiling_rotation": 1.0, "detiling_shift": 1.0},
 	## id 2 ("Rock") originally removed -- terrain_gen.gd no longer paints
 	## any slope-based rock texture (the generated ridges never got
 	## tall/sharp enough to read as cliffs, so the rock blending just
@@ -69,9 +80,15 @@ const TEXTURES_BY_ID := {
 	## three are registered as selectable Terrain3DTextureAssets only,
 	## for now -- hand-paint with the Terrain3D dock's paint tool, or wire
 	## up control-map painting logic separately.
-	2: {"name": "RockFace", "albedo": "res://textures/source/rock_face_03_albedo_1k.png", "normal": "res://textures/source/rock_face_03_normal_1k.png", "uv_scale": 2.5, "detiling_rotation": 1.0, "detiling_shift": 1.0},
-	3: {"name": "CoastSandRocks", "albedo": "res://textures/source/coast_sand_rocks_02_albedo_1k.png", "normal": "res://textures/source/coast_sand_rocks_02_normal_1k.png", "uv_scale": 2.5, "detiling_rotation": 1.0, "detiling_shift": 1.0},
-	4: {"name": "AerialRocks", "albedo": "res://textures/source/aerial_rocks_04_albedo_1k.png", "normal": "res://textures/source/aerial_rocks_04_normal_1k.png", "uv_scale": 2.5, "detiling_rotation": 1.0, "detiling_shift": 1.0},
+	## Cliff-area GROUND layers (never the cliff meshes): painted around each cliff by
+	## scripts/terrain/ground_paint.gd to blend the cliff into the terrain.
+	2: {"name": "RockFace", "albedo": "res://textures/source/rock_face_03_albedo_height_1k.png", "normal": "res://textures/source/rock_face_03_normal_roughness_1k.png", "uv_scale": 2.5, "detiling_rotation": 1.0, "detiling_shift": 1.0}, # bare rock ground right at the cliff
+	3: {"name": "CoastSandRocks", "albedo": "res://textures/source/coast_sand_rocks_02_albedo_height_1k.png", "normal": "res://textures/source/coast_sand_rocks_02_normal_roughness_1k.png", "uv_scale": 2.5, "detiling_rotation": 1.0, "detiling_shift": 1.0}, # cliff meets grass
+	4: {"name": "AerialRocks", "albedo": "res://textures/source/aerial_rocks_04_albedo_height_1k.png", "normal": "res://textures/source/aerial_rocks_04_normal_roughness_1k.png", "uv_scale": 2.5, "detiling_rotation": 1.0, "detiling_shift": 1.0}, # mossy rock ground at the cliff
+	## 2026-09-27 new layers (Poly Haven, 1k):
+	5: {"name": "Grass", "albedo": "res://textures/source/grass_ground_albedo_height_1k.png", "normal": "res://textures/source/grass_ground_normal_roughness_1k.png", "uv_scale": 2.5, "detiling_rotation": 1.0, "detiling_shift": 1.0}, # painted from GrassScatter's coverage bake
+	6: {"name": "RockyTrail", "albedo": "res://textures/source/rocky_trail_02_albedo_height_1k.png", "normal": "res://textures/source/rocky_trail_02_normal_roughness_1k.png", "uv_scale": 2.5, "detiling_rotation": 1.0, "detiling_shift": 1.0}, # scree around cliffs
+	7: {"name": "RockyTerrain", "albedo": "res://textures/source/rocky_terrain_03_albedo_height_1k.png", "normal": "res://textures/source/rocky_terrain_03_normal_roughness_1k.png", "uv_scale": 2.5, "detiling_rotation": 1.0, "detiling_shift": 1.0}, # scree with grass around cliffs
 }
 
 ## Strips the id=2 ("Rock") Terrain3DTextureAsset entry from the SAME live
@@ -120,18 +137,10 @@ func force_reimport() -> String:
 	# Godot already has loaded in ResourceCache -- same class of staleness
 	# as the terrain_assets.tres saga. EditorFileSystem.reimport_files() is
 	# the actual API for forcing a real reimport of already-imported files.
-	var paths := [
-		"res://textures/source/road_albedo_1k.png",
-		"res://textures/source/road_normal_1k.png",
-		"res://textures/source/ground_albedo_1k.png",
-		"res://textures/source/ground_normal_1k.png",
-		"res://textures/source/rock_face_03_albedo_1k.png",
-		"res://textures/source/rock_face_03_normal_1k.png",
-		"res://textures/source/coast_sand_rocks_02_albedo_1k.png",
-		"res://textures/source/coast_sand_rocks_02_normal_1k.png",
-		"res://textures/source/aerial_rocks_04_albedo_1k.png",
-		"res://textures/source/aerial_rocks_04_normal_1k.png",
-	]
+	var paths := []
+	for id in TEXTURES_BY_ID.keys():
+		paths.append(TEXTURES_BY_ID[id]["albedo"])
+		paths.append(TEXTURES_BY_ID[id]["normal"])
 	EditorInterface.get_resource_filesystem().reimport_files(PackedStringArray(paths))
 	var log_lines: Array[String] = []
 	for p in paths:
@@ -217,6 +226,7 @@ func fix_textures() -> String:
 		# zero-extra-art fix for visible texture repetition.
 		tex_asset.set_detiling_rotation(paths.get("detiling_rotation", 0.0))
 		tex_asset.set_detiling_shift(paths.get("detiling_shift", 0.0))
+		tex_asset.set_roughness(paths.get("roughness", 0.0))
 		if is_new:
 			# This is what actually inserts a brand-new Terrain3DTextureAsset
 			# into the live list -- setting properties on a freshly-constructed
