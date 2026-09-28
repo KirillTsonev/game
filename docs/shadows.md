@@ -4,7 +4,7 @@ Research + findings from the understory work (2026-09-25). Project-specific sett
 general Godot knowledge after. Related: `docs/vegetation.md` (understory/trees),
 `CLAUDE.md` (pitfalls).
 
-Last reviewed: 2026-09-25 (Godot 4.7.2 stable, Forward+).
+Last reviewed: 2026-09-29 (Godot 4.7.2 stable, Forward+).
 
 ---
 
@@ -24,12 +24,27 @@ number): ~18 M tris / ~6.5k draw calls per frame vs ~11-16 M with 2 splits to 25
 tree is drawn into 4 shadow passes. Levers if it gets too heavy: shorter max distance, fewer
 splits, Terrain3D `last_shadow_lod` / shadow impostors on the trees.
 
-**Tree impostors (2026-09-25):** pack trees swap to an 8-tri impostor at 150 m, the same distance
-where sun shadows end, so the impostor LOD casts nothing (`last_shadow_lod = 0`) and loses no
-visible shadow. The 10 m cross-fade sits beyond the shadow range, so the "fade self"
-shadow-drop issue (Godot #91671) doesn't show. After: ~7.0 ms GPU / 10.9 M tris / 4.5k draws
-(was 10.9 ms / 21.4 M / 7.2k). If max distance is ever raised past 150 m, raise
-`TREE_IMPOSTOR_RANGE` in `tools/setup_tree_assets.gd` with it. See `docs/vegetation.md`.
+**Tree impostors (2026-09-25, switch distance revised 2026-09-29):** pack trees swap to an 8-tri
+impostor at **175 m** (`TREE_IMPOSTOR_RANGE` in `tools/setup_tree_assets.gd`); the impostor LOD
+casts nothing (`last_shadow_lod = 0`). After (at the original 150 m): ~7.0 ms GPU / 10.9 M tris /
+4.5k draws (was 10.9 ms / 21.4 M / 7.2k). See `docs/vegetation.md`.
+
+*Why 175 and not 150 (= shadow max distance):* Terrain3D switches LODs per **32 m cell**, by the
+distance to the **cell centre**, not per tree -- a tree can be up to ~23 m (half the cell
+diagonal) nearer than its cell centre. With the switch at 150, whole cells of trees 127-150 m
+away became impostors while their shadows were still 25-70 % strong (fade 120-150 m), so tree
+shadows visibly **popped** in clusters instead of fading (user report, 2026-09-29). The 10 m
+"fade self" cross-fade made it worse: a fading instance drops its shadow entirely (Godot #91671).
+At 175 every tree whose shadow can still be seen is the full model; the swap and its cross-fade
+happen where shadows are already gone. Cost: full trees drawn in an extra 150-175 m ring (view
+only -- they're past the shadow range, so no shadow passes).
+
+**Rule:** keep `TREE_IMPOSTOR_RANGE >= directional_shadow_max_distance + ~23 m` (+ fade margin
+if you want zero overlap). If the shadow max distance changes, change the range with it and
+re-run `tree_impostor_import()` then `build_pack_trees()` -- `TREE_IMPOSTOR_GAIN_NEAR/FAR_DIST`
+follow the range (range -/+ 20 m) so the user-tuned impostor fullness at the switch stays put.
+The same cell rule applies to any instanced asset whose shadow stops at a LOD switch inside the
+shadow range.
 
 How these were chosen: temporary debug keys (first-split distance, 2/4 splits, atlas 4096/8192,
 max distance 250/150/100, blur 1/0.5/0) toggled live in-game; the 4096 atlas was kept.
@@ -107,7 +122,9 @@ in-game: frame cost unchanged (~17.9 M tris / ~6.6k draw calls vs ~18.1 M / ~6.5
 - **Terrain3D instancer**: LODs switch per **32 m cell** (distance to the cell centre), not per
   instance; `last_shadow_lod` stops shadows at a LOD; `shadow_impostor` casts a cheaper LOD's
   shadow while showing LOD0 -- the tool for cutting foliage shadow cost later. A single-LOD asset
-  gets fade 0 (fade clamps to half the LOD0->LOD1 gap).
+  gets fade 0 (fade clamps to half the LOD0->LOD1 gap). **Consequence:** a LOD switch that drops
+  shadows must sit >= ~23 m (half the cell diagonal) beyond the shadow max distance, or whole
+  cells of shadows pop inside the fade band (the 2026-09-29 tree fix above).
 - Imported meshes: `meshes/create_shadow_meshes` builds position-only shadow meshes (no UVs) ->
   alpha-scissor casters lose their cutout and cast nothing. Off for foliage.
 - Performance: fewer splits (2 here), lower max distance, `shadow_caster_mask` / `cast_shadow`

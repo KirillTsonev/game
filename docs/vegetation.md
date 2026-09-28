@@ -2,7 +2,7 @@
 
 How the forest is built and tuned. General model-adding rules: `docs/adding_models.md`.
 
-Last reviewed: 2026-09-24.
+Last reviewed: 2026-09-29.
 
 ---
 
@@ -25,13 +25,14 @@ realistic too.
   row of `PACK_TREES` (`id`, FBX `node`, `name`) it bakes the node's rotation/scale into a
   standalone mesh (base at y=0), fixes materials, saves `trees/<name>.res` + `<name>.tscn`
   and registers the Terrain3D mesh asset. With a baked impostor (always, since 2026-09-25):
-  LOD0 = full tree to 150 m, LOD1 = impostor to 100 km (never culled), 10 m cross-fade,
-  `last_shadow_lod = 0`. Without one it falls back to a single LOD visible to
-  `PACK_LOD0_RANGE` = 600 m.
+  LOD0 = full tree to **175 m** (`TREE_IMPOSTOR_RANGE`; was 150 until 2026-09-29), LOD1 =
+  impostor to 100 km (never culled), 10 m cross-fade, `last_shadow_lod = 0`. Without one it
+  falls back to a single LOD visible to `PACK_LOD0_RANGE` = 600 m.
 - **Far impostors** (2026-09-25). Measured before: trees beyond 150 m cost ~10 M tris, ~3.3k
   draw calls, ~3.9 ms GPU + ~3 ms CPU of a 10.9 ms GPU frame. After, same kind of view:
   7.0 ms GPU, 10.9 M tris (was 21.4 M), 4.5k draws (was 7.2k), and the forest now reaches the
-  map edge instead of ending at 600 m.
+  map edge instead of ending at 600 m. (Measured with the switch at 150 m; at 175 m there are
+  a few more full trees in the 150-175 m ring -- view only, no shadow passes.)
   - `bake_tree_impostors()` renders each baked tree unlit (bark = UNSHADED copy of its
     material, leaves = `foliage_impostor_capture.gdshader` with the vertex tint) from 4 angles
     (0/45/90/135 deg) with an orthographic camera in an editor SubViewport, at 4x supersampling
@@ -54,14 +55,18 @@ realistic too.
     fuller. Fix: `saturation` uniform (trees 0.9, `TREE_IMPOSTOR_SATURATION`) and
     `TREE_IMPOSTOR_ALPHA_GAIN` 2.0 -> 1.4. The gain is now a shader uniform (`alpha_gain`); the
     atlas stores true coverage (`TREE_IMPOSTOR_BAKE_GAIN` = 1).
-  - **Cross-fade band, as Godot really draws it:** Terrain3D sets real tree end 160 / impostor
-    begin 140, both margin 10, and Godot fades symmetrically around each limit
-    (renderer_scene_cull.cpp: limit +/- margin). So the impostor fades in over 130-150 m and the
-    real tree fades out over 150-170 m, with both fully drawn at 150. Distances are radial to
-    each batch's AABB centre.
-  - **Distance fullness:** `alpha_gain` applies at 130 m and `alpha_gain_far` at 170 m and
-    beyond, smooth in between. Coarser mips thin the impostor with distance, so one gain can't fit
-    both ends. The understory keeps `alpha_gain_far = -1` (off).
+  - **Cross-fade band, as Godot really draws it:** Terrain3D sets real tree end = range + 10 /
+    impostor begin = range - 10, both margin 10, and Godot fades symmetrically around each limit
+    (renderer_scene_cull.cpp: limit +/- margin). With the range at 175 (since 2026-09-29) the
+    impostor fades in over 155-175 m and the real tree fades out over 175-195 m, with both fully
+    drawn at 175 (was 130-150 / 150-170 at range 150). Distances are radial to each batch's AABB
+    centre (a 32 m instancer cell), not to each tree.
+  - **Distance fullness:** `alpha_gain` applies at `TREE_IMPOSTOR_GAIN_NEAR_DIST` and
+    `alpha_gain_far` at `TREE_IMPOSTOR_GAIN_FAR_DIST` and beyond, smooth in between. Both are
+    derived from the range (range - 20 / range + 20 = 155 / 195 m now, were 130 / 170), so the
+    user-tuned fullness at the switch stays put whenever the range moves. Coarser mips thin the
+    impostor with distance, so one gain can't fit both ends. The understory keeps
+    `alpha_gain_far = -1` (off).
   - **Dry trees** (ids 14, 16, 17, 19, 22, 24, 26: sparse brown twig cards, no leaves): the shared
     gains turned their twigs into solid brown canopies, so they get their own near/far pair
     (`TREE_IMPOSTOR_DRY_ALPHA_GAIN` / `_FAR`, materials tagged meta `impostor_group = "dry"`).
@@ -78,9 +83,17 @@ realistic too.
     player while the real crown was lit green. The shader now mirrors the normal through the
     plane when viewed from its back (`normal_views` must equal `TREE_IMPOSTOR_VIEWS`), like
     Godot's side check does for real double-sided leaves.
-  - The impostor casts no shadow. Sun shadows end at 150 m anyway (docs/shadows.md).
+  - **The impostor casts no shadow, so the switch must sit well past the shadow range.** Sun
+    shadows end at 150 m (fading from 120 m), but LODs switch per 32 m cell by the cell centre,
+    so a tree can be ~23 m nearer than its cell's switch distance. At range 150, whole cells of
+    trees 127-150 m away went impostor while their shadows were still 25-70 % strong -> tree
+    shadows popped in and out in clusters (user report, 2026-09-29). Fixed by moving the range
+    to 175. **Rule: `TREE_IMPOSTOR_RANGE` >= shadow max distance + ~23 m.** Details:
+    `docs/shadows.md`.
   - Pipeline: `bake_tree_impostors()` -> rescan -> `tree_impostor_import()` (VRAM + mips,
-    materials) -> `build_pack_trees()`. Rerun all of it after changing a tree mesh.
+    materials) -> `build_pack_trees()`. Rerun all of it after changing a tree mesh. After
+    changing only `TREE_IMPOSTOR_RANGE`: `tree_impostor_import()` (fullness distances) ->
+    `build_pack_trees()` (LOD range); no rebake.
   - Gotchas: `lod1_range = 0` ("unlimited") makes Terrain3D clamp `fade_margin` to 0, hence
     the 100 km range. After editing the shader, `tree_impostor_import()` loads it with
     CACHE_MODE_REPLACE, because the editor's stale copy silently drops parameters for new

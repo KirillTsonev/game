@@ -325,7 +325,6 @@ static func build_heightmap(master_seed: int = TerrainConfig.MASTER_SEED) -> Dic
 		smooth(heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, SMOOTH_PASSES, SMOOTH_RADIUS)
 		print("TERRAIN_GEN: smoothing done (%.2fs)" % ((Time.get_ticks_msec() - t_stage) / 1000.0))
 		t_stage = Time.get_ticks_msec()
-	_spike_debug_patch("1 after main erosion+smoothing", heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH) # TEMP spike diagnostic
 
 	var feature_count := maxi(1, int(TerrainConfig.AREA_WIDTH * TerrainConfig.AREA_LENGTH * FEATURE_DENSITY))
 	print("TERRAIN_GEN: adding %d cliff/ledge feature(s)..." % feature_count)
@@ -334,7 +333,6 @@ static func build_heightmap(master_seed: int = TerrainConfig.MASTER_SEED) -> Dic
 	var cliff_features := CliffFeatures.add_cliff_features(heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, feature_rng, feature_count)
 	print("TERRAIN_GEN: cliff features done (%.2fs)" % ((Time.get_ticks_msec() - t_stage) / 1000.0))
 	t_stage = Time.get_ticks_msec()
-	_spike_debug_patch("2 after cliff features", heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH) # TEMP spike diagnostic
 
 	# Second, much lighter erosion pass -- runs AFTER carving so the crisp
 	# features get real runoff/edge detail instead of none at all, but at
@@ -346,7 +344,6 @@ static func build_heightmap(master_seed: int = TerrainConfig.MASTER_SEED) -> Dic
 	TerrainErosion.erode(heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, erosion_rng, post_feature_erosion_iterations)
 	print("TERRAIN_GEN: post-feature erosion done (%.2fs)" % ((Time.get_ticks_msec() - t_stage) / 1000.0))
 	t_stage = Time.get_ticks_msec()
-	_spike_debug_patch("3 after post-feature erosion", heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH) # TEMP spike diagnostic
 
 	# Cliff dressing is PLANNED here (2026-09-17 reorder, moved AGAIN the same day -- now
 	# BEFORE road routing instead of after). Reasoning: cliff-dressing footprints are still
@@ -358,15 +355,18 @@ static func build_heightmap(master_seed: int = TerrainConfig.MASTER_SEED) -> Dic
 	# function's own comment. Same salt-XOR derivation _ready() used to do locally for this RNG
 	# (purely cosmetic placement, doesn't need to be in _derive_seeds' fixed derivation order
 	# any more than boulder_rng does).
+	# 2026-09-28: snapshot BEFORE cliff dressing touches the terrain -- TerrainKnots diffs
+	# against it to find which pixels dressing/outcrops already claimed (see knots.gd).
+	var pre_dressing_heights := heights.duplicate()
 	var cliff_dressing_rng := RandomNumberGenerator.new()
 	cliff_dressing_rng.seed = master_seed ^ 0x434C4646 # 'CLFF' salt
 	var cliff_dressing_plan := CliffDressing.plan_cliff_dressing(cliff_features, heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, cliff_dressing_rng)
+	# 2026-09-29: fixed landmark (landmarks.gd) -- drop planned meshes in its disk BEFORE they
+	# shape the terrain (the landmark is stamped over that area further down). No-op without data.
+	var lm_meshes_removed := TerrainLandmarks.filter_cliff_plan(cliff_dressing_plan)
 	CliffDressing.flatten_terrain_for_cliff_dressing(cliff_dressing_plan, heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH)
-	_spike_debug_patch("4 after cliff flatten", heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH) # TEMP spike diagnostic
 	var cliff_dressing_top_profiles := CliffDressing.build_cliff_dressing_top_profiles()
 	CliffDressing.raise_terrain_behind_cliff_dressing(cliff_dressing_plan, heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, cliff_dressing_top_profiles, master_seed ^ 0x52414953) # 'RAIS' salt, round 20
-	_spike_debug_patch("5 after cliff raise", heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH) # TEMP spike diagnostic
-	_spike_debug_raise_winners(TerrainConfig.AREA_WIDTH) # TEMP spike diagnostic
 	var cliff_obstacle_mask := CliffDressing.build_cliff_dressing_obstacle_mask(cliff_dressing_plan, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH)
 	print("TERRAIN_GEN: cliff dressing planned + terrain flattened/raised to match (%.2fs)" % ((Time.get_ticks_msec() - t_stage) / 1000.0))
 	t_stage = Time.get_ticks_msec()
@@ -378,9 +378,28 @@ static func build_heightmap(master_seed: int = TerrainConfig.MASTER_SEED) -> Dic
 	var outcrop_rng := RandomNumberGenerator.new()
 	outcrop_rng.seed = master_seed ^ 0x4F555443 # 'OUTC' salt
 	var outcrop_plan := TerrainOutcrops.plan_outcrops(outcrop_models, heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, outcrop_rng, cliff_dressing_plan)
+	var lm_outcrops_removed := TerrainLandmarks.filter_outcrops(outcrop_plan) # 2026-09-29 landmark disk
 	TerrainOutcrops.fit_terrain_to_outcrops(outcrop_plan, outcrop_models, heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH)
 	TerrainOutcrops.add_outcrops_to_obstacle_mask(outcrop_plan, cliff_obstacle_mask, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH)
 	print("TERRAIN_GEN: outcrops planned + terrain fitted (%.2fs)" % ((Time.get_ticks_msec() - t_stage) / 1000.0))
+	t_stage = Time.get_ticks_msec()
+
+	# 2026-09-29: fixed landmark -- stamp the captured formation (heights, cliff meshes, cliff
+	# features) and reserve its area; before knots (they avoid it) and the road (routes around it).
+	if TerrainLandmarks.is_active():
+		print("TERRAIN_GEN: LANDMARK disk cleared: %d planned cliff mesh(es), %d outcrop(s) dropped" % [lm_meshes_removed, lm_outcrops_removed])
+		TerrainLandmarks.stamp(heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, cliff_dressing_plan, cliff_obstacle_mask, cliff_features)
+
+	# 2026-09-28: verticality knots -- deliberate multi-level points of interest (knots.gd).
+	# Deliberately LAST among the terrain shapers and in free space only, so every existing
+	# formation (and every RNG stream above) is unchanged; own salted stream. Knot cliff meshes
+	# join the regular dressing plan AFTER flatten/raise ran (knots shape their own ground), and
+	# knot footprints go into cliff_obstacle_mask so the road always routes around them.
+	var knot_rng := RandomNumberGenerator.new()
+	knot_rng.seed = master_seed ^ 0x4B4E4F54 # 'KNOT' salt
+	var knot_result := TerrainKnots.build_knots(heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, knot_rng, pre_dressing_heights, cliff_features, cliff_dressing_plan, outcrop_plan, cliff_obstacle_mask, cliff_dressing_top_profiles)
+	var knot_meshes: Array[Dictionary] = knot_result.mesh_plan
+	cliff_dressing_plan.append_array(knot_meshes)
 	t_stage = Time.get_ticks_msec()
 
 	# Control map: defaults to ground everywhere; the road step below paints
@@ -409,7 +428,6 @@ static func build_heightmap(master_seed: int = TerrainConfig.MASTER_SEED) -> Dic
 	t_stage = Time.get_ticks_msec()
 
 	_print_roughness_stats(heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH)
-	_spike_debug_patch("6 final (after outcrops+road)", heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH) # TEMP spike diagnostic
 
 	# height_image built directly from `heights`' raw bytes (2026-09-16) --
 	# `heights` is already a PackedFloat32Array in the exact row-major
@@ -435,7 +453,7 @@ static func build_heightmap(master_seed: int = TerrainConfig.MASTER_SEED) -> Dic
 	var color_image := _build_color_map(seeds, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH)
 	print("TERRAIN_GEN: color map done (%.2fs)" % ((Time.get_ticks_msec() - t_stage) / 1000.0))
 	print("TERRAIN_GEN: _build_heightmap TOTAL (%.2fs)" % ((Time.get_ticks_msec() - t_start) / 1000.0))
-	return {"height": height_image, "control": control_image, "color": color_image, "cliff_features": cliff_features, "cliff_dressing_plan": cliff_dressing_plan, "cliff_dressing_top_profiles": cliff_dressing_top_profiles, "outcrop_plan": outcrop_plan, "outcrop_models": outcrop_models, "heights": heights, "road_weight": road_weight, "spawn_pixel": road_result.spawn_pixel, "exit_pixel": road_result.exit_pixel, "road_path": road_result.path}
+	return {"height": height_image, "control": control_image, "color": color_image, "cliff_features": cliff_features, "cliff_dressing_plan": cliff_dressing_plan, "cliff_dressing_top_profiles": cliff_dressing_top_profiles, "outcrop_plan": outcrop_plan, "outcrop_models": outcrop_models, "heights": heights, "road_weight": road_weight, "spawn_pixel": road_result.spawn_pixel, "exit_pixel": road_result.exit_pixel, "road_path": road_result.path, "knots": knot_result.knots}
 
 ## Builds the terrain's color map: a full-resolution RGBA image Terrain3D
 ## multiplies directly into every pixel's albedo (alpha nudges roughness
@@ -565,56 +583,6 @@ static func _print_roughness_stats(heights: PackedFloat32Array, width: int, leng
 ## single biggest cost in a heightmap build (the ROAD_SMOOTH_RADIUS=3
 ## call inside _generate_road alone was ~32% of total build time) -- this
 ## sliding-window change is the further fix for that.
-## 2026-09-28 TEMP spike diagnostic (Kirill: "ridge of sharp protrusions" at world
-## (-217.9, 197.0) = pixel ~(38, 453), seed 4176228882, in the join gap between cliff meshes
-## @8/@9). Prints a 9x9 height patch + the largest 1-px jump inside it after each pipeline
-## stage, to find which stage introduces the single-pixel spikes. KEEP until Kirill confirms
-## the fix in-game, then delete this + its call sites in build_heightmap.
-const SPIKE_DEBUG_CENTER := Vector2i(37, 452)
-const SPIKE_DEBUG_RADIUS := 4
-
-static func _spike_debug_patch(stage: String, heights: PackedFloat32Array, width: int, length: int) -> void:
-	var c := SPIKE_DEBUG_CENTER
-	var r := SPIKE_DEBUG_RADIUS
-	var max_jump := 0.0
-	var max_at := Vector2i(-1, -1)
-	var rows: Array[String] = []
-	for pz in range(maxi(c.y - r, 0), mini(c.y + r, length - 1) + 1):
-		var row := ""
-		for px in range(maxi(c.x - r, 0), mini(c.x + r, width - 1) + 1):
-			var h := heights[pz * width + px]
-			row += "%6.2f " % h
-			if px < c.x + r and px + 1 < width:
-				var jx := absf(h - heights[pz * width + px + 1])
-				if jx > max_jump:
-					max_jump = jx
-					max_at = Vector2i(px, pz)
-			if pz < c.y + r and pz + 1 < length:
-				var jz := absf(h - heights[(pz + 1) * width + px])
-				if jz > max_jump:
-					max_jump = jz
-					max_at = Vector2i(px, pz)
-		rows.append("SPIKE_DEBUG   pz %d: %s" % [pz, row])
-	print("SPIKE_DEBUG [%s] patch px %d..%d, max 1-px jump %.2f at %s" % [stage, c.x - r, c.x + r, max_jump, max_at])
-	for line in rows:
-		print(line)
-
-## Companion to _spike_debug_patch: which cliff-dressing plan entry won each pixel in the raise
-## pass's max-combination (-1 = untouched by raise). TEMP, same removal condition as above.
-static func _spike_debug_raise_winners(width: int) -> void:
-	var c := SPIKE_DEBUG_CENTER
-	var r := SPIKE_DEBUG_RADIUS
-	var winners: PackedInt32Array = CliffDressing._raise_debug_entry_index
-	if winners.is_empty():
-		print("SPIKE_DEBUG raise winners: buffer empty")
-		return
-	print("SPIKE_DEBUG raise winner entry index per pixel (-1 = untouched):")
-	for pz in range(c.y - r, c.y + r + 1):
-		var row := ""
-		for px in range(c.x - r, c.x + r + 1):
-			row += "%3d " % winners[pz * width + px]
-		print("SPIKE_DEBUG   pz %d: %s" % [pz, row])
-
 static func smooth(heights: PackedFloat32Array, width: int, length: int, passes: int, radius: int) -> void:
 	var window := 2 * radius + 1
 	var row_buffer := PackedFloat32Array()

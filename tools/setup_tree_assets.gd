@@ -262,8 +262,9 @@ func build_pack_trees() -> String:
 		if has_impostor:
 			# Full tree to TREE_IMPOSTOR_RANGE, then the 8-tri impostor out to 100 km (= never culled).
 			# Not range 0 ('unlimited'): Terrain3D clamps fade_margin to half the gap to the next range,
-			# and with 0 there is no gap -> fade forced to 0 -> hard swap at 150 m.
-			# Impostor casts no shadow (sun shadows end at 150 m anyway -- docs/shadows.md).
+			# and with 0 there is no gap -> fade forced to 0 -> hard swap at the range.
+			# Impostor casts no shadow -- which is why TREE_IMPOSTOR_RANGE must sit >= ~23 m past the
+			# sun shadow max distance (per-cell LOD switching, see the constant and docs/shadows.md).
 			a.set_lod_range(0, TREE_IMPOSTOR_RANGE)
 			a.set_lod_range(1, TREE_IMPOSTOR_FAR)
 			a.set_last_lod(1)
@@ -289,7 +290,14 @@ const TREE_FADE_MARGIN := 24.0
 ## GPU + ~3 ms CPU of a 10.9 ms GPU frame. Each tree gets a 4-view impostor: 4 vertical planes at
 ## 0/45/90/135 deg crossing at the trunk (8 tris), texture = unlit captures of the baked tree.
 ## Pipeline: bake_tree_impostors() -> rescan -> tree_impostor_import() -> build_pack_trees().
-const TREE_IMPOSTOR_RANGE := 150.0  ## full tree up to here (= sun shadow max distance)
+## 2026-09-29 (Kirill: "some tree shadows very obviously popping in and out instead of fading"):
+## was 150 (= sun shadow max distance). But Terrain3D switches LODs per 32 m CELL, by distance to
+## the cell centre -- a tree can be up to ~23 m (half the cell diagonal) nearer than that. So at 150
+## whole cells of trees 127-150 m away swapped to the no-shadow impostor while their shadows were
+## still 25-70 % strong (fade 120-150 m) -> shadows popped. 175 = 150 + 23 (+2): every tree whose
+## shadow can still be seen stays the full model; the swap happens where shadows are already gone.
+## Keep >= directional_shadow_max_distance + 23.
+const TREE_IMPOSTOR_RANGE := 175.0  ## full tree up to here (cell-centre distance)
 const TREE_IMPOSTOR_FAR := 100000.0  ## impostor end range -- effectively never culled
 const TREE_IMPOSTOR_FADE := 10.0  ## cross-fade full tree <-> impostor (shadows are gone out there anyway)
 const TREE_IMPOSTOR_VIEWS := 4
@@ -324,8 +332,10 @@ const TREE_IMPOSTOR_DRY_ALPHA_GAIN := 0.15
 const TREE_IMPOSTOR_DRY_ALPHA_GAIN_FAR := 1.05
 ## The cross-fade band as Godot actually draws it: impostor fades in 130-150, real tree out
 ## 150-170 (symmetric margins around begin 140 / end 160 -- see docs/vegetation.md).
-const TREE_IMPOSTOR_GAIN_NEAR_DIST := 130.0
-const TREE_IMPOSTOR_GAIN_FAR_DIST := 170.0
+## 2026-09-29: shifted +25 m with TREE_IMPOSTOR_RANGE (150 -> 175), so the user-tuned fullness
+## at the switch is unchanged: now 155-175 / 175-195.
+const TREE_IMPOSTOR_GAIN_NEAR_DIST := TREE_IMPOSTOR_RANGE - 20.0
+const TREE_IMPOSTOR_GAIN_FAR_DIST := TREE_IMPOSTOR_RANGE + 20.0
 const TREE_IMPOSTOR_BAKE_GAIN := 1.0  ## alpha = coverage x gain, so >= 25 % leaf cover survives the 0.5 cutout
 const TREE_IMPOSTOR_CAPTURE_SHADER := "res://shaders/foliage/foliage_impostor_capture.gdshader"
 const TREE_IMPOSTOR_SHADER := "res://shaders/foliage/foliage_impostor.gdshader"

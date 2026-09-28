@@ -35,6 +35,40 @@ const ROAD_EDGE_SOFTNESS := 2.5 ## half-width, in units, of the grading blend at
 const ROAD_SMOOTH_PASSES := 4 ## extra box-blur passes (on a separate copy) used as the "graded" target the corridor blends toward
 const ROAD_SMOOTH_RADIUS := 3
 
+## -- Level road bed + banks (2026-09-29) --
+## Kirill (screenshot): "the road can sit on some steep curves, can we make sure it stays on even
+## terrain?" The old grading blended the corridor toward a BLURRED copy of the terrain at each
+## pixel -- blurring removes bumps but keeps the hillside's tilt, so a road running along a slope
+## was tilted across its width. Now the bed follows a smoothed LONGITUDINAL profile of the centre
+## line (sampled every ROAD_PROFILE_SPACING m), so every cross-section is level: within
+## ROAD_BED_HALF_WIDTH the ground is exactly the profile height; beyond it the ground is only
+## clamped into a cone of ROAD_BANK_SLOPE around the bed (cut into the uphill side, fill on the
+## downhill side, untouched where the natural ground is already gentle), fading back to natural
+## over the last 4 m of ROAD_BANK_REACH. Never touches ground within ROAD_BANK_OBSTACLE_FADE of the
+## obstacle mask (cliff meshes, outcrops, knots). The old ROAD_HALF_WIDTH corridor weight is still
+## computed and returned -- other systems use it to keep rocks/plants off the road.
+const ROAD_BED_HALF_WIDTH := 5.0 ## metres either side of the centre line that are exactly level (painted half-width 3 + edge jitter 0.6 + margin; 4 -> 5 so the crease smoothing's 2 px reach doesn't pull the uphill bank into the road surface)
+const ROAD_BANK_SLOPE := 0.6 ## max rise per metre of the cut/fill banks beside the bed (~31 deg, walkable under the 45 deg floor limit)
+const ROAD_BANK_REACH := 14.0 ## how far from the centre line the banks may extend
+const ROAD_PROFILE_SPACING := 2.0 ## metres between longitudinal-profile samples (and bank-pass segments)
+const ROAD_PROFILE_SMOOTH_M := 12.0 ## half-window (metres along the road) of the profile's moving average -- limits grade changes
+const ROAD_PROFILE_SMOOTH_PASSES := 3
+const ROAD_BANK_OBSTACLE_FADE := 6.0 ## metres: bed/bank reshaping fades to nothing approaching the obstacle mask
+const ROAD_BANK_SMOOTH_PASSES := 2 ## 3x3 smoothing passes over the reshaped area (rounds the bed/bank creases)
+## Routing: extra A* cost for ground tilting ACROSS the direction of travel (sampled
+## ROAD_HALF_WIDTH to either side). The old cost only saw the rise ALONG the step, so running
+## sideways along a hillside was free and the router happily chose it.
+const ROAD_CROSS_SLOPE_PENALTY := 6.0
+## Routing clearance from the obstacle mask (cliff meshes, outcrops, knots). The level bed can't
+## be carved next to rocks (ROAD_BANK_OBSTACLE_FADE), so a road grazing one stayed tilted there
+## (first levelled run: 23 of 28 remaining > 8 deg spots were 1-5 m from an obstacle). A* only
+## sampled the mask at its 4 m grid nodes, so it could pass right beside a rock. Now: grid nodes
+## closer than ROAD_OBSTACLE_HARD_CLEARANCE are blocked, and closer than ROAD_OBSTACLE_SOFT_CLEARANCE
+## cost extra (quadratic ramp), so the road keeps its bed + banks clear when there's room.
+const ROAD_OBSTACLE_HARD_CLEARANCE := 3.0
+const ROAD_OBSTACLE_SOFT_CLEARANCE := 8.0
+const ROAD_OBSTACLE_PROXIMITY_PENALTY := 6.0
+
 ## -- Road pathfinding (A*) --
 const ROAD_PATH_GRID_STEP := 4.0 ## world units between pathfinding grid nodes -- coarser than the 1-unit heightmap for speed, smoothed back out afterward
 const ROAD_SLOPE_PENALTY := 7.2 ## how strongly a steep step is penalized vs. a flat one of the same length -- higher pushes the route further out of its way to avoid slopes (2026-09-16: +5%, per the road-snaking analysis -- makes existing modest terrain variation costly enough to detour around a bit more readily)
@@ -343,7 +377,9 @@ static func generate_road(heights: PackedFloat32Array, control: PackedInt32Array
 	# without this, every playthrough's S-curve would wander through the exact
 	# same left-right pattern, just with a different start_x.
 	var meander_phase := rng.randf_range(0.0, TAU)
-	var raw_path := _find_road_path(heights, width, length, start_x, meander_phase, cliff_obstacle_mask)
+	# Distance to the obstacle mask, shared by routing clearance and the bed/bank levelling.
+	var obst_dist := _obstacle_distance(cliff_obstacle_mask, width, length, maxf(ROAD_OBSTACLE_SOFT_CLEARANCE, ROAD_BANK_OBSTACLE_FADE) + 1.0)
+	var raw_path := _find_road_path(heights, width, length, start_x, meander_phase, cliff_obstacle_mask, obst_dist)
 	print("TERRAIN_GEN:   pathfinding (%.3fs)" % ((Time.get_ticks_msec() - t_road_stage) / 1000.0))
 	t_road_stage = Time.get_ticks_msec()
 	if raw_path.size() < 2:
@@ -453,9 +489,11 @@ static func generate_road(heights: PackedFloat32Array, control: PackedInt32Array
 	print("TERRAIN_GEN:   segment rasterization (%.3fs)" % ((Time.get_ticks_msec() - t_road_stage) / 1000.0))
 	t_road_stage = Time.get_ticks_msec()
 
+	# 2026-09-29: heights are no longer blended toward `blurred` by road_weight (that kept the
+	# hillside's cross-tilt) -- see _grade_level_bed / ROAD_BED_HALF_WIDTH. road_weight is still
+	# built above and returned for the systems that keep rocks/plants off the road.
+	_grade_level_bed(heights, blurred, width, length, path, obst_dist)
 	for idx in road_weight.size():
-		if road_weight[idx] > 0.0:
-			heights[idx] = lerpf(heights[idx], blurred[idx], road_weight[idx])
 		if road_blend[idx] > 0.0:
 			control[idx] = TerrainHeightmap.pack_control_blend(TerrainConfig.GROUND_TEXTURE_ID, ROAD_TEXTURE_ID, road_blend[idx])
 	print("TERRAIN_GEN:   apply grading+control (%.3fs)" % ((Time.get_ticks_msec() - t_road_stage) / 1000.0))
@@ -490,6 +528,190 @@ static func generate_road(heights: PackedFloat32Array, control: PackedInt32Array
 	# carries the parallax material.
 	return {"weight": road_weight, "spawn_pixel": spawn_pixel, "exit_pixel": exit_pixel, "path": path}
 
+## Level road bed + slope-limited banks (2026-09-29, see ROAD_BED_HALF_WIDTH). Replaces the old
+## per-pixel blend toward `blurred`, which kept a hillside's cross-tilt under the road.
+static func _grade_level_bed(heights: PackedFloat32Array, blurred: PackedFloat32Array, width: int, length: int, path: PackedVector2Array, obst: PackedFloat32Array) -> void:
+	var t0 := Time.get_ticks_msec()
+	var line := _resample_path(path, ROAD_PROFILE_SPACING)
+	var n := line.size()
+	if n < 2:
+		return
+	# Longitudinal profile: the (already blurred) terrain under the centre line, then a moving
+	# average along the road so the grade changes gently.
+	var prof := PackedFloat32Array()
+	prof.resize(n)
+	for i in n:
+		prof[i] = TerrainUtil.sample_height_bilinear(blurred, width, length, clampf(line[i].x, 0.0, float(width - 1)), clampf(line[i].y, 0.0, float(length - 1)))
+	var win := maxi(1, int(round(ROAD_PROFILE_SMOOTH_M / ROAD_PROFILE_SPACING)))
+	for _p in ROAD_PROFILE_SMOOTH_PASSES:
+		var src := prof.duplicate()
+		for i in n:
+			var lo := maxi(i - win, 0)
+			var hi := mini(i + win, n - 1)
+			var s := 0.0
+			for j in range(lo, hi + 1):
+				s += src[j]
+			prof[i] = s / float(hi - lo + 1)
+	var tilt_before := _cross_tilt_stats(heights, width, length, line)
+	var orig := heights.duplicate()
+
+	# Nearest centre-line point per pixel (within ROAD_BANK_REACH) and the bed height there.
+	var total := width * length
+	var best_d := PackedFloat32Array()
+	best_d.resize(total)
+	best_d.fill(INF)
+	var bed_h := PackedFloat32Array()
+	bed_h.resize(total)
+	var reach := ROAD_BANK_REACH
+	for i in range(n - 1):
+		var a: Vector2 = line[i]
+		var b: Vector2 = line[i + 1]
+		var seg := b - a
+		var sl2 := seg.length_squared()
+		var x0 := clampi(int(floor(minf(a.x, b.x) - reach)), 0, width - 1)
+		var x1 := clampi(int(ceil(maxf(a.x, b.x) + reach)), 0, width - 1)
+		var z0 := clampi(int(floor(minf(a.y, b.y) - reach)), 0, length - 1)
+		var z1 := clampi(int(ceil(maxf(a.y, b.y) + reach)), 0, length - 1)
+		for pz in range(z0, z1 + 1):
+			for px in range(x0, x1 + 1):
+				var q := Vector2(px, pz)
+				var t := 0.0
+				if sl2 > 0.00001:
+					t = clampf((q - a).dot(seg) / sl2, 0.0, 1.0)
+				var d := q.distance_to(a + seg * t)
+				var idx := pz * width + px
+				if d >= reach or d >= best_d[idx]:
+					continue
+				best_d[idx] = d
+				bed_h[idx] = lerpf(prof[i], prof[i + 1], t)
+
+	# Bed exactly level inside ROAD_BED_HALF_WIDTH; banks clamped into a ROAD_BANK_SLOPE cone around
+	# it (cut or fill), natural ground left alone where it's already inside the cone.
+	var zone := PackedInt32Array()
+	var mark := PackedByteArray()
+	mark.resize(total)
+	var max_cut := 0.0
+	var max_fill := 0.0
+	for idx in total:
+		var d := best_d[idx]
+		if d == INF:
+			continue
+		var bed := bed_h[idx]
+		var slack := maxf(0.0, d - ROAD_BED_HALF_WIDTH) * ROAD_BANK_SLOPE
+		var shaped := clampf(orig[idx], bed - slack, bed + slack)
+		var fade := 1.0 - smoothstep(reach - 4.0, reach, d)
+		fade *= smoothstep(0.0, ROAD_BANK_OBSTACLE_FADE, obst[idx])
+		var nh := lerpf(orig[idx], shaped, fade)
+		if absf(nh - orig[idx]) < 0.001:
+			continue
+		heights[idx] = nh
+		max_cut = maxf(max_cut, orig[idx] - nh)
+		max_fill = maxf(max_fill, nh - orig[idx])
+		# smoothing zone: the changed pixel + 1 px rim, away from obstacles
+		var cx := idx % width
+		var cz := idx / width
+		for dz in range(-1, 2):
+			for dx in range(-1, 2):
+				var zx := cx + dx
+				var zz := cz + dz
+				if zx < 1 or zz < 1 or zx >= width - 1 or zz >= length - 1:
+					continue
+				var zi := zz * width + zx
+				if mark[zi] == 0 and obst[zi] >= 2.0:
+					mark[zi] = 1
+					zone.append(zi)
+	# Round the bed-edge / bank-top / bank-toe creases.
+	for _p in ROAD_BANK_SMOOTH_PASSES:
+		var prev := heights.duplicate()
+		for zi in zone:
+			var s := 0.0
+			for dz in range(-1, 2):
+				for dx in range(-1, 2):
+					s += prev[zi + dz * width + dx]
+			heights[zi] = s / 9.0
+	var tilt_after := _cross_tilt_stats(heights, width, length, line)
+	# Diagnostic: where the bed is still tilted > 8 deg, and whether an obstacle (whose surroundings
+	# the levelling deliberately fades out of) is the reason. World = pixel - 256 on both axes.
+	var left_tilted: Array[String] = []
+	for i in range(1, n - 1):
+		var dir := (line[i + 1] - line[i - 1]).normalized()
+		var perp := Vector2(-dir.y, dir.x) * 3.0
+		var l := line[i] + perp
+		var r := line[i] - perp
+		var hl := TerrainUtil.sample_height_bilinear(heights, width, length, clampf(l.x, 0.0, float(width - 1)), clampf(l.y, 0.0, float(length - 1)))
+		var hr := TerrainUtil.sample_height_bilinear(heights, width, length, clampf(r.x, 0.0, float(width - 1)), clampf(r.y, 0.0, float(length - 1)))
+		var deg := rad_to_deg(atan(absf(hl - hr) / 6.0))
+		if deg > 8.0:
+			var ci := clampi(int(line[i].y), 0, length - 1) * width + clampi(int(line[i].x), 0, width - 1)
+			left_tilted.append("px(%.0f,%.0f) %.1f deg obst %.1f m" % [line[i].x, line[i].y, deg, obst[ci]])
+	if not left_tilted.is_empty():
+		print("TERRAIN_GEN_DEBUG road bed still tilted > 8 deg at: " + "; ".join(left_tilted))
+	print("TERRAIN_GEN:   road bed levelled: cross-tilt max %.1f deg (%.0f%% of road > 8 deg) -> max %.1f deg (%.0f%% > 8 deg); banks max cut %.1f m / fill %.1f m, %d px reshaped (%.2fs)" % [
+		tilt_before.x, tilt_before.y, tilt_after.x, tilt_after.y, max_cut, max_fill, zone.size(), (Time.get_ticks_msec() - t0) / 1000.0])
+
+## Road cross-tilt along `line`: height difference 3 m either side of the centre line (the painted
+## road's edges). Returns Vector2(max degrees, percent of samples steeper than 8 degrees).
+static func _cross_tilt_stats(heights: PackedFloat32Array, width: int, length: int, line: PackedVector2Array) -> Vector2:
+	var max_deg := 0.0
+	var steep := 0
+	var count := 0
+	for i in range(1, line.size() - 1):
+		var dir := (line[i + 1] - line[i - 1]).normalized()
+		var perp := Vector2(-dir.y, dir.x) * 3.0
+		var l := line[i] + perp
+		var r := line[i] - perp
+		var hl := TerrainUtil.sample_height_bilinear(heights, width, length, clampf(l.x, 0.0, float(width - 1)), clampf(l.y, 0.0, float(length - 1)))
+		var hr := TerrainUtil.sample_height_bilinear(heights, width, length, clampf(r.x, 0.0, float(width - 1)), clampf(r.y, 0.0, float(length - 1)))
+		var deg := rad_to_deg(atan(absf(hl - hr) / 6.0))
+		max_deg = maxf(max_deg, deg)
+		if deg > 8.0:
+			steep += 1
+		count += 1
+	return Vector2(max_deg, 100.0 * steep / maxf(count, 1.0))
+
+## Approximate distance (metres) from every pixel to the nearest obstacle-mask pixel, capped at
+## `cap` (two-pass 8-neighbour chamfer).
+static func _obstacle_distance(mask: PackedByteArray, width: int, length: int, cap: float) -> PackedFloat32Array:
+	var dist := PackedFloat32Array()
+	dist.resize(width * length)
+	if mask.is_empty():
+		dist.fill(cap)
+		return dist
+	for i in dist.size():
+		dist[i] = 0.0 if mask[i] != 0 else cap
+	var diag := 1.4142135
+	for pz in length:
+		for px in width:
+			var i := pz * width + px
+			var v := dist[i]
+			if v == 0.0:
+				continue
+			if px > 0:
+				v = minf(v, dist[i - 1] + 1.0)
+			if pz > 0:
+				v = minf(v, dist[i - width] + 1.0)
+				if px > 0:
+					v = minf(v, dist[i - width - 1] + diag)
+				if px < width - 1:
+					v = minf(v, dist[i - width + 1] + diag)
+			dist[i] = v
+	for pz in range(length - 1, -1, -1):
+		for px in range(width - 1, -1, -1):
+			var i := pz * width + px
+			var v := dist[i]
+			if v == 0.0:
+				continue
+			if px < width - 1:
+				v = minf(v, dist[i + 1] + 1.0)
+			if pz < length - 1:
+				v = minf(v, dist[i + width] + 1.0)
+				if px < width - 1:
+					v = minf(v, dist[i + width + 1] + diag)
+				if px > 0:
+					v = minf(v, dist[i + width - 1] + diag)
+			dist[i] = v
+	return dist
+
 ## Finds a route from the center of the north edge to the center of the south
 ## edge using A* over a coarse grid (spacing ROAD_PATH_GRID_STEP), where the
 ## cost of a step is its distance scaled up by how steep the terrain is
@@ -500,7 +722,7 @@ static func generate_road(heights: PackedFloat32Array, control: PackedInt32Array
 ## anything about where the cliff features specifically were placed (their
 ## own steepness is enough). Returns grid-resolution waypoints in heightmap
 ## pixel coordinates; _catmull_rom_smooth turns those into an actual curve.
-static func _find_road_path(heights: PackedFloat32Array, width: int, length: int, start_x: float, meander_phase: float, cliff_obstacle_mask: PackedByteArray) -> PackedVector2Array:
+static func _find_road_path(heights: PackedFloat32Array, width: int, length: int, start_x: float, meander_phase: float, cliff_obstacle_mask: PackedByteArray, obst_dist: PackedFloat32Array) -> PackedVector2Array:
 	var cols := int(ceil(width / ROAD_PATH_GRID_STEP)) + 1
 	var rows := int(ceil(length / ROAD_PATH_GRID_STEP)) + 1
 
@@ -519,7 +741,10 @@ static func _find_road_path(heights: PackedFloat32Array, width: int, length: int
 			return false
 		var px := clampi(int(round(gx * ROAD_PATH_GRID_STEP)), 0, width - 1)
 		var pz := clampi(int(round(gz * ROAD_PATH_GRID_STEP)), 0, length - 1)
-		return cliff_obstacle_mask[pz * width + px] != 0
+		if cliff_obstacle_mask[pz * width + px] != 0:
+			return true
+		# 2026-09-29: also too close to one (ROAD_OBSTACLE_HARD_CLEARANCE).
+		return not obst_dist.is_empty() and obst_dist[pz * width + px] < ROAD_OBSTACLE_HARD_CLEARANCE
 
 	# North/south edges (the SHORT ones, each AREA_WIDTH long) are what the
 	# road connects -- it travels the LONG axis (AREA_LENGTH, north to south)
@@ -650,6 +875,23 @@ static func _find_road_path(heights: PackedFloat32Array, width: int, length: int
 			var step_distance: float = ROAD_PATH_GRID_STEP * Vector2(offset).length()
 			var slope := height_delta / step_distance
 			var move_cost := step_distance * (1.0 + ROAD_SLOPE_PENALTY * slope * slope)
+			# 2026-09-29: sidehill cost -- ground tilting ACROSS the step (ROAD_HALF_WIDTH to either
+			# side of the neighbour). See ROAD_CROSS_SLOPE_PENALTY.
+			var step_dir := Vector2(offset).normalized()
+			var side := Vector2(-step_dir.y, step_dir.x) * ROAD_HALF_WIDTH
+			var npx := float(neighbor.x) * ROAD_PATH_GRID_STEP
+			var npz := float(neighbor.y) * ROAD_PATH_GRID_STEP
+			var h_left: float = heights[clampi(int(round(npz + side.y)), 0, length - 1) * width + clampi(int(round(npx + side.x)), 0, width - 1)]
+			var h_right: float = heights[clampi(int(round(npz - side.y)), 0, length - 1) * width + clampi(int(round(npx - side.x)), 0, width - 1)]
+			var cross := absf(h_left - h_right) / (2.0 * ROAD_HALF_WIDTH)
+			move_cost += step_distance * ROAD_CROSS_SLOPE_PENALTY * cross * cross
+			# 2026-09-29: keep clear of rocks (ROAD_OBSTACLE_SOFT_CLEARANCE) -- the bed can't be
+			# levelled next to them.
+			if not obst_dist.is_empty():
+				var od: float = obst_dist[clampi(int(round(npz)), 0, length - 1) * width + clampi(int(round(npx)), 0, width - 1)]
+				if od < ROAD_OBSTACLE_SOFT_CLEARANCE:
+					var near := 1.0 - od / ROAD_OBSTACLE_SOFT_CLEARANCE
+					move_cost += step_distance * ROAD_OBSTACLE_PROXIMITY_PENALTY * near * near
 
 			# Cosmetic meander pull (see ROAD_MEANDER_* consts): an EXTRA soft
 			# cost for straying from the wandering preferred column at this row,

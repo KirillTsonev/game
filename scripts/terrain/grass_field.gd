@@ -44,8 +44,8 @@ const PARAMS_VEC4 := 11 ## size of the cull shader's params buffer, in vec4s (se
 ## 2026-09-28: Kirill's second tuning pass (denser far bands, widen max back up to 70 -- the far
 ## shimmer is handled by the wind fade below instead of by narrower blades).
 const BLADE_BANDS: Array[Dictionary] = [
-	{"name": "blades_0", "inner": 0.0, "outer": 50.0, "band": 3.0, "spacing": 0.12, "mesh": "high"},
-	{"name": "blades_1", "inner": 50.0, "outer": 100.0, "band": 6.0, "spacing": 0.30, "mesh": "high"},
+	{"name": "blades_0", "inner": 0.0, "outer": 50.0, "band": 3.0, "spacing": 0.13, "mesh": "high"},
+	{"name": "blades_1", "inner": 50.0, "outer": 100.0, "band": 6.0, "spacing": 0.275, "mesh": "high"},
 	{"name": "blades_2", "inner": 100.0, "outer": 150.0, "band": 8.0, "spacing": 0.50, "mesh": "low"},
 	{"name": "blades_3", "inner": 150.0, "outer": 200.0, "band": 10.0, "spacing": 1.5, "mesh": "low"},
 	{"name": "blades_4", "inner": 200.0, "outer": RADIUS, "band": FADE_BAND, "spacing": 3.0, "mesh": "low"},
@@ -252,6 +252,11 @@ func _update() -> void:
 		params[6 * 4 + 0] = p.x
 		params[6 * 4 + 1] = p.y
 		params[6 * 4 + 2] = p.z
+		# 2026-09-29: the blade widening curve (read-only copy, values unchanged) so the cull can
+		# drop far, widened blades standing on a crest -- see "crest drop" in grass_cull.glsl.
+		params[9 * 4 + 2] = widen_scale
+		params[9 * 4 + 3] = widen_power
+		params[10 * 4 + 3] = widen_max
 		frames[i] = params.to_byte_array()
 	RenderingServer.call_on_render_thread(_rt_dispatch.bind(frames))
 

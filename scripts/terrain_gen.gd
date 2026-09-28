@@ -47,6 +47,8 @@ func _ready() -> void:
 	print("TERRAIN_GEN: building %dx%d heightmap (master_seed=%d)..." % [TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, resolved_seed])
 	var t_start := Time.get_ticks_msec() # temporary timing probe -- answering "is runtime-per-session generation viable" needs a real number, not a guess
 	var maps := TerrainHeightmap.build_heightmap(resolved_seed)
+	_debug_maps = maps # 2026-09-29 DEBUG (landmark capture / listing)
+	_debug_seed = resolved_seed
 	print("TERRAIN_GEN: heightmap build took %d ms (noise+erosion+smoothing+features+road, no I/O)" % (Time.get_ticks_msec() - t_start))
 
 	# -- RUNTIME roguelike generation --
@@ -115,6 +117,18 @@ func _ready() -> void:
 		min_region_x = mini(min_region_x, loc.x)
 		min_region_z = mini(min_region_z, loc.y)
 	var heightmap_corner := Vector3(min_region_x * region_size, 0, min_region_z * region_size)
+
+	# 2026-09-28: world coordinates of each verticality knot (knots.gd), so they can be found in-game.
+	for knot in maps.knots:
+		var anchor_world: Vector3 = heightmap_corner + Vector3(knot.ax, 0.0, knot.az)
+		var lvl_parts: Array[String] = []
+		for lvl in knot.levels:
+			lvl_parts.append("%s (%.0f, %.1f, %.0f)" % [lvl.name, heightmap_corner.x + float(lvl.px), float(lvl.h), heightmap_corner.z + float(lvl.pz)])
+		print("TERRAIN_GEN: KNOT #%d %s world anchor (%.0f, %.0f) -- %s" % [int(knot.index), TerrainKnots.KNOT_TYPE_NAMES[int(knot.type)], anchor_world.x, anchor_world.z, ", ".join(lvl_parts)])
+		for ramp in knot.get("ramp_paths", []):
+			var rf: Vector2 = ramp.from
+			var rt: Vector2 = ramp.to
+			print("TERRAIN_GEN:   KNOT #%d ramp to %s: from (%.0f, %.1f, %.0f) up to (%.0f, %.1f, %.0f)" % [int(knot.index), ramp.level, heightmap_corner.x + rf.x, float(ramp.from_h), heightmap_corner.z + rf.y, heightmap_corner.x + rt.x, float(ramp.to_h), heightmap_corner.z + rt.y])
 
 	# 2026-09-18 debug scaffolding -- see _raise_debug_points' own comment near the top of the
 	# file. heightmap_corner is only known here, so the actual box-spawning is deferred to now.
@@ -247,3 +261,15 @@ func _pipeline_counts_str() -> String:
 ## TreeScatter alongside the placement checks it re-runs.
 func debug_tree_probe(world_pos: Vector3) -> String:
 	return TreeScatter.debug_tree_probe(world_pos)
+
+## 2026-09-29 DEBUG (landmarks): this run's generated maps + seed, kept for the calls below.
+var _debug_maps: Dictionary = {}
+var _debug_seed := 0
+
+## Lists cliff meshes / outcrops / features within `reach` m of a heightmap pixel.
+func debug_landmark_list(center_px: Vector2, reach: float) -> String:
+	return TerrainLandmarks.debug_list(_debug_maps, center_px, reach)
+
+## Captures TerrainLandmarks.CENTER_PX / RADIUS from this run into the landmark data file.
+func debug_landmark_capture() -> String:
+	return TerrainLandmarks.capture(_debug_maps, _debug_seed)

@@ -67,9 +67,31 @@ const ROCK_BIG_FREQ := 0.07 ## ~14 m clumps
 const ROCK_SMALL_FREQ := 0.25 ## ~4 m ragged edges
 const ROCKY_BASE := 0.45
 const ROCKY_BIG := 0.85
-const ROCKY_SMALL := 0.35
-const ROCKY_LO := 0.35
-const ROCKY_HI := 0.75
+## 2026-09-29 (Kirill, screenshot: "the application of different additional textures is too
+## angular and looks artificial"): the rock patches traced their sources' shapes -- straight edges
+## and corners around cliff-mesh RECTANGLES, little squares around boulders -- because the
+## ramp was narrow (0.35-0.75) with little small-scale noise, the proximity fields were read at
+## the exact pixel (their iso-lines ARE the rect/circle shapes), and tiny patches of a few 1 m
+## vertices render as squares/diamonds. Now: wider ramp + more ragged noise, domain-warped
+## proximity lookup (ROCK_WARP_*), and a post-pass that fades rock-type seams and isolated rock
+## vertices (ROCK_TYPE_SEAM_FADE / ROCK_ISLAND_*). Was SMALL 0.35, LO 0.35, HI 0.75.
+const ROCKY_SMALL := 0.5
+const ROCKY_LO := 0.25
+const ROCKY_HI := 0.85
+## Domain warp: the proximity fields are sampled at a noise-offset position (+-ROCK_WARP_AMP m,
+## features ~1/ROCK_WARP_FREQ m), so rect/circle iso-lines become irregular blobs.
+const ROCK_WARP_AMP := 3.5
+const ROCK_WARP_FREQ := 0.09
+## Where 8-neighbouring rock vertices use DIFFERENT rock textures, Terrain3D draws a hard 1 m
+## seam (overlay id swap) -- fade both sides' rock blend by this so the swap happens mostly in soil.
+const ROCK_TYPE_SEAM_FADE := 0.4
+## Rock vertices with fewer than ROCK_ISLAND_MIN rocky 8-neighbours render as lone squares --
+## their blend is multiplied by ROCK_ISLAND_FADE.
+const ROCK_ISLAND_MIN := 3
+const ROCK_ISLAND_FADE := 0.4
+const ROCK_NONE := 255 ## rock_of marker: not a rock vertex
+const ROCK_TYPE_MODE_RADIUS := 2 ## majority-filter window half-size (vertices = metres)
+const ROCK_TYPE_MODE_PASSES := 2
 const ROCKY_MIN := 0.03 ## below this a vertex is plain soil
 const STEEP_NY_FULL := 0.62 ## normal.y at/below this -> fully steep (bare rock likely)
 const STEEP_NY_NONE := 0.82 ## at/above this -> not steep
@@ -144,6 +166,18 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 	var type_a := GrassScatter._noise_bytes(rng.randi(), TYPE_NOISE_FREQ, width, length)
 	var type_b := GrassScatter._noise_bytes(rng.randi(), TYPE_NOISE_FREQ, width, length)
 	var spray_n := GrassScatter._noise_bytes(rng.randi(), SPRAY_FREQ, width, length)
+	# 2026-09-29 domain warp -- drawn AFTER the existing noise seeds so those stay as they were.
+	var warp_x := GrassScatter._noise_bytes(rng.randi(), ROCK_WARP_FREQ, width, length)
+	var warp_z := GrassScatter._noise_bytes(rng.randi(), ROCK_WARP_FREQ, width, length)
+	# Rock vertices are packed in a post-pass (seam/island fade): per vertex its rock id
+	# (ROCK_NONE = soil/road), soil base and pre-spray rockiness.
+	var rock_of := PackedByteArray()
+	rock_of.resize(n)
+	rock_of.fill(ROCK_NONE)
+	var soil_of := PackedByteArray()
+	soil_of.resize(n)
+	var rocky_of := PackedFloat32Array()
+	rocky_of.resize(n)
 
 	var coverage_bytes := GrassScatter.density_image.get_data() # RGBA8, R = coverage
 	var old_control: PackedByteArray = (maps.control as Image).get_data() # FORMAT_RF: uint32 bits
@@ -188,9 +222,13 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 			var dz := (heights[zp * width + px] - heights[zm * width + px]) / float(zp - zm)
 			var ny := 1.0 / sqrt(1.0 + dx * dx + dz * dz)
 			var steep := 1.0 - smoothstep(STEEP_NY_FULL, STEEP_NY_NONE, ny)
-			var p_cliff := 1.0 - smoothstep(0.0, CLIFF_REACH, cliff_d[i])
-			var p_boulder := (1.0 - smoothstep(0.0, BOULDER_REACH, boulder_d[i])) * BOULDER_STRENGTH
-			var p_scree := 1.0 - smoothstep(0.0, SCREE_REACH, scree_d[i])
+			# Domain-warped lookup (ROCK_WARP_*): iso-lines of the rect/circle fields turn into blobs.
+			var wpx := clampi(int(round(px + (warp_x[i] / 255.0 - 0.5) * 2.0 * ROCK_WARP_AMP)), 0, w1)
+			var wpz := clampi(int(round(pz + (warp_z[i] / 255.0 - 0.5) * 2.0 * ROCK_WARP_AMP)), 0, l1)
+			var j := wpz * width + wpx
+			var p_cliff := 1.0 - smoothstep(0.0, CLIFF_REACH, cliff_d[j])
+			var p_boulder := (1.0 - smoothstep(0.0, BOULDER_REACH, boulder_d[j])) * BOULDER_STRENGTH
+			var p_scree := 1.0 - smoothstep(0.0, SCREE_REACH, scree_d[j])
 			var prox := maxf(maxf(p_cliff, p_boulder), p_scree)
 			var nb := big_n[i] / 255.0
 			var rocky := 0.0
@@ -208,7 +246,7 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 			var tb := type_b[i] / 255.0
 			var shade := maxf(UnderstoryScatter._grid_sample(canopy, gw, gl, px, pz), UnderstoryScatter._grid_sample(cliff_shade, gw, gl, px, pz))
 			var flat := smoothstep(STEEP_NY_NONE, FLAT_NY, ny)
-			var core := 1.0 - smoothstep(0.0, 2.5, cliff_d[i])
+			var core := 1.0 - smoothstep(0.0, 2.5, cliff_d[j])
 			var w_face := 0.3 + 1.1 * core + 1.0 * steep + 0.5 * ta
 			var w_moss := 1.7 * smoothstep(MOSS_SHADE_LO, MOSS_SHADE_HI, shade + 0.25 * (tb - 0.5)) + 0.2 * tb
 			var w_trail := 1.1 * p_scree + 0.8 * p_boulder / BOULDER_STRENGTH + 0.5 * (1.0 - ta)
@@ -230,7 +268,78 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 			type_counts[rock_id] += 1
 			counts.rock += 1
 			var soil := GRASS_ID if g >= 0.5 else GROUND_ID
-			control[i] = TerrainHeightmap.pack_control_blend(soil, rock_id, _spray(rocky, spray))
+			rock_of[i] = rock_id
+			soil_of[i] = soil
+			rocky_of[i] = rocky
+
+	# Rock-type majority filter (2026-09-29): the per-vertex "highest weight wins" type pick flips
+	# between neighbours all the time (first run: 9818 of ~18.9k rock vertices sat on a type seam),
+	# and every flip is a hard 1 m Terrain3D seam. Each rock vertex takes the most common type among
+	# the rock vertices within ROCK_TYPE_MODE_RADIUS, ROCK_TYPE_MODE_PASSES times -> coherent regions.
+	for _mp in ROCK_TYPE_MODE_PASSES:
+		var src := rock_of.duplicate()
+		for pz in length:
+			for px in width:
+				var i := pz * width + px
+				var rid := src[i]
+				if rid == ROCK_NONE:
+					continue
+				var tally := {}
+				for dz in range(-ROCK_TYPE_MODE_RADIUS, ROCK_TYPE_MODE_RADIUS + 1):
+					var zz := pz + dz
+					if zz < 0 or zz >= length:
+						continue
+					for dx in range(-ROCK_TYPE_MODE_RADIUS, ROCK_TYPE_MODE_RADIUS + 1):
+						var xx := px + dx
+						if xx < 0 or xx >= width:
+							continue
+						var nr := src[zz * width + xx]
+						if nr != ROCK_NONE:
+							tally[nr] = int(tally.get(nr, 0)) + 1
+				var best_id := rid
+				var best_n := int(tally.get(rid, 0))
+				for k in tally:
+					if int(tally[k]) > best_n:
+						best_n = int(tally[k])
+						best_id = k
+				rock_of[i] = best_id
+
+	# Post-pass (2026-09-29): pack rock vertices, fading hard rock-type seams and lone rock squares.
+	var seams := 0
+	var islands := 0
+	for pz in length:
+		for px in width:
+			var i := pz * width + px
+			var rid := rock_of[i]
+			if rid == ROCK_NONE:
+				continue
+			var rocky_nb := 0
+			var seam := false
+			for dz in range(-1, 2):
+				var zz := pz + dz
+				if zz < 0 or zz >= length:
+					continue
+				for dx in range(-1, 2):
+					var xx := px + dx
+					if (dx == 0 and dz == 0) or xx < 0 or xx >= width:
+						continue
+					var nr := rock_of[zz * width + xx]
+					if nr == ROCK_NONE:
+						continue
+					rocky_nb += 1
+					if nr != rid:
+						seam = true
+			var b := rocky_of[i]
+			if seam:
+				b *= ROCK_TYPE_SEAM_FADE
+				seams += 1
+			if rocky_nb < ROCK_ISLAND_MIN:
+				b *= ROCK_ISLAND_FADE
+				islands += 1
+			control[i] = TerrainHeightmap.pack_control_blend(soil_of[i], rid, _spray(b, spray_n[i] / 255.0 - 0.5))
+	last_stats["seams"] = seams
+	last_stats["islands"] = islands
+	print("GROUND_PAINT v2: shape softening -- %d rock-type seam vertices faded, %d island vertices faded, warp +-%.1f m" % [seams, islands, ROCK_WARP_AMP])
 	var t_px := Time.get_ticks_msec() - t0
 
 	# -- Write into each region's control image, then push to the GPU --
