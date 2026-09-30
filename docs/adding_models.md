@@ -4,7 +4,7 @@ Step-by-step checklists for getting a new 3D asset into the world. The *why* beh
 steps lives in `CLAUDE.md`'s pitfall sections (named in brackets) -- this file is the
 *what, in which order*. Trees and other vegetation: see `docs/vegetation.md`.
 
-Last reviewed: 2026-09-24.
+Last reviewed: 2026-09-30.
 
 ---
 
@@ -12,7 +12,7 @@ Last reviewed: 2026-09-24.
 
 | Folder | Contents |
 |---|---|
-| `assets/models/rocks/<dir>/` | scatter rocks (boulder_01, stone_01, rock_07, rock_09): `<dir>_2k.glb`, `<dir>_material.tres`, `textures/<dir>_{diff,nor_gl,rough}_2k.*` (+ optional `_mask_2k.png`) |
+| `assets/models/rocks/<dir>/` | scatter rocks (boulder_01, stone_01, rock_07, rock_09, namaqualand_boulder_02..06): `<dir>_2k.glb`, `<dir>_material.tres`, `textures/<dir>_{diff,nor_gl,rough}_2k.*` (+ optional `_mask_2k.png`) |
 | `assets/models/cliffs/<name>/` | cliff / outcrop set dressing (namaqualand_cliff_01/02, mountainside): `<name>_2k.glb`, `textures/` incl. `_patch_diff.png` / `_fill_diff.png` repair textures |
 | `assets/models/scree/` | scree rock/stone sets |
 | `assets/models/candidates/vegetation/` | the Fab vegetation pack (see `docs/vegetation.md`) |
@@ -21,9 +21,9 @@ Last reviewed: 2026-09-24.
 | `tools/` | editor-only `@tool` setup scripts + their one-node scenes (never loaded by the game) |
 | `terrain_assets.tres` | the Terrain3D asset list (textures + mesh ids) |
 
-**Terrain3D mesh ids (as of 2026-09-25):** 0 placeholder, 1-4 rocks, 5-13 scree, 14-27 trees,
-28-32 understory (Fern02, Bush01, Bush02Green, Bush04, Bush05).
-Ids are a contiguous list: a new asset is appended at the next id (**33**).
+**Terrain3D mesh ids (as of 2026-09-30):** 0 placeholder, 1-4 rocks, 5-13 scree, 14-27 trees,
+28-32 understory (Fern02, Bush01, Bush02Green, Bush04, Bush05), 33-37 rocks (NamaBoulder02-06).
+Ids are a contiguous list: a new asset is appended at the next id (**38**).
 
 ---
 
@@ -57,17 +57,24 @@ Ids are a contiguous list: a new asset is appended at the next id (**33**).
 2. Copy the source textures into `assets/models/rocks/<dir>/textures/` as
    `<dir>_diff_2k.jpg`, `<dir>_nor_gl_2k.exr`, `<dir>_rough_2k.exr` (EXRs checked per rule 2).
    Optional `<dir>_mask_2k.png` is picked up automatically as ambient occlusion.
+   Steps 1-2 in one go from a Poly Haven `.blend` download:
+   `tools/blender/import_polyhaven_rock.py` (run with Blender's own Python -- it re-encodes the
+   DWAA EXRs to ZIP via Blender's bundled OpenImageIO, copies the diffuse, and exports all
+   `*_LODn` meshes to the glb with no embedded images). Usage is in the script header.
 3. In `<dir>_2k.glb.import`: set `gltf/embedded_image_handling=0` (rule 4) and
    `nodes/root_scale` so the rock's longest axis lands around 1.0 (Boulder01 is ~1.83 and
    should stay the biggest). Force a reimport (rule 3). [Rock/boulder mesh scale]
 4. Add a row to `ROCKS` in `tools/setup_rock_assets.gd`:
    `{"id": 28, "dir": "<dir>", "file": "<dir>_2k", "name": "<Name>"}` (next free id).
 5. Run, in the editor (`call_method`, `runtime:false`, scene `tools/setup_rock_assets.tscn`,
-   node `.`): `setup_materials()`, then `setup_mesh_assets()`. For a heavy LOD0
-   (> ~20k tris) add its id to `ROCK_LOD_RANGES` and run `configure_rock_lods()`.
-6. In `scripts/terrain/rock_scatter.gd`: add the id to `ROCK_MESH_IDS` and its glb to
-   `ROCK_SCENE_PATHS` -- the collision hull is built at runtime from that glb's `LOD0` mesh
-   (`create_convex_shape(true, true)`, simplified to ~32 points).
+   node `.`): `setup_materials([ids])`, then `setup_mesh_assets([ids])` -- pass just the new
+   ids so the existing rocks' materials aren't re-saved (empty = all). For a heavy LOD0
+   (> ~20k tris) add its id to `ROCK_LOD_RANGES` (one range per LOD the glb actually has)
+   and run `configure_rock_lods()`.
+6. In `scripts/terrain/rock_scatter.gd`: add the id to `ROCK_MESH_IDS`, its glb to
+   `ROCK_SCENE_PATHS` and a `1.0` to `ROCK_BASE_SCALE` -- the collision hull is built at
+   runtime from that glb's lowest-poly `*_LODn` mesh (`create_convex_shape(true, true)`,
+   simplified to ~32 points). Check the `rock glb load + convex hulls` startup line after.
 7. Verify: `debug_print_mesh_sizes()` and `debug_print_mesh_assets()` in the rock tool, then
    in-game -- textured, sensible size next to Boulder01, and **not walk-through**.
 

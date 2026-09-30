@@ -749,6 +749,11 @@ automatically) -- a local copy also lives at
   script class"). Fixed by adding a `.gdignore` file directly inside
   `res://addons/godot_mcp/cache/` -- do this once per project if it
   recurs after a fresh checkout/clone.
+- `call_method` args arrive as JSON numbers, i.e. **floats**: `[[33, 34]]` reaches the method
+  as `[33.0, 34.0]`, and `Array.has(33)` is then false (silently -- no error, it just matches
+  nothing). Compare with `int(x) == id` in any @tool method that takes id lists (see
+  `setup_rock_assets.gd`'s `only_ids`). Also: after editing a @tool script, `rescan_filesystem`
+  before calling it, or the first call can still run the old version.
 - User preference: do not call `take_screenshot` -- screenshots are
   user-provided only. Verify changes via console logs, diagnostic stats
   (e.g. `_print_roughness_stats`), and raycasts (`get_intersection`)

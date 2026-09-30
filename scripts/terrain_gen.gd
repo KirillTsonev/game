@@ -146,7 +146,7 @@ func _ready() -> void:
 	# Independent stream from the main pipeline's _derive_seeds -- purely
 	# cosmetic scattering, doesn't need to be in that fixed derivation order.
 	boulder_rng.seed = resolved_seed ^ 0x424F554C # 'BOUL' salt
-	RockScatter.scatter_boulders(get_parent(), terrain, maps.heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, maps.cliff_features, heightmap_corner, boulder_rng, maps.road_weight, maps.cliff_dressing_plan, maps.cliff_dressing_top_profiles, maps.outcrop_plan)
+	RockScatter.scatter_boulders(get_parent(), terrain, maps.heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, maps.cliff_features, heightmap_corner, boulder_rng, maps.road_weight, maps.cliff_dressing_plan, maps.cliff_dressing_top_profiles, maps.outcrop_plan, maps.knots)
 	print("TERRAIN_GEN: boulder scattering (%.2fs)" % ((Time.get_ticks_msec() - t_ready_stage) / 1000.0))
 	t_ready_stage = Time.get_ticks_msec()
 
@@ -154,7 +154,7 @@ func _ready() -> void:
 	# layered under the boulders just scattered above -- see _scatter_scree.
 	var scree_rng := RandomNumberGenerator.new()
 	scree_rng.seed = resolved_seed ^ 0x53435245 # 'SCRE' salt -- own cosmetic stream
-	RockScatter.scatter_scree(terrain, maps.heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, maps.cliff_features, heightmap_corner, scree_rng, maps.road_weight, maps.cliff_dressing_plan, maps.cliff_dressing_top_profiles, maps.outcrop_plan)
+	RockScatter.scatter_scree(terrain, maps.heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, maps.cliff_features, heightmap_corner, scree_rng, maps.road_weight, maps.cliff_dressing_plan, maps.cliff_dressing_top_profiles, maps.outcrop_plan, maps.knots)
 	print("TERRAIN_GEN: scree scattering (%.2fs)" % ((Time.get_ticks_msec() - t_ready_stage) / 1000.0))
 	t_ready_stage = Time.get_ticks_msec()
 

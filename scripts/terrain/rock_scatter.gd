@@ -36,12 +36,18 @@ const BOULDER_COLLIDER_CONTAINER_NAME := "BoulderColliders" ## sibling Node3D (u
 ## existing id 1. ROCK_MESH_IDS is the pool every talus/erratic placement
 ## below now picks ONE id from at random (uniform) instead of always using
 ## BOULDER_MESH_ID -- see _scatter_boulders.
-const ROCK_MESH_IDS: Array[int] = [BOULDER_MESH_ID, 2, 3, 4]
+## 2026-09-30: + batch 2, namaqualand_boulder_02..06 (ids 33-37, same setup tool).
+const ROCK_MESH_IDS: Array[int] = [BOULDER_MESH_ID, 2, 3, 4, 33, 34, 35, 36, 37]
 const ROCK_SCENE_PATHS := {
 	1: BOULDER_SCENE_PATH,
 	2: "res://assets/models/rocks/stone_01/stone_01_2k.glb",
 	3: "res://assets/models/rocks/rock_07/rock_07_2k.glb",
 	4: "res://assets/models/rocks/rock_09/rock_09_2k.glb",
+	33: "res://assets/models/rocks/namaqualand_boulder_02/namaqualand_boulder_02_2k.glb",
+	34: "res://assets/models/rocks/namaqualand_boulder_03/namaqualand_boulder_03_2k.glb",
+	35: "res://assets/models/rocks/namaqualand_boulder_04/namaqualand_boulder_04_2k.glb",
+	36: "res://assets/models/rocks/namaqualand_boulder_05/namaqualand_boulder_05_2k.glb",
+	37: "res://assets/models/rocks/namaqualand_boulder_06/namaqualand_boulder_06_2k.glb",
 }
 ## Poly Haven's boulder_01 was modeled/exported at genuine boulder scale
 ## (LOD0 mesh AABB ~1.83 units on its longest axis). stone_01/rock_07/
@@ -65,6 +71,11 @@ const ROCK_BASE_SCALE := {
 	2: 1.0,
 	3: 1.0,
 	4: 1.0,
+	33: 1.0,
+	34: 1.0,
+	35: 1.0,
+	36: 1.0,
+	37: 1.0,
 }
 
 ## -- Scree layer scattering (2026-09-21) --
@@ -138,12 +149,28 @@ const ERRATIC_MAX_SLOPE_NORMAL_Y := 0.92 ## stricter than BOULDER_MAX_SLOPE_NORM
 const ERRATIC_MAX_PLACEMENT_ATTEMPTS := 6
 const ERRATIC_REACH := 3.0 ## rough footprint radius used only to keep candidates off the very map edge (see _clamp_range_for_reach) -- erratics don't overlap-check against cliff features or each other, since real-world erratics are scattered independently of one another
 
+## -- Knot talus + scree (2026-09-30) --
+## Knot cliffs (knots.gd) are rows of cliff meshes, not cliff_features fault lines, so the talus and
+## scree passes above never reached them -- their meshes only acted as keep-outs. Both passes now
+## also scatter in front of every knot row's foot (row centre/facing/front edge read back from the
+## knot meshes in cliff_plan), with the same size/distance rules as fault-line talus, plus:
+##   - nothing lands on a knot level top (plateaus/ledges stay clear -- debris sits on low ground);
+##   - boulders stay KNOT_TALUS_RAMP_CLEAR off every fallback ramp's centre line;
+##   - a knot's boulders are kept only if every level its walk check reached is still reached with
+##     them as rock (TerrainKnots.flood_reached_levels); otherwise they're re-added one by one and
+##     any boulder that cuts a level off is dropped.
+## Runs after the fault-line passes on the same RNG streams, so those placements are unchanged.
+const KNOT_TALUS_MAX_PER_ROW := 5 ## boulders per knot row (count otherwise follows BOULDER_PER_FEATURE_LENGTH_DIVISOR)
+const KNOT_TALUS_ROW_INSET := 0.1 ## fraction of a row's half-length kept clear at each end -- row ends are where paths go round
+const KNOT_TALUS_RAMP_CLEAR := 4.5 ## metres from a ramp centre line kept free of boulders (bed half-width 2.5 + margin)
+const KNOT_TALUS_BLOCK_PAD := 0.5 ## extra radius a boulder blocks in the walk check (~player capsule)
+
 ## Footprints (px, pz, radius -- pixel space) of every boulder/erratic placed by
 ## _scatter_boulders this run. _scatter_trees adds these to its keep-outs so tree
 ## trunks never grow through a rock. Rebuilt every run.
 static var rock_keep_circles: Array[Vector3] = []
 
-static func scatter_boulders(parent_node: Node, terrain: Terrain3D, heights: PackedFloat32Array, width: int, length: int, cliff_features: Array[Dictionary], import_position: Vector3, rng: RandomNumberGenerator, road_weight: PackedFloat32Array, cliff_plan: Array[Dictionary], cliff_top_profiles: Dictionary, outcrop_plan: Array[Dictionary]) -> void:
+static func scatter_boulders(parent_node: Node, terrain: Terrain3D, heights: PackedFloat32Array, width: int, length: int, cliff_features: Array[Dictionary], import_position: Vector3, rng: RandomNumberGenerator, road_weight: PackedFloat32Array, cliff_plan: Array[Dictionary], cliff_top_profiles: Dictionary, outcrop_plan: Array[Dictionary], knots: Array) -> void:
 	var instancer: Terrain3DInstancer = terrain.get_instancer()
 	# Clear any previous run's instances first -- this script regenerates
 	# the live Terrain3D every time it runs (see _ready), so without this,
@@ -175,18 +202,26 @@ static func scatter_boulders(parent_node: Node, terrain: Terrain3D, heights: Pac
 	# different mesh, so (unlike the old single-Boulder01 version) a single
 	# shared shape no longer applies to every scattered instance.
 	var rock_shapes: Dictionary = {}
+	var hull_start_ms := Time.get_ticks_msec()
 	for mesh_id in ROCK_MESH_IDS:
 		var scene: PackedScene = load(ROCK_SCENE_PATHS[mesh_id])
 		if scene:
 			var sample := scene.instantiate()
-			var lod0: MeshInstance3D = sample.find_child("*LOD0*", true, false)
-			if lod0 and lod0.mesh:
+			# 2026-09-30: hull from the LOWEST-poly LOD (last *_LODn), not LOD0. Every LOD
+			# shares the same silhouette (dims within ~0.3%), and the simplified hull ends
+			# up ~32 points either way -- but the batch-2 boulders' 59k-109k-tri LOD0s
+			# took ~3.1 s to hull at startup.
+			var lods := sample.find_children("*LOD*", "MeshInstance3D", true, false)
+			lods.sort_custom(func(a: Node, b: Node) -> bool: return String(a.name) < String(b.name))
+			var hull_src: MeshInstance3D = lods.back() if not lods.is_empty() else null
+			if hull_src and hull_src.mesh:
 				# simplify=true: the 2k meshes would otherwise give 300-500-point hulls; the
 				# simplified hull is ~32 points and matches the rock's size within ~1-3%.
-				rock_shapes[mesh_id] = lod0.mesh.create_convex_shape(true, true)
+				rock_shapes[mesh_id] = hull_src.mesh.create_convex_shape(true, true)
 			sample.free()
 		if not rock_shapes.has(mesh_id):
 			push_warning("TERRAIN_GEN: could not build a collision shape from %s (mesh id %d) -- these rocks will render but have no collision" % [ROCK_SCENE_PATHS[mesh_id], mesh_id])
+	print("TERRAIN_GEN_STARTUP:   rock glb load + convex hulls (%d mesh ids): %.2fs" % [ROCK_MESH_IDS.size(), (Time.get_ticks_msec() - hull_start_ms) / 1000.0])
 
 	# Per-mesh-id batches -- Terrain3DInstancer.add_transforms takes one mesh
 	# id per call, so instances using different rock meshes can't share one
@@ -375,16 +410,7 @@ static func scatter_boulders(parent_node: Node, terrain: Terrain3D, heights: Pac
 
 			var shape: Shape3D = rock_shapes.get(mesh_id)
 			if shape:
-				var body := StaticBody3D.new()
-				body.name = "Boulder%d" % collider_count
-				collider_container.add_child(body)
-				body.transform = Transform3D(boulder_basis, boulder_pos)
-
-				var col := CollisionShape3D.new()
-				col.name = "CollisionShape3D"
-				col.shape = shape
-				body.add_child(col)
-
+				_add_rock_collider(collider_container, shape, Transform3D(boulder_basis, boulder_pos), collider_count)
 				collider_count += 1
 
 	var talus_count := talus_total
@@ -446,20 +472,97 @@ static func scatter_boulders(parent_node: Node, terrain: Terrain3D, heights: Pac
 
 		var shape: Shape3D = rock_shapes.get(mesh_id)
 		if shape:
-			var body := StaticBody3D.new()
-			body.name = "Boulder%d" % collider_count
-			collider_container.add_child(body)
-			body.transform = Transform3D(erratic_basis, erratic_pos)
-
-			var col := CollisionShape3D.new()
-			col.name = "CollisionShape3D"
-			col.shape = shape
-			body.add_child(col)
-
+			_add_rock_collider(collider_container, shape, Transform3D(erratic_basis, erratic_pos), collider_count)
 			collider_count += 1
 
 	var erratic_count := erratic_total
-	var total_count := talus_count + erratic_count
+
+	# Knot talus (2026-09-30) -- see the KNOT_TALUS_* block above. Per knot: candidates in front of
+	# each row's foot, then the knot's walk check with the boulders as rock.
+	var knot_talus_total := 0
+	var knot_talus_dropped := 0
+	var knot_talus_parts: Array[String] = [] # per knot: "#i N (L lvl)" for the debug line
+	var knot_rows := _knot_rows(cliff_plan, cliff_top_profiles)
+	for knot in knots:
+		var ki := int(knot.index)
+		var rock := TerrainKnots.knot_rock_mask(ki, cliff_plan, width, length)
+		var tops := TerrainKnots.level_top_mask(knot, heights, width, length, rock)
+		var placed: Array[Dictionary] = []
+		for row in knot_rows:
+			if int(row.knot) != ki:
+				continue
+			var row_half: float = row.half_len
+			var usable := row_half * (1.0 - KNOT_TALUS_ROW_INSET)
+			var count := clampi(BOULDER_MIN_PER_FEATURE + int(row_half * 2.0 / BOULDER_PER_FEATURE_LENGTH_DIVISOR), BOULDER_MIN_PER_FEATURE, KNOT_TALUS_MAX_PER_ROW)
+			var t_centre := rng.randf_range(-usable, usable) # one rockfall centre per row
+			for i in count:
+				var size_u := rng.randf()
+				var size_scale := lerpf(BOULDER_SCALE_MIN, BOULDER_SCALE_MAX, size_u)
+				var radius := BOULDER_KEEPOUT_RADIUS * size_scale
+				var t := clampf(rng.randfn(t_centre, BOULDER_CLUSTER_SPREAD), -usable, usable)
+				var px := 0.0
+				var pz := 0.0
+				var found_clear_spot := false
+				for attempt in BOULDER_MAX_PLACEMENT_ATTEMPTS:
+					var talus_t := lerpf(pow(rng.randf(), BOULDER_TALUS_DENSITY_EXPONENT), size_u, BOULDER_SIZE_SORTING)
+					var dist := float(row.front) + BOULDER_FOOT_MARGIN_MIN + attempt * BOULDER_FOOT_MARGIN_STEP_BACK \
+						+ talus_t * (BOULDER_FOOT_MARGIN_MAX - BOULDER_FOOT_MARGIN_MIN)
+					var p: Vector2 = row.center + row.along * t + row.face * dist
+					px = clampf(p.x, 0.0, float(width - 1))
+					pz = clampf(p.y, 0.0, float(length - 1))
+					var normal := TerrainUtil.sample_normal(heights, width, length, px, pz)
+					var sample_idx := clampi(int(round(pz)), 0, length - 1) * width + clampi(int(round(px)), 0, width - 1)
+					if normal.y < BOULDER_MAX_SLOPE_NORMAL_Y or road_weight[sample_idx] > 0.0:
+						continue
+					if boulder_blocked(px, pz, radius, keep_rects, keep_circles):
+						keepout_rejects += 1
+						continue
+					if _mask_hits_circle(tops, px, pz, radius, width, length) or _near_knot_ramp(knot, px, pz, KNOT_TALUS_RAMP_CLEAR + radius):
+						continue
+					found_clear_spot = true
+					break
+				if found_clear_spot:
+					placed.append({"px": px, "pz": pz, "size": size_scale})
+
+		# Walk check: every level reached without the boulders must still be reached with them.
+		var baseline := TerrainKnots.flood_reached_levels(knot, heights, width, length, rock)
+		if not placed.is_empty() and not baseline.is_empty():
+			var block := rock.duplicate()
+			for b in placed:
+				_stamp_circle(block, b.px, b.pz, BOULDER_KEEPOUT_RADIUS * float(b.size) + KNOT_TALUS_BLOCK_PAD, width, length)
+			if _lost_any(baseline, TerrainKnots.flood_reached_levels(knot, heights, width, length, block)):
+				# Something got cut off: re-add one at a time, dropping each boulder that causes it.
+				block = rock.duplicate()
+				var kept: Array[Dictionary] = []
+				for b in placed:
+					var test := block.duplicate()
+					_stamp_circle(test, b.px, b.pz, BOULDER_KEEPOUT_RADIUS * float(b.size) + KNOT_TALUS_BLOCK_PAD, width, length)
+					if _lost_any(baseline, TerrainKnots.flood_reached_levels(knot, heights, width, length, test)):
+						knot_talus_dropped += 1
+					else:
+						block = test
+						kept.append(b)
+				placed = kept
+		knot_talus_parts.append("#%d %d (%d lvl)" % [ki, placed.size(), baseline.size()])
+
+		for b in placed:
+			var bpx: float = b.px
+			var bpz: float = b.pz
+			var normal := TerrainUtil.sample_normal(heights, width, length, bpx, bpz)
+			var pos := Vector3(import_position.x + bpx, TerrainUtil.sample_height_bilinear(heights, width, length, bpx, bpz) - BOULDER_EMBED_DEPTH, import_position.z + bpz)
+			var mesh_id: int = ROCK_MESH_IDS[rng.randi() % ROCK_MESH_IDS.size()]
+			var knot_scale: float = float(b.size) * float(ROCK_BASE_SCALE[mesh_id])
+			var knot_basis := Basis(Quaternion(normal, rng.randf_range(0.0, TAU)) * Quaternion(Vector3.UP, normal)).scaled(Vector3.ONE * knot_scale)
+			transforms_by_mesh[mesh_id].append(Transform3D(knot_basis, pos))
+			colors_by_mesh[mesh_id].append(Color(1.0, 1.0, 1.0, 1.0))
+			rock_keep_circles.append(Vector3(bpx, bpz, BOULDER_KEEPOUT_RADIUS * knot_scale))
+			knot_talus_total += 1
+			var shape: Shape3D = rock_shapes.get(mesh_id)
+			if shape:
+				_add_rock_collider(collider_container, shape, Transform3D(knot_basis, pos), collider_count)
+				collider_count += 1
+
+	var total_count := talus_count + erratic_count + knot_talus_total
 
 	if total_count == 0:
 		print("TERRAIN_GEN: no boulders scattered (no cliff features placed, no erratics found a clear spot)")
@@ -469,7 +572,8 @@ static func scatter_boulders(parent_node: Node, terrain: Terrain3D, heights: Pac
 		if not transforms_by_mesh[mesh_id].is_empty():
 			instancer.add_transforms(mesh_id, transforms_by_mesh[mesh_id], colors_by_mesh[mesh_id], true)
 
-	print("TERRAIN_GEN: scattered %d talus boulder(s) + %d glacial erratic(s) = %d total (%d with collision) along %d cliff feature(s)" % [talus_count, erratic_count, total_count, collider_count, cliff_features.size()])
+	print("TERRAIN_GEN: scattered %d talus boulder(s) + %d glacial erratic(s) + %d knot talus = %d total (%d with collision) along %d cliff feature(s) + %d knot(s)" % [talus_count, erratic_count, knot_talus_total, total_count, collider_count, cliff_features.size(), knots.size()])
+	print("TERRAIN_GEN_DEBUG knot talus -- per knot (boulders, levels walk-checked): %s; %d boulder(s) dropped by the walk check" % [", ".join(knot_talus_parts), knot_talus_dropped])
 	print("TERRAIN_GEN_DEBUG boulders -- %d rockfall centre(s) (%d under a cliff mesh), %d spot(s) rejected by cliff/outcrop keep-outs, mean step %.2f" % [cluster_total, face_cluster_total, keepout_rejects, mean_step])
 
 ## Scree layer -- a dense, collider-free debris carpet at each cliff foot,
@@ -482,7 +586,7 @@ static func scatter_boulders(parent_node: Node, terrain: Terrain3D, heights: Pac
 ## colliders built (scree is cosmetic; the terrain collider carries the
 ## ground). Same timing contract as _scatter_boulders: after import_images(),
 ## before save_directory().
-static func scatter_scree(terrain: Terrain3D, heights: PackedFloat32Array, width: int, length: int, cliff_features: Array[Dictionary], import_position: Vector3, rng: RandomNumberGenerator, road_weight: PackedFloat32Array, cliff_plan: Array[Dictionary], cliff_top_profiles: Dictionary, outcrop_plan: Array[Dictionary]) -> void:
+static func scatter_scree(terrain: Terrain3D, heights: PackedFloat32Array, width: int, length: int, cliff_features: Array[Dictionary], import_position: Vector3, rng: RandomNumberGenerator, road_weight: PackedFloat32Array, cliff_plan: Array[Dictionary], cliff_top_profiles: Dictionary, outcrop_plan: Array[Dictionary], knots: Array) -> void:
 	var instancer: Terrain3DInstancer = terrain.get_instancer()
 	for mesh_id in SCREE_MESH_IDS:
 		instancer.clear_by_mesh(mesh_id)
@@ -603,11 +707,142 @@ static func scatter_scree(terrain: Terrain3D, heights: PackedFloat32Array, width
 			colors_by_mesh[mesh_id].append(Color(1.0, 1.0, 1.0, 1.0))
 			scree_total += 1
 
+	# Knot scree (2026-09-30) -- same foot band as the knot talus in scatter_boulders, scree's own
+	# density/band/slope rules. No colliders, so no ramp or walk check; level tops still stay clear.
+	var knot_scree_total := 0
+	var knot_rows := _knot_rows(cliff_plan, cliff_top_profiles)
+	for knot in knots:
+		var ki := int(knot.index)
+		var tops := TerrainKnots.level_top_mask(knot, heights, width, length, TerrainKnots.knot_rock_mask(ki, cliff_plan, width, length))
+		for row in knot_rows:
+			if int(row.knot) != ki:
+				continue
+			var row_half: float = row.half_len
+			var usable := row_half * (1.0 - SCREE_END_INSET_FRACTION)
+			var count := clampi(SCREE_MIN_PER_FEATURE + int(row_half * 2.0 / SCREE_PER_FEATURE_LENGTH_DIVISOR), SCREE_MIN_PER_FEATURE, SCREE_MAX_PER_FEATURE)
+			for i in count:
+				var t := rng.randf_range(-usable, usable)
+				var size_scale := lerpf(SCREE_SCALE_MIN, SCREE_SCALE_MAX, rng.randf())
+				var px := 0.0
+				var pz := 0.0
+				var normal := Vector3.UP
+				var found_clear_spot := false
+				for attempt in SCREE_MAX_PLACEMENT_ATTEMPTS:
+					var dist := float(row.front) + SCREE_FOOT_MARGIN_MIN + attempt * SCREE_FOOT_MARGIN_STEP_BACK \
+						+ pow(rng.randf(), SCREE_TALUS_DENSITY_EXPONENT) * (SCREE_FOOT_MARGIN_MAX - SCREE_FOOT_MARGIN_MIN)
+					var p: Vector2 = row.center + row.along * (t + rng.randf_range(-SCREE_LATERAL_JITTER, SCREE_LATERAL_JITTER)) + row.face * dist
+					px = clampf(p.x, 0.0, float(width - 1))
+					pz = clampf(p.y, 0.0, float(length - 1))
+					normal = TerrainUtil.sample_normal(heights, width, length, px, pz)
+					var sample_idx := clampi(int(round(pz)), 0, length - 1) * width + clampi(int(round(px)), 0, width - 1)
+					if normal.y < SCREE_MAX_SLOPE_NORMAL_Y or road_weight[sample_idx] > 0.0 or tops[sample_idx] == 1:
+						continue
+					if boulder_blocked(px, pz, SCREE_KEEPOUT_RADIUS * size_scale, keep_rects, keep_circles):
+						continue
+					found_clear_spot = true
+					break
+				if not found_clear_spot:
+					continue
+				var pos := Vector3(import_position.x + px, TerrainUtil.sample_height_bilinear(heights, width, length, px, pz) - SCREE_EMBED_DEPTH, import_position.z + pz)
+				var mesh_id: int
+				if rng.randf() < SCREE_GRAVEL_FRACTION:
+					mesh_id = SCREE_GRAVEL_MESH_IDS[rng.randi() % SCREE_GRAVEL_MESH_IDS.size()]
+				else:
+					mesh_id = SCREE_FIST_MESH_IDS[rng.randi() % SCREE_FIST_MESH_IDS.size()]
+				var basis := Basis(Quaternion(normal, rng.randf_range(0.0, TAU)) * Quaternion(Vector3.UP, normal)).scaled(Vector3.ONE * size_scale)
+				transforms_by_mesh[mesh_id].append(Transform3D(basis, pos))
+				colors_by_mesh[mesh_id].append(Color(1.0, 1.0, 1.0, 1.0))
+				knot_scree_total += 1
+
 	for mesh_id in SCREE_MESH_IDS:
 		if not transforms_by_mesh[mesh_id].is_empty():
 			instancer.add_transforms(mesh_id, transforms_by_mesh[mesh_id], colors_by_mesh[mesh_id], true)
 
-	print("TERRAIN_GEN: scattered %d scree stone(s) across %d cliff feature(s)" % [scree_total, cliff_features.size()])
+	print("TERRAIN_GEN: scattered %d scree stone(s) across %d cliff feature(s) + %d at %d knot(s)" % [scree_total + knot_scree_total, cliff_features.size(), knot_scree_total, knots.size()])
+
+## Knot rows for the knot talus/scree passes: one {knot, center, face, along, half_len, front} per
+## (knot, knot_row) group of knot meshes in cliff_plan, pixel space. face = mean mesh facing (the
+## foot side), front = how far in front of `center` the rock reaches (scanned top profiles' z_max,
+## the same local +z the keep-out rects use), so the foot band starts at the real face.
+static func _knot_rows(cliff_plan: Array[Dictionary], top_profiles: Dictionary) -> Array[Dictionary]:
+	var defs: Dictionary = {}
+	for def in TerrainConfig.CLIFF_DRESSING_DEFS:
+		defs[def.name] = def
+	var groups: Dictionary = {}
+	for e in cliff_plan:
+		if not e.has("knot"):
+			continue
+		var key := "%d/%s" % [int(e.knot), String(e.knot_row)]
+		if not groups.has(key):
+			groups[key] = []
+		groups[key].append(e)
+	var rows: Array[Dictionary] = []
+	for key in groups:
+		var es: Array = groups[key]
+		var c := Vector2.ZERO
+		var f := Vector2.ZERO
+		for e in es:
+			c += Vector2(float(e.px), float(e.pz))
+			f += Vector2(float(e.face_dir_x), float(e.face_dir_z))
+		c /= float(es.size())
+		f = f.normalized()
+		var along := Vector2(-f.y, f.x)
+		var half_len := 0.0
+		var front := 0.0
+		for e in es:
+			var d = defs.get(e.def_name)
+			if d == null:
+				continue
+			var sj: float = e.scale_jitter
+			var rel := Vector2(float(e.px), float(e.pz)) - c
+			var prof: Dictionary = top_profiles.get(e.def_name, {})
+			half_len = maxf(half_len, absf(rel.dot(along)) + float(d.real_size) * sj * 0.5)
+			front = maxf(front, rel.dot(f) + float(prof.get("z_max", float(d.depth) * 0.5)) * sj)
+		rows.append({"knot": int(es[0].knot), "center": c, "face": f, "along": along, "half_len": half_len, "front": front})
+	return rows
+
+## True if any pixel within `radius` of (px, pz) is set in `mask`.
+static func _mask_hits_circle(mask: PackedByteArray, px: float, pz: float, radius: float, width: int, length: int) -> bool:
+	for z in range(clampi(int(floor(pz - radius)), 0, length - 1), clampi(int(ceil(pz + radius)), 0, length - 1) + 1):
+		for x in range(clampi(int(floor(px - radius)), 0, width - 1), clampi(int(ceil(px + radius)), 0, width - 1) + 1):
+			if mask[z * width + x] == 1 and Vector2(x, z).distance_to(Vector2(px, pz)) <= radius:
+				return true
+	return false
+
+## Sets every pixel within `radius` of (px, pz) in `mask`.
+static func _stamp_circle(mask: PackedByteArray, px: float, pz: float, radius: float, width: int, length: int) -> void:
+	for z in range(clampi(int(floor(pz - radius)), 0, length - 1), clampi(int(ceil(pz + radius)), 0, length - 1) + 1):
+		for x in range(clampi(int(floor(px - radius)), 0, width - 1), clampi(int(ceil(px + radius)), 0, width - 1) + 1):
+			if Vector2(x, z).distance_to(Vector2(px, pz)) <= radius:
+				mask[z * width + x] = 1
+
+## True if (px, pz) is within `clear` of any of the knot's fallback ramp centre lines.
+static func _near_knot_ramp(knot: Dictionary, px: float, pz: float, clear: float) -> bool:
+	var p := Vector2(px, pz)
+	for r in knot.get("ramp_paths", []):
+		var a: Vector2 = r.from
+		var b: Vector2 = r.to
+		if p.distance_to(Geometry2D.get_closest_point_to_segment(p, a, b)) < clear:
+			return true
+	return false
+
+## True if some level `baseline` lists is missing from `now`.
+static func _lost_any(baseline: Array[String], now: Array[String]) -> bool:
+	for n in baseline:
+		if not now.has(n):
+			return true
+	return false
+
+## One StaticBody3D + CollisionShape3D for a scattered rock, under the collider container.
+static func _add_rock_collider(container: Node3D, shape: Shape3D, xform: Transform3D, index: int) -> void:
+	var body := StaticBody3D.new()
+	body.name = "Boulder%d" % index
+	container.add_child(body)
+	body.transform = xform
+	var col := CollisionShape3D.new()
+	col.name = "CollisionShape3D"
+	col.shape = shape
+	body.add_child(col)
 
 ## Item 1 keep-out test (pixel space): true if a rock of `radius` at (px, pz) overlaps a cliff
 ## mesh's rotated local footprint (+ BOULDER_KEEPOUT_MARGIN) or an outcrop's bounding circle.

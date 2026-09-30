@@ -32,7 +32,9 @@
 ## (self-checked: "outside" count in the log must be 0). Every row plateau is verified walkable from outside (flood
 ## fill, KNOT_WALK_STEP) with a carved fallback ramp if not. The meshes are appended to the regular
 ## dressing plan, so instancing, collision, keep-outs and ground painting pick them up unchanged;
-## the road avoids knots via cliff_obstacle_mask.
+## the road avoids knots via cliff_obstacle_mask. Talus boulders + scree in front of each knot row
+## come from RockScatter (KNOT_TALUS_* there, 2026-09-30), which uses the queries near
+## filter_cliff_plan below to keep level tops clear and re-check reachability with the boulders.
 ##
 ## Side effect to know about: raise_terrain_behind_cliff_dressing resets CliffDressing's static
 ## _raise_debug_* buffers on every call, so with RAISE_DEBUG_SHOW_SURFACE on, the overlay would
@@ -272,6 +274,38 @@ static func filter_outcrops(plan: Array, knots: Array) -> int:
 			plan.remove_at(i)
 			removed += 1
 	return removed
+
+# ---------------------------------------------------------------------------------------------
+# Queries for later layers (2026-09-30: RockScatter's knot talus/scree -- debris in front of knot
+# rows must not land on a level top or cut a level off)
+# ---------------------------------------------------------------------------------------------
+
+## The walkability checks' rock mask (_mesh_block_mask) for knot `knot_index`'s meshes, read back
+## from the cliff-dressing plan they were appended to.
+static func knot_rock_mask(knot_index: int, cliff_plan: Array[Dictionary], width: int, length: int) -> PackedByteArray:
+	var entries: Array[Dictionary] = []
+	for e in cliff_plan:
+		if int(e.get("knot", -1)) == knot_index:
+			entries.append(e)
+	return _mesh_block_mask(entries, width, length)
+
+## Names of the knot's levels the walk flood (from the circle rim) reaches, with `block` as rock.
+static func flood_reached_levels(knot: Dictionary, heights: PackedFloat32Array, width: int, length: int, block: PackedByteArray) -> Array[String]:
+	var flood := _flood(knot, heights, width, length, block)
+	var out: Array[String] = []
+	for l in knot.levels:
+		if _level_reached(knot, l, flood):
+			out.append(String(l.name))
+	return out
+
+## 1 = pixel on one of the knot's level tops (_level_top: its standable plateaus and ledges).
+static func level_top_mask(knot: Dictionary, heights: PackedFloat32Array, width: int, length: int, block: PackedByteArray) -> PackedByteArray:
+	var mask := PackedByteArray()
+	mask.resize(width * length)
+	for l in knot.levels:
+		for q in _level_top(knot, l, heights, width, length, block):
+			mask[int(q.y) * width + int(q.x)] = 1
+	return mask
 
 ## Puts each knot circle back to `snapshot` (heights right after build_knots): exact inside
 ## reach - KNOT_PROTECT_FEATHER, blended to the current terrain at the rim. Returns pixels restored.

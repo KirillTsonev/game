@@ -1,0 +1,11 @@
+[gd_resource type="StandardMaterial3D" format=3 uid="uid://drucqgd75442a"]
+
+[ext_resource type="Texture2D" uid="uid://cbjl0m0d60xg1" path="res://assets/models/rocks/namaqualand_boulder_03/textures/namaqualand_boulder_03_diff_2k.jpg" id="1_ecy5a"]
+[ext_resource type="Texture2D" uid="uid://db28cyul4nw1i" path="res://assets/models/rocks/namaqualand_boulder_03/textures/namaqualand_boulder_03_nor_gl_2k.exr" id="2_v4cf4"]
+[ext_resource type="Texture2D" uid="uid://bn21v3i0h0ols" path="res://assets/models/rocks/namaqualand_boulder_03/textures/namaqualand_boulder_03_rough_2k.exr" id="3_4ytqa"]
+
+[resource]
+albedo_texture = ExtResource("1_ecy5a")
+roughness_texture = ExtResource("3_4ytqa")
+normal_enabled = true
+normal_texture = ExtResource("2_v4cf4")

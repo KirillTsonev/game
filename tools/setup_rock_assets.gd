@@ -1,11 +1,12 @@
 @tool
 extends Node
 
-## One-shot setup for the four rock props (Poly Haven CC0: boulder_01, stone_01,
-## rock_07, rock_09), each in res://assets/models/rocks/<dir>/ with a 2k glb and
+## One-shot setup for the scatter rock props (Poly Haven CC0: boulder_01, stone_01,
+## rock_07, rock_09, + namaqualand_boulder_02..06 since 2026-09-30), each in
+## res://assets/models/rocks/<dir>/ with a 2k glb and
 ## textures/<dir>_{diff,nor_gl,rough}_2k. setup_materials() builds each rock's
 ## StandardMaterial3D from those textures; setup_mesh_assets() registers each as a
-## Terrain3DMeshAsset (ids 1-4) with that material as override; configure_rock_lods()
+## Terrain3DMeshAsset (ids 1-4, 33-37) with that material as override; configure_rock_lods()
 ## sets LOD distances. (2026-09-24: Boulder01, id 1, used to have its own
 ## setup_boulder_asset.gd -- merged in here as one more ROCKS row.)
 ## Run via call_method(runtime:false) on the EDITOR process (tools/setup_rock_assets.tscn,
@@ -19,6 +20,13 @@ const ROCKS := [  # 2026-09-24: "file" is the 2k glb -- what's registered live; 
 	{"id": 2, "dir": "stone_01", "file": "stone_01_2k", "name": "Stone01"},
 	{"id": 3, "dir": "rock_07", "file": "rock_07_2k", "name": "Rock07"},
 	{"id": 4, "dir": "rock_09", "file": "rock_09_2k", "name": "Rock09"},
+	# 2026-09-30: batch 2 (Poly Haven namaqualand boulders). Modeled at real metre scale
+	# (1.2-3.1 m longest axis); root_scale in each .glb.import brings them to 1.0-1.75.
+	{"id": 33, "dir": "namaqualand_boulder_02", "file": "namaqualand_boulder_02_2k", "name": "NamaBoulder02"},
+	{"id": 34, "dir": "namaqualand_boulder_03", "file": "namaqualand_boulder_03_2k", "name": "NamaBoulder03"},
+	{"id": 35, "dir": "namaqualand_boulder_04", "file": "namaqualand_boulder_04_2k", "name": "NamaBoulder04"},
+	{"id": 36, "dir": "namaqualand_boulder_05", "file": "namaqualand_boulder_05_2k", "name": "NamaBoulder05"},
+	{"id": 37, "dir": "namaqualand_boulder_06", "file": "namaqualand_boulder_06_2k", "name": "NamaBoulder06"},
 ]
 
 ## Diagnostic only -- prints each rock's (and Boulder01's, for comparison)
@@ -29,24 +37,20 @@ const ROCKS := [  # 2026-09-24: "file" is the 2k glb -- what's registered live; 
 ## applied identically to every mesh id.
 func debug_print_mesh_sizes() -> String:
 	var results: Array[String] = []
-	var entries := [
-		{"name": "Boulder01", "path": "res://assets/models/rocks/boulder_01/boulder_01_2k.glb"},
-		{"name": "Stone01", "path": "res://assets/models/rocks/stone_01/stone_01_2k.glb"},
-		{"name": "Rock07", "path": "res://assets/models/rocks/rock_07/rock_07_2k.glb"},
-		{"name": "Rock09", "path": "res://assets/models/rocks/rock_09/rock_09_2k.glb"},
-	]
-	for entry: Dictionary in entries:
-		var scene: PackedScene = ResourceLoader.load(entry.path, "", ResourceLoader.CACHE_MODE_IGNORE)
+	for rock: Dictionary in ROCKS:
+		var path := "res://assets/models/rocks/%s/%s.glb" % [rock.dir, rock.file]
+		var scene: PackedScene = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE)
 		if scene == null:
-			results.append("%s: could not load %s" % [entry.name, entry.path])
+			results.append("%s: could not load %s" % [rock.name, path])
 			continue
 		var sample := scene.instantiate()
 		var lod0: MeshInstance3D = sample.find_child("*LOD0*", true, false)
 		if lod0 and lod0.mesh:
 			var aabb := lod0.mesh.get_aabb()
-			results.append("%s: mesh AABB size=%s (LOD0 node scale=%s)" % [entry.name, aabb.size, lod0.scale])
+			var lod_count := sample.find_children("*LOD*", "MeshInstance3D", true, false).size()
+			results.append("%s: mesh AABB size=%s (LOD0 node scale=%s, %d LOD nodes)" % [rock.name, aabb.size, lod0.scale, lod_count])
 		else:
-			results.append("%s: no LOD0 mesh found" % entry.name)
+			results.append("%s: no LOD0 mesh found" % rock.name)
 		sample.free()
 	return "\n".join(results)
 
@@ -61,7 +65,8 @@ func debug_print_mesh_assets() -> String:
 	if assets == null:
 		return "ERROR: could not load %s" % ASSETS_PATH
 	var results: Array[String] = []
-	for id in [1, 2, 3, 4]:
+	for rock: Dictionary in ROCKS:
+		var id: int = rock.id
 		var ma: Terrain3DMeshAsset = assets.get_mesh_asset(id)
 		if ma == null:
 			results.append("id=%d: NO MESH ASSET REGISTERED" % id)
@@ -84,17 +89,23 @@ func force_reimport_rocks() -> String:
 	# .import params changed. EditorFileSystem.reimport_files() is the
 	# actual API for forcing a reimport using whatever params are currently
 	# saved in the .import file.
+	# 2026-09-30: batch 2 boulders (root_scale + embedded_image_handling=0 set in their .import).
 	var paths := [
-		"res://assets/models/rocks/stone_01/stone_01_2k.glb",
-		"res://assets/models/rocks/rock_07/rock_07_2k.glb",
-		"res://assets/models/rocks/rock_09/rock_09_2k.glb",
+		"res://assets/models/rocks/namaqualand_boulder_02/namaqualand_boulder_02_2k.glb",
+		"res://assets/models/rocks/namaqualand_boulder_03/namaqualand_boulder_03_2k.glb",
+		"res://assets/models/rocks/namaqualand_boulder_04/namaqualand_boulder_04_2k.glb",
+		"res://assets/models/rocks/namaqualand_boulder_05/namaqualand_boulder_05_2k.glb",
+		"res://assets/models/rocks/namaqualand_boulder_06/namaqualand_boulder_06_2k.glb",
 	]
 	EditorInterface.get_resource_filesystem().reimport_files(PackedStringArray(paths))
 	return "reimported: " + ", ".join(paths)
 
-func setup_materials() -> String:
+## only_ids: limit to these ROCKS ids (e.g. [33, 34] for newly added rocks); empty = all.
+func setup_materials(only_ids: Array = []) -> String:
 	var results: Array[String] = []
 	for rock: Dictionary in ROCKS:
+		if not only_ids.is_empty() and not only_ids.any(func(i): return int(i) == rock.id):
+			continue
 		var base := "res://assets/models/rocks/%s/" % rock.dir  # 2026-09-24: rocks moved into models/rocks/
 		var mat := StandardMaterial3D.new()
 		# NOTE: texture files are named after rock.dir ("stone_01_diff_1k.jpg"),
@@ -126,7 +137,7 @@ func setup_materials() -> String:
 		results.append("saved %s (err=%d)" % [mat_path, err])
 	return "\n".join(results)
 
-func setup_mesh_assets() -> String:
+func setup_mesh_assets(only_ids: Array = []) -> String:
 	# Plain load(), deliberately:
 	# the editor keeps ONE canonical Terrain3DAssets instance alive
 	# (Terrain3D's own dock holds it), and only mutating that same instance
@@ -136,6 +147,8 @@ func setup_mesh_assets() -> String:
 		return "ERROR: could not load %s" % ASSETS_PATH
 	var results: Array[String] = []
 	for rock: Dictionary in ROCKS:
+		if not only_ids.is_empty() and not only_ids.any(func(i): return int(i) == rock.id):
+			continue
 		var base := "res://assets/models/rocks/%s/" % rock.dir  # 2026-09-24: rocks moved into models/rocks/
 		var scene_path := base + "%s.glb" % rock.file
 		var mat_path := base + "%s_material.tres" % rock.dir
@@ -165,6 +178,12 @@ func setup_mesh_assets() -> String:
 const ROCK_LOD_RANGES := {
 	1: [22.0, 50.0, 120.0, 380.0],  # Boulder01
 	2: [22.0, 50.0, 120.0, 380.0],  # Stone01
+	# 2026-09-30 batch 2 -- LOD0 is 59k-109k tris on every one, so same pulled-in hand-offs.
+	33: [22.0, 50.0, 120.0, 380.0],  # NamaBoulder02 (98k)
+	34: [22.0, 50.0, 120.0, 380.0],  # NamaBoulder03 (65k)
+	35: [22.0, 50.0, 120.0, 380.0],  # NamaBoulder04 (59k)
+	36: [22.0, 50.0, 380.0],  # NamaBoulder05 (90k) -- only 3 LODs (LOD2 = 5.6k tris is the last)
+	37: [22.0, 50.0, 120.0, 380.0],  # NamaBoulder06 (109k)
 }
 
 func configure_rock_lods() -> String:
