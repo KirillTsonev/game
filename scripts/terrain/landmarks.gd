@@ -187,7 +187,7 @@ static func save_polygon(points: Array[Vector2]) -> String:
 	return "LANDMARK shape saved: %d points %s -- restart the scene to stamp with it" % [arr.size(), str(arr)]
 
 ## 3. Stamp heights + meshes, reserve the area. Returns stats.
-static func stamp(heights: PackedFloat32Array, width: int, length: int, cliff_plan: Array[Dictionary], obstacle_mask: PackedByteArray, cliff_features: Array) -> Dictionary:
+static func stamp(heights: PackedFloat32Array, width: int, length: int, cliff_plan: Array[Dictionary], obstacle_mask: PackedByteArray, cliff_features: Array, top_profiles: Dictionary) -> Dictionary:
 	if not is_active():
 		return {}
 	var d := _load()
@@ -265,6 +265,12 @@ static func stamp(heights: PackedFloat32Array, width: int, length: int, cliff_pl
 		e["landmark"] = "verticality_knot_01"
 		added.append(e)
 	cliff_plan.append_array(added)
+	# 2026-09-30: the copied ground keeps the reference run's top lift, and the plane fit moves the
+	# meshes rigidly vs the terrain per pixel -> top the ground behind them back up to mesh top +
+	# CLIFF_DRESSING_RAISE_TOP_LIFT (top-up only -- see CLIFF_DRESSING_SEAM_MIN_COVERAGE).
+	var seam_px := 0
+	if not added.is_empty():
+		seam_px = CliffDressing.raise_terrain_behind_cliff_dressing(added, heights, width, length, top_profiles, 0, true)
 	if not obstacle_mask.is_empty():
 		var mesh_mask := CliffDressing.build_cliff_dressing_obstacle_mask(added, width, length)
 		for i in mesh_mask.size():
@@ -287,9 +293,9 @@ static func stamp(heights: PackedFloat32Array, width: int, length: int, cliff_pl
 		f["landmark"] = "verticality_knot_01"
 		cliff_features.append(f)
 		feat_added += 1
-	var stats := {"plane": plane, "ring_px": ring_px, "changed": changed, "max_change": max_change, "meshes": added.size()}
-	print("TERRAIN_GEN: LANDMARK verticality_knot_01 stamped at px (%.0f, %.0f) r %.0f [%s] -- plane offset %.2f m, tilt (%.3f, %.3f) from %d ring px; %d px changed (max %.2f m); %d cliff mesh(es); cliff features -%d +%d" % [
-		c.x, c.y, r, ("polygon %d pts" % poly.size()) if poly.size() >= 3 else "circle", pa, pb, pc, ring_px, changed, max_change, added.size(), feat_removed, feat_added])
+	var stats := {"plane": plane, "ring_px": ring_px, "changed": changed, "max_change": max_change, "meshes": added.size(), "seam_px": seam_px}
+	print("TERRAIN_GEN: LANDMARK verticality_knot_01 stamped at px (%.0f, %.0f) r %.0f [%s] -- plane offset %.2f m, tilt (%.3f, %.3f) from %d ring px; %d px changed (max %.2f m); %d cliff mesh(es), %d px topped up to mesh top + %.2f m; cliff features -%d +%d" % [
+		c.x, c.y, r, ("polygon %d pts" % poly.size()) if poly.size() >= 3 else "circle", pa, pb, pc, ring_px, changed, max_change, added.size(), seam_px, CliffDressing.CLIFF_DRESSING_RAISE_TOP_LIFT, feat_removed, feat_added])
 	return stats
 
 # ---------------------------------------------------------------------------------------------

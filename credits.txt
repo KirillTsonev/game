@@ -1,19 +1,22 @@
-textures
+--- Textures ---
 
-Charlotte Baglioni - bark - https://www.artstation.com/wyrine
-Charlotte Baglioni - grass - https://www.artstation.com/wyrine
-golukumar - church model
-https://www.artstation.com/amalbubble - rocky trail - Amal Kumar
-https://www.artstation.com/amalbubble - rocky terrain - Amal Kumar
+Charlotte Baglioni - https://www.artstation.com/wyrine
+Amal Kumar - https://www.artstation.com/amalbubble
+Golukumar - https://sketchfab.com/mortalityrexotable
 
-models
+--- Models and meshes ---
 
-Yughues - bushes and ferns - https://www.artstation.com/yughues
+Dario Barresi
+Jenelle van Heerden
+Greg Zaal - https://gregzaal.com/
+Rico Cilliers - https://www.artstation.com/rico_b3d
+Yughues - https://www.artstation.com/yughues
+Elbolillo - https://www.fab.com/sellers/Elbolillo
 
-code
+--- Code ---
 
-Ethan Truong - GodotGrass (per-blade grass shader ported in shaders/grass/grass_blade.gdshader, blade meshes rebuilt from its grass_high/grass_low.obj in scripts/terrain/grass_field.gd, lighting/wind approach adapted in shaders/grass/grass_tuft.gdshader) - https://github.com/2Retr0/GodotGrass - MIT License, Copyright (c) 2024 Ethan Truong
+Ethan Truong - https://github.com/2Retr0/GodotGrass
 
-post
+--- Post-processing ---
 
-AtSaturn's Mind https://www.patreon.com/SaturnsMind
+AtSaturn's Mind - https://www.patreon.com/SaturnsMind

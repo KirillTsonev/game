@@ -81,7 +81,27 @@ const CLIFF_DRESSING_RAISE_RAMP_DISTANCE := 10.0
 ## TUNING: raise until the gaps close, then stop -- too much and the soil visibly climbs over
 ## the crest and is seen from the front, which is the opposite failure. 0.0 restores the old
 ## exact-match behaviour. The per-run value is echoed in the round19 raise-pass print.
-const CLIFF_DRESSING_RAISE_TOP_LIFT := 0.02
+const CLIFF_DRESSING_RAISE_TOP_LIFT := 0.1
+## 2026-09-30 (Kirill: the TOP_LIFT didn't apply to the fixed landmark's cliff meshes): the landmark
+## stamp (landmarks.gd) pastes captured heights and adds its meshes AFTER the raise pass, so its
+## ground keeps whatever lift the reference run had -- and its plane fit shifts terrain per pixel
+## but each mesh rigidly at its centre, which opens small gaps along the tops. stamp() re-runs
+## raise_terrain_behind_cliff_dressing on its meshes with seam_only = true: a TOP-UP only --
+## pixels at >= SEAM_MIN_COVERAGE raise weight (the plateau core behind the mesh) whose ground is
+## BELOW mesh top + TOP_LIFT are lifted to it; never lowered, no bump noise. Shortfalls beyond
+## TOP_LIFT + SEAM_TOLERANCE are left alone (fading over the last half of the tolerance), so the
+## captured shape's intentional dips / carved ramps aren't filled in.
+## 2026-09-30 (Kirill, seed 858829582, two namaqualand_cliff_01 at px (98, 400) / (105, 412) --
+## the first one's back exposed ~0.4-0.5 m): overlapping raise zones are combined as a weighted
+## average of the entries' plateau heights, and right behind a mesh that stands inside a
+## NEIGHBOUR's plateau both had ~full weight -> the neighbour's lower top dragged the ground below
+## this mesh's own top. Each entry's share of that average is now also scaled by
+## 1 / (1 + (d_behind / PROXIMITY_FALLOFF)^2), d_behind = metres past ITS back edge (<= 0 -> 1), so
+## the ground right behind a mesh follows that mesh. Only the height AVERAGE -- coverage (how far
+## the ground is pulled off natural) is unchanged. Smaller = sharper hand-over between meshes.
+const CLIFF_DRESSING_RAISE_PROXIMITY_FALLOFF := 3.0
+const CLIFF_DRESSING_SEAM_MIN_COVERAGE := 0.9
+const CLIFF_DRESSING_SEAM_TOLERANCE := 0.5
 ## How far the raised ground stays at full plateau height once the ramp above reaches it,
 ## before CLIFF_DRESSING_RAISE_FADE_DISTANCE below starts blending it back down -- without
 ## some hold distance the plateau would be a knife-edge ridge instead of actual standable
@@ -760,7 +780,9 @@ static func _sample_neighbor_facing_plateau_height(other: Dictionary, other_half
 	var edge_top := _sample_cliff_top_profile_flanked(other_profile, local_x_unscaled, _cliff_profile_flank_height(other_profile, true), _cliff_profile_flank_height(other_profile, false))
 	return other_origin_y + edge_top * other_scale
 
-static func raise_terrain_behind_cliff_dressing(plan: Array[Dictionary], heights: PackedFloat32Array, width: int, length: int, top_profiles: Dictionary, noise_seed: int) -> void:
+## seam_only (2026-09-30, landmark stamp): top-up mode -- see CLIFF_DRESSING_SEAM_MIN_COVERAGE.
+## Returns the number of pixels changed.
+static func raise_terrain_behind_cliff_dressing(plan: Array[Dictionary], heights: PackedFloat32Array, width: int, length: int, top_profiles: Dictionary, noise_seed: int, seam_only := false) -> int:
 	# 2026-09-18 round 20 -- see CLIFF_DRESSING_RAISE_EDGE_WARP / _BUMP_* comments.
 	var raise_warp_noise := FastNoiseLite.new()
 	raise_warp_noise.seed = noise_seed
@@ -795,7 +817,9 @@ static func raise_terrain_behind_cliff_dressing(plan: Array[Dictionary], heights
 	# SPIKE_DEBUG stage dump: smooth after flatten, spiky only after this pass, spike pixels =
 	# exactly the pixels the fringe entry "won"). Now every entry ACCUMULATES instead, and one
 	# continuous blend is applied after the loop (see the commit loop at the end):
-	#   target   = weight-averaged plateau height of all contributing entries
+	#   target   = weight-averaged plateau height of all contributing entries (weights also
+	#              scaled by proximity to each entry's back edge since 2026-09-30 -- see
+	#              CLIFF_DRESSING_RAISE_PROXIMITY_FALLOFF)
 	#   coverage = 1 - prod(1 - w_i)   (any single full-weight entry => fully applied)
 	#   height   = lerp(natural, target, coverage) + bump noise
 	# A pixel touched by only ONE entry gets exactly the same result as before (target = its
@@ -1186,8 +1210,12 @@ static func raise_terrain_behind_cliff_dressing(plan: Array[Dictionary], heights
 				# 2026-09-28: accumulate instead of blending+max-combining per entry -- see the
 				# raise_w_sum/raise_keep comment at the top of this function. The blend (and the
 				# round-20 mid-slope bump noise) is applied once per pixel in the commit loop below.
-				raise_w_sum[idx] += raise_w
-				raise_wp_sum[idx] += raise_w * plateau_height
+				# 2026-09-30: the height average favours the mesh this pixel is closest behind (see
+				# CLIFF_DRESSING_RAISE_PROXIMITY_FALLOFF); coverage below still uses the plain weight.
+				var prox_d := maxf(d_behind, 0.0) / CLIFF_DRESSING_RAISE_PROXIMITY_FALLOFF
+				var avg_w := raise_w / (1.0 + prox_d * prox_d)
+				raise_w_sum[idx] += avg_w
+				raise_wp_sum[idx] += avg_w * plateau_height
 				raise_keep[idx] *= (1.0 - raise_w)
 				touched_x0 = mini(touched_x0, qx)
 				touched_x1 = maxi(touched_x1, qx)
@@ -1204,6 +1232,7 @@ static func raise_terrain_behind_cliff_dressing(plan: Array[Dictionary], heights
 	# down -- the 2026-09-28 spike ridge), now weighted blend (continuous; see top of function).
 	# _raise_debug_heights still receives the final value so the optional RAISE_DEBUG_SHOW_SURFACE
 	# overlay keeps working unchanged.
+	var changed := 0
 	for cz in range(touched_z0, touched_z1 + 1): # 2026-09-29: only the touched box (see touched_x0)
 		for cx in range(touched_x0, touched_x1 + 1):
 			var i := cz * width + cx
@@ -1213,6 +1242,19 @@ static func raise_terrain_behind_cliff_dressing(plan: Array[Dictionary], heights
 			var natural := heights[i]
 			var target := raise_wp_sum[i] / w_sum
 			var coverage := 1.0 - raise_keep[i]
+			if seam_only:
+				# Top-up only (see CLIFF_DRESSING_SEAM_MIN_COVERAGE): plateau core, small shortfalls.
+				var short := target - natural
+				if short <= 0.0 or coverage < CLIFF_DRESSING_SEAM_MIN_COVERAGE:
+					continue
+				var seam_max := CLIFF_DRESSING_RAISE_TOP_LIFT + CLIFF_DRESSING_SEAM_TOLERANCE
+				var seam_w := smoothstep(CLIFF_DRESSING_SEAM_MIN_COVERAGE, 1.0, coverage) * (1.0 - smoothstep(seam_max - CLIFF_DRESSING_SEAM_TOLERANCE * 0.5, seam_max, short))
+				if seam_w <= 0.0:
+					continue
+				heights[i] = natural + short * seam_w
+				_raise_debug_heights[i] = heights[i]
+				changed += 1
+				continue
 			var blended_height := lerpf(natural, target, coverage)
 			# round 20: mid-slope bumps -- zero at coverage 0 (natural ground) and 1 (plateau). Same
 			# world-grid noise sample as before, so single-entry pixels match the old result (up to
@@ -1221,6 +1263,8 @@ static func raise_terrain_behind_cliff_dressing(plan: Array[Dictionary], heights
 			blended_height += raise_bump_noise.get_noise_2d(cx, cz) * bump_amp * 4.0 * coverage * (1.0 - coverage)
 			_raise_debug_heights[i] = blended_height
 			heights[i] = blended_height
+			changed += 1
+	return changed
 
 ## Restores this module's static state (caches, debug buffers, counters) to its initial
 ## values. Called at the start of every WorldGenerator run so each run starts clean, the

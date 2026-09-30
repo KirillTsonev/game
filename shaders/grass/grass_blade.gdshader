@@ -98,6 +98,14 @@
 //     t = mix(b, t, tip_blend) with tip_blend = 0 -> base colour root to tip, for green AND dry
 //     blades (and the distance-flattened colour, which also uses t). tip_color / dry_tip_color
 //     are kept -- raise tip_blend to bring a tip gradient back.
+//   - PER-BLADE VARIETY (2026-09-30): blades read as identical copies -- height was 80% clump
+//     noise (~13 m features, so neighbours matched), width only 0.6-1.0 and on the same hash as
+//     the bend, one mesh shape, no per-blade colour. Now: height_clumping 0.5, a skewed per-blade
+//     stature_range multiplier (odd tall stalk), width_range 0.5-1.25, a per-blade taper
+//     (needle <-> broad leaf), an independent bend hash with a wider range (0.10-0.30), and
+//     per-blade brightness/hue jitter (color_variation, hue_variation). Width/taper fade to 1.0
+//     with the wind fade (overhang cap assumes the base width far away); colour jitter fades with
+//     fog_factor. Tallest blade now ~1.01 m -> BLADE_MAX_HEIGHT raised to 1.15.
 //   - LESS DRY GRASS (2026-09-29): v_dry threshold smoothstep(0.30, 0.60) -> (0.45, 0.75) so fewer
 //     patches turn straw, and dry_tip_color (0.75, 0.62, 0.30) -> (0.58, 0.50, 0.26) so the ones
 //     that do are less glaring. The bake's dry channel itself is unchanged.
@@ -119,6 +127,11 @@ uniform vec2 height_range = vec2(0.3, 0.8); // x the 0.75 m blade mesh (GodotGra
 uniform float widen_scale = 0.0333; // distance widening: 1 + min(pow(widen_scale * d, widen_power), widen_max)
 uniform float widen_power = 4.0;
 uniform float widen_max = 70.0;
+// Per-blade variety (see header "PER-BLADE VARIETY").
+uniform float height_clumping : hint_range(0.0, 1.0) = 0.5; // clump noise vs per-blade hash for height (GodotGrass: 0.8)
+uniform vec2 stature_range = vec2(0.7, 1.25); // per-blade height multiplier, skewed toward the low end
+uniform vec2 width_range = vec2(0.5, 1.25); // per-blade width multiplier (was 0.6-1.0)
+uniform vec2 taper_range = vec2(0.6, 1.3); // upper-blade width: <1 = needle-like, >1 = broad leaf
 
 group_uniforms GrassColor;
 uniform vec3 base_color : source_color = vec3(0.05, 0.2, 0.01);
@@ -138,8 +151,12 @@ uniform float blade_specular : hint_range(0.0, 1.0) = 0.0;
 // Ambient/indirect light on the blades (see header "BLADE AMBIENT").
 // 1 = full engine ambient at the tips; the root always gets 25% of this.
 uniform float blade_ambient : hint_range(0.0, 1.0) = 0.5;
+// Per-blade colour jitter (see header "PER-BLADE VARIETY"). 0 = every blade the same colour.
+uniform float color_variation : hint_range(0.0, 0.5) = 0.15; // brightness +-
+uniform float hue_variation : hint_range(0.0, 1.0) = 0.5; // bluish-green <-> yellowish-green
 
 varying float v_dry;
+varying vec2 v_jitter; // per-blade (brightness, hue) hashes for fragment()
 
 // Source: https://www.shadertoy.com/view/Xt3cDn
 float hash12(vec2 x) {
@@ -187,6 +204,13 @@ void vertex() {
 	float height_factor = 1.0 - UV.y;
 	float hash0 = hash12(root.xz);
 	float hash1 = hash12(-root.zx);
+	// Extra independent hashes (see header "PER-BLADE VARIETY") so size, shape, bend and colour
+	// don't all move together.
+	float hash_stature = hash12(root.xz + vec2(13.7, 71.3));
+	float hash_width = hash12(root.zx + vec2(47.1, 5.9));
+	float hash_taper = hash12(root.xz - vec2(29.3, 88.7));
+	float hash_bend = hash12(-root.xz + vec2(61.9, 23.1));
+	v_jitter = vec2(hash12(root.zx - vec2(7.7, 39.1)), hash12(root.xz + vec2(91.3, 3.7)));
 	float clump0 = texture(clump_noise, root.zx * 0.075).x;
 	float clump1 = texture(clump_noise, root.xz * 0.5).x;
 	float clump2 = texture(clump_noise, -root.zx * 0.035).x;
@@ -194,10 +218,17 @@ void vertex() {
 	// --- GRASS BLADE HEIGHT/WIDTH ---
 	vec3 camera_offset = root - CAMERA_POSITION_WORLD;
 	float camera_distance = length(camera_offset);
-	float height_offset = mix(height_range.x, height_range.y, mix(hash0, clump0, 0.8));
+	float height_offset = mix(height_range.x, height_range.y, mix(hash0, clump0, height_clumping));
 	height_offset *= mix(0.6, 1.35, tall) * mix(0.85, 1.0, coverage);
+	// Stature: pow skews toward short -- mostly mid blades with the odd taller stalk poking out.
+	height_offset *= mix(stature_range.x, stature_range.y, pow(hash_stature, 1.5));
 
-	VERTEX.x *= mix(0.6, 1.0, hash1);
+	// Width + taper. Fades to a plain 1.0 with the wind fade: far blades are widened slabs where
+	// the variety isn't visible, and grass_cull.glsl's overhang cap assumes the base width there.
+	float wind_fade = 1.0 - smoothstep(wind_fade_start, wind_fade_end, camera_distance);
+	float width_mul = mix(1.0, mix(width_range.x, width_range.y, hash_width), wind_fade);
+	float taper = mix(1.0, mix(taper_range.x, taper_range.y, hash_taper), wind_fade);
+	VERTEX.x *= width_mul * mix(1.0, taper, height_factor);
 	// The further the distance from the camera, the thicker the grass blade will
 	// appear to account for decreasing density with distance (the blade layers thin out).
 	// x INSTANCE_CUSTOM.x = the overhang cap's width factor (2026-09-29, see header; 1 = full width).
@@ -206,8 +237,7 @@ void vertex() {
 	vec3 vertex_model = VERTEX; // Vertex in model space before any rotations are applied
 
 	// --- WIND ---
-	// Wind fade (see header): 1 near the camera, 0 far away -- far blades hold still.
-	float wind_fade = 1.0 - smoothstep(wind_fade_start, wind_fade_end, camera_distance);
+	// Wind fade (see header, computed above): 1 near the camera, 0 far away -- far blades hold still.
 	vec2 to_player = player_position.xz - root.xz;
 	float player_distance = length(to_player) / crush_radius * 0.9;
 	float crushed_factor = min(player_distance * player_distance * 1.2, 1.0);
@@ -220,7 +250,8 @@ void vertex() {
 	wind_strength *= mix(0.6, 0.7, hash1) * wind_speed * wind_fade;
 	mat3 grass_rotate = rotate_y(mix(turn_angle_base, wind_direction, wind_strength));
 
-	float bend_angle_base = mix(0.12, 0.25, hash1 + height_offset * 0.1) * PI * height_factor;
+	// Own hash (was hash1, shared with width) so thin blades don't all bend alike; range widened (0.12-0.25).
+	float bend_angle_base = mix(0.10, 0.30, hash_bend + height_offset * 0.1) * PI * height_factor;
 	// We sample wind noise identically to strength, but with a time offset based on
 	// the height to simulate the turbulence as the grass blade shakes from the wind.
 	float wind_strength_turbulence = mix(0.25, 1.0, texture(wind_noise, root.xz * 0.025 / wind_speed + (TIME + height_factor * height_factor * 0.25) * 0.05).x);
@@ -272,6 +303,11 @@ void fragment() {
 	ALBEDO *= mix(0.1, 1.0, height_factor * height_factor); // AO
 	// Color becomes more uniform as distance increases
 	ALBEDO = mix(mix(b, t, 0.5) * 0.5, ALBEDO, fog_factor);
+	// Per-blade colour jitter (see header "PER-BLADE VARIETY"), faded with fog_factor so far
+	// grass stays even instead of speckling. Brightness is symmetric around 1 (no net brightening).
+	vec3 hue_tint = mix(vec3(0.88, 1.0, 1.12), vec3(1.15, 1.0, 0.82), v_jitter.y);
+	vec3 jitter = mix(vec3(1.0), hue_tint, hue_variation) * (1.0 + color_variation * (v_jitter.x * 2.0 - 1.0));
+	ALBEDO *= mix(vec3(1.0), jitter, fog_factor);
 	// Desaturate toward luminance (see header "BLADE SATURATION").
 	float albedo_luma = dot(ALBEDO, vec3(0.2126, 0.7152, 0.0722));
 	ALBEDO = mix(vec3(albedo_luma), ALBEDO, blade_saturation);

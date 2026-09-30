@@ -462,7 +462,7 @@ static func build_heightmap(master_seed: int = TerrainConfig.MASTER_SEED) -> Dic
 	# features) and reserve its area; before knots (they avoid it) and the road (routes around it).
 	if TerrainLandmarks.is_active():
 		print("TERRAIN_GEN: LANDMARK disk cleared: %d planned cliff mesh(es), %d outcrop(s) dropped" % [lm_meshes_removed, lm_outcrops_removed])
-		TerrainLandmarks.stamp(heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, cliff_dressing_plan, cliff_obstacle_mask, cliff_features)
+		TerrainLandmarks.stamp(heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, cliff_dressing_plan, cliff_obstacle_mask, cliff_features, cliff_dressing_top_profiles)
 
 	# 2026-09-29: knot cliff meshes join the regular dressing plan only now -- AFTER the main
 	# flatten/raise passes, since build_knots already shaped their ground (knots run first now, see

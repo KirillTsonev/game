@@ -91,7 +91,7 @@ func apply_widen() -> void:
 ## Blades read the map's R as COVERAGE (fraction of ground inside patches -- see grass_cull.glsl);
 ## this scales it (1.0 = the bake's zone targets as-is).
 const BLADE_DENSITY_SCALE := 1.0
-const BLADE_MAX_HEIGHT := 1.0 ## m -- tallest blade (0.75 m mesh x 0.8 x tall 1.35 = 0.81) + margin, for the cull sphere
+const BLADE_MAX_HEIGHT := 1.15 ## m -- tallest blade (0.75 m mesh x 0.8 x tall 1.35 x stature 1.25 = 1.01) + margin, for the cull sphere
 
 ## (2026-09-27/28: sun-shadow culling -- skipping blades in terrain / rock / tree shadow -- was built,
 ## measured and removed: ~17% fewer blades mid-map saved only ~0.07 ms GPU. Not worth the load time.)
