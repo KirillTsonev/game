@@ -46,6 +46,12 @@ const TREE_MAX_PLACEMENT_ATTEMPTS := 6
 const TREE_SCALE_MIN := 0.85
 const TREE_SCALE_MAX := 1.25
 const TREE_EMBED_DEPTH := 0.20 ## sink the base slightly so the trunk root meets the ground rather than floating on uneven terrain
+## Slope grounding (2026-09-29): the tree is planted at the lowest ground found on a ring of this
+## radius (x the tree's scale) around the trunk centre, so the downhill side of the base never
+## floats. Roughly the trunk base / root-flare radius: raise it if bases still float on slopes,
+## lower it if trunks look sunk too deep on the uphill side.
+const TREE_BASE_RADIUS := 0.6
+const TREE_BASE_SAMPLES := 8 ## points on that ring
 const TREE_LEAN_MAX_DEG := 4.0 ## max random lean off vertical -- a touch of wind-bent character, never a full ground-align
 const TREE_KEEPOUT_RADIUS := 1.2 ## trunk footprint radius for cliff-mesh / outcrop keep-outs (so trunks never spawn inside rock)
 ## Tree-vs-tree spacing (2026-09-25): each tree claims a circle of this radius * its scale, and
@@ -249,7 +255,17 @@ static func _place_one_tree(target: Vector2, heights: PackedFloat32Array, width:
 	_add_to_spacing_grid(spacing_grid, px, pz, spacing_radius)
 	tree_points.append(Vector3(px, pz, scale))
 
-	var tree_pos := Vector3(import_position.x + px, height - TREE_EMBED_DEPTH, import_position.z + pz)
+	# 2026-09-29 (Kirill: "trees placed on slopes don't fully stand on even ground"): height used to
+	# be sampled only at the trunk CENTRE, so on a slope the downhill side of the trunk base floated
+	# (ground drops ~0.75 m per metre at the steepest allowed slope; the fixed 0.2 m embed can't cover
+	# that). Now the tree sits at the LOWEST ground in a ring around the base, so the downhill edge
+	# always touches down and the uphill side runs into the slope. Flat ground: unchanged.
+	var base_r := TREE_BASE_RADIUS * scale
+	var base_h := height
+	for i in TREE_BASE_SAMPLES:
+		var a := TAU * float(i) / float(TREE_BASE_SAMPLES)
+		base_h = minf(base_h, TerrainUtil.sample_height_bilinear(heights, width, length, px + cos(a) * base_r, pz + sin(a) * base_r))
+	var tree_pos := Vector3(import_position.x + px, base_h - TREE_EMBED_DEPTH, import_position.z + pz)
 	# Upright: random yaw + a tiny lean, never normal-aligned.
 	var yaw := rng.randf() * TAU
 	var basis := Basis(Vector3.UP, yaw)

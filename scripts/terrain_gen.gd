@@ -134,6 +134,13 @@ func _ready() -> void:
 	# file. heightmap_corner is only known here, so the actual box-spawning is deferred to now.
 	if CliffDressing.RAISE_DEBUG_SHOW_SURFACE:
 		CliffDressing.spawn_raise_debug_boxes(get_parent(), heightmap_corner)
+	# 2026-09-29 DEBUG (landmarks), DISABLED -- kept for future landmark work. Uncommenting this line
+	# brings back BOTH debug tools from TerrainLandmarks.spawn_debug_overlay:
+	#   - the "what gets copied" overlay: cyan = copied 1:1, orange = blend band, magenta poles =
+	#     copied cliff meshes ("LM mesh #k"), yellow poles = copied cliff features
+	#   - the beacon shape picker (scripts/debug/landmark_beacon_tool.gd): B place, X remove nearest,
+	#     N save the copy shape into the landmark JSON (used by stamp() from the next run)
+	# TerrainLandmarks.spawn_debug_overlay(get_parent(), heightmap_corner, maps)
 
 	var boulder_rng := RandomNumberGenerator.new()
 	# Independent stream from the main pipeline's _derive_seeds -- purely

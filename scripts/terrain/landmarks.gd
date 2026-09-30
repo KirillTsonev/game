@@ -22,6 +22,18 @@
 ##      taken (height diff + mesh circles in their occupancy).
 ## On the reference seed itself the stamp must be ~a no-op (stamp() prints the max change).
 ##
+## Copy SHAPE (2026-09-29): the circle turned out to copy too much, so the copy area is now a
+## polygon Kirill picked in-game with the beacon tool (scripts/debug/landmark_beacon_tool.gd),
+## saved as "polygon" in the data file (points relative to the centre). When it's present:
+##   - inside the polygon  = captured heights copied 1:1 (+ fitted plane), road-blocked
+##   - FEATHER m OUTSIDE it = blend back to this map's terrain (the plane is fitted on this band)
+##   - captured meshes / cliff features are only stamped if their centre is inside the polygon
+##   - this map's own dressing / outcrops / features are cleared from polygon + FEATHER
+## Without "polygon" everything falls back to the old circle (CENTER_PX / RADIUS / FEATHER ring).
+## The captured heights cover a (size x size) square, so polygon + FEATHER must stay inside it.
+## To re-pick the shape: re-enable the debug call in terrain_gen.gd (see spawn_debug_overlay).
+## To go back to the circle: delete the "polygon" key from the data file.
+##
 ## Static-only module, same conventions as the other scripts/terrain modules.
 class_name TerrainLandmarks
 extends RefCounted
@@ -73,33 +85,106 @@ static func _entry_half_size(e: Dictionary) -> float:
 			return float(def.real_size) * float(e.get("scale_jitter", 1.0)) * 0.5
 	return 5.0
 
-## 1. Drop planned cliff meshes that would stand in / reach into the landmark disk.
+## 1. Drop planned cliff meshes that would stand in / reach into the landmark area.
 static func filter_cliff_plan(plan: Array[Dictionary]) -> int:
 	if not is_active():
 		return 0
-	var c := _center()
-	var r := _radius()
 	var removed := 0
 	for i in range(plan.size() - 1, -1, -1):
 		var e: Dictionary = plan[i]
-		if Vector2(float(e.px), float(e.pz)).distance_to(c) < r + _entry_half_size(e):
+		if _reaches(Vector2(float(e.px), float(e.pz)), _entry_half_size(e)):
 			plan.remove_at(i)
 			removed += 1
 	return removed
 
-## 2. Drop outcrops in / reaching into the disk.
+## 2. Drop outcrops in / reaching into the landmark area.
 static func filter_outcrops(plan: Array) -> int:
 	if not is_active():
 		return 0
-	var c := _center()
-	var r := _radius()
 	var removed := 0
 	for i in range(plan.size() - 1, -1, -1):
 		var o: Dictionary = plan[i]
-		if Vector2(float(o.px), float(o.pz)).distance_to(c) < r + float(o.radius):
+		if _reaches(Vector2(float(o.px), float(o.pz)), float(o.radius)):
 			plan.remove_at(i)
 			removed += 1
 	return removed
+
+# ---------------------------------------------------------------------------------------------
+# Copy shape (2026-09-29, Kirill: pick the copy area in-game with beacons, blend OUTWARD).
+# If the data file has "polygon" (>= 3 points, pixels relative to the landmark centre, saved by
+# the beacon tool), that shape replaces the circle: inside it = captured heights 1:1 (+ plane),
+# then a FEATHER-wide band OUTSIDE it blends back to this map. Captured meshes / features are only
+# taken if their centre is inside the shape. Without a polygon the old circle behaviour applies.
+# Captured heights cover the full (size x size) square around the centre, so the shape + FEATHER
+# must stay inside that square (the beacon tool flags beacons that don't).
+# ---------------------------------------------------------------------------------------------
+
+## Saved copy shape (relative pixels), empty if none.
+static func polygon() -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for p in _load().get("polygon", []):
+		out.append(Vector2(float(p[0]), float(p[1])))
+	return out if out.size() >= 3 else PackedVector2Array()
+
+## Half-size of the captured square (pixels), for the beacon tool's limit check.
+static func capture_half() -> int:
+	return int(_load().get("size", RADIUS * 2.0 + 1.0)) / 2
+
+## (copy weight 0..1, 1.0 if in the fully-copied core else 0.0) for a pixel RELATIVE to the centre.
+## poly empty -> circle mode.
+static func _zone(rel: Vector2, poly: PackedVector2Array) -> Vector2:
+	if poly.size() >= 3:
+		if Geometry2D.is_point_in_polygon(rel, poly):
+			return Vector2(1.0, 1.0)
+		var d := dist_to_polygon(rel, poly)
+		return Vector2(1.0 - smoothstep(0.0, FEATHER, d) if d < FEATHER else 0.0, 0.0)
+	var r := _radius()
+	var dist := rel.length()
+	if dist <= r - FEATHER:
+		return Vector2(1.0, 1.0)
+	return Vector2(1.0 - smoothstep(r - FEATHER, r, dist) if dist < r else 0.0, 0.0)
+
+## Public copy weight for any shape (the beacon tool previews unsaved shapes with this).
+static func zone_for(rel: Vector2, poly: PackedVector2Array) -> Vector2:
+	return _zone(rel, poly)
+
+static func dist_to_polygon(p: Vector2, poly: PackedVector2Array) -> float:
+	var best := INF
+	for i in poly.size():
+		var a := poly[i]
+		var b := poly[(i + 1) % poly.size()]
+		best = minf(best, p.distance_to(Geometry2D.get_closest_point_to_segment(p, a, b)))
+	return best
+
+## Does something centred at `p_abs` (absolute pixels) with half-size `extra` reach the area this
+## map's own dressing must clear (core + feather)?
+static func _reaches(p_abs: Vector2, extra: float) -> bool:
+	var rel := p_abs - _center()
+	var poly := polygon()
+	if poly.size() >= 3:
+		return Geometry2D.is_point_in_polygon(rel, poly) or dist_to_polygon(rel, poly) < FEATHER + extra
+	return rel.length() < _radius() + extra
+
+## Writes the shape into the landmark data file (keeps everything else). Takes effect next run.
+static func save_polygon(points: Array[Vector2]) -> String:
+	if points.size() < 3:
+		return "LANDMARK shape NOT saved -- need at least 3 beacons (have %d)" % points.size()
+	if not FileAccess.file_exists(DATA_PATH):
+		return "LANDMARK shape NOT saved -- %s missing" % DATA_PATH
+	var data = JSON.parse_string(FileAccess.get_file_as_string(DATA_PATH))
+	if typeof(data) != TYPE_DICTIONARY:
+		return "LANDMARK shape NOT saved -- %s is not valid JSON" % DATA_PATH
+	var arr: Array = []
+	for p in points:
+		arr.append([snappedf(p.x, 0.01), snappedf(p.y, 0.01)])
+	data["polygon"] = arr
+	var fa := FileAccess.open(DATA_PATH, FileAccess.WRITE)
+	if fa == null:
+		return "LANDMARK shape NOT saved -- can't write %s (err %d)" % [DATA_PATH, FileAccess.get_open_error()]
+	fa.store_string(JSON.stringify(data))
+	fa.close()
+	_cache = {}
+	return "LANDMARK shape saved: %d points %s -- restart the scene to stamp with it" % [arr.size(), str(arr)]
 
 ## 3. Stamp heights + meshes, reserve the area. Returns stats.
 static func stamp(heights: PackedFloat32Array, width: int, length: int, cliff_plan: Array[Dictionary], obstacle_mask: PackedByteArray, cliff_features: Array) -> Dictionary:
@@ -111,16 +196,16 @@ static func stamp(heights: PackedFloat32Array, width: int, length: int, cliff_pl
 	var n: int = int(d.size)
 	var half := n / 2
 	var patch: Array = d.heights
-	var ring_lo := r - FEATHER
-	# Plane fit on the ring: diff = this map - captured, least squares a + b*dx + c*dz.
+	var poly := polygon() # empty -> circle mode
+	# Plane fit on the blend band (circle: the outer FEATHER ring; polygon: the band outside the shape).
 	var s := [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] # sums: 1, x, z, xx, xz, zz, f, xf, zf
 	var ring_px := 0
 	for lz in n:
 		for lx in n:
 			var dx := float(lx - half)
 			var dz := float(lz - half)
-			var dist := sqrt(dx * dx + dz * dz)
-			if dist < ring_lo or dist > r:
+			var zr := _zone(Vector2(dx, dz), poly)
+			if zr.y > 0.5 or zr.x <= 0.0:
 				continue
 			var v = patch[lz * n + lx]
 			if v == null:
@@ -147,22 +232,22 @@ static func stamp(heights: PackedFloat32Array, width: int, length: int, cliff_pl
 				continue
 			var dx := float(lx - half)
 			var dz := float(lz - half)
-			var dist := sqrt(dx * dx + dz * dz)
-			if dist > r:
+			var zw := _zone(Vector2(dx, dz), poly)
+			if zw.x <= 0.0:
 				continue
 			var px := int(c.x) + lx - half
 			var pz := int(c.y) + lz - half
 			if px < 0 or pz < 0 or px >= width or pz >= length:
 				continue
 			var idx := pz * width + px
-			var w := 1.0 - smoothstep(ring_lo, r, dist)
+			var w: float = zw.x
 			var target := float(v) + pa + pb * dx + pc * dz
 			var nh := lerpf(heights[idx], target, w)
 			max_change = maxf(max_change, absf(nh - heights[idx]))
 			if absf(nh - heights[idx]) > 0.001:
 				changed += 1
 			heights[idx] = nh
-			if dist <= ring_lo and not obstacle_mask.is_empty():
+			if zw.y > 0.5 and not obstacle_mask.is_empty():
 				obstacle_mask[idx] = 1
 	# Meshes.
 	var added: Array[Dictionary] = []
@@ -170,6 +255,8 @@ static func stamp(heights: PackedFloat32Array, width: int, length: int, cliff_pl
 		var e: Dictionary = (m as Dictionary).duplicate(true)
 		var mdx: float = float(e.dx)
 		var mdz: float = float(e.dz)
+		if poly.size() >= 3 and not Geometry2D.is_point_in_polygon(Vector2(mdx, mdz), poly):
+			continue # polygon mode: only meshes whose centre is inside the picked shape
 		e.erase("dx")
 		e.erase("dz")
 		e["px"] = c.x + mdx
@@ -188,20 +275,191 @@ static func stamp(heights: PackedFloat32Array, width: int, length: int, cliff_pl
 	var feat_removed := 0
 	for i in range(cliff_features.size() - 1, -1, -1):
 		var fc: Vector2 = cliff_features[i].center
-		if fc.distance_to(c) < r:
+		if _zone(fc - c, poly).x > 0.0:
 			cliff_features.remove_at(i)
 			feat_removed += 1
 	var feat_added := 0
 	for fd in d.get("features", []):
 		var f: Dictionary = _decode(fd)
+		if poly.size() >= 3 and not Geometry2D.is_point_in_polygon(f.center as Vector2, poly):
+			continue # centre still relative here
 		f["center"] = c + (f.center as Vector2)
 		f["landmark"] = "verticality_knot_01"
 		cliff_features.append(f)
 		feat_added += 1
 	var stats := {"plane": plane, "ring_px": ring_px, "changed": changed, "max_change": max_change, "meshes": added.size()}
-	print("TERRAIN_GEN: LANDMARK verticality_knot_01 stamped at px (%.0f, %.0f) r %.0f -- plane offset %.2f m, tilt (%.3f, %.3f) from %d ring px; %d px changed (max %.2f m); %d cliff mesh(es); cliff features -%d +%d" % [
-		c.x, c.y, r, pa, pb, pc, ring_px, changed, max_change, added.size(), feat_removed, feat_added])
+	print("TERRAIN_GEN: LANDMARK verticality_knot_01 stamped at px (%.0f, %.0f) r %.0f [%s] -- plane offset %.2f m, tilt (%.3f, %.3f) from %d ring px; %d px changed (max %.2f m); %d cliff mesh(es); cliff features -%d +%d" % [
+		c.x, c.y, r, ("polygon %d pts" % poly.size()) if poly.size() >= 3 else "circle", pa, pb, pc, ring_px, changed, max_change, added.size(), feat_removed, feat_added])
 	return stats
+
+# ---------------------------------------------------------------------------------------------
+# 2026-09-29 DEBUG overlay (Kirill: "can you add some sort of visible highlight to see what gets
+# copied?"). Draws what stamp() brought into THIS map, so we can decide what to trim:
+#   CYAN   tint + wall  = inner disk (r - FEATHER): captured heights copied 1:1 (+ plane)
+#   ORANGE tint + wall  = feather ring: blend captured -> this map (more opaque = more copy)
+#   MAGENTA pole/ring/label = copied cliff mesh "LM mesh #k" (k = index in the JSON's meshes)
+#   YELLOW  pole/label      = copied cliff feature "LM feature #j" (index in the JSON's features;
+#                             boulders / scree / rock paint / moss follow these)
+# Rebuilt every run under a "LandmarkDebugOverlay" node; purely visual, no collision.
+#
+# STATUS: DISABLED (2026-09-29, copy shape picked and saved). Nothing calls spawn_debug_overlay
+# right now -- the call in terrain_gen.gd's _ready() is commented out; uncomment it to bring the
+# overlay AND the beacon tool back. DEBUG_SHOW_OVERLAY is a second kill switch inside the function.
+# In polygon mode (a saved shape exists) the circle tint/walls are skipped and the beacon tool
+# draws the shape + its preview tint instead (it starts from the saved shape, so you can edit it).
+# ---------------------------------------------------------------------------------------------
+const DEBUG_SHOW_OVERLAY := true
+const DEBUG_OVERLAY_LIFT := 0.15 ## metres the tint floats above the ground (avoids z-fighting)
+const DEBUG_WALL_HEIGHT := 4.0 ## height of the boundary walls
+const DEBUG_POLE_HEIGHT := 10.0
+const DEBUG_COL_INNER := Color(0.1, 0.9, 1.0, 0.35)
+const DEBUG_COL_FEATHER := Color(1.0, 0.55, 0.0, 0.55)
+const DEBUG_COL_MESH := Color(1.0, 0.2, 0.9, 0.9)
+const DEBUG_COL_FEATURE := Color(1.0, 0.95, 0.1, 0.9)
+
+static func spawn_debug_overlay(parent: Node, heightmap_corner: Vector3, maps: Dictionary) -> void:
+	var old := parent.get_node_or_null("LandmarkDebugOverlay")
+	if old:
+		old.queue_free()
+	if not DEBUG_SHOW_OVERLAY or not is_active():
+		return
+	var heights: PackedFloat32Array = maps.heights
+	var width := TerrainConfig.AREA_WIDTH
+	var length := TerrainConfig.AREA_LENGTH
+	var c := Vector2(floorf(_center().x), floorf(_center().y)) # stamp() uses int(c) as the pixel centre
+	var r := _radius()
+	var ring_lo := r - FEATHER
+
+	# Built detached, added deferred (parent is still setting up its children during _ready --
+	# same as CliffDressing.spawn_raise_debug_boxes). Root at the origin, so local = world.
+	var root := Node3D.new()
+	root.name = "LandmarkDebugOverlay"
+	parent.add_child.call_deferred(root)
+
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.vertex_color_use_as_albedo = true
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+
+	# 1. Tint draped over the stamped terrain (per-vertex colour by distance from the centre).
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var x0 := maxi(int(floor(c.x - r)), 0)
+	var x1 := mini(int(ceil(c.x + r)), width - 2)
+	var z0 := maxi(int(floor(c.y - r)), 0)
+	var z1 := mini(int(ceil(c.y + r)), length - 2)
+	var poly := polygon()
+	var circle_mode := poly.size() < 3 # polygon mode: the beacon tool draws the shape + its tint
+	var corners := [Vector2i(0, 0), Vector2i(1, 0), Vector2i(1, 1), Vector2i(0, 0), Vector2i(1, 1), Vector2i(0, 1)]
+	if circle_mode:
+		for qz in range(z0, z1 + 1):
+			for qx in range(x0, x1 + 1):
+				if Vector2(qx + 0.5, qz + 0.5).distance_to(c) > r:
+					continue
+				for k: Vector2i in corners:
+					var px := qx + k.x
+					var pz := qz + k.y
+					st.set_color(_debug_zone_color(Vector2(px, pz).distance_to(c), ring_lo, r))
+					st.add_vertex(heightmap_corner + Vector3(px, heights[pz * width + px] + DEBUG_OVERLAY_LIFT, pz))
+		# 2. Boundary walls: inner (end of the 1:1 copy) and outer (end of any influence).
+		_debug_add_wall(st, heights, width, length, heightmap_corner, c, ring_lo, DEBUG_WALL_HEIGHT, Color(DEBUG_COL_INNER, 0.6))
+		_debug_add_wall(st, heights, width, length, heightmap_corner, c, r, DEBUG_WALL_HEIGHT, Color(DEBUG_COL_FEATHER, 0.6))
+	# 3. Copied cliff meshes: footprint ring at the model's half-size.
+	var mesh_k := 0
+	var mesh_lines: Array[String] = []
+	for e in maps.cliff_dressing_plan:
+		if not e.has("landmark"):
+			continue
+		var p := Vector2(float(e.px), float(e.pz))
+		_debug_add_wall(st, heights, width, length, heightmap_corner, p, _entry_half_size(e), 0.8, Color(DEBUG_COL_MESH, 0.5))
+		var foot := heightmap_corner + Vector3(p.x, float(e.height), p.y)
+		_debug_pole(root, foot, DEBUG_COL_MESH, "LM mesh #%d\n%s\n(dx %.1f, dz %.1f)" % [mesh_k, e.def_name, p.x - c.x, p.y - c.y])
+		mesh_lines.append("#%d %s dx %.1f dz %.1f world (%.0f, %.1f, %.0f)" % [mesh_k, e.def_name, p.x - c.x, p.y - c.y, foot.x, foot.y, foot.z])
+		mesh_k += 1
+	if circle_mode or mesh_k > 0:
+		var tint := MeshInstance3D.new()
+		tint.name = "Tint"
+		tint.mesh = st.commit()
+		tint.material_override = mat
+		tint.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root.add_child(tint)
+	# 4. Copied cliff features.
+	var feat_j := 0
+	for f in maps.cliff_features:
+		if not f.has("landmark"):
+			continue
+		var fc: Vector2 = f.center
+		var fh := _debug_h(heights, width, length, fc.x, fc.y)
+		_debug_pole(root, heightmap_corner + Vector3(fc.x, fh, fc.y), DEBUG_COL_FEATURE, "LM feature #%d\n%s step %.1f" % [feat_j, str(f.get("kind", f.get("type", "?"))), float(f.get("step_height", 0.0))])
+		feat_j += 1
+	var cw := heightmap_corner + Vector3(c.x, _debug_h(heights, width, length, c.x, c.y), c.y)
+	print("TERRAIN_GEN_DEBUG: LANDMARK overlay -- centre world (%.0f, %.1f, %.0f), inner r %.0f, outer r %.0f; %d mesh(es), %d feature(s)" % [cw.x, cw.y, cw.z, ring_lo, r, mesh_k, feat_j])
+	for line in mesh_lines:
+		print("TERRAIN_GEN_DEBUG:   LM mesh " + line)
+	# 5. Beacon tool (B place / X remove nearest / N save) for picking the copy shape in-game.
+	# load() at runtime rather than preload, to avoid a class_name preload cycle.
+	var tool: Node3D = load("res://scripts/debug/landmark_beacon_tool.gd").new()
+	tool.name = "LandmarkBeaconTool"
+	tool.setup(heightmap_corner, heights, c, poly, capture_half())
+	root.add_child(tool)
+
+static func _debug_zone_color(dist: float, ring_lo: float, r: float) -> Color:
+	if dist <= ring_lo:
+		return DEBUG_COL_INNER
+	var w := 1.0 - smoothstep(ring_lo, r, dist) # same weight stamp() uses
+	return Color(DEBUG_COL_FEATHER, 0.1 + DEBUG_COL_FEATHER.a * w)
+
+static func _debug_h(heights: PackedFloat32Array, width: int, length: int, x: float, z: float) -> float:
+	var px := clampi(int(round(x)), 0, width - 1)
+	var pz := clampi(int(round(z)), 0, length - 1)
+	return heights[pz * width + px]
+
+## Vertical ribbon following the ground around a circle, fading out toward the top.
+static func _debug_add_wall(st: SurfaceTool, heights: PackedFloat32Array, width: int, length: int, corner: Vector3, centre: Vector2, radius: float, tall: float, col: Color) -> void:
+	var segs := maxi(24, int(radius * 4.0))
+	var top_col := Color(col, 0.05)
+	for i in segs:
+		var a0 := TAU * float(i) / float(segs)
+		var a1 := TAU * float(i + 1) / float(segs)
+		var p0 := centre + Vector2(cos(a0), sin(a0)) * radius
+		var p1 := centre + Vector2(cos(a1), sin(a1)) * radius
+		if p0.x < 0.0 or p0.y < 0.0 or p0.x > width - 1 or p0.y > length - 1:
+			continue
+		var b0 := corner + Vector3(p0.x, _debug_h(heights, width, length, p0.x, p0.y), p0.y)
+		var b1 := corner + Vector3(p1.x, _debug_h(heights, width, length, p1.x, p1.y), p1.y)
+		var t0 := b0 + Vector3(0.0, tall, 0.0)
+		var t1 := b1 + Vector3(0.0, tall, 0.0)
+		st.set_color(col); st.add_vertex(b0)
+		st.set_color(col); st.add_vertex(b1)
+		st.set_color(top_col); st.add_vertex(t1)
+		st.set_color(col); st.add_vertex(b0)
+		st.set_color(top_col); st.add_vertex(t1)
+		st.set_color(top_col); st.add_vertex(t0)
+
+## Thin coloured pole with a billboard label on top (label visible through terrain).
+static func _debug_pole(root: Node3D, foot: Vector3, col: Color, text: String) -> void:
+	var pole := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = Vector3(0.25, DEBUG_POLE_HEIGHT, 0.25)
+	pole.mesh = box
+	var pm := StandardMaterial3D.new()
+	pm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	pm.albedo_color = col
+	pole.material_override = pm
+	pole.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	pole.position = foot + Vector3(0.0, DEBUG_POLE_HEIGHT * 0.5, 0.0)
+	root.add_child(pole)
+	var label := Label3D.new()
+	label.text = text
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
+	label.font_size = 64
+	label.pixel_size = 0.02
+	label.outline_size = 14
+	label.modulate = Color(col, 1.0)
+	label.position = foot + Vector3(0.0, DEBUG_POLE_HEIGHT + 1.5, 0.0)
+	root.add_child(label)
 
 ## Solves the 3x3 normal equations of a plane fit from the sums in s (see stamp()).
 static func _solve3(s: Array) -> Vector3:

@@ -31,15 +31,20 @@
 // pre-cull (8 m tiles frustum-tested before the per-cell pass, indirect dispatch) cut the cell
 // threads to ~37% with identical output but no measurable GPU change, and made the grass flicker
 // -- reverted.
-// 2026-09-29 CREST DROP (Kirill: "the grass seems to extend past the edges of slope terrain"): the
-// blade shader widens far blades (x (1 + min((widen_scale * d)^widen_power, widen_max)) -- ~0.9 m
-// wide at 50 m, ~5 m at 80 m, ~7 m past 100 m), so a far blade standing near a slope's crest sticks
-// metres out over the drop and reads as grass floating past the edge. Without touching any grass
-// layer value (the widening curve is only READ, params 9.zw / 10.w), each blade whose widened
-// half-width exceeds CREST_MIN_HALF_WIDTH samples the ground that far N/S/E/W of it; if the ground
-// falls away on both sides of it (convexity k = root - mean(opposite pair), per metre of reach),
-// it's dropped with a chance ramping CREST_K_LO -> CREST_K_HI. Flat ground, even slopes and hollows
-// keep every blade; near blades (narrow) are never tested.
+// 2026-09-29 OVERHANG CAP (Kirill: far grass on slopes seems to float past the slope edges; "it's
+// only when looking at grass on slopes from a big distance", fix it WITHOUT changing the grass layer
+// values). The blade shader widens far blades (x (1 + min((widen_scale * d)^widen_power,
+// widen_max)) -- ~0.9 m wide at 50 m, ~5 m at 80 m, ~7 m past 100 m), so a far blade on a slope or
+// a brow sticks metres out horizontally over ground that has dropped away beneath it.
+// Earlier the same day this was a CREST DROP (skip blades on convex brows only); it deliberately
+// kept every blade on an EVEN slope, which is exactly where the floating stayed visible. Now, for
+// every widened blade (half-width > OVERHANG_MIN_HALF_WIDTH), the ground is sampled at its
+// half-width in 8 directions; if the biggest drop exceeds a distance-scaled tolerance (what can't be
+// seen from that far: max(OVERHANG_TOL_MIN, OVERHANG_TOL_PER_M * d)), the blade's WIDTH is scaled
+// down so its overhang stays within the tolerance (factor -> INSTANCE_CUSTOM.x, applied in the
+// blade shader); blades that would need less than OVERHANG_MIN_SCALE are skipped. Flat / gentle
+// ground and all near blades (narrow, never tested) are unchanged. The widening curve is only READ
+// here (params 9.zw / 10.w) -- no grass layer value changed.
 // Reads GrassScatter's bake: density_map (R coverage / G dry / B tall / A tussock, 1 px = 1 m),
 // height_map (R32F, texel (px,pz) = height at map_corner + (px, 0, pz); sampled with manual
 // bilinear because linear filtering of R32F isn't guaranteed on every GPU) and patch_map.
@@ -66,7 +71,7 @@ layout(push_constant, std430) uniform Push {
 //   6    center.xyz (player), w = spacing
 //   7    map_corner.x, map_corner.z, map_size.x, map_size.y
 //   8    radius (band outer edge), fade_band (just inside radius), inner (band inner edge, 0 = none), inner_band (just inside inner)
-//   9    seed, coverage_scale, widen_scale, widen_power (2026-09-29, read-only copy for the crest drop)
+//   9    seed, coverage_scale, widen_scale, widen_power (2026-09-29, read-only copy for the overhang cap)
 //   10   embed, cull_radius, cull_lift, widen_max (2026-09-29, same)
 
 // -- Blade patches (baked noise, see header; keep in sync with GrassScatter) --
@@ -79,11 +84,12 @@ const float TUSSOCK_CELL = 1.6;     // m -- at most one tussock per cell
 const float TUSSOCK_RATE = 0.22;    // chance a cell has one, x the map's tussock allowance (A)
 const float TUSSOCK_R_MIN = 0.10;   // m -- tussock radius range (-> ~10-30 blades near the player)
 const float TUSSOCK_R_MAX = 0.28;
-// -- Crest drop (2026-09-29, see header) --
-const float BLADE_HALF_WIDTH = 0.05;     // m -- the blade mesh's base half-width (grass_field.gd _build_blade_mesh)
-const float CREST_MIN_HALF_WIDTH = 0.25; // m -- narrower blades (roughly the nearest ~40 m) aren't tested
-const float CREST_K_LO = 0.10;           // convexity per metre of reach where blades start to drop
-const float CREST_K_HI = 0.30;           // ... and where every blade is dropped (a sharp slope brow)
+// -- Overhang cap (2026-09-29, see header) --
+const float BLADE_HALF_WIDTH = 0.05;        // m -- the blade mesh's base half-width (grass_field.gd _build_blade_mesh)
+const float OVERHANG_MIN_HALF_WIDTH = 0.25; // m -- narrower blades (roughly the nearest ~40 m) aren't tested
+const float OVERHANG_TOL_MIN = 0.25;        // m -- ground may fall this much under a blade's edge without it showing ...
+const float OVERHANG_TOL_PER_M = 0.005;     // ... or this much per metre of camera distance, whichever is larger
+const float OVERHANG_MIN_SCALE = 0.15;      // a blade that would need to be narrower than this fraction is skipped
 
 // Dave Hoskins' hash-without-sine
 float hash12(vec2 p) {
@@ -173,20 +179,25 @@ void main() {
 		return;
 	}
 
-	float r1 = hash12(key + 3.77);
 	float h0 = height_at(px, size);
 	float y = h0 - m2.x;
 
-	// Crest drop (2026-09-29, see header): a widened blade on a slope brow overhangs the drop.
+	// Overhang cap (2026-09-29, see header): a widened blade on a slope / brow overhangs the drop.
+	float width_scale = 1.0;
 	float half_w = BLADE_HALF_WIDTH * (1.0 + min(pow(ms.z * d, ms.w), m2.w));
-	if (half_w > CREST_MIN_HALF_WIDTH) {
-		float hn = height_at(px + vec2(0.0, -half_w), size);
-		float hs = height_at(px + vec2(0.0, half_w), size);
-		float he = height_at(px + vec2(half_w, 0.0), size);
-		float hwst = height_at(px + vec2(-half_w, 0.0), size);
-		float k = max(h0 - 0.5 * (hn + hs), h0 - 0.5 * (he + hwst)) / half_w;
-		if (hash12(key + 13.7) < smoothstep(CREST_K_LO, CREST_K_HI, k)) {
-			return;
+	if (half_w > OVERHANG_MIN_HALF_WIDTH) {
+		float max_drop = 0.0;
+		for (int i = 0; i < 8; i++) {
+			float a = float(i) * 0.78539816; // 45 degree steps
+			max_drop = max(max_drop, h0 - height_at(px + vec2(cos(a), sin(a)) * half_w, size));
+		}
+		float tol = max(OVERHANG_TOL_MIN, OVERHANG_TOL_PER_M * d);
+		if (max_drop > tol) {
+			// Drop grows ~linearly with reach, so this width keeps the overhang at ~tol.
+			width_scale = tol / max_drop;
+			if (width_scale < OVERHANG_MIN_SCALE) {
+				return;
+			}
 		}
 	}
 
@@ -209,6 +220,7 @@ void main() {
 	inst.data[o] = vec4(1.0, 0.0, 0.0, wpos.x);
 	inst.data[o + 1u] = vec4(0.0, 1.0, 0.0, y);
 	inst.data[o + 2u] = vec4(0.0, 0.0, 1.0, wpos.y);
-	// -> INSTANCE_CUSTOM (rand, dry, tall, coverage)
-	inst.data[o + 3u] = vec4(r1, m.g, m.b, m.r);
+	// -> INSTANCE_CUSTOM (width_scale, dry, tall, coverage). x used to be an unused random value;
+	// since 2026-09-29 it's the overhang cap's width factor (1 = full width), read by the blade shader.
+	inst.data[o + 3u] = vec4(width_scale, m.g, m.b, m.r);
 }

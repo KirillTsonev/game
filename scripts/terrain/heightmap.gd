@@ -154,6 +154,41 @@ static func _valley_profile(px: float, width: int) -> Dictionary:
 		var wall_t := smoothstep(0.0, 1.0, t)
 		return {"height": BASE_LEVEL + VALLEY_RIGHT_WALL_HEIGHT * wall_t, "wall_t": wall_t}
 
+## 2026-09-29 despike after the post-feature erosion (see the call in build_heightmap): a pixel may
+## stick out above / dip below ALL 4 of its direct neighbours by at most this much (metres).
+const DESPIKE_TOLERANCE := 0.35
+const DESPIKE_PASSES := 2 ## a clamped fin tip can expose the next fin pixel -- one more pass catches it
+
+## Clamps each interior pixel into [min(4 direct neighbours) - tol, max(4 direct neighbours) + tol],
+## DESPIKE_PASSES times, each pass reading from a copy so the result doesn't depend on scan order.
+## Deliberately 4-neighbour, not 8: the first version used all 8 and missed the actual culprit --
+## a 1-px-wide DIAGONAL fin off the ravine wall ((45,114) 0.3 -> (46,115) 0.3 -> (47,115) -0.9 ->
+## (48,114) -0.3, ground 1.4-2.8 m lower on both sides), whose pixels are each other's diagonal
+## neighbours and so "vouched" for each other. A pixel on a real slope / cliff step always has a
+## DIRECT neighbour at least as high, so real terrain is unaffected. Returns px changed (all passes).
+static func _despike(heights: PackedFloat32Array, width: int, length: int, tol: float) -> int:
+	var fixed := 0
+	for pass_i in DESPIKE_PASSES:
+		var src := heights.duplicate()
+		for pz in range(1, length - 1):
+			var row := pz * width
+			for px in range(1, width - 1):
+				var i := row + px
+				var h := src[i]
+				var a := src[i - 1]
+				var b := src[i + 1]
+				var c := src[i - width]
+				var d := src[i + width]
+				var hi := maxf(maxf(a, b), maxf(c, d)) + tol
+				var lo := minf(minf(a, b), minf(c, d)) - tol
+				if h > hi:
+					heights[i] = hi
+					fixed += 1
+				elif h < lo:
+					heights[i] = lo
+					fixed += 1
+	return fixed
+
 ## Three noise layers at different scales, combined and lightly shaped so
 ## it reads as terrain rather than a random bumpy blob:
 ##   base   -- low frequency FBM, the big rolling hills / valleys
@@ -342,6 +377,16 @@ static func build_heightmap(master_seed: int = TerrainConfig.MASTER_SEED) -> Dic
 	var post_feature_erosion_iterations := maxi(50, int(erosion_iterations * POST_FEATURE_EROSION_FRACTION))
 	print("TERRAIN_GEN: post-feature erosion (%d droplets)..." % post_feature_erosion_iterations)
 	TerrainErosion.erode(heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, erosion_rng, post_feature_erosion_iterations)
+	# 2026-09-29 DESPIKE (Kirill: steep terrain spike in a V-ravine; traced with the ridge debug on
+	# seed 3371389413): this light post-feature erosion runs AFTER smoothing, so nothing cleans up
+	# after it -- and carved features are pits where droplets end and dump their sediment, sometimes
+	# onto a single pixel: e.g. px (48,114) went -2.4 -> -0.3 m while all 8 neighbours stayed
+	# -2.0..-3.4 (a 1 m-wide, ~2 m-tall cone on the 1 m grid); px (51,127) +3.3 m in the ravine floor.
+	# Clamp every pixel to within DESPIKE_TOLERANCE of its 4 direct neighbours' range (2 passes; see
+	# _despike for why 4 and not 8) -- only isolated 1-px spikes / fins / pits change; slopes and cliff
+	# steps always have a direct neighbour on the high side.
+	var despiked := _despike(heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, DESPIKE_TOLERANCE)
+	print("TERRAIN_GEN: despike after post-feature erosion -- %d px clamped" % despiked)
 	print("TERRAIN_GEN: post-feature erosion done (%.2fs)" % ((Time.get_ticks_msec() - t_stage) / 1000.0))
 	t_stage = Time.get_ticks_msec()
 
@@ -355,19 +400,41 @@ static func build_heightmap(master_seed: int = TerrainConfig.MASTER_SEED) -> Dic
 	# function's own comment. Same salt-XOR derivation _ready() used to do locally for this RNG
 	# (purely cosmetic placement, doesn't need to be in _derive_seeds' fixed derivation order
 	# any more than boulder_rng does).
-	# 2026-09-28: snapshot BEFORE cliff dressing touches the terrain -- TerrainKnots diffs
-	# against it to find which pixels dressing/outcrops already claimed (see knots.gd).
-	var pre_dressing_heights := heights.duplicate()
+	# 2026-09-29: verticality knots (knots.gd) now run HERE -- first among the shaping layers, right
+	# after the post-feature erosion -- instead of last (they rarely found free space after cliff
+	# dressing + outcrops had claimed the ground; see the "Knots-first pipeline" block in knots.gd).
+	# At this point only the landmark circle and the map ends are off-limits; the layers below make
+	# room for the knots (filter + restore). Own salted RNG stream, so the other layers' RNG
+	# sequences are unchanged -- their placements only differ near knots, which they now skip.
+	# Knot footprints go into their own obstacle mask, merged into cliff_obstacle_mask below, so
+	# the road still routes around them.
+	var knot_obstacle_mask := PackedByteArray()
+	knot_obstacle_mask.resize(TerrainConfig.AREA_WIDTH * TerrainConfig.AREA_LENGTH)
+	var cliff_dressing_top_profiles := CliffDressing.build_cliff_dressing_top_profiles() # per-model, no terrain dependency
+	var knot_rng := RandomNumberGenerator.new()
+	knot_rng.seed = master_seed ^ 0x4B4E4F54 # 'KNOT' salt
+	var no_plan: Array[Dictionary] = []
+	# pre_dressing_heights == current heights -> nothing counts as "already claimed" by dressing yet.
+	var knot_result := TerrainKnots.build_knots(heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, knot_rng, heights.duplicate(), cliff_features, no_plan, no_plan, knot_obstacle_mask, cliff_dressing_top_profiles)
+	var knots: Array = knot_result.knots
+	var knot_meshes: Array[Dictionary] = knot_result.mesh_plan
+	var post_knot_heights := heights.duplicate() # restore_knot_ground puts knot circles back to this
+	t_stage = Time.get_ticks_msec()
+
 	var cliff_dressing_rng := RandomNumberGenerator.new()
 	cliff_dressing_rng.seed = master_seed ^ 0x434C4646 # 'CLFF' salt
 	var cliff_dressing_plan := CliffDressing.plan_cliff_dressing(cliff_features, heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, cliff_dressing_rng)
 	# 2026-09-29: fixed landmark (landmarks.gd) -- drop planned meshes in its disk BEFORE they
 	# shape the terrain (the landmark is stamped over that area further down). No-op without data.
 	var lm_meshes_removed := TerrainLandmarks.filter_cliff_plan(cliff_dressing_plan)
+	# 2026-09-29 knots-first: planned meshes reaching into a knot circle are dropped (knots.gd).
+	var knot_meshes_removed := TerrainKnots.filter_cliff_plan(cliff_dressing_plan, knots)
 	CliffDressing.flatten_terrain_for_cliff_dressing(cliff_dressing_plan, heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH)
-	var cliff_dressing_top_profiles := CliffDressing.build_cliff_dressing_top_profiles()
 	CliffDressing.raise_terrain_behind_cliff_dressing(cliff_dressing_plan, heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, cliff_dressing_top_profiles, master_seed ^ 0x52414953) # 'RAIS' salt, round 20
 	var cliff_obstacle_mask := CliffDressing.build_cliff_dressing_obstacle_mask(cliff_dressing_plan, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH)
+	for i in knot_obstacle_mask.size(): # knot footprints + ramps (built before this mask existed)
+		if knot_obstacle_mask[i] == 1:
+			cliff_obstacle_mask[i] = 1
 	print("TERRAIN_GEN: cliff dressing planned + terrain flattened/raised to match (%.2fs)" % ((Time.get_ticks_msec() - t_stage) / 1000.0))
 	t_stage = Time.get_ticks_msec()
 
@@ -379,10 +446,17 @@ static func build_heightmap(master_seed: int = TerrainConfig.MASTER_SEED) -> Dic
 	outcrop_rng.seed = master_seed ^ 0x4F555443 # 'OUTC' salt
 	var outcrop_plan := TerrainOutcrops.plan_outcrops(outcrop_models, heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, outcrop_rng, cliff_dressing_plan)
 	var lm_outcrops_removed := TerrainLandmarks.filter_outcrops(outcrop_plan) # 2026-09-29 landmark disk
+	var knot_outcrops_removed := TerrainKnots.filter_outcrops(outcrop_plan, knots) # 2026-09-29 knots-first
 	TerrainOutcrops.fit_terrain_to_outcrops(outcrop_plan, outcrop_models, heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH)
 	TerrainOutcrops.add_outcrops_to_obstacle_mask(outcrop_plan, cliff_obstacle_mask, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH)
 	print("TERRAIN_GEN: outcrops planned + terrain fitted (%.2fs)" % ((Time.get_ticks_msec() - t_stage) / 1000.0))
 	t_stage = Time.get_ticks_msec()
+
+	# 2026-09-29 knots-first: dressing raise-behind plateaus / outcrop fitting next to a knot may
+	# have spilled into its circle -- put the knot's own ground back (feathered at the rim) so its
+	# levels, reachability and ramps stay exactly as build_knots verified them.
+	var knot_px_restored := TerrainKnots.restore_knot_ground(knots, heights, post_knot_heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH)
+	print("TERRAIN_GEN: knots-first -- %d knot(s); cleared %d planned cliff mesh(es) + %d outcrop(s) around them; %d knot px restored after dressing/outcrops" % [knots.size(), knot_meshes_removed, knot_outcrops_removed, knot_px_restored])
 
 	# 2026-09-29: fixed landmark -- stamp the captured formation (heights, cliff meshes, cliff
 	# features) and reserve its area; before knots (they avoid it) and the road (routes around it).
@@ -390,15 +464,9 @@ static func build_heightmap(master_seed: int = TerrainConfig.MASTER_SEED) -> Dic
 		print("TERRAIN_GEN: LANDMARK disk cleared: %d planned cliff mesh(es), %d outcrop(s) dropped" % [lm_meshes_removed, lm_outcrops_removed])
 		TerrainLandmarks.stamp(heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, cliff_dressing_plan, cliff_obstacle_mask, cliff_features)
 
-	# 2026-09-28: verticality knots -- deliberate multi-level points of interest (knots.gd).
-	# Deliberately LAST among the terrain shapers and in free space only, so every existing
-	# formation (and every RNG stream above) is unchanged; own salted stream. Knot cliff meshes
-	# join the regular dressing plan AFTER flatten/raise ran (knots shape their own ground), and
-	# knot footprints go into cliff_obstacle_mask so the road always routes around them.
-	var knot_rng := RandomNumberGenerator.new()
-	knot_rng.seed = master_seed ^ 0x4B4E4F54 # 'KNOT' salt
-	var knot_result := TerrainKnots.build_knots(heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, knot_rng, pre_dressing_heights, cliff_features, cliff_dressing_plan, outcrop_plan, cliff_obstacle_mask, cliff_dressing_top_profiles)
-	var knot_meshes: Array[Dictionary] = knot_result.mesh_plan
+	# 2026-09-29: knot cliff meshes join the regular dressing plan only now -- AFTER the main
+	# flatten/raise passes, since build_knots already shaped their ground (knots run first now, see
+	# above). From here instancing, collision, keep-outs and ground paint treat them like any mesh.
 	cliff_dressing_plan.append_array(knot_meshes)
 	t_stage = Time.get_ticks_msec()
 

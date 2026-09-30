@@ -13,3 +13,7 @@ Yughues - bushes and ferns - https://www.artstation.com/yughues
 code
 
 Ethan Truong - GodotGrass (per-blade grass shader ported in shaders/grass/grass_blade.gdshader, blade meshes rebuilt from its grass_high/grass_low.obj in scripts/terrain/grass_field.gd, lighting/wind approach adapted in shaders/grass/grass_tuft.gdshader) - https://github.com/2Retr0/GodotGrass - MIT License, Copyright (c) 2024 Ethan Truong
+
+post
+
+AtSaturn's Mind https://www.patreon.com/SaturnsMind

@@ -142,6 +142,11 @@ const CLIFF_DRESSING_FLANK_BAND_FRACTION := 0.2
 ## front-gated weight to the join-gap weight (previously a hard switch at the edge line, which
 ## left a V-trench there).
 const CLIFF_DRESSING_RAISE_JOIN_BLEND := 2.0
+## 2026-09-29: at a join, the bridge between two neighbouring meshes is full height only behind this
+## fraction of the mesh's half-depth (measured back from its centre line) and fades to 0 AT the centre
+## line -- nothing in the front half (it used to reach the front face line and poke out above the
+## rocks' rounded tops as a terrain spine). Raise toward 1.0 if a slit opens between rock backs.
+const CLIFF_DRESSING_RAISE_JOIN_BRIDGE_FULL := 0.5
 ## 2026-09-18 round 20 ("can the side curves be a little random in terms of terrain, not the
 ## same smooth slope"): two noise layers on the raised slopes.
 ## EDGE_WARP -- low-frequency noise stretches/shrinks the lateral and far-fade falloff DISTANCES
@@ -773,12 +778,12 @@ static func raise_terrain_behind_cliff_dressing(plan: Array[Dictionary], heights
 	# knows exactly which pixels this pass would have touched.
 	_raise_debug_heights = PackedFloat32Array()
 	_raise_debug_heights.resize(width * length)
-	for i in _raise_debug_heights.size():
-		_raise_debug_heights[i] = RAISE_DEBUG_UNSET
+	# 2026-09-29 speed: native fill() -- these were per-element GDScript loops over the whole map
+	# (2 x 131k iterations) on EVERY call, and knots call this pass once per knot row (~13x a map).
+	_raise_debug_heights.fill(RAISE_DEBUG_UNSET)
 	_raise_debug_entry_index = PackedInt32Array()
 	_raise_debug_entry_index.resize(width * length)
-	for i in _raise_debug_entry_index.size():
-		_raise_debug_entry_index[i] = -1
+	_raise_debug_entry_index.fill(-1)
 	# 2026-09-28 (Kirill: "ridge of sharp protrusions" in the join gap between two
 	# namaqualand_cliff_01 placements, seed 4176228882, pixel ~(37, 452)): overlapping entries
 	# used to combine by "tallest blended height wins" (round 19). That's only right while every
@@ -808,6 +813,13 @@ static func raise_terrain_behind_cliff_dressing(plan: Array[Dictionary], heights
 	var raise_best_w := PackedFloat32Array() ## debug only: highest single-entry weight, for _raise_debug_entry_index
 	raise_best_w.resize(width * length)
 	raise_best_w.fill(0.0)
+	# 2026-09-29 speed: bounding box of every pixel an entry touched, so the commit loop only walks
+	# that box instead of the whole map (identical result -- untouched pixels have w_sum 0 and were
+	# skipped anyway).
+	var touched_x0 := width
+	var touched_x1 := -1
+	var touched_z0 := length
+	var touched_z1 := -1
 	var defs_by_name: Dictionary = {}
 	for def in TerrainConfig.CLIFF_DRESSING_DEFS:
 		defs_by_name[def.name] = def
@@ -1131,14 +1143,22 @@ static func raise_terrain_behind_cliff_dressing(plan: Array[Dictionary], heights
 					# sticking out in front of the two meshes. Keep full height over the back half of
 					# the gap only, fade out across the front half, and stop exactly at the front-face
 					# line -- nothing past it.
-					if local_z >= half_z:
+					# 2026-09-29 (Kirill, seed 858829582: "the terrain between them spills forward" -- a
+					# spine of plateau-height ground between two knot rocks, standing ABOVE their rounded
+					# tops and running forward between their fronts): round 18 still kept full height to the
+					# mesh's centre line and only faded across the FRONT half, stopping at the face line.
+					# Rock tops dip toward their front and ends, so that half-raised bridge poked out over
+					# them. Now the bridge is full height only behind JOIN_BRIDGE_FULL of the half-depth,
+					# fades out by the centre line, and nothing reaches the front half -- the plateaus still
+					# meet behind the rocks.
+					if local_z >= 0.0:
 						depth_weight = 0.0
 					elif d_behind > plateau_depth:
 						depth_weight = 1.0 - smoothstep(0.0, fade_distance, (d_behind - plateau_depth) * fade_warp)
-					elif local_z <= 0.0:
+					elif local_z <= -CLIFF_DRESSING_RAISE_JOIN_BRIDGE_FULL * half_z:
 						depth_weight = 1.0
 					else:
-						depth_weight = 1.0 - smoothstep(0.0, half_z, local_z)
+						depth_weight = 1.0 - smoothstep(-CLIFF_DRESSING_RAISE_JOIN_BRIDGE_FULL * half_z, 0.0, local_z)
 					# round 22 blend -- 0 = front-gated weight, 1 = join weight (reached AT the edge).
 					var join_t := smoothstep(half_x - CLIFF_DRESSING_RAISE_JOIN_BLEND, half_x, absf(local_x))
 					depth_weight = lerpf(depth_weight_gated, depth_weight, join_t)
@@ -1169,6 +1189,10 @@ static func raise_terrain_behind_cliff_dressing(plan: Array[Dictionary], heights
 				raise_w_sum[idx] += raise_w
 				raise_wp_sum[idx] += raise_w * plateau_height
 				raise_keep[idx] *= (1.0 - raise_w)
+				touched_x0 = mini(touched_x0, qx)
+				touched_x1 = maxi(touched_x1, qx)
+				touched_z0 = mini(touched_z0, qz)
+				touched_z1 = maxi(touched_z1, qz)
 				if raise_w > raise_best_w[idx]:
 					raise_best_w[idx] = raise_w
 					_raise_debug_entry_index[idx] = entry_index
@@ -1180,21 +1204,23 @@ static func raise_terrain_behind_cliff_dressing(plan: Array[Dictionary], heights
 	# down -- the 2026-09-28 spike ridge), now weighted blend (continuous; see top of function).
 	# _raise_debug_heights still receives the final value so the optional RAISE_DEBUG_SHOW_SURFACE
 	# overlay keeps working unchanged.
-	for i in range(raise_w_sum.size()):
-		var w_sum := raise_w_sum[i]
-		if w_sum <= 0.0:
-			continue
-		var natural := heights[i]
-		var target := raise_wp_sum[i] / w_sum
-		var coverage := 1.0 - raise_keep[i]
-		var blended_height := lerpf(natural, target, coverage)
-		# round 20: mid-slope bumps -- zero at coverage 0 (natural ground) and 1 (plateau). Same
-		# world-grid noise sample as before, so single-entry pixels match the old result (up to
-		# float32 rounding in the accumulators).
-		var bump_amp := minf(CLIFF_DRESSING_RAISE_BUMP_MAX, absf(target - natural) * CLIFF_DRESSING_RAISE_BUMP_FRACTION)
-		blended_height += raise_bump_noise.get_noise_2d(i % width, floori(float(i) / float(width))) * bump_amp * 4.0 * coverage * (1.0 - coverage)
-		_raise_debug_heights[i] = blended_height
-		heights[i] = blended_height
+	for cz in range(touched_z0, touched_z1 + 1): # 2026-09-29: only the touched box (see touched_x0)
+		for cx in range(touched_x0, touched_x1 + 1):
+			var i := cz * width + cx
+			var w_sum := raise_w_sum[i]
+			if w_sum <= 0.0:
+				continue
+			var natural := heights[i]
+			var target := raise_wp_sum[i] / w_sum
+			var coverage := 1.0 - raise_keep[i]
+			var blended_height := lerpf(natural, target, coverage)
+			# round 20: mid-slope bumps -- zero at coverage 0 (natural ground) and 1 (plateau). Same
+			# world-grid noise sample as before, so single-entry pixels match the old result (up to
+			# float32 rounding in the accumulators).
+			var bump_amp := minf(CLIFF_DRESSING_RAISE_BUMP_MAX, absf(target - natural) * CLIFF_DRESSING_RAISE_BUMP_FRACTION)
+			blended_height += raise_bump_noise.get_noise_2d(cx, cz) * bump_amp * 4.0 * coverage * (1.0 - coverage)
+			_raise_debug_heights[i] = blended_height
+			heights[i] = blended_height
 
 ## Restores this module's static state (caches, debug buffers, counters) to its initial
 ## values. Called at the start of every WorldGenerator run so each run starts clean, the

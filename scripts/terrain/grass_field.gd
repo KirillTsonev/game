@@ -44,10 +44,10 @@ const PARAMS_VEC4 := 11 ## size of the cull shader's params buffer, in vec4s (se
 ## 2026-09-28: Kirill's second tuning pass (denser far bands, widen max back up to 70 -- the far
 ## shimmer is handled by the wind fade below instead of by narrower blades).
 const BLADE_BANDS: Array[Dictionary] = [
-	{"name": "blades_0", "inner": 0.0, "outer": 50.0, "band": 3.0, "spacing": 0.13, "mesh": "high"},
-	{"name": "blades_1", "inner": 50.0, "outer": 100.0, "band": 6.0, "spacing": 0.275, "mesh": "high"},
-	{"name": "blades_2", "inner": 100.0, "outer": 150.0, "band": 8.0, "spacing": 0.50, "mesh": "low"},
-	{"name": "blades_3", "inner": 150.0, "outer": 200.0, "band": 10.0, "spacing": 1.5, "mesh": "low"},
+	{"name": "blades_0", "inner": 0.0, "outer": 50.0, "band": 3.0, "spacing": 0.1, "mesh": "high"},
+	{"name": "blades_1", "inner": 50.0, "outer": 100.0, "band": 6.0, "spacing": 0.34, "mesh": "high"},
+	{"name": "blades_2", "inner": 100.0, "outer": 150.0, "band": 8.0, "spacing": 0.75, "mesh": "low"},
+	{"name": "blades_3", "inner": 150.0, "outer": 200.0, "band": 10.0, "spacing": 1.25, "mesh": "low"},
 	{"name": "blades_4", "inner": 200.0, "outer": RADIUS, "band": FADE_BAND, "spacing": 3.0, "mesh": "low"},
 ]
 ## LIVE-TUNABLE copies (2026-09-27, grass tuning panel -- debug key Y): the field builds its blade

@@ -7,6 +7,9 @@
 // player crush, view-space thickening of blades seen edge-on, distance widening (their LOD
 // compensation), base->tip colour with AO darkening, distance colour flattening, rounded normals,
 // anisotropy, and their wrap-diffuse + subsurface light().
+// NOTE: saving this file from a Godot shader-editor tab that was opened BEFORE an external write
+// reverts it to the tab's stale copy (happened 2026-09-30 -- everything after the saturation change
+// was lost and restored). Reopen the file before editing it in Godot.
 // Changes for this project:
 //   - root = the instance origin from the GPU placement (MODEL_MATRIX[3]), already ON our terrain
 //     -> their global heightmap offset is gone;
@@ -35,6 +38,69 @@
 //   - WIND FADE (2026-09-28): wind sway (gust turn + turbulence) x (1 - smoothstep(wind_fade_start,
 //     wind_fade_end, camera distance)). Far blades are metres wide and their sway read as a
 //     heat-haze shimmer; faded out they keep their resting lean/yaw/bend and just hold still.
+//   - OVERHANG CAP (2026-09-29): the widened width is multiplied by INSTANCE_CUSTOM.x, a per-blade
+//     factor (1 = full width) from grass_cull.glsl's overhang cap -- far blades on slopes / brows
+//     are narrowed so they don't stick out over ground that drops away beneath them (it read as
+//     grass floating past slope edges from a distance). The widening curve itself is unchanged.
+//   - TOP-SIDE NEON FIX (2026-09-29): the sun-facing (upper) side of bent blades read neon
+//     yellow-green while the underside was a nice dark green. Causes: tip_color (0.5, 0.5, 0.1) is
+//     yellow (R = G, no B); GodotGrass's wrap diffuse pow(4, N.L)/4 spans 1/16 -> 1.0, so the lit
+//     face got ~16x the underside's light (cull_disabled flips NORMAL on the back face); and the
+//     orange-yellow SSS term added more on top. Now: greener tip (0.30, 0.42, 0.10), linear wrap
+//     mix(backlight_floor, 0.75, N.L*0.5+0.5). GodotGrass originals: tip (0.5,0.5,0.1), SSS
+//     (1.0,0.75,0.1) x 0.5.
+//   - FACING-THE-MOON FIX (2026-09-29): looking away from the moon was fine, looking toward it the
+//     whole field went neon. The SSS lobe max(-V.L, 0) is view-dependent and ~90 deg wide, so
+//     facing the light every blade got it (then bloom). Now pow(max(-V.L,0), 4) x 0.2 -- the glow
+//     stays near the moon direction (45 deg off: ~0.25x instead of 0.7x) -- and a deeper green SSS
+//     colour (0.35, 0.55, 0.12) since it's moonlight. History: GodotGrass linear x 0.5, then
+//     linear x 0.3 with (0.55, 0.65, 0.15).
+//   - BACKLIGHT FLOOR (2026-09-29): still too saturated facing the moon. Grass casts no shadows
+//     (grass_field.gd: SHADOW_CASTING_SETTING_OFF -- keep it; blade counts + shadow bias make it
+//     pointless), so nothing darkens a blade's shadowed side except N.L -- and the wrap floor kept
+//     backlit faces at 0.25 of full moonlight while the trees (plain Lambert) go to black
+//     silhouettes -> the grass read as glowing. Floor is now the uniform backlight_floor (0.08;
+//     was 0.25 in the neon fix, 1/16 in GodotGrass). The lit top (0.75) is unchanged, so the
+//     facing-away view barely moves.
+//   - BLADE SATURATION (2026-09-29): final ALBEDO is pulled toward its own luminance by the uniform
+//     blade_saturation (1 = unchanged, 0 = grey). Applied last in fragment(), so it covers green,
+//     dry and distance-flattened colours alike -- and the SSS glow too, since the engine
+//     multiplies DIFFUSE_LIGHT by ALBEDO. Luminance is kept, so brightness doesn't drop.
+//   - SKY-REFLECTION SHEEN (2026-09-30): the glossy tips (ROUGHNESS 0.4, ANISOTROPY 0.85) pick up
+//     the engine's sky/radiance reflections, added OUTSIDE light(); at the grazing angle of looking
+//     across the field toward the moon, Fresnel pushes them up and they mirror the moon halo.
+//     SPECULAR = the uniform blade_specular (0 = no sky reflections; engine default 0.5).
+//   - DISTANCE NORMAL TARGET (2026-09-30): facing the moon, grass got BRIGHTER WITH DISTANCE (a
+//     near patch dim, patches past a tree bright). GodotGrass blends the blade normal toward
+//     straight up with distance (fog_factor: ~40% up at 30 m, ~65% at 60 m) so far grass reads
+//     like the ground -- but an up normal is lit by a high moon whichever side of the blade you
+//     see, while near blades seen from the moon side show their shadowed face (backlight_floor).
+//     Now the far target is normalize(up + VIEW) -- halfway between up and toward the camera,
+//     like the visible face of a near blade (cull_disabled flips NORMAL to face the viewer) -- so
+//     far grass darkens facing the light and stays lit facing away, matching the near grass.
+//     View space: vec3(0,1,0) is camera-up (the same assumption GodotGrass made).
+//   - BLADE AMBIENT / SKY OCCLUSION (2026-09-30): an in-game bisection (a since-removed debug
+//     cycle on key U) of the white glow facing the moon found: black blades -> no glow (it's the
+//     blades, not the terrain's grass ground texture); direct diffuse only -> black; SSS only ->
+//     black; ambient-only == normal; ambient x0.1 / x0.01 -> no visible change; all post-FX off ->
+//     no change. So light() changes don't reach it, and why the blades' brightness ignores those
+//     lighting scales is still unexplained (the only Environment, main.tscn, has
+//     ambient_light_source = DISABLED, no SDFGI/SSIL/VoxelGI/ReflectionProbe). Kept anyway as a
+//     physically sensible sky occlusion: AO = blade_ambient x mix(0.25, 1.0, height), with
+//     AO_LIGHT_AFFECT = 0 (direct light untouched).
+//     Side finding: direct diffuse alone rendered black, so direct moonlight barely reaches the
+//     blades (likely terrain shadow + shadow_normal_bias 0.75 swallowing 0.3 m blades) -- not
+//     investigated yet.
+//   - NO BRIGHT TIPS (2026-09-30) -- THE FIX for the white glow facing the moon. Kirill's
+//     hypothesis: the TIPS are the glow -- they're the brightest part of each blade (the lower
+//     blade is darkened to 10%), and under the pale teal moon light (0.77, 0.90, 0.84) they read
+//     white. The "whole blade = base colour" test looked best in-game, so it's the default:
+//     t = mix(b, t, tip_blend) with tip_blend = 0 -> base colour root to tip, for green AND dry
+//     blades (and the distance-flattened colour, which also uses t). tip_color / dry_tip_color
+//     are kept -- raise tip_blend to bring a tip gradient back.
+//   - LESS DRY GRASS (2026-09-29): v_dry threshold smoothstep(0.30, 0.60) -> (0.45, 0.75) so fewer
+//     patches turn straw, and dry_tip_color (0.75, 0.62, 0.30) -> (0.58, 0.50, 0.26) so the ones
+//     that do are less glaring. The bake's dry channel itself is unchanged.
 shader_type spatial;
 render_mode cull_disabled, ensure_correct_normals;
 
@@ -56,10 +122,22 @@ uniform float widen_max = 70.0;
 
 group_uniforms GrassColor;
 uniform vec3 base_color : source_color = vec3(0.05, 0.2, 0.01);
-uniform vec3 tip_color : source_color = vec3(0.5, 0.5, 0.1);
-uniform vec3 subsurface_scattering_color : source_color = vec3(1.0, 0.75, 0.1);
+uniform vec3 tip_color : source_color = vec3(0.30, 0.42, 0.10); // was (0.5, 0.5, 0.1) -- see header
+uniform vec3 subsurface_scattering_color : source_color = vec3(0.35, 0.55, 0.12); // see header (moon fix)
 uniform vec3 dry_base_color : source_color = vec3(0.22, 0.17, 0.06);
-uniform vec3 dry_tip_color : source_color = vec3(0.75, 0.62, 0.30);
+uniform vec3 dry_tip_color : source_color = vec3(0.58, 0.50, 0.26); // was (0.75, 0.62, 0.30)
+// How much of tip_color / dry_tip_color reaches the blade tips (see header "NO BRIGHT TIPS").
+// 0 = base colour root to tip (the fix), 1 = the full GodotGrass base->tip gradient.
+uniform float tip_blend : hint_range(0.0, 1.0) = 0.0;
+// Direct light on a face pointing straight away from the light (see header "BACKLIGHT FLOOR").
+uniform float backlight_floor : hint_range(0.0, 0.5) = 0.08;
+// 1 = colours as authored, 0 = greyscale (see header "BLADE SATURATION").
+uniform float blade_saturation : hint_range(0.0, 1.0) = 1;
+// Sky/reflection strength on the blades (see header "SKY-REFLECTION SHEEN"). Engine default 0.5.
+uniform float blade_specular : hint_range(0.0, 1.0) = 0.0;
+// Ambient/indirect light on the blades (see header "BLADE AMBIENT").
+// 1 = full engine ambient at the tips; the root always gets 25% of this.
+uniform float blade_ambient : hint_range(0.0, 1.0) = 0.5;
 
 varying float v_dry;
 
@@ -104,7 +182,7 @@ void vertex() {
 	vec3 root = MODEL_MATRIX[3].xyz;
 	float tall = INSTANCE_CUSTOM.z;
 	float coverage = INSTANCE_CUSTOM.w;
-	v_dry = smoothstep(0.30, 0.60, INSTANCE_CUSTOM.y);
+	v_dry = smoothstep(0.45, 0.75, INSTANCE_CUSTOM.y); // was (0.30, 0.60) -- see header
 
 	float height_factor = 1.0 - UV.y;
 	float hash0 = hash12(root.xz);
@@ -121,8 +199,9 @@ void vertex() {
 
 	VERTEX.x *= mix(0.6, 1.0, hash1);
 	// The further the distance from the camera, the thicker the grass blade will
-	// appear to account for decreasing density with distance (the blade layers thin out)
-	VERTEX.x *= 1.0 + min(pow(widen_scale * camera_distance, widen_power), widen_max);
+	// appear to account for decreasing density with distance (the blade layers thin out).
+	// x INSTANCE_CUSTOM.x = the overhang cap's width factor (2026-09-29, see header; 1 = full width).
+	VERTEX.x *= (1.0 + min(pow(widen_scale * camera_distance, widen_power), widen_max)) * INSTANCE_CUSTOM.x;
 	VERTEX.y *= height_offset;
 	vec3 vertex_model = VERTEX; // Vertex in model space before any rotations are applied
 
@@ -179,24 +258,41 @@ void fragment() {
 	float fog_factor = exp(-length(VERTEX) * 0.017);
 	mat3 normal_offset = rotate_y(mix(-0.12, 0.12, uv.x) * PI);
 	NORMAL = normalize(normal_offset * NORMAL);
-	// Blend grass normal with terrain normal based on distance (assumes up is 0,1,0!)
-	NORMAL = mix(vec3(0, 1, 0), NORMAL, fog_factor);
+	// Blend far grass toward a "visible face" normal -- halfway between up and the camera -- not
+	// straight up (see header "DISTANCE NORMAL TARGET"; assumes up is 0,1,0 in view space).
+	vec3 far_normal = normalize(vec3(0.0, 1.0, 0.0) + VIEW);
+	NORMAL = normalize(mix(far_normal, NORMAL, fog_factor));
 
 	vec3 b = mix(base_color, dry_base_color, v_dry);
 	vec3 t = mix(tip_color, dry_tip_color, v_dry);
+	// No bright tips by default (see header "NO BRIGHT TIPS"): tip_blend 0 = base colour to the tip.
+	t = mix(b, t, tip_blend);
 	float height_factor = 1.0 - uv.y;
 	ALBEDO = mix(b, t, ease_in_quartic(height_factor));
 	ALBEDO *= mix(0.1, 1.0, height_factor * height_factor); // AO
 	// Color becomes more uniform as distance increases
 	ALBEDO = mix(mix(b, t, 0.5) * 0.5, ALBEDO, fog_factor);
+	// Desaturate toward luminance (see header "BLADE SATURATION").
+	float albedo_luma = dot(ALBEDO, vec3(0.2126, 0.7152, 0.0722));
+	ALBEDO = mix(vec3(albedo_luma), ALBEDO, blade_saturation);
 
 	ROUGHNESS = mix(1.0, 0.4, ease_out_quartic(height_factor));
 	ANISOTROPY = 0.85;
+	SPECULAR = blade_specular; // sky-reflection sheen off (see header)
+	// Sky occlusion by neighbouring blades: root sees ~25% of the sky, tip all of it, x the
+	// blade_ambient control (see header "BLADE AMBIENT"). AO_LIGHT_AFFECT 0 = direct light untouched.
+	AO = blade_ambient * mix(0.25, 1.0, height_factor);
+	AO_LIGHT_AFFECT = 0.0;
 }
 
 void light() {
-	float diffuse_factor = pow(4.0, dot(NORMAL, LIGHT)) / 4.0; // Diffuse never drops to 0 to simulate ambient bounces
-	float sss_factor = max(-dot(VIEW, LIGHT), 0.0) * 0.5;
+	// Wrap diffuse (see header "TOP-SIDE NEON FIX" / "BACKLIGHT FLOOR"): backlight_floor facing
+	// away -> 0.75 facing the light. GodotGrass's pow(4.0, N.L) / 4.0 spanned 1/16 -> 1.0.
+	float diffuse_factor = mix(backlight_floor, 0.75, dot(NORMAL, LIGHT) * 0.5 + 0.5);
+	// Narrow back-light lobe (see header "FACING-THE-MOON FIX"): only near the light direction.
+	float sss_lobe = max(-dot(VIEW, LIGHT), 0.0);
+	sss_lobe *= sss_lobe;
+	float sss_factor = sss_lobe * sss_lobe * 0.2; // pow(lobe, 4) x 0.2 (was linear x 0.3)
 	DIFFUSE_LIGHT += (diffuse_factor + sss_factor * subsurface_scattering_color) * ATTENUATION * LIGHT_COLOR;
 	SPECULAR_LIGHT *= diffuse_factor;
 }
