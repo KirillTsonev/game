@@ -17,6 +17,9 @@ automatically) -- a local copy also lives at
 - `docs/shadows.md` -- how the sun's shadows are set up and why (25 m first cascade, bias),
   why thin foliage shadows vanish/fade, the foliage cutout shader (`IN_SHADOW_PASS`), Godot
   shadow research + sources. Read before touching the DirectionalLight3D or leaf materials.
+- `docs/forest_floor_plan.md` -- PLAN (2026-10-01) for the "empty patches" problem: reference
+  findings, decisions (ambient light, SSAO off, optimisation deferred) and the build order for
+  colour matching, litter, moss, gap cover, grounding, cones and the mid-storey.
 - This file stays the reference for pitfalls and *why* things are done the way they are.
 
 ## Local tooling paths (this machine)

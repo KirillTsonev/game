@@ -105,6 +105,20 @@ Alpha-scissor leaf cards are solid only where texture alpha >= the cutoff (0.5).
 - a separate, lower cutoff + stronger mip boost **in the shadow pass only** (`IN_SHADOW_PASS`,
   true while rendering shadow maps): near shadows stay dappled, coarse-cascade shadows become soft
   solid-ish blobs instead of fading. Visible look unaffected.
+- **The blob-to-leaves handoff at ~25 m is fixed with `light_angular_distance` = 0.05, not in
+  the shader (2026-10-01).** The solid-ish far blobs were obvious on the cliff meshes: one dark
+  mass from ~20 m that switched to leaf detail on approach (user report). Shadow range, atlas
+  size and splits are fixed by the user, so the only fix is to soften the NEAR shadows.
+  Angular distance does that by caster height (crowns go soft, ferns stay crisp); user: "it
+  worked". Cost: roughly 5-10 points of GPU utilisation (70 % -> 95 % with SSAO also on, SSAO
+  alone 15-20), from a per-pixel blocker search on every lit fragment incl. grass.
+  - Tried and reverted, shader-side: (a) coarse cascades only -- per-texel random keep by true
+    card alpha, density 1.0 then 2.5: obvious fade-in and still a blob-to-detail switch;
+    (b) a world-space ~0.2 m dapple for tree cards in every cascade: rejected before testing,
+    it throws away near leaf detail more crudely than angular distance does. Changing only
+    the far side cannot work -- the near side has detail the far side can't show.
+  - SSAO: 15-20 points on its own at default quality here -- left off (2026-10-01).
+
 **Tree leaf cards use it too** (2026-09-25): `build_pack_trees()` in `tools/setup_tree_assets.gd`
 builds each leaf/branch card's material with `_foliage_leaf_material()` (same texture, tint,
 roughness; `use_vertex_color` on -- the Fab pack tints its cards via vertex colours). Cutoff and
