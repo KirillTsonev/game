@@ -85,6 +85,12 @@
 [ext_resource type="PackedScene" uid="uid://bohs43bnu5v5y" path="res://assets/models/ground_debris/sticks_debris/sticks_debris_b.glb" id="67_luudq"]
 [ext_resource type="PackedScene" uid="uid://cqhtbudmfucxy" path="res://assets/models/ground_debris/sticks_debris/sticks_debris_c.glb" id="68_dqksv"]
 [ext_resource type="PackedScene" uid="uid://xg5hc252g463" path="res://assets/models/ground_debris/sticks_debris/sticks_debris_d.glb" id="69_qrb1v"]
+[ext_resource type="Material" uid="uid://c5csvofiyc2g0" path="res://assets/models/ground_debris/litter_mound/litter_mound_material.tres" id="70_qrb1v"]
+[ext_resource type="PackedScene" uid="uid://vhbixjweim4e" path="res://assets/models/ground_debris/litter_mound/litter_mound_a.glb" id="71_d2h71"]
+[ext_resource type="PackedScene" uid="uid://0efka7knk7ls" path="res://assets/models/ground_debris/litter_mound/litter_mound_b.glb" id="72_2acpf"]
+[ext_resource type="PackedScene" uid="uid://c8qh4jxmhd377" path="res://assets/models/ground_debris/litter_mound/litter_mound_c.glb" id="73_6wq5w"]
+[ext_resource type="Texture2D" uid="uid://djg8j246rgu54" path="res://textures/source/pine_litter_albedo_height_1k.png" id="86_tiys7"]
+[ext_resource type="Texture2D" uid="uid://bwuiskoiebal5" path="res://textures/source/pine_litter_normal_roughness_1k.png" id="87_jjmba"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_g6uno"]
 transparency = 4
@@ -650,6 +656,39 @@ lod0_range = 10.0
 lod1_range = 25.0
 lod2_range = 80.0
 
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_xrnjs"]
+name = "LitterMoundA"
+id = 50
+scene_file = ExtResource("71_d2h71")
+density = 0.05
+cast_shadows = 0
+material_override = ExtResource("70_qrb1v")
+last_lod = 0
+last_shadow_lod = 0
+lod0_range = 50.0
+
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_wakti"]
+name = "LitterMoundB"
+id = 51
+scene_file = ExtResource("72_2acpf")
+density = 0.05
+cast_shadows = 0
+material_override = ExtResource("70_qrb1v")
+last_lod = 0
+last_shadow_lod = 0
+lod0_range = 50.0
+
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_aiiri"]
+name = "LitterMoundC"
+id = 52
+scene_file = ExtResource("73_6wq5w")
+density = 0.05
+cast_shadows = 0
+material_override = ExtResource("70_qrb1v")
+last_lod = 0
+last_shadow_lod = 0
+lod0_range = 50.0
+
 [sub_resource type="Terrain3DTextureAsset" id="Terrain3DTextureAsset_grass"]
 name = "Ground"
 albedo_texture = ExtResource("39_6bfbq")
@@ -722,6 +761,15 @@ uv_scale = 2.0
 detiling_rotation = 1.0
 detiling_shift = 1.0
 
+[sub_resource type="Terrain3DTextureAsset" id="Terrain3DTextureAsset_luudq"]
+name = "PineLitter"
+id = 8
+albedo_texture = ExtResource("86_tiys7")
+normal_texture = ExtResource("87_jjmba")
+uv_scale = 0.64
+detiling_rotation = 1.0
+detiling_shift = 1.0
+
 [resource]
-mesh_list = Array[Terrain3DMeshAsset]([SubResource("Terrain3DMeshAsset_81oi1"), SubResource("Terrain3DMeshAsset_y4pab"), SubResource("Terrain3DMeshAsset_vgup8"), SubResource("Terrain3DMeshAsset_x2oql"), SubResource("Terrain3DMeshAsset_3mt4f"), SubResource("Terrain3DMeshAsset_o3r11"), SubResource("Terrain3DMeshAsset_j3dbr"), SubResource("Terrain3DMeshAsset_ok3py"), SubResource("Terrain3DMeshAsset_j7xkl"), SubResource("Terrain3DMeshAsset_wafp7"), SubResource("Terrain3DMeshAsset_0bfyr"), SubResource("Terrain3DMeshAsset_4wc0o"), SubResource("Terrain3DMeshAsset_egd2s"), SubResource("Terrain3DMeshAsset_iq0fs"), SubResource("Terrain3DMeshAsset_ut3y1"), SubResource("Terrain3DMeshAsset_2ohup"), SubResource("Terrain3DMeshAsset_xplyh"), SubResource("Terrain3DMeshAsset_st3tx"), SubResource("Terrain3DMeshAsset_njita"), SubResource("Terrain3DMeshAsset_6bfbq"), SubResource("Terrain3DMeshAsset_vl2ef"), SubResource("Terrain3DMeshAsset_gv63u"), SubResource("Terrain3DMeshAsset_hasxv"), SubResource("Terrain3DMeshAsset_e33tj"), SubResource("Terrain3DMeshAsset_ierxv"), SubResource("Terrain3DMeshAsset_gdy8x"), SubResource("Terrain3DMeshAsset_v5bka"), SubResource("Terrain3DMeshAsset_r3kdc"), SubResource("Terrain3DMeshAsset_bwc52"), SubResource("Terrain3DMeshAsset_idynt"), SubResource("Terrain3DMeshAsset_xp8ly"), SubResource("Terrain3DMeshAsset_8027u"), SubResource("Terrain3DMeshAsset_81xqu"), SubResource("Terrain3DMeshAsset_1kr7w"), SubResource("Terrain3DMeshAsset_1of2d"), SubResource("Terrain3DMeshAsset_nj03w"), SubResource("Terrain3DMeshAsset_and2d"), SubResource("Terrain3DMeshAsset_e1eb4"), SubResource("Terrain3DMeshAsset_d2h71"), SubResource("Terrain3DMeshAsset_2acpf"), SubResource("Terrain3DMeshAsset_6wq5w"), SubResource("Terrain3DMeshAsset_41kqr"), SubResource("Terrain3DMeshAsset_br08d"), SubResource("Terrain3DMeshAsset_wpoff"), SubResource("Terrain3DMeshAsset_2bixs"), SubResource("Terrain3DMeshAsset_sp2r7"), SubResource("Terrain3DMeshAsset_x81x7"), SubResource("Terrain3DMeshAsset_nw0df"), SubResource("Terrain3DMeshAsset_e0lft"), SubResource("Terrain3DMeshAsset_55bbd")])
-texture_list = Array[Terrain3DTextureAsset]([SubResource("Terrain3DTextureAsset_grass"), SubResource("Terrain3DTextureAsset_road"), SubResource("Terrain3DTextureAsset_ldu0t"), SubResource("Terrain3DTextureAsset_141l7"), SubResource("Terrain3DTextureAsset_oc8my"), SubResource("Terrain3DTextureAsset_we7sw"), SubResource("Terrain3DTextureAsset_ree8b"), SubResource("Terrain3DTextureAsset_osfy8")])
+mesh_list = Array[Terrain3DMeshAsset]([SubResource("Terrain3DMeshAsset_81oi1"), SubResource("Terrain3DMeshAsset_y4pab"), SubResource("Terrain3DMeshAsset_vgup8"), SubResource("Terrain3DMeshAsset_x2oql"), SubResource("Terrain3DMeshAsset_3mt4f"), SubResource("Terrain3DMeshAsset_o3r11"), SubResource("Terrain3DMeshAsset_j3dbr"), SubResource("Terrain3DMeshAsset_ok3py"), SubResource("Terrain3DMeshAsset_j7xkl"), SubResource("Terrain3DMeshAsset_wafp7"), SubResource("Terrain3DMeshAsset_0bfyr"), SubResource("Terrain3DMeshAsset_4wc0o"), SubResource("Terrain3DMeshAsset_egd2s"), SubResource("Terrain3DMeshAsset_iq0fs"), SubResource("Terrain3DMeshAsset_ut3y1"), SubResource("Terrain3DMeshAsset_2ohup"), SubResource("Terrain3DMeshAsset_xplyh"), SubResource("Terrain3DMeshAsset_st3tx"), SubResource("Terrain3DMeshAsset_njita"), SubResource("Terrain3DMeshAsset_6bfbq"), SubResource("Terrain3DMeshAsset_vl2ef"), SubResource("Terrain3DMeshAsset_gv63u"), SubResource("Terrain3DMeshAsset_hasxv"), SubResource("Terrain3DMeshAsset_e33tj"), SubResource("Terrain3DMeshAsset_ierxv"), SubResource("Terrain3DMeshAsset_gdy8x"), SubResource("Terrain3DMeshAsset_v5bka"), SubResource("Terrain3DMeshAsset_r3kdc"), SubResource("Terrain3DMeshAsset_bwc52"), SubResource("Terrain3DMeshAsset_idynt"), SubResource("Terrain3DMeshAsset_xp8ly"), SubResource("Terrain3DMeshAsset_8027u"), SubResource("Terrain3DMeshAsset_81xqu"), SubResource("Terrain3DMeshAsset_1kr7w"), SubResource("Terrain3DMeshAsset_1of2d"), SubResource("Terrain3DMeshAsset_nj03w"), SubResource("Terrain3DMeshAsset_and2d"), SubResource("Terrain3DMeshAsset_e1eb4"), SubResource("Terrain3DMeshAsset_d2h71"), SubResource("Terrain3DMeshAsset_2acpf"), SubResource("Terrain3DMeshAsset_6wq5w"), SubResource("Terrain3DMeshAsset_41kqr"), SubResource("Terrain3DMeshAsset_br08d"), SubResource("Terrain3DMeshAsset_wpoff"), SubResource("Terrain3DMeshAsset_2bixs"), SubResource("Terrain3DMeshAsset_sp2r7"), SubResource("Terrain3DMeshAsset_x81x7"), SubResource("Terrain3DMeshAsset_nw0df"), SubResource("Terrain3DMeshAsset_e0lft"), SubResource("Terrain3DMeshAsset_55bbd"), SubResource("Terrain3DMeshAsset_xrnjs"), SubResource("Terrain3DMeshAsset_wakti"), SubResource("Terrain3DMeshAsset_aiiri")])
+texture_list = Array[Terrain3DTextureAsset]([SubResource("Terrain3DTextureAsset_grass"), SubResource("Terrain3DTextureAsset_road"), SubResource("Terrain3DTextureAsset_ldu0t"), SubResource("Terrain3DTextureAsset_141l7"), SubResource("Terrain3DTextureAsset_oc8my"), SubResource("Terrain3DTextureAsset_we7sw"), SubResource("Terrain3DTextureAsset_ree8b"), SubResource("Terrain3DTextureAsset_osfy8"), SubResource("Terrain3DTextureAsset_luudq")])

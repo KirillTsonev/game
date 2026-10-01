@@ -42,7 +42,58 @@ const AERIAL_ROCKS_ID := 4 ## aerial_rocks_04 -- mossy rock ground
 const GRASS_ID := 5 ## grass_ground
 const ROCKY_TRAIL_ID := 6 ## rocky_trail_02 -- scree
 const ROCKY_TERRAIN_ID := 7 ## rocky_terrain_03 -- scree with grass
+const PINE_LITTER_ID := 8 ## pine_litter -- needle litter under canopy (baked from a floor scan)
 const ROCK_TYPES: Array[int] = [ROCK_FACE_ID, AERIAL_ROCKS_ID, ROCKY_TRAIL_ID, ROCKY_TERRAIN_ID, COAST_SAND_ROCKS_ID]
+
+## -- Litter under canopy (2026-10-01, docs/forest_floor_plan.md step 2) --
+## Litter is a patch under each tree (user decision 2026-10-01; v1 was a stand-wide carpet from
+## canopy cover): full within LITTER_TREE_CORE m x tree scale of the trunk, gone LITTER_TREE_FADE m
+## further out, the edge moved +-LITTER_EDGE_NOISE/2 m by noise. Close trees merge into one patch.
+## Then cut by slope, cliffs and the road (constants below). Soil vertices then use
+## one of three pairs, chosen so neighbours with different pairs show the same texture at the swap:
+##   litter >= LITTER_FULL          base PineLitter, overlay Grass,      blend = grass
+##   litter > grass (the ramp)      base Ground,     overlay PineLitter, blend = litter / LITTER_FULL
+##   otherwise                      base Ground,     overlay Grass,      blend = grass
+## Only a grass patch crossing the ramp swaps overlays mid-blend; both sides are faded there.
+const LITTER_TREE_CORE := 1.6
+const LITTER_TREE_FADE := 2.2
+const LITTER_EDGE_NOISE := 1.6
+## Slope + cliff cuts (user screenshot 2026-10-01: litter on a steep bank, stretched by the
+## top-down projection and showing through the rock texture as its "soil" up to a cliff mesh).
+## normal.y at/below NY_NONE (~37 deg) -> no litter, at/above NY_FULL (~23 deg) -> unaffected;
+## none within CLIFF_CLEAR m of a cliff face / cliff-mesh footprint / outcrop, full from CLIFF_REACH.
+const LITTER_NY_NONE := 0.8
+const LITTER_NY_FULL := 0.92
+const LITTER_CLIFF_CLEAR := 0.5
+const LITTER_CLIFF_REACH := 3.0
+## Strays (2026-10-01): litter away from the trunks, only where nearby trees can supply it
+## (supply = canopy cover between SUPPLY_LO and SUPPLY_HI). All go through the cuts above.
+##   collar  -- within COLLAR_REACH m of a boulder / stump / log: full on its uphill side, x COLLAR_SIDE elsewhere
+##   hollow  -- concave ground (ravine floors, gullies, dug-out features): laplacian CURV_LO..CURV_HI
+##   drift   -- noise blobs in and beside stands (own, lower supply band)
+const LITTER_SUPPLY_LO := 0.3
+const LITTER_SUPPLY_HI := 0.6
+const LITTER_COLLAR_REACH := 1.4
+const LITTER_COLLAR_SIDE := 0.5
+const LITTER_UPHILL_STEP := 1.2
+const LITTER_CURV_LO := 0.05
+const LITTER_CURV_HI := 0.12
+const LITTER_DRIFT_LO := 0.66
+const LITTER_DRIFT_HI := 0.8
+const LITTER_DRIFT_SUPPLY_LO := 0.15
+const LITTER_DRIFT_SUPPLY_HI := 0.45
+const LITTER_FULL := 0.85
+const LITTER_MIN := 0.02
+## Road vertices keep their own pair (Ground + Road), so full litter right beside them is a pair
+## swap between two unlike textures: a blocky, straight 1 m edge (user screenshot 2026-10-01).
+## Litter is 0 within LITTER_ROAD_CLEAR m of a road vertex and back to full at LITTER_ROAD_REACH,
+## which puts the verge on the Ground/PineLitter ramp pair instead.
+const LITTER_ROAD_CLEAR := 1.0
+const LITTER_ROAD_REACH := 6.0
+const LITTER_SEAM_GRASS_MIN := 0.3 ## a Ground/Grass neighbour with at least this much grass counts as a seam
+const LITTER_SEAM_FADE := 0.5
+const PAIR_GROUND_GRASS := 1
+const PAIR_GROUND_LITTER := 2
 
 ## Terrain material: height-blend sharpness (0..1; Terrain3D default 0.5 = exponent ~36, very hard
 ## edges). Lower = softer, more gradual transitions.
@@ -178,9 +229,36 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 	soil_of.resize(n)
 	var rocky_of := PackedFloat32Array()
 	rocky_of.resize(n)
+	# Soil vertices: which pair (PAIR_*, 0 = other) and the pre-spray blend, for the litter seam pass.
+	var soil_pair := PackedByteArray()
+	soil_pair.resize(n)
+	var soil_b := PackedFloat32Array()
+	soil_b.resize(n)
+	var litter_ok := terrain.get_assets() != null and terrain.get_assets().get_texture(PINE_LITTER_ID) != null
+	if not litter_ok:
+		print("GROUND_PAINT: texture id %d (PineLitter) not registered -- no litter painted; run fix_textures() in tools/assign_flat_textures.gd" % PINE_LITTER_ID)
+	var litter_full := 0
+	var litter_ramp := 0
 
 	var coverage_bytes := GrassScatter.density_image.get_data() # RGBA8, R = coverage
 	var old_control: PackedByteArray = (maps.control as Image).get_data() # FORMAT_RF: uint32 bits
+	# Distance to the road's painted vertices: litter fades out toward them (LITTER_ROAD_*).
+	var road_d := _new_field(n, LITTER_ROAD_REACH)
+	# Distance to stumps / logs, for the litter collar (boulders: boulder_d above).
+	var dead_d := _new_field(n, LITTER_COLLAR_REACH)
+	if litter_ok:
+		for kc in DeadfallScatter.deadfall_keep_circles:
+			GrassScatter._stamp_circle(dead_d, width, length, kc.x, kc.y, kc.z, LITTER_COLLAR_REACH)
+	# Distance past each tree's litter core (0 inside it).
+	var tree_d := _new_field(n, LITTER_TREE_FADE + LITTER_EDGE_NOISE)
+	if litter_ok:
+		for tp in TreeScatter.tree_points:
+			GrassScatter._stamp_circle(tree_d, width, length, tp.x, tp.y, LITTER_TREE_CORE * tp.z, LITTER_TREE_FADE + LITTER_EDGE_NOISE)
+		for pz in length:
+			for px in width:
+				var c := old_control.decode_u32((pz * width + px) * 4)
+				if Terrain3DUtil.get_base(c) == ROAD_ID or Terrain3DUtil.get_overlay(c) == ROAD_ID:
+					GrassScatter._stamp_circle(road_d, width, length, px, pz, 0.0, LITTER_ROAD_REACH)
 	var control := PackedInt32Array()
 	control.resize(n)
 	var counts := {"road": 0, "soil": 0, "rock": 0}
@@ -236,15 +314,55 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 				rocky = smoothstep(ROCKY_LO, ROCKY_HI, prox * (ROCKY_BASE + ROCKY_BIG * nb) + ROCKY_SMALL * (small_n[i] / 255.0 - 0.5))
 			rocky = maxf(rocky, steep * (0.6 + 0.4 * nb))
 
+			var canopy_c := UnderstoryScatter._grid_sample(canopy, gw, gl, px, pz)
+			var lit := 0.0
+			if litter_ok:
+				lit = 1.0 - smoothstep(0.0, LITTER_TREE_FADE, tree_d[i] + LITTER_EDGE_NOISE * (small_n[i] / 255.0 - 0.5))
+				# Strays (LITTER_SUPPLY_* etc.): only where nearby trees can supply them.
+				var supply := smoothstep(LITTER_SUPPLY_LO, LITTER_SUPPLY_HI, canopy_c)
+				if supply > 0.0:
+					# Collar around boulders / stumps / logs. k = the spot LITTER_UPHILL_STEP m downhill:
+					# an obstacle there means this vertex is on its uphill side, where litter stops.
+					var k := j
+					var glen := sqrt(dx * dx + dz * dz)
+					if glen > 0.04:
+						k = clampi(int(round(wpz - dz / glen * LITTER_UPHILL_STEP)), 0, l1) * width + clampi(int(round(wpx - dx / glen * LITTER_UPHILL_STEP)), 0, w1)
+					var collar := maxf(
+						LITTER_COLLAR_SIDE * (1.0 - smoothstep(0.0, LITTER_COLLAR_REACH, minf(boulder_d[j], dead_d[j]))),
+						1.0 - smoothstep(0.0, LITTER_COLLAR_REACH, minf(boulder_d[k], dead_d[k])))
+					# Hollows: laplacian of the height, + = concave (same measure as GrassScatter's).
+					var curv := (heights[pz * width + maxi(px - GrassScatter.CURV_RADIUS, 0)] + heights[pz * width + mini(px + GrassScatter.CURV_RADIUS, w1)] \
+						+ heights[maxi(pz - GrassScatter.CURV_RADIUS, 0) * width + px] + heights[mini(pz + GrassScatter.CURV_RADIUS, l1) * width + px] \
+						- 4.0 * heights[i]) / float(GrassScatter.CURV_RADIUS * GrassScatter.CURV_RADIUS)
+					var hollow := smoothstep(LITTER_CURV_LO, LITTER_CURV_HI, curv)
+					lit = maxf(lit, supply * maxf(collar, hollow))
+				# Wind drifts: noise blobs in and beside stands.
+				var drift := smoothstep(LITTER_DRIFT_LO, LITTER_DRIFT_HI, 0.6 * nb + 0.4 * (small_n[i] / 255.0))
+				lit = maxf(lit, drift * smoothstep(LITTER_DRIFT_SUPPLY_LO, LITTER_DRIFT_SUPPLY_HI, canopy_c))
+				# Read at the warped position (j), so the fade line along the road is ragged.
+				lit *= smoothstep(LITTER_ROAD_CLEAR, LITTER_ROAD_REACH, road_d[j])
+				lit *= smoothstep(LITTER_NY_NONE, LITTER_NY_FULL, ny) * smoothstep(LITTER_CLIFF_CLEAR, LITTER_CLIFF_REACH, cliff_d[j])
+
 			if rocky < ROCKY_MIN:
 				counts.soil += 1
-				control[i] = TerrainHeightmap.pack_control_blend(GROUND_ID, GRASS_ID, _spray(g, spray))
+				if lit >= LITTER_FULL:
+					litter_full += 1
+					control[i] = TerrainHeightmap.pack_control_blend(PINE_LITTER_ID, GRASS_ID, _spray(g, spray))
+				elif lit > g and lit > LITTER_MIN:
+					litter_ramp += 1
+					soil_pair[i] = PAIR_GROUND_LITTER
+					soil_b[i] = lit / LITTER_FULL
+					control[i] = TerrainHeightmap.pack_control_blend(GROUND_ID, PINE_LITTER_ID, _spray(soil_b[i], spray))
+				else:
+					soil_pair[i] = PAIR_GROUND_GRASS
+					soil_b[i] = g
+					control[i] = TerrainHeightmap.pack_control_blend(GROUND_ID, GRASS_ID, _spray(g, spray))
 				continue
 
 			# Rock type: correlated weights + regional noise, highest wins.
 			var ta := type_a[i] / 255.0
 			var tb := type_b[i] / 255.0
-			var shade := maxf(UnderstoryScatter._grid_sample(canopy, gw, gl, px, pz), UnderstoryScatter._grid_sample(cliff_shade, gw, gl, px, pz))
+			var shade := maxf(canopy_c, UnderstoryScatter._grid_sample(cliff_shade, gw, gl, px, pz))
 			var flat := smoothstep(STEEP_NY_NONE, FLAT_NY, ny)
 			var core := 1.0 - smoothstep(0.0, 2.5, cliff_d[j])
 			var w_face := 0.3 + 1.1 * core + 1.0 * steep + 0.5 * ta
@@ -267,7 +385,7 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 				rock_id = COAST_SAND_ROCKS_ID
 			type_counts[rock_id] += 1
 			counts.rock += 1
-			var soil := GRASS_ID if g >= 0.5 else GROUND_ID
+			var soil := GRASS_ID if g >= 0.5 else (PINE_LITTER_ID if lit >= 0.5 else GROUND_ID)
 			rock_of[i] = rock_id
 			soil_of[i] = soil
 			rocky_of[i] = rocky
@@ -337,6 +455,36 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 				b *= ROCK_ISLAND_FADE
 				islands += 1
 			control[i] = TerrainHeightmap.pack_control_blend(soil_of[i], rid, _spray(b, spray_n[i] / 255.0 - 0.5))
+	# Litter seam pass: a litter-ramp vertex next to a grassy Ground/Grass vertex swaps overlays
+	# mid-blend (a blocky 1 m step) -- fade both toward Ground so the swap happens in soil.
+	var litter_seams := 0
+	var faded := PackedByteArray()
+	faded.resize(n)
+	for pz in length:
+		for px in width:
+			var i := pz * width + px
+			if soil_pair[i] != PAIR_GROUND_LITTER:
+				continue
+			var hit := false
+			for dz in range(-1, 2):
+				var zz := pz + dz
+				if zz < 0 or zz >= length:
+					continue
+				for dx in range(-1, 2):
+					var xx := px + dx
+					if xx < 0 or xx >= width:
+						continue
+					var k := zz * width + xx
+					if soil_pair[k] != PAIR_GROUND_GRASS or soil_b[k] < LITTER_SEAM_GRASS_MIN:
+						continue
+					hit = true
+					if faded[k] == 0:
+						faded[k] = 1
+						control[k] = TerrainHeightmap.pack_control_blend(GROUND_ID, GRASS_ID, _spray(soil_b[k] * LITTER_SEAM_FADE, spray_n[k] / 255.0 - 0.5))
+			if hit:
+				litter_seams += 1
+				control[i] = TerrainHeightmap.pack_control_blend(GROUND_ID, PINE_LITTER_ID, _spray(soil_b[i] * LITTER_SEAM_FADE, spray_n[i] / 255.0 - 0.5))
+	print("GROUND_PAINT v2: litter -- %.1f%% of vertices full litter, %.1f%% on the ramp, %d ramp vertices faded at grass seams" % [100.0 * litter_full / n, 100.0 * litter_ramp / n, litter_seams])
 	last_stats["seams"] = seams
 	last_stats["islands"] = islands
 	print("GROUND_PAINT v2: shape softening -- %d rock-type seam vertices faded, %d island vertices faded, warp +-%.1f m" % [seams, islands, ROCK_WARP_AMP])

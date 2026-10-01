@@ -280,6 +280,10 @@ func _pipeline_counts_str() -> String:
 func debug_tree_probe(world_pos: Vector3) -> String:
 	return TreeScatter.debug_tree_probe(world_pos)
 
+## 2026-10-01 DEBUG: deadfall pieces near a world position (which model, scale, lean).
+func debug_deadfall_probe(world_pos: Vector3, radius: float = 6.0) -> String:
+	return DeadfallScatter.debug_probe(world_pos, radius)
+
 ## 2026-09-29 DEBUG (landmarks): this run's generated maps + seed, kept for the calls below.
 var _debug_maps: Dictionary = {}
 var _debug_seed := 0

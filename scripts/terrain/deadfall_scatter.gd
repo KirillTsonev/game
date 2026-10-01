@@ -43,11 +43,15 @@ const SCENE_DIR := "res://assets/models/ground_debris/"
 ## Per piece: glb dir, kind, footprint capsule along local X at scale 1 (hl = half-length of the
 ## axis segment, r = radius), scale range. Footprints are from each LOD0's AABB.
 const PIECES := {
-	STUMP_BROKEN_ID: {"dir": "stump_broken", "kind": "stump", "hl": 0.0, "r": 0.5, "s": [0.85, 1.2]},
+	STUMP_BROKEN_ID: {"dir": "stump_broken", "kind": "stump", "hl": 0.0, "r": 0.5, "s": [1.3, 1.7], "embed": 0.15}, # embed: own sink depth (m, x scale) in place of EMBED.stump; x1.5: at scale 1 its 0.38 m trunk is thinner than the live trees' (0.56 m)
 	STUMP_OLD_ID: {"dir": "stump_old", "kind": "stump", "hl": 0.25, "r": 0.45, "s": [0.85, 1.2]},
-	STUMP_ROTTEN_LARGE_ID: {"dir": "stump_rotten_large", "kind": "stump", "hl": 0.65, "r": 0.55, "s": [0.8, 1.1]},
+	STUMP_ROTTEN_LARGE_ID: {"dir": "stump_rotten_large", "kind": "stump", "hl": 0.65, "r": 0.55, "s": [0.8, 1.1], "lying": true}, # toppled: 2.4 m long, one splinter up at 45 deg
 	STUMP_ROTTEN_TALL_ID: {"dir": "stump_rotten_tall", "kind": "stump", "hl": 0.1, "r": 0.45, "s": [0.8, 1.15]},
-	LOG_NORDIC_ID: {"dir": "log_fallen_nordic", "kind": "log", "hl": 2.4, "r": 0.45, "s": [0.75, 1.1]},
+	# The nordic log is a stump (x 1.9..2.85, base at y 0) with the fallen trunk still attached and
+	# held 0.22-0.46 m clear of the scan's ground plane: laid flat, the whole trunk floats.
+	# pivot_x / rest: see the hinged branch in _try_place. rest = trunk underside from LOD0.
+	LOG_NORDIC_ID: {"dir": "log_fallen_nordic", "kind": "log", "hl": 2.4, "r": 0.45, "s": [0.75, 1.1], "pivot_x": 2.4,
+		"rest": [[-2.6, 0.34], [-2.1, 0.30], [-1.65, 0.26], [-1.2, 0.23], [-0.7, 0.22], [-0.25, 0.36], [0.25, 0.38], [0.7, 0.40], [1.2, 0.44]]},
 	LOG_LARGE_ID: {"dir": "log_fallen_large", "kind": "log", "hl": 2.8, "r": 0.75, "s": [0.7, 1.0]},
 	BRANCH_ID: {"dir": "branch_fallen", "kind": "branch", "hl": 0.45, "r": 0.12, "s": [0.8, 1.35]},
 	STICK_ARBEM_ID: {"dir": "stick_arbem", "kind": "stick", "hl": 0.35, "r": 0.07, "s": [0.8, 1.3]},
@@ -62,6 +66,18 @@ const LOG_MIX := [[LOG_NORDIC_ID, 0.6], [LOG_LARGE_ID, 0.4]]
 ## Kinds with no collision and no keep-out for the understory/grass; they pack tightly (SMALL_GAP).
 const SMALL_KINDS: Array[String] = ["branch", "stick"]
 const STICK_MIX :=[[STICK_ARBEM_ID, 0.28], [STICK_DEBRIS_A_ID, 0.2], [STICK_DEBRIS_B_ID, 0.2], [STICK_DEBRIS_C_ID, 0.16], [STICK_DEBRIS_D_ID, 0.16]]
+
+## -- Litter mounds (2026-10-01): low domes of needle litter around trunk bases and against stumps /
+## logs. Rim below ground, no collision, no shadows, no keep-out; overlaps allowed. They use the
+## PineLitter terrain texture, so they read as the ground swelling up. Placed by _scatter_mounds --
+## NOT through _try_place (its linear scan of ctx.placed is too slow for this many pieces).
+const MOUND_MESH_IDS: Array[int] = [50, 51, 52] ## LitterMoundA-C, radius 1.1 / 0.95 / 1.25 m at scale 1
+const MOUND_TRUNK_P := 0.4 ## chance per tree
+const MOUND_DEADFALL_P := 0.6 ## chance per stump / log
+const MOUND_TRUNK_OFFSET := 0.35 ## m, max shift from the trunk centre toward uphill
+const MOUND_SCALE_MIN := 0.8
+const MOUND_SCALE_MAX := 1.25
+const MOUND_MIN_NORMAL_Y := 0.9 ## flatter ground only (~25 deg): a rigid dome floats on one side on a slope
 
 ## -- Rock-banked debris --
 const ROCK_BANK_MIN_RADIUS := 1.0 ## m, only rocks with a keep-out radius at least this big (~scale 1.1+)
@@ -101,6 +117,7 @@ const FIT_FLOAT_MAX := 0.25 ## m: ground may drop away under a lying piece by at
 const EMBED := {"stump": 0.05, "log": 0.06, "branch": 0.03, "stick": 0.01} ## m sunk into the ground (x scale)
 const STUMP_NORMAL_FOLLOW := 0.25 ## stumps grow up, only tilt this much toward the ground normal
 const LOG_ROLL_MAX_DEG := 10.0
+const HINGE_MAX_SIN := 0.3 ## hinged pieces: max tilt of the log about its stump (sin; ~17 deg), steeper = rejected
 const KEEPOUT_MARGIN := 0.15 ## m around rocks / cliffs / outcrops / trunks / other deadfall
 const ROAD_MARGIN := 0.8 ## m kept between any piece and the road corridor
 const KNOT_RAMP_CLEAR := 3.5 ## m from a knot fallback ramp's centre line (colliders could block it)
@@ -127,6 +144,8 @@ static func scatter_deadfall(parent_node: Node, terrain: Terrain3D, heights: Pac
 	for id in DEADFALL_MESH_IDS:
 		instancer.clear_by_mesh(id)
 		active[id] = assets != null and assets.get_mesh_asset(id) != null
+	for id in MOUND_MESH_IDS:
+		instancer.clear_by_mesh(id)
 	deadfall_keep_circles.clear()
 	_keep_grid.clear()
 	if not active.values().has(true):
@@ -226,6 +245,9 @@ static func scatter_deadfall(parent_node: Node, terrain: Terrain3D, heights: Pac
 					ctx.counts["trunk_banked" if banked else "free"] += 1
 					break
 
+	# 3. Litter mounds -- last, so the rolls above are unchanged by them.
+	_scatter_mounds(ctx, instancer, assets, rng)
+
 	# Emit: instances, colliders, keep-out circles.
 	var collider_count := 0
 	for id in DEADFALL_MESH_IDS:
@@ -265,6 +287,7 @@ static func scatter_deadfall(parent_node: Node, terrain: Terrain3D, heights: Pac
 				_keep_grid[cell].append(kc)
 
 	var counts: Dictionary = ctx.counts
+	_debug_transforms = ctx.transforms
 	last_counts = counts
 	print("TERRAIN_GEN: deadfall -- %d stump(s) (broken %d, old %d, rotten large %d, rotten tall %d), %d log(s) (nordic %d, large %d), %d big branch(es) + %d stick(s) in %d clump(s); %d rock-banked, %d trunk-banked, %d free; %d with collision; rejected slope %d / road %d / blocked %d / ground fit %d / edge %d; %d ms" % [
 		counts[STUMP_BROKEN_ID] + counts[STUMP_OLD_ID] + counts[STUMP_ROTTEN_LARGE_ID] + counts[STUMP_ROTTEN_TALL_ID],
@@ -273,6 +296,57 @@ static func scatter_deadfall(parent_node: Node, terrain: Terrain3D, heights: Pac
 		counts[BRANCH_ID], counts[STICK_ARBEM_ID] + counts[STICK_DEBRIS_A_ID] + counts[STICK_DEBRIS_B_ID] + counts[STICK_DEBRIS_C_ID] + counts[STICK_DEBRIS_D_ID],
 		counts.clumps, counts.rock_banked, counts.trunk_banked, counts.free, collider_count,
 		counts.rej_slope, counts.rej_road, counts.rej_block, counts.rej_fit, counts.rej_edge, Time.get_ticks_msec() - t0])
+
+## Litter mounds at trunk bases and on the uphill side of stumps / logs. Light checks only (edge,
+## slope, road); a mound may overlap anything -- its rim is underground and it has no collision.
+static func _scatter_mounds(ctx: Dictionary, instancer: Terrain3DInstancer, assets: Terrain3DAssets, rng: RandomNumberGenerator) -> void:
+	var ids: Array[int] = []
+	for id in MOUND_MESH_IDS:
+		if assets != null and assets.get_mesh_asset(id) != null:
+			ids.append(id)
+	if ids.is_empty():
+		print("TERRAIN_GEN: no litter mound mesh assets registered (ids %s) -- run setup_mesh_assets() in tools/setup_ground_debris_assets.gd" % str(MOUND_MESH_IDS))
+		return
+	var spots: Array[Vector2] = []
+	for tp in TreeScatter.tree_points:
+		if rng.randf() < MOUND_TRUNK_P:
+			var c := Vector2(tp.x, tp.y)
+			spots.append(c + _uphill(ctx, c) * rng.randf() * MOUND_TRUNK_OFFSET)
+	var at_trunks := spots.size()
+	for cap: Dictionary in ctx.placed:
+		if SMALL_KINDS.has(cap.kind) or rng.randf() >= MOUND_DEADFALL_P:
+			continue
+		var q: Vector2 = (cap.a as Vector2).lerp(cap.b, rng.randf())
+		spots.append(q + _uphill(ctx, q) * float(cap.r) * 0.8)
+	var width: int = ctx.width
+	var length: int = ctx.length
+	var road_weight: PackedFloat32Array = ctx.road_weight
+	var xforms := {}
+	for id in ids:
+		xforms[id] = [] as Array[Transform3D]
+	var placed := 0
+	for p in spots:
+		if p.x < EDGE_MARGIN + 2.0 or p.y < EDGE_MARGIN + 2.0 or p.x > width - 3 - EDGE_MARGIN or p.y > length - 3 - EDGE_MARGIN:
+			continue
+		var normal := TerrainUtil.sample_normal(ctx.heights, width, length, p.x, p.y)
+		if normal.y < MOUND_MIN_NORMAL_Y:
+			continue
+		if road_weight[clampi(int(round(p.y)), 0, length - 1) * width + clampi(int(round(p.x)), 0, width - 1)] > 0.0:
+			continue
+		var basis := Basis(Quaternion(Vector3.UP, normal)) * Basis(Vector3.UP, rng.randf() * TAU)
+		var scale := rng.randf_range(MOUND_SCALE_MIN, MOUND_SCALE_MAX)
+		var pos := Vector3(p.x, _h(ctx, p.x, p.y), p.y) + (ctx.import_position as Vector3)
+		xforms[ids[rng.randi() % ids.size()]].append(Transform3D(basis.scaled(Vector3.ONE * scale), pos))
+		placed += 1
+	for id in ids:
+		var list: Array[Transform3D] = xforms[id]
+		if list.is_empty():
+			continue
+		var colors := PackedColorArray()
+		colors.resize(list.size())
+		colors.fill(Color.WHITE)
+		instancer.add_transforms(id, list, colors, true)
+	print("TERRAIN_GEN: litter mounds -- %d placed of %d spots (%d at trunks, %d at stumps/logs)" % [placed, spots.size(), at_trunks, spots.size() - at_trunks])
 
 ## True if a footprint of radius `pad` at (px, pz) overlaps a stump or log placed this run.
 static func keep_blocked(px: float, pz: float, pad: float) -> bool:
@@ -375,12 +449,34 @@ static func _try_place(ctx: Dictionary, id: int, p: Vector2, angle: float, scale
 	var basis: Basis
 	var normal := TerrainUtil.sample_normal(ctx.heights, width, length, p.x, p.y)
 	if kind == "stump":
-		var up := Vector3.UP.slerp(normal, STUMP_NORMAL_FOLLOW).normalized()
+		# "lying": a toppled piece rests on the ground like a log -- it follows the ground normal
+		# fully, so no side floats and it needs no slope sink (which buried it, 2026-10-01).
+		var lying: bool = piece.get("lying", false)
+		var up := Vector3.UP.slerp(normal, 1.0 if lying else STUMP_NORMAL_FOLLOW).normalized()
 		basis = Basis(Quaternion(Vector3.UP, up)) * Basis(Vector3.UP, rng.randf() * TAU)
 		# On a slope the downhill side would float: sink by the drop across the footprint.
 		var tilt := sqrt(maxf(0.0, 1.0 - normal.y * normal.y)) / maxf(normal.y, 0.2)
-		var sink := float(EMBED.stump) * scale + tilt * (hl + r) * STUMP_SLOPE_SINK
+		var sink := float(piece.get("embed", EMBED.stump)) * scale +(0.0 if lying else tilt * (hl + r) * STUMP_SLOPE_SINK)
 		pos = Vector3(p.x, _h(ctx, p.x, p.y) - sink, p.y)
+	elif piece.has("rest"):
+		# Hinged piece (stump + attached log): the stump stays planted at "pivot_x" and the log is
+		# lowered about it until the first of its "rest" points (local x, underside height) touches
+		# the ground -- so the far end never floats and nothing is pushed through the terrain.
+		var pivot_x := float(piece.pivot_x) * scale
+		var pp := p + along * pivot_x
+		var h0 := _h(ctx, pp.x, pp.y)
+		var sin_t := INF
+		for rp: Array in piece.rest:
+			var q := p + along * (float(rp[0]) * scale)
+			sin_t = minf(sin_t, (h0 + float(rp[1]) * scale - _h(ctx, q.x, q.y)) / (pivot_x - float(rp[0]) * scale))
+		if absf(sin_t) > HINGE_MAX_SIN:
+			counts.rej_fit += 1
+			return false
+		var cos_t := sqrt(1.0 - sin_t * sin_t)
+		var x_axis := Vector3(along.x * cos_t, sin_t, along.y * cos_t)
+		var y_axis := (normal - x_axis * normal.dot(x_axis)).normalized()
+		basis = Basis(x_axis, y_axis, x_axis.cross(y_axis))
+		pos = Vector3(pp.x, h0 - float(EMBED[kind]) * scale, pp.y) - x_axis * pivot_x
 	else:
 		var ha := _h(ctx, a.x, a.y)
 		var hb := _h(ctx, b.x, b.y)
@@ -512,8 +608,31 @@ static func _pick(mix: Array, rng: RandomNumberGenerator) -> int:
 			return int(row[0])
 	return int(mix[mix.size() - 1][0])
 
+## DEBUG (2026-10-01): this run's placed transforms per mesh id, for debug_probe.
+static var _debug_transforms: Dictionary = {}
+
+## Lists every deadfall piece within `radius` m of a world position, nearest first: which model,
+## where, its scale and how far its up axis leans from vertical. Call on the running game:
+## WorldGenerator.debug_deadfall_probe(pos).
+static func debug_probe(world_pos: Vector3, radius: float = 6.0) -> String:
+	var rows: Array = []
+	for id: int in _debug_transforms:
+		var piece: Dictionary = PIECES[id]
+		for xf: Transform3D in _debug_transforms[id]:
+			var d := Vector2(xf.origin.x - world_pos.x, xf.origin.z - world_pos.z).length()
+			if d <= radius:
+				rows.append([d, "%s (id %d, %s) at %.1f m: pos (%.1f, %.1f, %.1f) scale %.2f, up axis %.0f deg from vertical" % [
+					piece.get("file", piece.dir), id, piece.kind, d, xf.origin.x, xf.origin.y, xf.origin.z,
+					xf.basis.get_scale().x, rad_to_deg(xf.basis.y.normalized().angle_to(Vector3.UP))]])
+	rows.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
+	var out := PackedStringArray()
+	for r in rows:
+		out.append(r[1])
+	return "\n".join(out) if not out.is_empty() else "no deadfall within %.0f m" % radius
+
 ## Per-run static state reset -- called first thing in WorldGenerator._ready().
 static func reset_run_state() -> void:
+	_debug_transforms = {}
 	deadfall_keep_circles = []
 	_keep_grid = {}
 	last_counts = {}

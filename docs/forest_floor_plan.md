@@ -66,7 +66,10 @@ at grove edges). What is missing is the materials that make thin ground read as 
   ambient + angular distance, SSAO off: ~60 % looking at the ground, 75-98 % by view. Later the
   same day, same window / position / direction, with SSAO on at Low as well: 80 % max. UNEXPLAINED
   (adding SSAO can't make it cheaper) -- left for the optimisation session; measure frame time
-  there, not utilisation.
+  there, not utilisation. After the litter layer (step 2) landed: at spawn, looking ahead, nothing
+  moving, utilisation wanders in irregular steps between 75 and 98 %. Same range as before the
+  litter work, so not attributed to it. The project runs capped (`run/max_fps=60`, vsync on), so
+  the percentage also moves with the GPU's clock/power stepping -- measure uncapped frame time.
 
 ## Build order
 
@@ -76,7 +79,26 @@ at grove edges). What is missing is the materials that make thin ground read as 
    per-texture tint too. Anchor: the grass blade colour, unless the user supplies a reference.
    Care: pack trees are tinted by vertex colour (incl. the brown "dry" variants); the colour grade
    remaps by brightness, so judge in-game with the grade on. **Open: palette anchor.**
-2. **Litter under canopy.** New Terrain3D texture(s) in `TEXTURES_BY_ID`
+2. **Litter under canopy.** FIRST PASS BUILT 2026-10-01, not yet judged in-game by the user:
+   texture id 8 `PineLitter` (baked from the floor scan, see "Assets on hand"), painted by
+   `ground_paint.gd` from canopy cover x noise (`LITTER_*` constants; three vertex pairs, see the
+   comment there), and litter mounds at trunk bases and against stumps / logs
+   (`DeadfallScatter._scatter_mounds`, mesh ids 50-52, no shadows, no collision). First run: 36 %
+   of vertices full litter, 10 % on the ramp, 450 mounds. Not done: the boost near deadfall and
+   uphill of rocks, a leaf component, colour matching (step 1). Ground paint now takes ~1.7 s
+   (not measured before the change). User feedback the same day: full litter beside the road
+   drew a blocky straight edge (pair swap against the road's vertices) -> litter now fades out
+   toward the road (`LITTER_ROAD_CLEAR` 1 m / `LITTER_ROAD_REACH` 6 m); the user then found the
+   litter too sparse along the road -- 6 m is probably too wide, ~3 m proposed, not yet changed.
+   Then: litter also sat on a steep bank and showed through the rock texture up to a cliff mesh.
+   User decision: litter is a PATCH UNDER EACH TREE (`LITTER_TREE_*`), not a stand-wide carpet,
+   and none on steep ground or at cliffs (`LITTER_NY_*`, `LITTER_CLIFF_*`). Result on the same
+   map: 9 % full litter + 9 % ramp (was 35 % + 10 %). Then "strays" added on the user's suggestion,
+   all gated by nearby canopy as the supply (`LITTER_SUPPLY_*` etc. in `ground_paint.gd`): a
+   collar around boulders / stumps / logs (full on the uphill side), concave ground (ravine
+   floors, gullies), and noise-placed wind drifts. Same map: 12 % full + 12 % ramp. Not yet
+   judged in-game.
+   Original notes: New Terrain3D texture(s) in `TEXTURES_BY_ID`
    (`tools/assign_flat_textures.gd`; packed albedo+height / normal+roughness, import settings
    matching id 0), painted in `scripts/terrain/ground_paint.gd`. Weight = canopy cover x noise,
    boosted near `DeadfallScatter.deadfall_keep_circles` and uphill of rocks. A vertex holds one
@@ -94,12 +116,24 @@ at grove edges). What is missing is the materials that make thin ground read as 
    paint (patch map + plant positions are known); fade plant and blade colour toward dark at the
    base in their shaders; soften foliage lighting so shadowed sides don't go black.
 6. **Pine cones.** New small kind in `scripts/terrain/deadfall_scatter.gd` + rows in
-   `tools/setup_ground_debris_assets.gd` (next free mesh ids, 50+). Clusters under pines, biased
+   `tools/setup_ground_debris_assets.gd` (next free mesh ids, 53+). Clusters under pines, biased
    downhill, a few against logs. No collision, no shadows, cull ~30-40 m, in `SMALL_KINDS`.
    NOT through `_try_place` as is (linear scan of `ctx.placed`): light path with slope / road /
    rock checks only, overlaps allowed.
 7. **Mid-storey at grove edges.** Saplings and tall shrubs 2-4 m (pack candidates: `Tree_05`,
    `Branch_C`, `Tree_B`). The one step with a real rendering cost.
+8. **Sparse litter on the road** (added 2026-10-01; do AFTER step 1 and once the litter look of
+   step 2 is accepted -- both change how it should look). Real roads under trees are swept clean
+   in the middle; litter collects along the edges, in the joints between stones and in drifts.
+   NOT via the terrain texture: the visible road is the ribbon mesh (`TerrainRoad.build_road_mesh`,
+   a StandardMaterial3D with heightmap parallax) lying over the terrain, and road vertices keep
+   their own Ground + Road pair. Do it in the road mesh's material: a custom shader replacing the
+   StandardMaterial3D, blending the PineLitter pair in where the stone height map is low (joints),
+   scaled by canopy cover and by closeness to the road edge (both passed per vertex), broken up by
+   noise. Cost: two extra texture reads on the road only. Care: the shader must reproduce the
+   current parallax; road depth has failed twice before (`CLAUDE.md`, "Road parallax"), so compare
+   against the current look before and after. Sample the litter with plain samplers, no
+   `hint_normal` (see `litter_mound.gdshader` for why).
 
 Later / optional: grounding decals for stumps, logs, boulders; road ruts and puddles; cliff and
 church stains; cloud shadows (no projector on Godot's directional light -- would have to be faked
@@ -111,10 +145,15 @@ in the terrain, grass and foliage shaders together).
   yet given.
 - **`raw-assets/models/forest_ground_soil_pine_free.glb`** (54 MB): photogrammetry scan of pine
   forest floor. 11 chunks, ~500k tris, one 8192 px albedo JPEG, no normal/roughness/height. The
-  texture is a scan atlas (patchwork islands, bottom third empty) -- not tileable. Extent ~37 x
-  42 units, but texel density suggests ~4 m real size (not measured in Blender). Unusable as is;
-  bake top-down in Blender to albedo + normal + mask for grounding decals (preferred), or to a
-  tileable ground texture with a true height map.
+  texture is a scan atlas (patchwork islands, bottom third empty) -- not tileable. Measured
+  2026-10-01: one continuous patch, 37 x 42 units, ~0.06 m per unit (from the cones and an oak
+  leaf) = ~2.2 x 2.5 m; the mesh is upside down and closed by ~200 huge cap triangles on its
+  back. `tools/blender/bake_pine_litter.py` fixes both in memory and bakes it top-down to the
+  tileable `textures/source/pine_litter_{albedo_height,normal_roughness}_1k.png` (one tile =
+  1.56 m, height from one ray per pixel, normal derived from the height) plus three 476-triangle
+  mound meshes in `assets/models/ground_debris/litter_mound/`. The mounds have no textures of
+  their own: `litter_mound.gdshader` reads the terrain pair, so they match the painted ground.
+  Still possible from the same bake: grounding decals (albedo + mask blobs).
 
 ## Decal notes (if used)
 

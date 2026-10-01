@@ -34,6 +34,13 @@ const DEBRIS := [
 	{"id": 47, "dir": "sticks_debris", "file": "sticks_debris_b", "name": "StickDebrisB", "ranges": [10.0, 25.0, 80.0]},
 	{"id": 48, "dir": "sticks_debris", "file": "sticks_debris_c", "name": "StickDebrisC", "ranges": [10.0, 25.0, 80.0]},
 	{"id": 49, "dir": "sticks_debris", "file": "sticks_debris_d", "name": "StickDebrisD", "ranges": [10.0, 25.0, 80.0]},
+	# 2026-10-01: litter mounds (476 tris, one LOD) built by tools/blender/bake_pine_litter.py.
+	# "terrain_tex": no textures of their own -- the material is litter_mound.gdshader reading the
+	# Terrain3D texture pair of that name from res://textures/source/. No shadows: fine relief
+	# under a low light throws hard black self-shadows (the rejected road ribbon, CLAUDE.md).
+	{"id": 50, "dir": "litter_mound", "file": "litter_mound_a", "name": "LitterMoundA", "ranges": [50.0], "terrain_tex": "pine_litter", "shadows": false},
+	{"id": 51, "dir": "litter_mound", "file": "litter_mound_b", "name": "LitterMoundB", "ranges": [50.0], "terrain_tex": "pine_litter", "shadows": false},
+	{"id": 52, "dir": "litter_mound", "file": "litter_mound_c", "name": "LitterMoundC", "ranges": [50.0], "terrain_tex": "pine_litter", "shadows": false},
 ]
 
 func _glb(e: Dictionary) -> String:
@@ -76,6 +83,17 @@ func setup_materials(only_ids: Array = []) -> String:
 		if done.has(e.dir):
 			continue
 		done.append(e.dir)
+		var mat_path := BASE + "%s/%s_material.tres" % [e.dir, e.dir]
+		if e.has("terrain_tex"):
+			var smat := ShaderMaterial.new()
+			smat.shader = load(BASE + "%s/%s.gdshader" % [e.dir, e.dir])
+			smat.set_shader_parameter("albedo_height", load("res://textures/source/%s_albedo_height_1k.png" % e.terrain_tex))
+			smat.set_shader_parameter("normal_roughness", load("res://textures/source/%s_normal_roughness_1k.png" % e.terrain_tex))
+			for prop: String in ["albedo_height", "normal_roughness"]:
+				if smat.get_shader_parameter(prop) == null:
+					push_error("setup_ground_debris_assets: %s failed to load for %s" % [prop, e.dir])
+			out.append("saved %s (err=%d)" % [mat_path, ResourceSaver.save(smat, mat_path)])
+			continue
 		var mat := StandardMaterial3D.new()
 		mat.albedo_texture = _tex(e.dir, "diff")
 		mat.normal_enabled = true
@@ -93,7 +111,6 @@ func setup_materials(only_ids: Array = []) -> String:
 		for prop: String in ["albedo_texture", "normal_texture", "roughness_texture"]:
 			if mat.get(prop) == null:
 				push_error("setup_ground_debris_assets: %s failed to load for %s" % [prop, e.dir])
-		var mat_path := BASE + "%s/%s_material.tres" % [e.dir, e.dir]
 		out.append("saved %s (err=%d)" % [mat_path, ResourceSaver.save(mat, mat_path)])
 	return "\n".join(out)
 
@@ -123,7 +140,7 @@ func setup_mesh_assets(only_ids: Array = []) -> String:
 			a.set_lod_range(i, ranges[i])
 		a.set_last_lod(mini(ranges.size(), a.get_lod_count()) - 1)
 		a.set_last_shadow_lod(a.get_last_lod())
-		a.set_cast_shadows(GeometryInstance3D.SHADOW_CASTING_SETTING_ON)
+		a.set_cast_shadows(GeometryInstance3D.SHADOW_CASTING_SETTING_ON if e.get("shadows", true) else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 		a.set_fade_margin(0.0)
 		var got: Array[String] = []
 		for i in a.get_lod_count():

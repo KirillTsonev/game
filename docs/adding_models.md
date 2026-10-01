@@ -27,8 +27,10 @@ material; x3.5-4) -- small Megascans twigs scaled up to 0.6-0.9 m. Embedded text
 **Terrain3D mesh ids (as of 2026-09-30):** 0 placeholder, 1-4 rocks, 5-13 scree, 14-27 trees,
 28-32 understory (Fern02, Bush01, Bush02Green, Bush04, Bush05), 33-37 rocks (NamaBoulder02-06),
 38-49 deadfall (StumpBroken, StumpOld, StumpRottenLarge, StumpRottenTall, LogFallenNordic,
-LogFallenLarge, BranchFallen, StickArbem, StickDebrisA-D).
-Ids are a contiguous list: a new asset is appended at the next id (**50**).
+LogFallenLarge, BranchFallen, StickArbem, StickDebrisA-D), 50-52 litter mounds (LitterMoundA-C:
+`ground_debris/litter_mound/`, built by `tools/blender/bake_pine_litter.py`, material =
+`litter_mound.gdshader` on the PineLitter terrain textures -- see `docs/forest_floor_plan.md`).
+Ids are a contiguous list: a new asset is appended at the next id (**53**).
 
 ---
 

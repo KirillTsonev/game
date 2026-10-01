@@ -1,4 +1,4 @@
-KNOT_PROFILE occupancy 67 ms, place 31 ms, rows 322 ms, clip+mark 54 ms, levels+mesh_block 10 ms, reach+ramps 937 ms, self-check 25 ms -- total 1.45s
+KNOT_PROFILE occupancy 64 ms, place 34 ms, rows 364 ms, clip+mark 57 ms, levels+mesh_block 11 ms, reach+ramps 994 ms, self-check 24 ms -- total 1.55s
 KNOT #0 wall_right at px (212, 149): levels bench top 10.1, shelf top 15.4 -- unreached [] -- ramps [] -- drops [] -- covered []
 KNOT #1 wall_right at px (213, 386): levels bench top 6.3, shelf top 14.5 -- unreached [] -- ramps [] -- drops [] -- covered []
 KNOT #2 wall_left at px (40, 163): levels bench top 7.9, shelf top 19.5 -- unreached [] -- ramps [] -- drops [] -- covered []

@@ -89,6 +89,10 @@ const TEXTURES_BY_ID := {
 	5: {"name": "Grass", "albedo": "res://textures/source/grass_ground_albedo_height_1k.png", "normal": "res://textures/source/grass_ground_normal_roughness_1k.png", "uv_scale": 2.5, "detiling_rotation": 1.0, "detiling_shift": 1.0}, # painted from GrassScatter's coverage bake
 	6: {"name": "RockyTrail", "albedo": "res://textures/source/rocky_trail_02_albedo_height_1k.png", "normal": "res://textures/source/rocky_trail_02_normal_roughness_1k.png", "uv_scale": 2.5, "detiling_rotation": 1.0, "detiling_shift": 1.0}, # scree around cliffs
 	7: {"name": "RockyTerrain", "albedo": "res://textures/source/rocky_terrain_03_albedo_height_1k.png", "normal": "res://textures/source/rocky_terrain_03_normal_roughness_1k.png", "uv_scale": 2.5, "detiling_rotation": 1.0, "detiling_shift": 1.0}, # scree with grass around cliffs
+	## 2026-10-01: pine needle litter, baked from the forest floor scan by tools/blender/bake_pine_litter.py
+	## (one tile = 1.56 m of real ground -> uv_scale 1 / 1.56). Painted under canopy by ground_paint.gd;
+	## the litter mounds (tools/setup_ground_debris_assets.gd) render with the same two files.
+	8: {"name": "PineLitter", "albedo": "res://textures/source/pine_litter_albedo_height_1k.png", "normal": "res://textures/source/pine_litter_normal_roughness_1k.png", "uv_scale": 0.64, "detiling_rotation": 1.0, "detiling_shift": 1.0},
 }
 
 ## Strips the id=2 ("Rock") Terrain3DTextureAsset entry from the SAME live
