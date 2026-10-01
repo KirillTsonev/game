@@ -11,6 +11,7 @@
 ##   TerrainOutcrops outcrops.gd         flat rock outcrops
 ##   RockScatter     rock_scatter.gd     boulders, erratics, scree
 ##   TreeScatter     tree_scatter.gd     trees + debug_tree_probe
+##   DeadfallScatter deadfall_scatter.gd stumps, fallen logs, branch clumps (uphill of rocks/trunks, in stands)
 ##   UnderstoryScatter understory_scatter.gd  shrubs + ferns, density from canopy + shaded cliff feet
 ##   TerrainUtil     terrain_util.gd     height/normal sampling, zone ranges, mesh helpers
 ## New system -> new module there (class_name + extends RefCounted + static funcs), called from
@@ -24,6 +25,7 @@ func _ready() -> void:
 	RockScatter.reset_run_state()
 	TreeScatter.reset_run_state()
 	UnderstoryScatter.reset_run_state()
+	DeadfallScatter.reset_run_state()
 	GrassScatter.reset_run_state()
 	# Whole-_ready() timing (2026-09-16): the earlier per-stage prints only
 	# covered _build_heightmap (noise/erosion/smoothing/road) -- this covers
@@ -162,6 +164,15 @@ func _ready() -> void:
 	tree_rng.seed = resolved_seed ^ 0x54524545 # 'TREE' salt -- own cosmetic stream
 	TreeScatter.scatter_trees(get_parent(), terrain, maps.heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, heightmap_corner, tree_rng, maps.road_weight, maps.road_path, maps.cliff_dressing_plan, maps.cliff_dressing_top_profiles, maps.outcrop_plan)
 	print("TERRAIN_GEN: tree scattering (%.2fs)" % ((Time.get_ticks_msec() - t_ready_stage) / 1000.0))
+	t_ready_stage = Time.get_ticks_msec()
+
+	# Deadfall (stumps, logs, branch clumps): banked uphill of the larger rocks and of trunks, and
+	# scattered through the stands -- reads rock_keep_circles + tree_points, so after both. Runs
+	# before the understory/grass so they keep clear of it. Own cosmetic stream.
+	var deadfall_rng := RandomNumberGenerator.new()
+	deadfall_rng.seed = resolved_seed ^ 0x44454144 # 'DEAD' salt
+	DeadfallScatter.scatter_deadfall(get_parent(), terrain, maps.heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, heightmap_corner, deadfall_rng, maps.road_weight, maps.cliff_dressing_plan, maps.cliff_dressing_top_profiles, maps.outcrop_plan, maps.knots)
+	print("TERRAIN_GEN: deadfall scattering (%.2fs)" % ((Time.get_ticks_msec() - t_ready_stage) / 1000.0))
 	t_ready_stage = Time.get_ticks_msec()
 
 	# Understory (shrubs + ferns): density reads the canopy just placed (TreeScatter.tree_points)

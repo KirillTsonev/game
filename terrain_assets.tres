@@ -58,12 +58,33 @@
 [ext_resource type="Texture2D" uid="uid://6t77cohtroge" path="res://textures/source/aerial_rocks_04_albedo_height_1k.png" id="47_r3kdc"]
 [ext_resource type="Texture2D" uid="uid://b1dw085d2nd8t" path="res://textures/source/aerial_rocks_04_normal_roughness_1k.png" id="48_bwc52"]
 [ext_resource type="PackedScene" uid="uid://dmo61f2rgr1w1" path="res://assets/models/rocks/namaqualand_boulder_06/namaqualand_boulder_06_2k.glb" id="48_whgbg"]
+[ext_resource type="Material" uid="uid://cq77u30m8vmee" path="res://assets/models/ground_debris/stump_broken/stump_broken_material.tres" id="49_e1eb4"]
 [ext_resource type="Texture2D" uid="uid://cywuxejl0w1cu" path="res://textures/source/grass_ground_albedo_height_1k.png" id="49_idynt"]
+[ext_resource type="PackedScene" uid="uid://dtkwv4ueu7btn" path="res://assets/models/ground_debris/stump_broken/stump_broken.glb" id="50_kck04"]
 [ext_resource type="Texture2D" uid="uid://b6dc58sg4h0pv" path="res://textures/source/grass_ground_normal_roughness_1k.png" id="50_xp8ly"]
 [ext_resource type="Texture2D" uid="uid://b4h4xifm3dkq0" path="res://textures/source/rocky_trail_02_albedo_height_1k.png" id="51_8027u"]
+[ext_resource type="Material" uid="uid://du1jmvwviuufm" path="res://assets/models/ground_debris/stump_old/stump_old_material.tres" id="51_cpe3k"]
 [ext_resource type="Texture2D" uid="uid://luofuyfvwjea" path="res://textures/source/rocky_trail_02_normal_roughness_1k.png" id="52_81xqu"]
+[ext_resource type="PackedScene" uid="uid://dc8bcqwvyilp5" path="res://assets/models/ground_debris/stump_old/stump_old.glb" id="52_a7ggm"]
+[ext_resource type="Material" uid="uid://bcnsyj0dwwvpm" path="res://assets/models/ground_debris/stump_rotten_large/stump_rotten_large_material.tres" id="53_gajd1"]
 [ext_resource type="Texture2D" uid="uid://c5lfpsmksv4ls" path="res://textures/source/rocky_terrain_03_albedo_height_1k.png" id="53_mhf0x"]
+[ext_resource type="PackedScene" uid="uid://crhgqgghp4jd3" path="res://assets/models/ground_debris/stump_rotten_large/stump_rotten_large.glb" id="54_a3uac"]
 [ext_resource type="Texture2D" uid="uid://bx62ts0s5epxo" path="res://textures/source/rocky_terrain_03_normal_roughness_1k.png" id="54_nv4lo"]
+[ext_resource type="Material" uid="uid://r8poibbbh3es" path="res://assets/models/ground_debris/stump_rotten_tall/stump_rotten_tall_material.tres" id="55_8wx7w"]
+[ext_resource type="PackedScene" uid="uid://bxydchrro47la" path="res://assets/models/ground_debris/stump_rotten_tall/stump_rotten_tall.glb" id="56_ff8r2"]
+[ext_resource type="Material" uid="uid://yt5ylg8cfe4" path="res://assets/models/ground_debris/log_fallen_nordic/log_fallen_nordic_material.tres" id="57_vonsu"]
+[ext_resource type="PackedScene" uid="uid://cr4xjqjofed5t" path="res://assets/models/ground_debris/log_fallen_nordic/log_fallen_nordic.glb" id="58_tiys7"]
+[ext_resource type="Material" uid="uid://dc5ts8ivmynch" path="res://assets/models/ground_debris/log_fallen_large/log_fallen_large_material.tres" id="59_jjmba"]
+[ext_resource type="PackedScene" uid="uid://b0ts36anjonp1" path="res://assets/models/ground_debris/log_fallen_large/log_fallen_large.glb" id="60_luudq"]
+[ext_resource type="Material" uid="uid://cnb3nokhb60n6" path="res://assets/models/ground_debris/branch_fallen/branch_fallen_material.tres" id="61_dqksv"]
+[ext_resource type="PackedScene" uid="uid://dq2kybhdat5dt" path="res://assets/models/ground_debris/branch_fallen/branch_fallen.glb" id="62_qrb1v"]
+[ext_resource type="Material" uid="uid://5fq4rxfgpgyl" path="res://assets/models/ground_debris/stick_arbem/stick_arbem_material.tres" id="63_ff8r2"]
+[ext_resource type="PackedScene" uid="uid://bolhvfa8kmfy1" path="res://assets/models/ground_debris/stick_arbem/stick_arbem.glb" id="64_vonsu"]
+[ext_resource type="Material" uid="uid://bkcxora7ekuq6" path="res://assets/models/ground_debris/sticks_debris/sticks_debris_material.tres" id="65_tiys7"]
+[ext_resource type="PackedScene" uid="uid://b4v5wmsjb1gi6" path="res://assets/models/ground_debris/sticks_debris/sticks_debris_a.glb" id="66_jjmba"]
+[ext_resource type="PackedScene" uid="uid://bohs43bnu5v5y" path="res://assets/models/ground_debris/sticks_debris/sticks_debris_b.glb" id="67_luudq"]
+[ext_resource type="PackedScene" uid="uid://cqhtbudmfucxy" path="res://assets/models/ground_debris/sticks_debris/sticks_debris_c.glb" id="68_dqksv"]
+[ext_resource type="PackedScene" uid="uid://xg5hc252g463" path="res://assets/models/ground_debris/sticks_debris/sticks_debris_d.glb" id="69_qrb1v"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_g6uno"]
 transparency = 4
@@ -485,6 +506,150 @@ lod1_range = 50.0
 lod2_range = 120.0
 lod3_range = 380.0
 
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_d2h71"]
+name = "StumpBroken"
+id = 38
+scene_file = ExtResource("50_kck04")
+density = 0.05
+material_override = ExtResource("49_e1eb4")
+last_lod = 2
+last_shadow_lod = 2
+lod0_range = 20.0
+lod1_range = 50.0
+lod2_range = 200.0
+
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_2acpf"]
+name = "StumpOld"
+id = 39
+scene_file = ExtResource("52_a7ggm")
+density = 0.05
+material_override = ExtResource("51_cpe3k")
+last_lod = 2
+last_shadow_lod = 2
+lod0_range = 25.0
+lod1_range = 60.0
+lod2_range = 200.0
+
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_6wq5w"]
+name = "StumpRottenLarge"
+id = 40
+scene_file = ExtResource("54_a3uac")
+density = 0.05
+material_override = ExtResource("53_gajd1")
+last_lod = 2
+last_shadow_lod = 2
+lod0_range = 30.0
+lod1_range = 70.0
+lod2_range = 300.0
+
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_41kqr"]
+name = "StumpRottenTall"
+id = 41
+scene_file = ExtResource("56_ff8r2")
+density = 0.05
+material_override = ExtResource("55_8wx7w")
+last_lod = 2
+last_shadow_lod = 2
+lod0_range = 30.0
+lod1_range = 70.0
+lod2_range = 300.0
+
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_br08d"]
+name = "LogFallenNordic"
+id = 42
+scene_file = ExtResource("58_tiys7")
+density = 0.05
+material_override = ExtResource("57_vonsu")
+last_lod = 2
+last_shadow_lod = 2
+lod0_range = 30.0
+lod1_range = 70.0
+lod2_range = 300.0
+
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_wpoff"]
+name = "LogFallenLarge"
+id = 43
+scene_file = ExtResource("60_luudq")
+density = 0.05
+material_override = ExtResource("59_jjmba")
+last_lod = 2
+last_shadow_lod = 2
+lod0_range = 30.0
+lod1_range = 70.0
+lod2_range = 300.0
+
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_2bixs"]
+name = "BranchFallen"
+id = 44
+scene_file = ExtResource("62_qrb1v")
+density = 0.05
+material_override = ExtResource("61_dqksv")
+last_lod = 2
+last_shadow_lod = 2
+lod0_range = 15.0
+lod1_range = 40.0
+lod2_range = 120.0
+
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_sp2r7"]
+name = "StickArbem"
+id = 45
+scene_file = ExtResource("64_vonsu")
+density = 0.05
+material_override = ExtResource("63_ff8r2")
+last_lod = 2
+last_shadow_lod = 2
+lod0_range = 10.0
+lod1_range = 25.0
+lod2_range = 80.0
+
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_x81x7"]
+name = "StickDebrisA"
+id = 46
+scene_file = ExtResource("66_jjmba")
+density = 0.05
+material_override = ExtResource("65_tiys7")
+last_lod = 2
+last_shadow_lod = 2
+lod0_range = 10.0
+lod1_range = 25.0
+lod2_range = 80.0
+
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_nw0df"]
+name = "StickDebrisB"
+id = 47
+scene_file = ExtResource("67_luudq")
+density = 0.05
+material_override = ExtResource("65_tiys7")
+last_lod = 2
+last_shadow_lod = 2
+lod0_range = 10.0
+lod1_range = 25.0
+lod2_range = 80.0
+
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_e0lft"]
+name = "StickDebrisC"
+id = 48
+scene_file = ExtResource("68_dqksv")
+density = 0.05
+material_override = ExtResource("65_tiys7")
+last_lod = 2
+last_shadow_lod = 2
+lod0_range = 10.0
+lod1_range = 25.0
+lod2_range = 80.0
+
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_55bbd"]
+name = "StickDebrisD"
+id = 49
+scene_file = ExtResource("69_qrb1v")
+density = 0.05
+material_override = ExtResource("65_tiys7")
+last_lod = 2
+last_shadow_lod = 2
+lod0_range = 10.0
+lod1_range = 25.0
+lod2_range = 80.0
+
 [sub_resource type="Terrain3DTextureAsset" id="Terrain3DTextureAsset_grass"]
 name = "Ground"
 albedo_texture = ExtResource("39_6bfbq")
@@ -558,5 +723,5 @@ detiling_rotation = 1.0
 detiling_shift = 1.0
 
 [resource]
-mesh_list = Array[Terrain3DMeshAsset]([SubResource("Terrain3DMeshAsset_81oi1"), SubResource("Terrain3DMeshAsset_y4pab"), SubResource("Terrain3DMeshAsset_vgup8"), SubResource("Terrain3DMeshAsset_x2oql"), SubResource("Terrain3DMeshAsset_3mt4f"), SubResource("Terrain3DMeshAsset_o3r11"), SubResource("Terrain3DMeshAsset_j3dbr"), SubResource("Terrain3DMeshAsset_ok3py"), SubResource("Terrain3DMeshAsset_j7xkl"), SubResource("Terrain3DMeshAsset_wafp7"), SubResource("Terrain3DMeshAsset_0bfyr"), SubResource("Terrain3DMeshAsset_4wc0o"), SubResource("Terrain3DMeshAsset_egd2s"), SubResource("Terrain3DMeshAsset_iq0fs"), SubResource("Terrain3DMeshAsset_ut3y1"), SubResource("Terrain3DMeshAsset_2ohup"), SubResource("Terrain3DMeshAsset_xplyh"), SubResource("Terrain3DMeshAsset_st3tx"), SubResource("Terrain3DMeshAsset_njita"), SubResource("Terrain3DMeshAsset_6bfbq"), SubResource("Terrain3DMeshAsset_vl2ef"), SubResource("Terrain3DMeshAsset_gv63u"), SubResource("Terrain3DMeshAsset_hasxv"), SubResource("Terrain3DMeshAsset_e33tj"), SubResource("Terrain3DMeshAsset_ierxv"), SubResource("Terrain3DMeshAsset_gdy8x"), SubResource("Terrain3DMeshAsset_v5bka"), SubResource("Terrain3DMeshAsset_r3kdc"), SubResource("Terrain3DMeshAsset_bwc52"), SubResource("Terrain3DMeshAsset_idynt"), SubResource("Terrain3DMeshAsset_xp8ly"), SubResource("Terrain3DMeshAsset_8027u"), SubResource("Terrain3DMeshAsset_81xqu"), SubResource("Terrain3DMeshAsset_1kr7w"), SubResource("Terrain3DMeshAsset_1of2d"), SubResource("Terrain3DMeshAsset_nj03w"), SubResource("Terrain3DMeshAsset_and2d"), SubResource("Terrain3DMeshAsset_e1eb4")])
+mesh_list = Array[Terrain3DMeshAsset]([SubResource("Terrain3DMeshAsset_81oi1"), SubResource("Terrain3DMeshAsset_y4pab"), SubResource("Terrain3DMeshAsset_vgup8"), SubResource("Terrain3DMeshAsset_x2oql"), SubResource("Terrain3DMeshAsset_3mt4f"), SubResource("Terrain3DMeshAsset_o3r11"), SubResource("Terrain3DMeshAsset_j3dbr"), SubResource("Terrain3DMeshAsset_ok3py"), SubResource("Terrain3DMeshAsset_j7xkl"), SubResource("Terrain3DMeshAsset_wafp7"), SubResource("Terrain3DMeshAsset_0bfyr"), SubResource("Terrain3DMeshAsset_4wc0o"), SubResource("Terrain3DMeshAsset_egd2s"), SubResource("Terrain3DMeshAsset_iq0fs"), SubResource("Terrain3DMeshAsset_ut3y1"), SubResource("Terrain3DMeshAsset_2ohup"), SubResource("Terrain3DMeshAsset_xplyh"), SubResource("Terrain3DMeshAsset_st3tx"), SubResource("Terrain3DMeshAsset_njita"), SubResource("Terrain3DMeshAsset_6bfbq"), SubResource("Terrain3DMeshAsset_vl2ef"), SubResource("Terrain3DMeshAsset_gv63u"), SubResource("Terrain3DMeshAsset_hasxv"), SubResource("Terrain3DMeshAsset_e33tj"), SubResource("Terrain3DMeshAsset_ierxv"), SubResource("Terrain3DMeshAsset_gdy8x"), SubResource("Terrain3DMeshAsset_v5bka"), SubResource("Terrain3DMeshAsset_r3kdc"), SubResource("Terrain3DMeshAsset_bwc52"), SubResource("Terrain3DMeshAsset_idynt"), SubResource("Terrain3DMeshAsset_xp8ly"), SubResource("Terrain3DMeshAsset_8027u"), SubResource("Terrain3DMeshAsset_81xqu"), SubResource("Terrain3DMeshAsset_1kr7w"), SubResource("Terrain3DMeshAsset_1of2d"), SubResource("Terrain3DMeshAsset_nj03w"), SubResource("Terrain3DMeshAsset_and2d"), SubResource("Terrain3DMeshAsset_e1eb4"), SubResource("Terrain3DMeshAsset_d2h71"), SubResource("Terrain3DMeshAsset_2acpf"), SubResource("Terrain3DMeshAsset_6wq5w"), SubResource("Terrain3DMeshAsset_41kqr"), SubResource("Terrain3DMeshAsset_br08d"), SubResource("Terrain3DMeshAsset_wpoff"), SubResource("Terrain3DMeshAsset_2bixs"), SubResource("Terrain3DMeshAsset_sp2r7"), SubResource("Terrain3DMeshAsset_x81x7"), SubResource("Terrain3DMeshAsset_nw0df"), SubResource("Terrain3DMeshAsset_e0lft"), SubResource("Terrain3DMeshAsset_55bbd")])
 texture_list = Array[Terrain3DTextureAsset]([SubResource("Terrain3DTextureAsset_grass"), SubResource("Terrain3DTextureAsset_road"), SubResource("Terrain3DTextureAsset_ldu0t"), SubResource("Terrain3DTextureAsset_141l7"), SubResource("Terrain3DTextureAsset_oc8my"), SubResource("Terrain3DTextureAsset_we7sw"), SubResource("Terrain3DTextureAsset_ree8b"), SubResource("Terrain3DTextureAsset_osfy8")])

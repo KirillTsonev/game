@@ -1,0 +1,14 @@
+[gd_resource type="StandardMaterial3D" format=3 uid="uid://bcnsyj0dwwvpm"]
+
+[ext_resource type="Texture2D" uid="uid://bmbpgddbgdx16" path="res://assets/models/ground_debris/stump_rotten_large/textures/stump_rotten_large_diff_2k.jpg" id="1_28bbf"]
+[ext_resource type="Texture2D" uid="uid://brlokyjfbd4rg" path="res://assets/models/ground_debris/stump_rotten_large/textures/stump_rotten_large_orm_2k.png" id="2_bw4oy"]
+[ext_resource type="Texture2D" uid="uid://drit4sskrlbsj" path="res://assets/models/ground_debris/stump_rotten_large/textures/stump_rotten_large_nor_gl_2k.jpg" id="3_pcvaj"]
+
+[resource]
+albedo_texture = ExtResource("1_28bbf")
+roughness_texture = ExtResource("2_bw4oy")
+roughness_texture_channel = 1
+normal_enabled = true
+normal_texture = ExtResource("3_pcvaj")
+ao_enabled = true
+ao_texture = ExtResource("2_bw4oy")

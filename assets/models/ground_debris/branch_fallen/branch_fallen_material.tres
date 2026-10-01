@@ -1,0 +1,14 @@
+[gd_resource type="StandardMaterial3D" format=3 uid="uid://cnb3nokhb60n6"]
+
+[ext_resource type="Texture2D" uid="uid://bnv4ogg3v1c3s" path="res://assets/models/ground_debris/branch_fallen/textures/branch_fallen_diff_2k.jpg" id="1_isyw7"]
+[ext_resource type="Texture2D" uid="uid://jrtcsbg1u3jr" path="res://assets/models/ground_debris/branch_fallen/textures/branch_fallen_orm_2k.png" id="2_6mi6h"]
+[ext_resource type="Texture2D" uid="uid://blnjk8fogvyig" path="res://assets/models/ground_debris/branch_fallen/textures/branch_fallen_nor_gl_2k.jpg" id="3_xgrd1"]
+
+[resource]
+albedo_texture = ExtResource("1_isyw7")
+roughness_texture = ExtResource("2_6mi6h")
+roughness_texture_channel = 1
+normal_enabled = true
+normal_texture = ExtResource("3_xgrd1")
+ao_enabled = true
+ao_texture = ExtResource("2_6mi6h")

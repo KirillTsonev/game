@@ -1,0 +1,14 @@
+[gd_resource type="StandardMaterial3D" format=3 uid="uid://r8poibbbh3es"]
+
+[ext_resource type="Texture2D" uid="uid://b61kasuh18lb1" path="res://assets/models/ground_debris/stump_rotten_tall/textures/stump_rotten_tall_diff_2k.jpg" id="1_wq2pa"]
+[ext_resource type="Texture2D" uid="uid://bo775ixpgsfg5" path="res://assets/models/ground_debris/stump_rotten_tall/textures/stump_rotten_tall_orm_2k.png" id="2_sqtw0"]
+[ext_resource type="Texture2D" uid="uid://doetabtrr8rc0" path="res://assets/models/ground_debris/stump_rotten_tall/textures/stump_rotten_tall_nor_gl_2k.jpg" id="3_qi4jx"]
+
+[resource]
+albedo_texture = ExtResource("1_wq2pa")
+roughness_texture = ExtResource("2_sqtw0")
+roughness_texture_channel = 1
+normal_enabled = true
+normal_texture = ExtResource("3_qi4jx")
+ao_enabled = true
+ao_texture = ExtResource("2_sqtw0")

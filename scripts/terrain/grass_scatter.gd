@@ -133,6 +133,7 @@ static func bake(_parent_node: Node, maps: Dictionary, corner: Vector3, rng: Ran
 	rock_d.fill(ROCK_FADE)
 	var circles: Array[Vector3] = []
 	circles.append_array(RockScatter.rock_keep_circles)
+	circles.append_array(DeadfallScatter.deadfall_keep_circles) # stumps + logs: no blades through them
 	var boulder_count := circles.size()
 	for oc in maps.outcrop_plan:
 		circles.append(Vector3(oc.px, oc.pz, oc.radius))

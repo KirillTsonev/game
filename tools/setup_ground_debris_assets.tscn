@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://c0sy63pi4c4cj"]
+
+[ext_resource type="Script" uid="uid://cdyxejckeas1o" path="res://tools/setup_ground_debris_assets.gd" id="1_gdeb"]
+
+[node name="SetupGroundDebrisAssets" type="Node" unique_id=196223383]
+script = ExtResource("1_gdeb")

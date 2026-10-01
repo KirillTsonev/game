@@ -1,0 +1,14 @@
+[gd_resource type="StandardMaterial3D" format=3 uid="uid://du1jmvwviuufm"]
+
+[ext_resource type="Texture2D" uid="uid://c3ajrc4h15805" path="res://assets/models/ground_debris/stump_old/textures/stump_old_diff_2k.jpg" id="1_i5dmk"]
+[ext_resource type="Texture2D" uid="uid://b4or65cn37ibx" path="res://assets/models/ground_debris/stump_old/textures/stump_old_orm_2k.png" id="2_dxg0v"]
+[ext_resource type="Texture2D" uid="uid://de1jymy4fitfr" path="res://assets/models/ground_debris/stump_old/textures/stump_old_nor_gl_2k.jpg" id="3_ljaw0"]
+
+[resource]
+albedo_texture = ExtResource("1_i5dmk")
+roughness_texture = ExtResource("2_dxg0v")
+roughness_texture_channel = 1
+normal_enabled = true
+normal_texture = ExtResource("3_ljaw0")
+ao_enabled = true
+ao_texture = ExtResource("2_dxg0v")

@@ -1,0 +1,14 @@
+[gd_resource type="StandardMaterial3D" format=3 uid="uid://yt5ylg8cfe4"]
+
+[ext_resource type="Texture2D" uid="uid://vyi4ukhwuh6g" path="res://assets/models/ground_debris/log_fallen_nordic/textures/log_fallen_nordic_diff_2k.jpg" id="1_ofkp0"]
+[ext_resource type="Texture2D" uid="uid://tc832lbveb1" path="res://assets/models/ground_debris/log_fallen_nordic/textures/log_fallen_nordic_orm_2k.png" id="2_ol3hy"]
+[ext_resource type="Texture2D" uid="uid://dqo7fggmj0pny" path="res://assets/models/ground_debris/log_fallen_nordic/textures/log_fallen_nordic_nor_gl_2k.jpg" id="3_gpn0l"]
+
+[resource]
+albedo_texture = ExtResource("1_ofkp0")
+roughness_texture = ExtResource("2_ol3hy")
+roughness_texture_channel = 1
+normal_enabled = true
+normal_texture = ExtResource("3_gpn0l")
+ao_enabled = true
+ao_texture = ExtResource("2_ol3hy")

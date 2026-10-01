@@ -1,0 +1,14 @@
+[gd_resource type="StandardMaterial3D" format=3 uid="uid://5fq4rxfgpgyl"]
+
+[ext_resource type="Texture2D" uid="uid://q7s5ovx7ojre" path="res://assets/models/ground_debris/stick_arbem/textures/stick_arbem_diff_2k.png" id="1_iryub"]
+[ext_resource type="Texture2D" uid="uid://duou6owkrnoxm" path="res://assets/models/ground_debris/stick_arbem/textures/stick_arbem_orm_2k.png" id="2_kkxxi"]
+[ext_resource type="Texture2D" uid="uid://uyrp053xgwdl" path="res://assets/models/ground_debris/stick_arbem/textures/stick_arbem_nor_gl_2k.png" id="3_b2tdw"]
+
+[resource]
+albedo_texture = ExtResource("1_iryub")
+roughness_texture = ExtResource("2_kkxxi")
+roughness_texture_channel = 1
+normal_enabled = true
+normal_texture = ExtResource("3_b2tdw")
+ao_enabled = true
+ao_texture = ExtResource("2_kkxxi")

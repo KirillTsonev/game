@@ -310,3 +310,60 @@ material override), `debug_print_sizes()`.
   first ~20-25 m rather than dropping them.
 - Later idea: a rustle sound when walking through foliage, using a spatial grid of the
   understory positions.
+
+---
+
+## Deadfall -- stumps, logs, branch clumps (built 2026-09-30)
+
+Megascans props (Fab "mid" glbs, 2K) in `assets/models/ground_debris/<dir>/`, Terrain3D ids 38-49:
+4 stumps (0.4-1.7 m tall), 2 fallen logs (5.7 m / 7.1 m), 1 fallen branch (1 m), 5 sticks
+(0.6-0.9 m: small twigs scaled up x3-4 at import).
+
+- **Import:** `tools/blender/import_megascans_glb.py -- <src> <name> [options]` flattens the
+  Sketchfab empties, writes the embedded textures out unchanged (`_diff`, `_orm` = AO/rough/metal,
+  `_nor_gl`), builds `<name>_LOD0..2` by Decimate and exports the glb without images. Every glb has
+  its long axis on X. Options (usage in the script header):
+  - `--ratios` per-LOD share of the source tris (default 1 / 0.35 / 0.1). `stump_broken` uses
+    0.35,0.1,0.03 (7.2k / 2k / 616 tris; its source is 20.5k for a 0.4 m stump); the sticks
+    0.5,0.15,0.05.
+  - `--rotate x,y,z` (degrees): `stump_broken`'s scan is authored lying on its side (Fab lists it
+    0.95 x 0.88 x 0.38 m) and read in-game as a stump planted sideways -- exported with
+    `--rotate 0,90,0 --recenter --floor`: now a 0.88 m snag standing on its roots.
+  - `--recenter` for the logs, branch and sticks (pivot was at one end); the other stumps keep the
+    scan's pivot. `--floor` puts the lowest vertex at 0 (the debris-pack sticks were centred on their
+    middle).
+  - `--mesh` picks one mesh out of a multi-mesh source, `--scale` bakes a uniform scale,
+    `--dir` puts several assets in one folder sharing its textures/material (`sticks_debris`),
+    `--textures <dir> <prefix>` takes loose Unreal-named `_BC/_ORM/_N` pngs (the arbem FBX; its
+    `_N` was checked against its height map: OpenGL, no flip).
+- **Setup:** `tools/setup_ground_debris_assets.gd` (`call_method`, `runtime:false`, scene
+  `tools/setup_ground_debris_assets.tscn`, node `.`): `configure_imports()` -> `setup_materials()`
+  (StandardMaterial3D, one per folder, ORM read directly: roughness = G, AO = R, metallic 0) ->
+  `setup_mesh_assets()` (material override, LOD ranges in `DEBRIS`, shadows on every LOD, no fade)
+  -> `debug_print_sizes()`. Pass ids (e.g. `[[45, 46]]`) to touch only new rows.
+- **Placement:** `scripts/terrain/deadfall_scatter.gd`, called after the trees and BEFORE the
+  understory/grass (they keep clear of stumps and logs; branches/sticks excluded). Own rng (`'DEAD'`).
+  - Rock-banked: rocks with keep-out radius >= `ROCK_BANK_MIN_RADIUS` get, with
+    `ROCK_BANK_P`, a log or a branch clump against their **uphill** side, along the contour.
+  - Stands: jittered `STAND_STEP` grid, chance from the understory's canopy-cover field
+    (`STAND_*`, `OPEN_P`); logs/clumps near a trunk bank against its uphill side
+    (`TRUNK_BANK_*`), stumps stand free.
+  - **Clumps:** at most ONE big branch (`CLUMP_BIG_BRANCH_P`) + 2-5 mixed sticks (`STICK_MIX`)
+    within `CLUMP_SPREAD`, crossing at up to `CLUMP_ANGLE_JITTER_DEG`. The first version put 2-4
+    copies of the big branch side by side at similar angles -- it read as a ribcage (user,
+    2026-09-30).
+  - Footprint = capsule along X (`PIECES`); rejects: slope (per kind), road + `ROAD_MARGIN`,
+    cliff rects / outcrops / rocks / trunks / other deadfall (branches and sticks may cross each
+    other), knot ramps. Logs/branches/sticks follow the ground end to end; rejected where it
+    bulges through or drops away (`FIT_*`).
+  - Collision (shared per id, from LOD2): stumps simplified convex hull, logs **trimesh** (a hull
+    of the large log's root plate would be a wedge), branches and sticks none.
+  - Understory checks deadfall through `DeadfallScatter.keep_blocked()` (4 m buckets): passing
+    the ~1.5k log circles into its linear keep-out list took it from ~1.7 s to 4.3 s.
+- **Runs (2026-09-30, same seed):** first: 160 stumps, 105 logs, 355 branches in 139 clumps.
+  With sticks: 158 stumps, 135 logs, 57 big branches + 477 sticks in 152 clumps (35 rock-banked,
+  83 trunk-banked, 327 free), 293 colliders, 0.81 s. User check of the first run: fine apart from
+  the branch clumps (fixed by the sticks); densities otherwise untuned.
+- Later: moss on the log bark (a moss texture blended on upward faces), leaf and needle litter as
+  Terrain3D ground textures under the canopy. The two debris-pack pieces not used (11-12 cm chips,
+  meshes `TIER2_003` / `_004`) are still in `raw-assets/models/logs/`.

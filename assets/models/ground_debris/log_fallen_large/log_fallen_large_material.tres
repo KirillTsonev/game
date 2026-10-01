@@ -1,0 +1,14 @@
+[gd_resource type="StandardMaterial3D" format=3 uid="uid://dc5ts8ivmynch"]
+
+[ext_resource type="Texture2D" uid="uid://xl8apqw1c7t6" path="res://assets/models/ground_debris/log_fallen_large/textures/log_fallen_large_diff_2k.jpg" id="1_wraar"]
+[ext_resource type="Texture2D" uid="uid://cayjlrpbqh5jb" path="res://assets/models/ground_debris/log_fallen_large/textures/log_fallen_large_orm_2k.png" id="2_pe7vk"]
+[ext_resource type="Texture2D" uid="uid://d07oqivmghcl2" path="res://assets/models/ground_debris/log_fallen_large/textures/log_fallen_large_nor_gl_2k.jpg" id="3_g6o1k"]
+
+[resource]
+albedo_texture = ExtResource("1_wraar")
+roughness_texture = ExtResource("2_pe7vk")
+roughness_texture_channel = 1
+normal_enabled = true
+normal_texture = ExtResource("3_g6o1k")
+ao_enabled = true
+ao_texture = ExtResource("2_pe7vk")

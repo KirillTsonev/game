@@ -114,7 +114,7 @@ static func scatter_understory(parent_node: Node, terrain: Terrain3D, heights: P
 	for id in UNDERSTORY_MESH_IDS:
 		transforms_by_mesh[id] = [] as Array[Transform3D]
 		colors_by_mesh[id] = PackedColorArray()
-	var counts := {"candidates": 0, "rolled": 0, "rej_slope": 0, "rej_road": 0, "rej_rock": 0, "rej_trunk": 0, "fern_group": 0, "shrub_group": 0}
+	var counts := {"candidates": 0, "rolled": 0, "rej_slope": 0, "rej_road": 0, "rej_rock": 0, "rej_deadfall": 0, "rej_trunk": 0, "fern_group": 0, "shrub_group": 0}
 	for id in UNDERSTORY_MESH_IDS:
 		counts[id] = 0
 
@@ -159,6 +159,9 @@ static func scatter_understory(parent_node: Node, terrain: Terrain3D, heights: P
 			if RockScatter.boulder_blocked(px, pz, KEEPOUT_RADIUS, keep_rects, keep_circles):
 				counts.rej_rock += 1
 				continue
+			if DeadfallScatter.keep_blocked(px, pz, KEEPOUT_RADIUS): # stumps + logs (bucketed lookup)
+				counts.rej_deadfall += 1
+				continue
 			if _near_trunk(trunk_grid, px, pz):
 				counts.rej_trunk += 1
 				continue
@@ -185,9 +188,9 @@ static func scatter_understory(parent_node: Node, terrain: Terrain3D, heights: P
 
 	last_counts = counts
 	var total: int = counts.fern_group + counts.shrub_group
-	print("TERRAIN_GEN: understory -- %d plant(s): %d fern-group (fern %d, broad fern %d) + %d shrub(s) (bush04 %d, bush05 %d, bush02 green %d) from %d candidate spots (%.1f%%); rolled %d, rejected slope %d / road %d / rock %d / trunk %d; fields %d ms, total %d ms" % [
+	print("TERRAIN_GEN: understory -- %d plant(s): %d fern-group (fern %d, broad fern %d) + %d shrub(s) (bush04 %d, bush05 %d, bush02 green %d) from %d candidate spots (%.1f%%); rolled %d, rejected slope %d / road %d / rock %d / deadfall %d / trunk %d; fields %d ms, total %d ms" % [
 		total, counts.fern_group, counts[FERN_ID], counts[BROAD_FERN_ID], counts.shrub_group, counts[BUSH04_ID], counts[BUSH05_ID], counts[BUSH02_GREEN_ID],
-		counts.candidates, 100.0 * total / maxf(1.0, counts.candidates), counts.rolled, counts.rej_slope, counts.rej_road, counts.rej_rock, counts.rej_trunk,
+		counts.candidates, 100.0 * total / maxf(1.0, counts.candidates), counts.rolled, counts.rej_slope, counts.rej_road, counts.rej_rock, counts.rej_deadfall, counts.rej_trunk,
 		t_fields, Time.get_ticks_msec() - t0])
 
 ## Canopy cover grid from TreeScatter.tree_points: summed gaussians -> 1 - exp(-gain * sum).
