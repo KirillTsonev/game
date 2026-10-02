@@ -59,9 +59,7 @@
 [ext_resource type="Texture2D" uid="uid://b1dw085d2nd8t" path="res://textures/source/aerial_rocks_04_normal_roughness_1k.png" id="48_bwc52"]
 [ext_resource type="PackedScene" uid="uid://dmo61f2rgr1w1" path="res://assets/models/rocks/namaqualand_boulder_06/namaqualand_boulder_06_2k.glb" id="48_whgbg"]
 [ext_resource type="Material" uid="uid://cq77u30m8vmee" path="res://assets/models/ground_debris/stump_broken/stump_broken_material.tres" id="49_e1eb4"]
-[ext_resource type="Texture2D" uid="uid://cywuxejl0w1cu" path="res://textures/source/grass_ground_albedo_height_1k.png" id="49_idynt"]
 [ext_resource type="PackedScene" uid="uid://dtkwv4ueu7btn" path="res://assets/models/ground_debris/stump_broken/stump_broken.glb" id="50_kck04"]
-[ext_resource type="Texture2D" uid="uid://b6dc58sg4h0pv" path="res://textures/source/grass_ground_normal_roughness_1k.png" id="50_xp8ly"]
 [ext_resource type="Texture2D" uid="uid://b4h4xifm3dkq0" path="res://textures/source/rocky_trail_02_albedo_height_1k.png" id="51_8027u"]
 [ext_resource type="Material" uid="uid://du1jmvwviuufm" path="res://assets/models/ground_debris/stump_old/stump_old_material.tres" id="51_cpe3k"]
 [ext_resource type="Texture2D" uid="uid://luofuyfvwjea" path="res://textures/source/rocky_trail_02_normal_roughness_1k.png" id="52_81xqu"]
@@ -89,6 +87,8 @@
 [ext_resource type="PackedScene" uid="uid://vhbixjweim4e" path="res://assets/models/ground_debris/litter_mound/litter_mound_a.glb" id="71_d2h71"]
 [ext_resource type="PackedScene" uid="uid://0efka7knk7ls" path="res://assets/models/ground_debris/litter_mound/litter_mound_b.glb" id="72_2acpf"]
 [ext_resource type="PackedScene" uid="uid://c8qh4jxmhd377" path="res://assets/models/ground_debris/litter_mound/litter_mound_c.glb" id="73_6wq5w"]
+[ext_resource type="Texture2D" uid="uid://7gqdpav107gt" path="res://textures/source/grass002_albedo_height_1k.png" id="84_qrb1v"]
+[ext_resource type="Texture2D" uid="uid://sn8lx0nxav8c" path="res://textures/source/grass002_normal_roughness_1k.png" id="85_d2h71"]
 [ext_resource type="Texture2D" uid="uid://djg8j246rgu54" path="res://textures/source/pine_litter_albedo_height_1k.png" id="86_tiys7"]
 [ext_resource type="Texture2D" uid="uid://bwuiskoiebal5" path="res://textures/source/pine_litter_normal_roughness_1k.png" id="87_jjmba"]
 
@@ -737,9 +737,10 @@ detiling_shift = 1.0
 [sub_resource type="Terrain3DTextureAsset" id="Terrain3DTextureAsset_we7sw"]
 name = "Grass"
 id = 5
-albedo_texture = ExtResource("49_idynt")
-normal_texture = ExtResource("50_xp8ly")
-uv_scale = 2.0
+albedo_texture = ExtResource("84_qrb1v")
+normal_texture = ExtResource("85_d2h71")
+roughness = 0.5
+uv_scale = 1.0
 detiling_rotation = 1.0
 detiling_shift = 1.0
 

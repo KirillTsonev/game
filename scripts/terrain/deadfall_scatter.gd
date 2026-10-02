@@ -77,7 +77,11 @@ const MOUND_DEADFALL_P := 0.6 ## chance per stump / log
 const MOUND_TRUNK_OFFSET := 0.35 ## m, max shift from the trunk centre toward uphill
 const MOUND_SCALE_MIN := 0.8
 const MOUND_SCALE_MAX := 1.25
-const MOUND_MIN_NORMAL_Y := 0.9 ## flatter ground only (~25 deg): a rigid dome floats on one side on a slope
+const MOUND_RIM_RADIUS := {50: 1.3, 51: 1.15, 52: 1.5} ## m at scale 1: the widest point of each outline
+const MOUND_RIM_SAMPLES := 8
+const MOUND_RIM_SLACK := 0.04 ## m of ground drop under the rim the mesh already covers (its rim is 0.08 m down)
+const MOUND_MAX_DROP := 0.14 ## m: more than this and the mound is skipped (sinking it further would bury the dome)
+const MOUND_MIN_NORMAL_Y := 0.9## flatter ground only (~25 deg): a rigid dome floats on one side on a slope
 
 ## -- Rock-banked debris --
 const ROCK_BANK_MIN_RADIUS := 1.0 ## m, only rocks with a keep-out radius at least this big (~scale 1.1+)
@@ -325,6 +329,7 @@ static func _scatter_mounds(ctx: Dictionary, instancer: Terrain3DInstancer, asse
 	for id in ids:
 		xforms[id] = [] as Array[Transform3D]
 	var placed := 0
+	var rej_fit := 0
 	for p in spots:
 		if p.x < EDGE_MARGIN + 2.0 or p.y < EDGE_MARGIN + 2.0 or p.x > width - 3 - EDGE_MARGIN or p.y > length - 3 - EDGE_MARGIN:
 			continue
@@ -335,8 +340,23 @@ static func _scatter_mounds(ctx: Dictionary, instancer: Terrain3DInstancer, asse
 			continue
 		var basis := Basis(Quaternion(Vector3.UP, normal)) * Basis(Vector3.UP, rng.randf() * TAU)
 		var scale := rng.randf_range(MOUND_SCALE_MIN, MOUND_SCALE_MAX)
-		var pos := Vector3(p.x, _h(ctx, p.x, p.y), p.y) + (ctx.import_position as Vector3)
-		xforms[ids[rng.randi() % ids.size()]].append(Transform3D(basis.scaled(Vector3.ONE * scale), pos))
+		var id: int = ids[rng.randi() % ids.size()]
+		# Rim fit: the mound is a rigid disc on the tangent plane at p. Where the ground curves away
+		# (a knoll, a bank edge) its rim would hang in the air -- measure how far the ground drops
+		# below that plane around the rim, sink the mound by it, and skip the spot if that is too much.
+		var h0 := _h(ctx, p.x, p.y)
+		var rim := float(MOUND_RIM_RADIUS[id]) * scale
+		var drop := 0.0
+		for k in MOUND_RIM_SAMPLES:
+			var a := TAU * float(k) / float(MOUND_RIM_SAMPLES)
+			var q := p + Vector2(cos(a), sin(a)) * rim
+			var plane_h := h0 - (normal.x * (q.x - p.x) + normal.z * (q.y - p.y)) / normal.y
+			drop = maxf(drop, plane_h - _h(ctx, q.x, q.y))
+		if drop > MOUND_MAX_DROP:
+			rej_fit += 1
+			continue
+		var pos := Vector3(p.x, h0, p.y) - normal * maxf(0.0, drop - MOUND_RIM_SLACK) + (ctx.import_position as Vector3)
+		xforms[id].append(Transform3D(basis.scaled(Vector3.ONE * scale), pos))
 		placed += 1
 	for id in ids:
 		var list: Array[Transform3D] = xforms[id]
@@ -346,7 +366,7 @@ static func _scatter_mounds(ctx: Dictionary, instancer: Terrain3DInstancer, asse
 		colors.resize(list.size())
 		colors.fill(Color.WHITE)
 		instancer.add_transforms(id, list, colors, true)
-	print("TERRAIN_GEN: litter mounds -- %d placed of %d spots (%d at trunks, %d at stumps/logs)" % [placed, spots.size(), at_trunks, spots.size() - at_trunks])
+	print("TERRAIN_GEN: litter mounds -- %d placed of %d spots (%d at trunks, %d at stumps/logs); %d skipped where the ground curves away under the rim" % [placed, spots.size(), at_trunks, spots.size() - at_trunks, rej_fit])
 
 ## True if a footprint of radius `pad` at (px, pz) overlaps a stump or log placed this run.
 static func keep_blocked(px: float, pz: float, pad: float) -> bool:

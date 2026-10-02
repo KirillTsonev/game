@@ -106,6 +106,17 @@
 //     per-blade brightness/hue jitter (color_variation, hue_variation). Width/taper fade to 1.0
 //     with the wind fade (overhang cap assumes the base width far away); colour jitter fades with
 //     fog_factor. Tallest blade now ~1.01 m -> BLADE_MAX_HEIGHT raised to 1.15.
+//   - HEIGHT FACTOR (2026-10-02): INSTANCE_CUSTOM.w is no longer the raw coverage but a per-blade
+//     height factor from grass_cull.glsl: patch-edge taper (tall layers) or the short gap layer's
+//     height, x the old coverage trim mix(0.85, 1, coverage). .x also carries their width factor.
+//   - SHORT BLADES FACE EVERY WAY (2026-10-02, Kirill: from some angles the short gap grass
+//     looked non-existent). Yaw is +-0.15 turn around the ~13 m clump direction, so a whole area
+//     faces one way and is seen edge-on from the side; tall blades survive that through bend and
+//     numbers, 10 cm ones vanish. Blades with a low height factor (the short layers and the
+//     tapered patch rim) now get a fully random yaw and short_lean extra bend, so some always
+//     face the camera and they show their face from above. Then (same day): beyond
+//     short_face_range (5-15 m) they turn to face the camera, +-short_face_jitter. Not closer:
+//     a blade tracking the camera visibly swivels as the player walks past it.
 //   - LESS DRY GRASS (2026-09-29): v_dry threshold smoothstep(0.30, 0.60) -> (0.45, 0.75) so fewer
 //     patches turn straw, and dry_tip_color (0.75, 0.62, 0.30) -> (0.58, 0.50, 0.26) so the ones
 //     that do are less glaring. The bake's dry channel itself is unchanged.
@@ -132,6 +143,12 @@ uniform float height_clumping : hint_range(0.0, 1.0) = 0.5; // clump noise vs pe
 uniform vec2 stature_range = vec2(0.7, 1.25); // per-blade height multiplier, skewed toward the low end
 uniform vec2 width_range = vec2(0.5, 1.25); // per-blade width multiplier (was 0.6-1.0)
 uniform vec2 taper_range = vec2(0.6, 1.3); // upper-blade width: <1 = needle-like, >1 = broad leaf
+// Short blades (see header "SHORT BLADES FACE EVERY WAY"): height factor at/below x = fully
+// "short" (random yaw + extra lean), at/above y = a normal clump-aligned blade.
+uniform vec2 short_height = vec2(0.45, 0.7);
+uniform float short_lean : hint_range(0.0, 0.3) = 0.12; // extra bend, x PI, at the tip
+uniform vec2 short_face_range = vec2(5.0, 15.0); // m from the camera: random yaw closer than x, facing the camera from y
+uniform float short_face_jitter = 0.44; // rad (+-25 deg) of per-blade yaw kept when facing the camera
 
 group_uniforms GrassColor;
 uniform vec3 base_color : source_color = vec3(0.05, 0.2, 0.01);
@@ -198,7 +215,7 @@ float ease_out_quartic(float x) {
 void vertex() {
 	vec3 root = MODEL_MATRIX[3].xyz;
 	float tall = INSTANCE_CUSTOM.z;
-	float coverage = INSTANCE_CUSTOM.w;
+	float height_scale = INSTANCE_CUSTOM.w;
 	v_dry = smoothstep(0.45, 0.75, INSTANCE_CUSTOM.y); // was (0.30, 0.60) -- see header
 
 	float height_factor = 1.0 - UV.y;
@@ -219,7 +236,7 @@ void vertex() {
 	vec3 camera_offset = root - CAMERA_POSITION_WORLD;
 	float camera_distance = length(camera_offset);
 	float height_offset = mix(height_range.x, height_range.y, mix(hash0, clump0, height_clumping));
-	height_offset *= mix(0.6, 1.35, tall) * mix(0.85, 1.0, coverage);
+	height_offset *= mix(0.6, 1.35, tall) * height_scale;
 	// Stature: pow skews toward short -- mostly mid blades with the odd taller stalk poking out.
 	height_offset *= mix(stature_range.x, stature_range.y, pow(hash_stature, 1.5));
 
@@ -244,6 +261,17 @@ void vertex() {
 	crushed_factor = mix(1.0, crushed_factor, 1.0 - smoothstep(crush_height * 0.6, crush_height, abs(player_position.y - root.y)));
 
 	float turn_angle_base = (mix(-0.15, 0.15, hash0) + clump2 * clumping_factor) * TAU;
+	// Short blades face every way and lean more (see header "SHORT BLADES FACE EVERY WAY").
+	float shortness = 1.0 - smoothstep(short_height.x, short_height.y, height_scale);
+	float short_angle = hash12(root.zx + vec2(17.3, 53.9)) * TAU;
+	// ... and past short_face_range.x m they turn to show the camera their face. The blade's +Z
+	// points AWAY from the camera, so the bend leans the tip away and tilts the face up toward an
+	// eye above it (cull_disabled: either side draws). Shortest-arc blend, so a blade never spins
+	// the long way round as the player approaches.
+	float face_angle = atan(camera_offset.x, camera_offset.z) + (hash1 - 0.5) * 2.0 * short_face_jitter;
+	float facing = smoothstep(short_face_range.x, short_face_range.y, camera_distance);
+	short_angle += (mod(face_angle - short_angle + PI, TAU) - PI) * facing;
+	turn_angle_base = mix(turn_angle_base, short_angle, shortness);
 	float wind_direction = texture(wind_noise, root.zx * 0.005 / wind_speed + TIME * 0.005 * wind_speed).x * TAU;
 	float wind_strength = mix(0.25, 1.0, texture(wind_noise, root.xz * 0.025 / wind_speed + TIME * 0.05).x) * crushed_factor;
 	wind_strength *= wind_strength;
@@ -251,7 +279,7 @@ void vertex() {
 	mat3 grass_rotate = rotate_y(mix(turn_angle_base, wind_direction, wind_strength));
 
 	// Own hash (was hash1, shared with width) so thin blades don't all bend alike; range widened (0.12-0.25).
-	float bend_angle_base = mix(0.10, 0.30, hash_bend + height_offset * 0.1) * PI * height_factor;
+	float bend_angle_base = (mix(0.10, 0.30, hash_bend + height_offset * 0.1) + short_lean * shortness) * PI * height_factor;
 	// We sample wind noise identically to strength, but with a time offset based on
 	// the height to simulate the turbulence as the grass blade shakes from the wind.
 	float wind_strength_turbulence = mix(0.25, 1.0, texture(wind_noise, root.xz * 0.025 / wind_speed + (TIME + height_factor * height_factor * 0.25) * 0.05).x);

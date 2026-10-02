@@ -45,11 +45,23 @@ const PARAMS_VEC4 := 11 ## size of the cull shader's params buffer, in vec4s (se
 ## shimmer is handled by the wind fade below instead of by narrower blades).
 const BLADE_BANDS: Array[Dictionary] = [
 	{"name": "blades_0", "inner": 0.0, "outer": 50.0, "band": 3.0, "spacing": 0.1, "mesh": "high"},
-	{"name": "blades_1", "inner": 50.0, "outer": 100.0, "band": 6.0, "spacing": 0.34, "mesh": "high"},
+	{"name": "blades_1", "inner": 50.0, "outer": 100.0, "band": 6.0, "spacing": 0.25, "mesh": "high"},
 	{"name": "blades_2", "inner": 100.0, "outer": 150.0, "band": 8.0, "spacing": 0.75, "mesh": "low"},
 	{"name": "blades_3", "inner": 150.0, "outer": 200.0, "band": 10.0, "spacing": 1.25, "mesh": "low"},
 	{"name": "blades_4", "inner": 200.0, "outer": RADIUS, "band": FADE_BAND, "spacing": 3.0, "mesh": "low"},
 ]
+## SHORT layer (2026-10-02, docs/forest_floor_plan.md step 4): low blades in the gaps BETWEEN the
+## patches (grass_cull.glsl, pc.kind 1 near / 2 far), so a gap has a silhouette instead of a flat
+## texture. One triangle per blade; not in the tuning panel. Cost not measured yet -- K prints the
+## drawn counts. Set SHORT_LAYER_ENABLED false to compare. (First try, one layer 0-40 m @ 0.1 m:
+## too sparse, invisible from a distance -- see SHORT_* in grass_cull.glsl.)
+const SHORT_LAYER_ENABLED := true
+const SHORT_LAYERS: Array[Dictionary] = [
+	{"name": "short_0", "kind": 1, "inner": 0.0, "outer": 25.0, "band": 5.0, "spacing": 0.07},
+	{"name": "short_1", "kind": 2, "inner": 25.0, "outer": 60.0, "band": 15.0, "spacing": 0.2},
+]
+const SHORT_MAX_HEIGHT := 0.5 ## m -- for the cull sphere (1.01 m tallest blade x 0.45 + margin)
+const SHORT_FAR_HALF_WIDTH := 1.0 ## m -- grass_cull.glsl SHORT_FAR_MAX x the 0.05 m blade half-width
 ## LIVE-TUNABLE copies (2026-09-27, grass tuning panel -- debug key Y): the field builds its blade
 ## layers from `blade_bands` (not BLADE_BANDS) and the widening curve from widen_*. Static so they
 ## survive the rebuild (GrassField.spawn) the panel does after a band change. Defaults = the consts.
@@ -155,6 +167,17 @@ func _ready() -> void:
 			"cull_radius": BLADE_MAX_HEIGHT + 0.05 * widen, "cull_lift": BLADE_MAX_HEIGHT * 0.5,
 		})
 		prev_band = b.band
+	if SHORT_LAYER_ENABLED:
+		prev_band = 0.0
+		for s: Dictionary in SHORT_LAYERS:
+			_add_layer({
+				"name": s.name, "spacing": float(s.spacing), "mesh": blade_meshes["low"],
+				"inner": float(s.inner), "inner_band": prev_band, "outer": float(s.outer), "band": float(s.band),
+				"density_scale": BLADE_DENSITY_SCALE, "kind": int(s.kind),
+				"cull_radius": SHORT_MAX_HEIGHT + (SHORT_FAR_HALF_WIDTH if s.kind == 2 else 0.05 * widen_at(s.outer)),
+				"cull_lift": SHORT_MAX_HEIGHT * 0.5,
+			})
+			prev_band = s.band
 
 	RenderingServer.call_on_render_thread(_rt_init)
 	_apply_visibility()
@@ -164,7 +187,7 @@ func _ready() -> void:
 	for l in _layers:
 		summary.append("%s %dx%d@%.2f m cap %d" % [l.name, l.n, l.n, l.spacing, l.capacity])
 		total_mb += l.capacity * 64.0 / 1048576.0
-	print("GRASS: field ready (GPU-culled) -- %d blade layers, instance buffers %.1f MB: %s" % [_layers.size(), total_mb, ", ".join(summary)])
+	print("GRASS: field ready (GPU-culled) -- %d layers, instance buffers %.1f MB: %s" % [_layers.size(), total_mb, ", ".join(summary)])
 
 ## One layer = one indirect MultiMesh + RS instance + its static cull params.
 func _add_layer(cfg: Dictionary) -> void:
@@ -202,7 +225,7 @@ func _add_layer(cfg: Dictionary) -> void:
 	base[10 * 4 + 2] = float(cfg.cull_lift)
 
 	_layers.append({"name": cfg.name, "spacing": spacing, "mesh": cfg.mesh, "mm": mm, "inst": inst,
-		"n": n, "capacity": capacity, "base": base})
+		"n": n, "capacity": capacity, "base": base, "kind": int(cfg.get("kind", 0))})
 
 func _process(_delta: float) -> void:
 	_update()
@@ -307,7 +330,7 @@ func _rt_dispatch(frames: Dictionary) -> void:
 	_rd.compute_list_bind_compute_pipeline(cl, _pipeline)
 	for i: int in frames:
 		var l: Dictionary = _layers[i]
-		var push := PackedInt32Array([0, l.capacity, l.n, 0]).to_byte_array()
+		var push := PackedInt32Array([0, l.capacity, l.n, l.kind]).to_byte_array()
 		_rd.compute_list_bind_uniform_set(cl, l.uset, 0)
 		_rd.compute_list_set_push_constant(cl, push, push.size())
 		_rd.compute_list_dispatch(cl, int(ceil(float(l.n * l.n) / 64.0)), 1, 1)

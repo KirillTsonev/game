@@ -108,7 +108,13 @@ at grove edges). What is missing is the materials that make thin ground read as 
    uniform pick from 8 pines + 6 deciduous), so per-species litter needs species-biased stands
    first, plus tree ids alongside `TreeScatter.tree_points`.
 3. **Moss** as a ground type in shade (canopy / cliff shade grids), not only on rocky ground.
-4. **Green gaps and soft patch edges in the open.** Short-grass/moss texture in the gaps between
+4. **Green gaps and soft patch edges in the open.** PARTLY BUILT, not yet judged in-game: Grass is
+   the default ground texture since 2026-10-01 (`BARE_*` in `ground_paint.gd`); 2026-10-02 added
+   the blade height taper toward patch edges and short blade layers in the gaps to 60 m
+   (`PATCH_TAPER` / `EDGE_*` / `SHORT_*` in `grass_cull.glsl`, `SHORT_LAYERS` in `grass_field.gd`;
+   the first try, one layer to 40 m, was too sparse and invisible from a distance).
+   Known gap: the short layer doesn't know the worn-soil noise patches of the ground paint, so it
+   grows over them. Cost not measured. Original notes: Short-grass/moss texture in the gaps between
    blade patches (soil only at road verges, rock, dense canopy); widen the patch edge ramp and
    taper blade height toward it; optionally a 3-6 cm blade band out to 15-20 m as an extra layer
    in `GrassField` (never as placed instances).

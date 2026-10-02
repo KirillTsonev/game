@@ -45,6 +45,17 @@
 // blade shader); blades that would need less than OVERHANG_MIN_SCALE are skipped. Flat / gentle
 // ground and all near blades (narrow, never tested) are unchanged. The widening curve is only READ
 // here (params 9.zw / 10.w) -- no grass layer value changed.
+// 2026-10-02 EDGE TAPER + SHORT LAYER (docs/forest_floor_plan.md step 4; Kirill: the gaps between
+// patches got a grass texture but still read as empty, the patches as cut turf).
+//   - Tall layers (pc.kind 0): blade HEIGHT now falls toward the patch edge -- full where coverage
+//     is PATCH_TAPER above the patch noise, EDGE_HEIGHT x at the outline (also narrower, EDGE_WIDTH).
+//     Tussock blades keep full height. Which blades exist is unchanged (PATCH_EDGE stays in sync
+//     with the CPU twins).
+//   - Short layer (pc.kind 1): the complement -- keep = 1 - the tall keep, x a coverage gate
+//     (SHORT_COVER_*: none on road / rock / under dense canopy, where the ground is litter or
+//     soil). Blades SHORT_HEIGHT_* x the normal height, SHORT_WIDTH x the width.
+//   The height factor travels in INSTANCE_CUSTOM.w, x the old coverage trim mix(0.85, 1, coverage)
+//   the blade shader used to compute from the raw coverage that was there.
 // Reads GrassScatter's bake: density_map (R coverage / G dry / B tall / A tussock, 1 px = 1 m),
 // height_map (R32F, texel (px,pz) = height at map_corner + (px, 0, pz); sampled with manual
 // bilinear because linear filtering of R32F isn't guaranteed on every GPU) and patch_map.
@@ -63,7 +74,7 @@ layout(push_constant, std430) uniform Push {
 	uint mode;
 	uint capacity;
 	uint grid_n;
-	uint reserved; // was the tuft/blade variant; unused since 2026-09-27
+	uint kind; // 0 = tall blades (patches + tussocks), 1 / 2 = short blades in the gaps, near / far (2026-10-02)
 } pc;
 
 // params.v layout (see GrassField._add_layer / _update; PARAMS_VEC4 = 11):
@@ -79,6 +90,22 @@ const float PATCH_RES = 2.0;        // patch_map texels per metre
 const float PATCH_N_LO = 0.2;
 const float PATCH_N_HI = 0.8;
 const float PATCH_EDGE = 0.06;      // noise units -- soft rim (a few tens of cm) where blades thin out
+// -- Edge taper + short layer (2026-10-02, see header) --
+const float PATCH_TAPER = 0.25;     // noise units (~1-2 m) -- blades reach full height this far inside the outline
+const float EDGE_HEIGHT = 0.3;      // height factor of a tall-layer blade right at the outline
+const float EDGE_WIDTH = 0.65;      // ... and its width factor
+// Same day, Kirill: "way too sparse, almost invisible from certain angles, and especially from a
+// distance" (was height 0.18-0.32, width 0.6, cover 0.08-0.45, one layer 0-40 m @ 0.1 m). Now
+// taller + wider, a wider coverage gate, a denser near layer and a far layer (pc.kind 2) whose
+// thinner spacing is made up by SHORT_FAR_WIDTH -- the distance widening curve is tuned for the
+// tall bands and barely acts before ~40 m.
+const float SHORT_HEIGHT_MIN = 0.25; // short-layer height factor range (x ~0.4 m typical -> ~10-18 cm)
+const float SHORT_HEIGHT_MAX = 0.45;
+const float SHORT_WIDTH = 0.9;
+const float SHORT_FAR_WIDTH = 3.0;  // kind 2: width factor on top of the distance widening ...
+const float SHORT_FAR_MAX = 20.0;   // ... capped so width x widening stays under this (2 m wide)
+const float SHORT_COVER_LO = 0.05;  // coverage at/below this -> no short grass (dense canopy, road, rock)
+const float SHORT_COVER_HI = 0.25;  // ... at/above this -> every gap filled
 // -- Tussocks: small dense clumps in the gaps between patches (and on rocky/steep ground) --
 const float TUSSOCK_CELL = 1.6;     // m -- at most one tussock per cell
 const float TUSSOCK_RATE = 0.22;    // chance a cell has one, x the map's tussock allowance (A)
@@ -104,8 +131,8 @@ vec2 hash22(vec2 p) {
 }
 
 // Keep chance for a blade at world pos w (map pixel px), from coverage c (map R) and tussock
-// allowance t (map A).
-float blade_patch_keep(vec2 w, vec2 px, vec2 size, float c, float t) {
+// allowance t (map A). taper: 0 at the patch outline -> 1 PATCH_TAPER inside it (1 in a tussock).
+float blade_patch_keep(vec2 w, vec2 px, vec2 size, float c, float t, out float taper) {
 	// Patches: baked noise, same texel the CPU reads for the pixel this blade stands in.
 	vec2 puv = (px * PATCH_RES + 0.5) / (size * PATCH_RES);
 	float n = smoothstep(PATCH_N_LO, PATCH_N_HI, textureLod(patch_map, puv, 0.0).r);
@@ -121,6 +148,7 @@ float blade_patch_keep(vec2 w, vec2 px, vec2 size, float c, float t) {
 		float r = mix(TUSSOCK_R_MIN, TUSSOCK_R_MAX, hash12(tc + vec2(2.1, 17.9)));
 		tussock_keep = 1.0 - smoothstep(r * 0.7, r, distance(w, centre));
 	}
+	taper = tussock_keep > 0.0 ? 1.0 : smoothstep(n, n + PATCH_TAPER, c);
 	return max(patch_keep, tussock_keep);
 }
 
@@ -174,7 +202,18 @@ void main() {
 
 	float fade_out = 1.0 - smoothstep(rg.x - rg.y, rg.x, d);
 	float fade_in = rg.z > 0.0 ? smoothstep(rg.z - rg.w, rg.z, d) : 1.0;
-	float p = blade_patch_keep(wpos, px, size, clamp(m.r * ms.y, 0.0, 1.0), m.a) * fade_out * fade_in;
+	float cov = clamp(m.r * ms.y, 0.0, 1.0);
+	float taper;
+	float keep = blade_patch_keep(wpos, px, size, cov, m.a, taper);
+	float height_scale = mix(EDGE_HEIGHT, 1.0, taper);
+	float blade_width = mix(EDGE_WIDTH, 1.0, taper);
+	float widen = 1.0 + min(pow(ms.z * d, ms.w), m2.w); // the blade shader's distance widening
+	if (pc.kind != 0u) {
+		keep = (1.0 - keep) * smoothstep(SHORT_COVER_LO, SHORT_COVER_HI, cov);
+		height_scale = mix(SHORT_HEIGHT_MIN, SHORT_HEIGHT_MAX, hash12(key + 3.77));
+		blade_width = pc.kind == 2u ? min(SHORT_FAR_WIDTH, SHORT_FAR_MAX / widen) : SHORT_WIDTH;
+	}
+	float p = keep * fade_out * fade_in;
 	if (hash12(key + 7.31) >= p) {
 		return;
 	}
@@ -184,7 +223,7 @@ void main() {
 
 	// Overhang cap (2026-09-29, see header): a widened blade on a slope / brow overhangs the drop.
 	float width_scale = 1.0;
-	float half_w = BLADE_HALF_WIDTH * (1.0 + min(pow(ms.z * d, ms.w), m2.w));
+	float half_w = BLADE_HALF_WIDTH * widen * blade_width;
 	if (half_w > OVERHANG_MIN_HALF_WIDTH) {
 		float max_drop = 0.0;
 		for (int i = 0; i < 8; i++) {
@@ -220,7 +259,8 @@ void main() {
 	inst.data[o] = vec4(1.0, 0.0, 0.0, wpos.x);
 	inst.data[o + 1u] = vec4(0.0, 1.0, 0.0, y);
 	inst.data[o + 2u] = vec4(0.0, 0.0, 1.0, wpos.y);
-	// -> INSTANCE_CUSTOM (width_scale, dry, tall, coverage). x used to be an unused random value;
-	// since 2026-09-29 it's the overhang cap's width factor (1 = full width), read by the blade shader.
-	inst.data[o + 3u] = vec4(width_scale, m.g, m.b, m.r);
+	// -> INSTANCE_CUSTOM (width factor, dry, tall, height factor). x = the overhang cap's width
+	// factor (2026-09-29) x the edge / short-layer width; w = the edge taper / short-layer height
+	// x the coverage trim (2026-10-02; was the raw coverage). Both read by the blade shader.
+	inst.data[o + 3u] = vec4(width_scale * blade_width, m.g, m.b, height_scale * mix(0.85, 1.0, m.r));
 }

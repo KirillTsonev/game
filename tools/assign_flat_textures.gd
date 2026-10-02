@@ -86,7 +86,15 @@ const TEXTURES_BY_ID := {
 	3: {"name": "CoastSandRocks", "albedo": "res://textures/source/coast_sand_rocks_02_albedo_height_1k.png", "normal": "res://textures/source/coast_sand_rocks_02_normal_roughness_1k.png", "uv_scale": 2.5, "detiling_rotation": 1.0, "detiling_shift": 1.0}, # cliff meets grass
 	4: {"name": "AerialRocks", "albedo": "res://textures/source/aerial_rocks_04_albedo_height_1k.png", "normal": "res://textures/source/aerial_rocks_04_normal_roughness_1k.png", "uv_scale": 2.5, "detiling_rotation": 1.0, "detiling_shift": 1.0}, # mossy rock ground at the cliff
 	## 2026-09-27 new layers (Poly Haven, 1k):
-	5: {"name": "Grass", "albedo": "res://textures/source/grass_ground_albedo_height_1k.png", "normal": "res://textures/source/grass_ground_normal_roughness_1k.png", "uv_scale": 2.5, "detiling_rotation": 1.0, "detiling_shift": 1.0}, # painted from GrassScatter's coverage bake
+	## 2026-10-01: Grass switched from Poly Haven grass_ground (thin straw-coloured grass over soil)
+	## to ambientCG Grass002 (dense, green), packed by tools/blender/pack_ambientcg_texture.py. It is
+	## now the DEFAULT open-ground surface in ground_paint.gd, under and between the blade patches.
+	## TRIED AND REVERTED the same day: uv_scale 0.5 (2 m tile) + roughness +0.15 + normal_depth 1.5 +
+	## ao_strength 1.0, to get closer to ambientCG's preview render -- in-game it read "stretched out,
+	## pixelated and shiny plasticky" (user). A 1K texture over 2 m is too few pixels up close, and the
+	## set's low roughness is what makes it plastic. The preview's depth is real displacement, which
+	## this Terrain3D version (1.0.2) does not have (CLAUDE.md, "Road parallax").
+	5: {"name": "Grass", "albedo": "res://textures/source/grass002_albedo_height_1k.png", "normal": "res://textures/source/grass002_normal_roughness_1k.png", "uv_scale": 1.0, "detiling_rotation": 1.0, "detiling_shift": 1.0, "roughness": 0.5},
 	6: {"name": "RockyTrail", "albedo": "res://textures/source/rocky_trail_02_albedo_height_1k.png", "normal": "res://textures/source/rocky_trail_02_normal_roughness_1k.png", "uv_scale": 2.5, "detiling_rotation": 1.0, "detiling_shift": 1.0}, # scree around cliffs
 	7: {"name": "RockyTerrain", "albedo": "res://textures/source/rocky_terrain_03_albedo_height_1k.png", "normal": "res://textures/source/rocky_terrain_03_normal_roughness_1k.png", "uv_scale": 2.5, "detiling_rotation": 1.0, "detiling_shift": 1.0}, # scree with grass around cliffs
 	## 2026-10-01: pine needle litter, baked from the forest floor scan by tools/blender/bake_pine_litter.py
@@ -231,6 +239,9 @@ func fix_textures() -> String:
 		tex_asset.set_detiling_rotation(paths.get("detiling_rotation", 0.0))
 		tex_asset.set_detiling_shift(paths.get("detiling_shift", 0.0))
 		tex_asset.set_roughness(paths.get("roughness", 0.0))
+		# Optional: normal-map strength and height-derived AO (Terrain3D defaults: 0.5 each).
+		tex_asset.set_normal_depth(paths.get("normal_depth", 0.5))
+		tex_asset.set_ao_strength(paths.get("ao_strength", 0.5))
 		if is_new:
 			# This is what actually inserts a brand-new Terrain3DTextureAsset
 			# into the live list -- setting properties on a freshly-constructed

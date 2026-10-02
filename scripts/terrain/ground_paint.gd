@@ -43,6 +43,29 @@ const GRASS_ID := 5 ## grass_ground
 const ROCKY_TRAIL_ID := 6 ## rocky_trail_02 -- scree
 const ROCKY_TERRAIN_ID := 7 ## rocky_terrain_03 -- scree with grass
 const PINE_LITTER_ID := 8 ## pine_litter -- needle litter under canopy (baked from a floor scan)
+
+## -- Open ground (2026-10-01): GRASS is the default surface. Before, Ground (bright tan soil) was
+## the default and Grass was painted only under the blade patches, so every gap between patches
+## read as a bright empty hole (docs/forest_floor_plan.md). Now a soil vertex is base Grass with
+## Ground as the overlay, blend = "bare":
+##   - the road verge: 1 within BARE_ROAD_CLEAR m of a road vertex (their base is Ground, so the
+##     pair swap there shows the same texture), 0 from BARE_ROAD_REACH m;
+##   - sparse worn patches: noise above BARE_WORN_LO..HI, at most BARE_WORN_MAX.
+## The header's "SOIL: Ground <-> Grass" description and GRASS_TEXTURE_GROW predate this.
+## Verge (user 2026-10-01: no uniform soil strip along the road): worn-to-soil stretches where the
+## verge noise is above BARE_VERGE_LO..HI, grass up to the stones elsewhere. Road vertices get the
+## matching base (Ground / Grass) so the pair swap at the road edge shows the same texture.
+const BARE_VERGE_LO := 0.47
+const BARE_VERGE_HI := 0.6
+const BARE_ROAD_CLEAR := 0.8
+const BARE_ROAD_REACH := 3.5
+const BARE_WORN_LO := 0.74
+const BARE_WORN_HI := 0.88
+const BARE_WORN_MAX := 0.8
+const BARE_NY_FULL := 0.8 ## normal.y at/below this (~37 deg) -> fully bare
+const BARE_NY_NONE := 0.93 ## at/above this (~21 deg) -> slope adds no bare soil
+const BARE_CLIFF_CLEAR := 1.5 ## m from a cliff face / cliff-mesh footprint / outcrop: fully bare within this
+const BARE_CLIFF_REACH := 5.0 ## ...and no effect from here
 const ROCK_TYPES: Array[int] = [ROCK_FACE_ID, AERIAL_ROCKS_ID, ROCKY_TRAIL_ID, ROCKY_TERRAIN_ID, COAST_SAND_ROCKS_ID]
 
 ## -- Litter under canopy (2026-10-01, docs/forest_floor_plan.md step 2) --
@@ -254,11 +277,13 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 	if litter_ok:
 		for tp in TreeScatter.tree_points:
 			GrassScatter._stamp_circle(tree_d, width, length, tp.x, tp.y, LITTER_TREE_CORE * tp.z, LITTER_TREE_FADE + LITTER_EDGE_NOISE)
-		for pz in length:
-			for px in width:
-				var c := old_control.decode_u32((pz * width + px) * 4)
-				if Terrain3DUtil.get_base(c) == ROAD_ID or Terrain3DUtil.get_overlay(c) == ROAD_ID:
-					GrassScatter._stamp_circle(road_d, width, length, px, pz, 0.0, LITTER_ROAD_REACH)
+	var bare_sum := 0.0
+	# Always built: the road distance also drives the bare verge (BARE_ROAD_*).
+	for pz in length:
+		for px in width:
+			var c := old_control.decode_u32((pz * width + px) * 4)
+			if Terrain3DUtil.get_base(c) == ROAD_ID or Terrain3DUtil.get_overlay(c) == ROAD_ID:
+				GrassScatter._stamp_circle(road_d, width, length, px, pz, 0.0, LITTER_ROAD_REACH)
 	var control := PackedInt32Array()
 	control.resize(n)
 	var counts := {"road": 0, "soil": 0, "rock": 0}
@@ -274,8 +299,13 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 		for px in width:
 			var i := pz * width + px
 			var old := old_control.decode_u32(i * 4)
+			# Verge: is the roadside here worn to soil (1) or grown over (0)? Regional noise, so soil
+			# and grass alternate along the road in stretches instead of one even strip (BARE_VERGE_*).
+			var verge := smoothstep(BARE_VERGE_LO, BARE_VERGE_HI, 0.6 * (type_b[i] / 255.0) + 0.4 * (big_n[i] / 255.0))
 			if Terrain3DUtil.get_base(old) == ROAD_ID or Terrain3DUtil.get_overlay(old) == ROAD_ID:
-				control[i] = old
+				# Road vertices keep their Road blend; only what the road fades INTO at its edge
+				# changes: Ground on a worn verge, Grass elsewhere (TerrainRoad paints Ground).
+				control[i] = TerrainHeightmap.pack_control_blend(GROUND_ID if verge >= 0.5 else GRASS_ID, ROAD_ID, Terrain3DUtil.get_blend(old) / 255.0)
 				counts.road += 1
 				continue
 
@@ -343,20 +373,29 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 				lit *= smoothstep(LITTER_ROAD_CLEAR, LITTER_ROAD_REACH, road_d[j])
 				lit *= smoothstep(LITTER_NY_NONE, LITTER_NY_FULL, ny) * smoothstep(LITTER_CLIFF_CLEAR, LITTER_CLIFF_REACH, cliff_d[j])
 
+			# Bare soil (BARE_*): the road verge + sparse worn patches. Everything else is Grass.
+			var bare := maxf(
+				verge * (1.0 - smoothstep(BARE_ROAD_CLEAR, BARE_ROAD_REACH, road_d[j])),
+				BARE_WORN_MAX * smoothstep(BARE_WORN_LO, BARE_WORN_HI, 0.5 * (type_a[i] / 255.0) + 0.5 * (small_n[i] / 255.0)))
+			# No turf on steep ground or against cliffs (user screenshot 2026-10-01: grass up a bank
+			# and blending into a cliff mesh) -- there the soil under the rock texture is Ground.
+			bare = maxf(bare, maxf(1.0 - smoothstep(BARE_NY_FULL, BARE_NY_NONE, ny), 1.0 - smoothstep(BARE_CLIFF_CLEAR, BARE_CLIFF_REACH, cliff_d[j])))
+
 			if rocky < ROCKY_MIN:
 				counts.soil += 1
 				if lit >= LITTER_FULL:
 					litter_full += 1
 					control[i] = TerrainHeightmap.pack_control_blend(PINE_LITTER_ID, GRASS_ID, _spray(g, spray))
-				elif lit > g and lit > LITTER_MIN:
+				elif lit > bare and lit > LITTER_MIN:
 					litter_ramp += 1
 					soil_pair[i] = PAIR_GROUND_LITTER
 					soil_b[i] = lit / LITTER_FULL
-					control[i] = TerrainHeightmap.pack_control_blend(GROUND_ID, PINE_LITTER_ID, _spray(soil_b[i], spray))
+					control[i] = TerrainHeightmap.pack_control_blend(GRASS_ID, PINE_LITTER_ID, _spray(soil_b[i], spray))
 				else:
+					bare_sum += bare
 					soil_pair[i] = PAIR_GROUND_GRASS
-					soil_b[i] = g
-					control[i] = TerrainHeightmap.pack_control_blend(GROUND_ID, GRASS_ID, _spray(g, spray))
+					soil_b[i] = bare
+					control[i] = TerrainHeightmap.pack_control_blend(GRASS_ID, GROUND_ID, _spray(bare, spray))
 				continue
 
 			# Rock type: correlated weights + regional noise, highest wins.
@@ -385,7 +424,7 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 				rock_id = COAST_SAND_ROCKS_ID
 			type_counts[rock_id] += 1
 			counts.rock += 1
-			var soil := GRASS_ID if g >= 0.5 else (PINE_LITTER_ID if lit >= 0.5 else GROUND_ID)
+			var soil := PINE_LITTER_ID if lit >= 0.5 else (GROUND_ID if bare >= 0.5 else GRASS_ID)
 			rock_of[i] = rock_id
 			soil_of[i] = soil
 			rocky_of[i] = rocky
@@ -480,11 +519,11 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 					hit = true
 					if faded[k] == 0:
 						faded[k] = 1
-						control[k] = TerrainHeightmap.pack_control_blend(GROUND_ID, GRASS_ID, _spray(soil_b[k] * LITTER_SEAM_FADE, spray_n[k] / 255.0 - 0.5))
+						control[k] = TerrainHeightmap.pack_control_blend(GRASS_ID, GROUND_ID, _spray(soil_b[k] * LITTER_SEAM_FADE, spray_n[k] / 255.0 - 0.5))
 			if hit:
 				litter_seams += 1
-				control[i] = TerrainHeightmap.pack_control_blend(GROUND_ID, PINE_LITTER_ID, _spray(soil_b[i] * LITTER_SEAM_FADE, spray_n[i] / 255.0 - 0.5))
-	print("GROUND_PAINT v2: litter -- %.1f%% of vertices full litter, %.1f%% on the ramp, %d ramp vertices faded at grass seams" % [100.0 * litter_full / n, 100.0 * litter_ramp / n, litter_seams])
+				control[i] = TerrainHeightmap.pack_control_blend(GRASS_ID, PINE_LITTER_ID, _spray(soil_b[i] * LITTER_SEAM_FADE, spray_n[i] / 255.0 - 0.5))
+	print("GROUND_PAINT v2: litter -- %.1f%% of vertices full litter, %.1f%% on the ramp, %d ramp vertices faded at bare-soil seams; bare soil ~%.1f%% of the map (rest of the open ground = Grass)" % [100.0 * litter_full / n, 100.0 * litter_ramp / n, litter_seams, 100.0 * bare_sum / n])
 	last_stats["seams"] = seams
 	last_stats["islands"] = islands
 	print("GROUND_PAINT v2: shape softening -- %d rock-type seam vertices faded, %d island vertices faded, warp +-%.1f m" % [seams, islands, ROCK_WARP_AMP])
