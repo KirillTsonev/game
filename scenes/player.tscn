@@ -22,7 +22,16 @@ current = true
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.22, 1.15, -0.12)
 light_color = Color(1, 0.7647059, 0.36862746, 1)
 light_energy = 3.0
-light_specular = 0.3
 shadow_enabled = true
-omni_range = 12.0
-omni_attenuation = 0.0
+omni_range = 13.0
+omni_attenuation = 0.5
+
+[node name="GroundPool" type="SpotLight3D" parent="Lantern" unique_id=1550993870]
+transform = Transform3D(1, 0, 0, 0, 0.25881904, 0.9659258, 0, -0.9659258, 0.25881904, 0.22, 2.35, -0.3)
+light_color = Color(1, 0.7647059, 0.36862746, 1)
+light_energy = 2.0
+light_specular = 0.0
+spot_range = 7.0
+spot_attenuation = 0.5
+spot_angle = 55.0
+spot_angle_attenuation = 2.0

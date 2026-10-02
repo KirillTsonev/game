@@ -31,6 +31,7 @@ extends RefCounted
 ## Fab pack trees renumbered from 20-33 to 14-27. Keep in sync with PACK_TREES.
 const TREE_IDS_FAB_PACK: Array[int] = [14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]  ## Fab vegetation pack (Kirill's cleaned selection): 8 pines + 6 deciduous (1.9-11.3k tris)
 const TREE_MESH_IDS: Array[int] = TREE_IDS_FAB_PACK
+const TREE_IDS_PINE: Array[int] = [14, 15, 16, 17, 18, 19, 20, 21] ## the pines among them (PackPineA-D + their second variants)
 const TREE_REACH := 4.0 ## canopy footprint radius (~6-7 m wide trees) kept off the map edge, same role as ERRATIC_REACH
 ## Stand counts calibrated at 256x256 and scaled by real map area (like ERRATIC/OUTCROP) so stand density stays constant as AREA_* change.
 const TREE_DENSITY_BASE_AREA := 256.0 * 256.0
@@ -89,6 +90,8 @@ static var _tree_debug: Dictionary = {}
 ## Every tree placed this run as Vector3(px, pz, scale) in heightmap-pixel space (1 px = 1 m).
 ## Read by UnderstoryScatter to build its canopy density map (2026-09-25). Reset per run.
 static var tree_points: PackedVector3Array = PackedVector3Array()
+## Mesh id of each tree in tree_points (same index). Read by DeadfallScatter: cones under pines only.
+static var tree_mesh_ids: PackedInt32Array = PackedInt32Array()
 
 ## Canopy tree scatter -- see the TREE_* const block for the design. Floor-based
 ## clumped stands, upright, gameplay-range trunk colliders. Same timing contract
@@ -275,6 +278,7 @@ static func _place_one_tree(target: Vector2, heights: PackedFloat32Array, width:
 		var lean_axis := Vector3(cos(la), 0.0, sin(la))
 		basis = Basis(lean_axis, lean) * basis
 	var mesh_id: int = active_ids[rng.randi() % active_ids.size()]
+	tree_mesh_ids.append(mesh_id)
 	var tree_basis := basis.scaled(Vector3.ONE * scale)
 	transforms_by_mesh[mesh_id].append(Transform3D(tree_basis, tree_pos))
 	colors_by_mesh[mesh_id].append(Color(1.0, 1.0, 1.0, 1.0))
@@ -404,3 +408,4 @@ static func _add_to_spacing_grid(grid: Dictionary, px: float, pz: float, radius:
 static func reset_run_state() -> void:
 	_tree_debug = {}
 	tree_points = PackedVector3Array()
+	tree_mesh_ids = PackedInt32Array()

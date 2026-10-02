@@ -7,6 +7,9 @@
 ## - Readout per band: blades per m^2, grid cells the GPU cull pass walks EVERY FRAME (the real cost:
 ##   (2 x end / spacing)^2), and blade widening at the band's far edge.
 ## - "Print values" prints GDScript you can paste over BLADE_BANDS / WIDEN_* in grass_field.gd.
+## - Second panel (top left, 2026-10-02): blade colours + blend/ambient sliders (grass_blade.gdshader
+##   uniforms, kept in GrassField.shader_overrides so they survive a rebuild) and the Grass ground
+##   texture's tint (TerrainGroundPaint.GRASS_TINT). All live; "Print values" prints them too.
 ## Mouse: the panel shows the cursor. Clicking outside the panel captures it again (player.gd),
 ## so you can look around; press Y to get the cursor back, Y again to close.
 class_name GrassTuningPanel
@@ -26,6 +29,23 @@ var _wind_sliders: Dictionary = {}
 var _wind_labels: Dictionary = {}
 var _readout: Label
 var _status: Label
+## grass_blade.gdshader uniforms shown in the colour panel: [uniform, row title] / [uniform, row title, max].
+const COLOR_PARAMS := [
+	[&"base_color", "Blade base"], [&"tip_color", "Blade tip"],
+	[&"dry_base_color", "Dry blade base"], [&"dry_tip_color", "Dry blade tip"],
+	[&"subsurface_scattering_color", "Backlit glow"],
+]
+const FLOAT_PARAMS := [
+	[&"tip_blend", "Tip blend (tall)", 1.0], [&"short_tip_blend", "Tip blend (short)", 1.0],
+	[&"backlight_floor", "Backlight floor", 0.5], [&"blade_ambient", "Blade ambient", 1.0],
+	[&"blade_saturation", "Blade saturation", 1.0],
+]
+var _color_pickers: Dictionary = {}
+var _float_sliders: Dictionary = {}
+var _float_labels: Dictionary = {}
+var _tint_picker: ColorPickerButton
+var _tint_mult: HSlider
+var _tint_mult_label: Label
 
 func _ready() -> void:
 	layer = 50
@@ -91,6 +111,95 @@ func _ready() -> void:
 	_status = Label.new()
 	_status.add_theme_font_size_override("font_size", 12)
 	box.add_child(_status)
+	_build_color_panel()
+	_refresh_labels()
+
+## Second panel, top left: blade colours + ground tint, all live.
+func _build_color_panel() -> void:
+	var panel := PanelContainer.new()
+	panel.offset_left = 10.0
+	panel.offset_top = 10.0
+	add_child(panel)
+	var margin := MarginContainer.new()
+	for side in ["left", "right", "top", "bottom"]:
+		margin.add_theme_constant_override("margin_" + side, 10)
+	panel.add_child(margin)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 4)
+	margin.add_child(box)
+
+	_add_label(box, "GRASS COLOUR (live)", true)
+	for spec in COLOR_PARAMS:
+		var picker := _add_color_row(box, spec[1], _as_color(GrassField.blade_param(spec[0])), _blade_default(spec[0]))[0] as ColorPickerButton
+		_color_pickers[spec[0]] = picker
+		picker.color_changed.connect(_on_blade_param_changed.bind(spec[0]))
+	for spec in FLOAT_PARAMS:
+		var fr := _add_slider_row(box, spec[1], 0.0, spec[2], 0.01, float(GrassField.blade_param(spec[0])))
+		_float_sliders[spec[0]] = fr[0]
+		_float_labels[spec[0]] = fr[1]
+		fr[0].value_changed.connect(_on_blade_param_changed.bind(spec[0]))
+
+	box.add_child(HSeparator.new())
+	_add_label(box, "Grass ground texture: tint x brightness (white, 1 = untouched)", true)
+	var tint_row := _add_color_row(box, "Ground tint", TerrainGroundPaint.GRASS_TINT, TerrainGroundPaint.GRASS_TINT)
+	_tint_picker = tint_row[0]
+	_tint_picker.color_changed.connect(func(_c: Color) -> void: _apply_ground_tint())
+	(tint_row[1] as Button).pressed.connect(func() -> void: _tint_mult.value = 1.0) # its reset also resets the brightness
+	var tr := _add_slider_row(box, "Ground brightness", 0.25, 3.0, 0.05, 1.0)
+	_tint_mult = tr[0]
+	_tint_mult_label = tr[1]
+	_tint_mult.value_changed.connect(func(_v: float) -> void: _apply_ground_tint())
+	_add_label(box, "Patch shade (PATCH_SHADE) is baked at startup -- not live.")
+
+## The shader's own default for a colour uniform (ignores the panel's override).
+func _blade_default(param: StringName) -> Color:
+	return _as_color(RenderingServer.shader_get_parameter_default(GrassField.BLADE_SHADER.get_rid(), param))
+
+func _as_color(v: Variant) -> Color:
+	return Color(v.x, v.y, v.z) if v is Vector3 else v
+
+## Returns [picker, reset_button]; the button puts `default` back (and fires color_changed).
+func _add_color_row(parent: Control, title: String, color: Color, default: Color) -> Array:
+	var row := HBoxContainer.new()
+	parent.add_child(row)
+	var name_label := Label.new()
+	name_label.text = title
+	name_label.custom_minimum_size.x = 190.0
+	name_label.add_theme_font_size_override("font_size", 12)
+	row.add_child(name_label)
+	var picker := ColorPickerButton.new()
+	picker.color = color
+	picker.edit_alpha = false
+	picker.focus_mode = Control.FOCUS_NONE
+	picker.custom_minimum_size = Vector2(170.0, 22.0)
+	row.add_child(picker)
+	var reset := Button.new()
+	reset.text = "Reset"
+	reset.focus_mode = Control.FOCUS_NONE
+	reset.add_theme_font_size_override("font_size", 12)
+	reset.pressed.connect(func() -> void:
+		picker.color = default
+		picker.color_changed.emit(default))
+	row.add_child(reset)
+	return [picker, reset]
+
+func _on_blade_param_changed(value: Variant, param: StringName) -> void:
+	GrassField.shader_overrides[param] = value
+	var field := _field()
+	if field:
+		field.apply_widen() # also pushes the shader overrides
+	_refresh_labels()
+
+func _ground_tint() -> Color:
+	var c := _tint_picker.color
+	var m := float(_tint_mult.value)
+	return Color(c.r * m, c.g * m, c.b * m)
+
+func _apply_ground_tint() -> void:
+	var terrain := get_tree().current_scene.get_node_or_null("Terrain3D") as Terrain3D
+	var asset: Terrain3DTextureAsset = terrain.get_assets().get_texture(TerrainGroundPaint.GRASS_ID) if terrain and terrain.get_assets() else null
+	if asset:
+		asset.set_albedo_color(_ground_tint())
 	_refresh_labels()
 
 ## PerfDebug's Y: closed -> open with cursor; open + mouse captured -> cursor back; open -> close.
@@ -199,6 +308,13 @@ func _on_reset() -> void:
 		_widen_sliders[key].set_value_no_signal({"scale": GrassField.widen_scale, "power": GrassField.widen_power, "max": GrassField.widen_max}[key])
 	for key in _wind_sliders:
 		_wind_sliders[key].set_value_no_signal(GrassField.wind_fade_start if key == "fade start" else GrassField.wind_fade_end)
+	for spec in COLOR_PARAMS:
+		_color_pickers[spec[0]].color = _blade_default(spec[0])
+	for spec in FLOAT_PARAMS:
+		_float_sliders[spec[0]].set_value_no_signal(float(GrassField.blade_param(spec[0])))
+	_tint_picker.color = TerrainGroundPaint.GRASS_TINT
+	_tint_mult.set_value_no_signal(1.0)
+	_apply_ground_tint()
 	GrassField.spawn(get_tree().current_scene)
 	_status.text = "Reset to defaults and rebuilt."
 	_refresh_labels()
@@ -218,6 +334,15 @@ func _on_print() -> void:
 	lines.append("const WIDEN_MAX := %.1f" % GrassField.widen_max)
 	lines.append("const WIND_FADE_START := %.1f" % GrassField.wind_fade_start)
 	lines.append("const WIND_FADE_END := %.1f" % GrassField.wind_fade_end)
+	lines.append("[GrassTuning] paste into grass_blade.gdshader (GrassColor uniforms):")
+	for spec in COLOR_PARAMS:
+		var c: Color = _color_pickers[spec[0]].color
+		lines.append("uniform vec3 %s : source_color = vec3(%.3f, %.3f, %.3f);" % [spec[0], c.r, c.g, c.b])
+	for spec in FLOAT_PARAMS:
+		lines.append("%s = %.2f" % [spec[0], float(_float_sliders[spec[0]].value)])
+	var t := _ground_tint()
+	lines.append("[GrassTuning] paste into ground_paint.gd:")
+	lines.append("const GRASS_TINT := Color(%.3f, %.3f, %.3f)" % [t.r, t.g, t.b])
 	print("\n".join(lines))
 	_status.text = "Printed to the Output panel."
 
@@ -261,6 +386,10 @@ func _refresh_labels() -> void:
 	if not _wind_labels.is_empty():
 		_wind_labels["fade start"].text = "%.0f m" % GrassField.wind_fade_start
 		_wind_labels["fade end"].text = "%.0f m" % GrassField.wind_fade_end
+	for param: StringName in _float_labels:
+		_float_labels[param].text = "%.2f" % float(_float_sliders[param].value)
+	if _tint_mult_label:
+		_tint_mult_label.text = "x%.2f" % float(_tint_mult.value)
 
 func _k(v: int) -> String:
 	return "%.1fM" % (v / 1000000.0) if v >= 1000000 else "%dk" % (v / 1000)

@@ -157,10 +157,12 @@ uniform vec2 short_face_range = vec2(5.0, 15.0); // m from the camera: random ya
 uniform float short_face_jitter = 0.44; // rad (+-25 deg) of per-blade yaw kept when facing the camera
 
 group_uniforms GrassColor;
-uniform vec3 base_color : source_color = vec3(0.05, 0.2, 0.01);
-uniform vec3 tip_color : source_color = vec3(0.30, 0.42, 0.10); // was (0.5, 0.5, 0.1) -- see header
+// 2026-10-02 (Kirill, tuning panel, for the lantern): base, tip and dry base lightened --
+// were (0.05, 0.2, 0.01), (0.30, 0.42, 0.10), (0.22, 0.17, 0.06).
+uniform vec3 base_color : source_color = vec3(0.061, 0.242, 0.012);
+uniform vec3 tip_color : source_color = vec3(0.390, 0.559, 0.103); // before 0.30/0.42/0.10: (0.5, 0.5, 0.1) -- see header
 uniform vec3 subsurface_scattering_color : source_color = vec3(0.35, 0.55, 0.12); // see header (moon fix)
-uniform vec3 dry_base_color : source_color = vec3(0.22, 0.17, 0.06);
+uniform vec3 dry_base_color : source_color = vec3(0.348, 0.266, 0.090);
 uniform vec3 dry_tip_color : source_color = vec3(0.58, 0.50, 0.26); // was (0.75, 0.62, 0.30)
 // How much of tip_color / dry_tip_color reaches the blade tips (see header "NO BRIGHT TIPS").
 // 0 = base colour root to tip (the fix), 1 = the full GodotGrass base->tip gradient.

@@ -6,6 +6,7 @@
 #       [--ratios 1,0.35,0.1] [--mesh <name part>] [--scale <s>] [--textures <dir> <prefix>]
 #       [--dir <folder>]   (several assets in one folder sharing its textures -- the debris-pack sticks)
 #       [--rotate x,y,z] [--floor]   (degrees; stand a sideways scan up -- then --recenter --floor)
+#       [--loose-roles] [--tex-size <px>]   (non-Megascans sources -- the pine cones, 2026-10-02)
 #
 # Written for the deadfall stumps/logs (2026-09-30). Fab's converted glbs are one mesh under a chain
 # of Sketchfab empties, with base colour / ORM / normal embedded as Image_0/1/2.
@@ -22,6 +23,9 @@
 #    --textures <dir> <prefix>: loose Unreal-named textures instead (the FBX download): copies
 #    <prefix>_BC.png / _ORM.png / _N.png to _diff / _orm / _nor_gl (.png). Check the normal map's
 #    convention first -- tree_branch_arbem's _N was tested OpenGL (vs its height map, 2026-09-30).
+#    --loose-roles: the source has no ORM (or no normal map either) -- write whichever of the three
+#    it has; only the base colour is required. --tex-size <px>: embedded textures larger than this
+#    are scaled down and re-encoded, and the files are named for it (1024 -> _1k).
 # 4. builds LODs with Decimate (collapse): <name>_LOD0, _LOD1, _LOD2 -- sibling nodes, which
 #    Terrain3D uses as LODs (same layout as the rock glbs). --ratios sets each LOD's share of the
 #    source tris (default 1,0.35,0.1: LOD0 = the source). A first ratio < 1 decimates LOD0 too --
@@ -44,6 +48,9 @@ mesh_key = args[args.index("--mesh") + 1] if "--mesh" in args else ""
 bake_scale = float(args[args.index("--scale") + 1]) if "--scale" in args else 1.0
 loose_tex = args[args.index("--textures") + 1:args.index("--textures") + 3] if "--textures" in args else []
 folder = args[args.index("--dir") + 1] if "--dir" in args else name  # also the texture name prefix
+loose_roles = "--loose-roles" in args
+tex_size = int(args[args.index("--tex-size") + 1]) if "--tex-size" in args else 0
+res_tag = f"{tex_size // 1024}k" if tex_size else "2k"
 dst = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "assets", "models", "ground_debris", folder))
 os.makedirs(os.path.join(dst, "textures"), exist_ok=True)
 
@@ -116,14 +123,19 @@ else:
                     roles["nor_gl"] = nd.image
                 elif l.to_node.type == 'SEPARATE_COLOR':
                     roles["orm"] = nd.image
-    if set(roles) != {"diff", "orm", "nor_gl"}:
+    if set(roles) != {"diff", "orm", "nor_gl"} and not (loose_roles and "diff" in roles):
         raise RuntimeError(f"unexpected image roles {list(roles)}")
     for role, img in roles.items():
         ext = ".png" if img.file_format == 'PNG' else ".jpg"
-        path = os.path.join(dst, "textures", f"{folder}_{role}_2k{ext}")
-        with open(path, "wb") as f:
-            f.write(img.packed_file.data)
-        print(f"TEXTURE {role} {img.size[0]}x{img.size[1]} -> {path}")
+        path = os.path.join(dst, "textures", f"{folder}_{role}_{res_tag}{ext}")
+        src_size = tuple(img.size)
+        if tex_size and max(src_size) > tex_size:
+            img.scale(tex_size, tex_size)
+            img.save(filepath=path, quality=92, save_copy=True)
+        else:
+            with open(path, "wb") as f:
+                f.write(img.packed_file.data)
+        print(f"TEXTURE {role} {src_size[0]}x{src_size[1]} -> {path} ({os.path.getsize(path) / 1e3:.0f} kB)")
     mat.name = folder + "_material"
 
 # 4. LODs

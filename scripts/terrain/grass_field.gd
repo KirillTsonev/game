@@ -46,7 +46,7 @@ const PARAMS_VEC4 := 11 ## size of the cull shader's params buffer, in vec4s (se
 const BLADE_BANDS: Array[Dictionary] = [
 	{"name": "blades_0", "inner": 0.0, "outer": 50.0, "band": 3.0, "spacing": 0.1, "mesh": "high"},
 	{"name": "blades_1", "inner": 50.0, "outer": 100.0, "band": 6.0, "spacing": 0.25, "mesh": "high"},
-	{"name": "blades_2", "inner": 100.0, "outer": 150.0, "band": 8.0, "spacing": 0.75, "mesh": "low"},
+	{"name": "blades_2", "inner": 100.0, "outer": 150.0, "band": 8.0, "spacing": 0.5, "mesh": "low"},
 	{"name": "blades_3", "inner": 150.0, "outer": 200.0, "band": 10.0, "spacing": 1.25, "mesh": "low"},
 	{"name": "blades_4", "inner": 200.0, "outer": RADIUS, "band": FADE_BAND, "spacing": 3.0, "mesh": "low"},
 ]
@@ -79,8 +79,15 @@ static var blade_bands: Array = BLADE_BANDS.duplicate(true)
 static var widen_scale := WIDEN_SCALE
 static var widen_power := WIDEN_POWER
 static var widen_max := WIDEN_MAX
+## Blade-shader uniforms changed in the panel (name -> value); empty = the shader's own defaults.
+static var shader_overrides: Dictionary = {}
+
+## Current value of a grass_blade.gdshader uniform: the panel's override, else the shader default.
+static func blade_param(param: StringName) -> Variant:
+	return shader_overrides.get(param, RenderingServer.shader_get_parameter_default(BLADE_SHADER.get_rid(), param))
 
 static func reset_tuning() -> void:
+	shader_overrides = {}
 	blade_bands = BLADE_BANDS.duplicate(true)
 	widen_scale = WIDEN_SCALE
 	widen_power = WIDEN_POWER
@@ -99,6 +106,8 @@ func apply_widen() -> void:
 		_blade_mat.set_shader_parameter("widen_max", widen_max)
 		_blade_mat.set_shader_parameter("wind_fade_start", wind_fade_start)
 		_blade_mat.set_shader_parameter("wind_fade_end", maxf(wind_fade_end, wind_fade_start + 1.0))
+		for param: StringName in shader_overrides:
+			_blade_mat.set_shader_parameter(param, shader_overrides[param])
 
 ## Blades read the map's R as COVERAGE (fraction of ground inside patches -- see grass_cull.glsl);
 ## this scales it (1.0 = the bake's zone targets as-is).

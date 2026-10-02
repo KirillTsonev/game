@@ -29,8 +29,10 @@ material; x3.5-4) -- small Megascans twigs scaled up to 0.6-0.9 m. Embedded text
 38-49 deadfall (StumpBroken, StumpOld, StumpRottenLarge, StumpRottenTall, LogFallenNordic,
 LogFallenLarge, BranchFallen, StickArbem, StickDebrisA-D), 50-52 litter mounds (LitterMoundA-C:
 `ground_debris/litter_mound/`, built by `tools/blender/bake_pine_litter.py`, material =
-`litter_mound.gdshader` on the PineLitter terrain textures -- see `docs/forest_floor_plan.md`).
-Ids are a contiguous list: a new asset is appended at the next id (**53**).
+`litter_mound.gdshader` on the PineLitter terrain textures -- see `docs/forest_floor_plan.md`),
+53-54 pine cones (ConeOpen, ConeLong: `ground_debris/cone_open/`, `cone_long/`, 1K textures, no
+ORM -- same plan, step 6).
+Ids are a contiguous list: a new asset is appended at the next id (**55**).
 
 ---
 

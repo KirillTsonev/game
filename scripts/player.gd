@@ -72,7 +72,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	# Esc is now handled by the PauseMenu autoload (opens the pause menu and
 	# releases the mouse itself). Click back into the window to re-capture
 	# the mouse during normal play (e.g. after alt-tabbing).
-	# L = lantern on/off (the OmniLight3D "Lantern" on the belt, player.tscn).
+	# L = lantern on/off (the OmniLight3D "Lantern" on the belt, player.tscn). Its child
+	# "GroundPool" (the overhead spot that lights the ground) hides with it.
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_L:
 		var lantern := get_node_or_null("Lantern") as Light3D
 		if lantern:

@@ -6,7 +6,7 @@ extends Node
 ## tools/blender/import_megascans_glb.py) + textures/<dir>_{diff,nor_gl}_2k.jpg, <dir>_orm_2k.png.
 ##   configure_imports()  discard embedded images (rule 4, docs/adding_models.md), forced reimport
 ##   setup_materials()    <dir>_material.tres from the three textures (ORM read directly)
-##   setup_mesh_assets()  Terrain3D mesh assets, ids 38-49, material override + LOD ranges
+##   setup_mesh_assets()  Terrain3D mesh assets, ids 38-54, material override + LOD ranges
 ##   debug_print_sizes()  LOD0 AABB + tris per LOD, loaded from disk
 ## Run via call_method(runtime:false) on the EDITOR process (tools/setup_ground_debris_assets.tscn,
 ## node "."): Play mode's separate process would never touch the editor's live Terrain3DAssets.
@@ -41,15 +41,20 @@ const DEBRIS := [
 	{"id": 50, "dir": "litter_mound", "file": "litter_mound_a", "name": "LitterMoundA", "ranges": [50.0], "terrain_tex": "pine_litter", "shadows": false},
 	{"id": 51, "dir": "litter_mound", "file": "litter_mound_b", "name": "LitterMoundB", "ranges": [50.0], "terrain_tex": "pine_litter", "shadows": false},
 	{"id": 52, "dir": "litter_mound", "file": "litter_mound_c", "name": "LitterMoundC", "ranges": [50.0], "terrain_tex": "pine_litter", "shadows": false},
+	# 2026-10-02: pine cones (raw-assets/models/cones/), 9 cm open cone + 12 cm long closed cone,
+	# lying on their side along X. Not Megascans: 1K textures ("res"), no ORM -> flat "roughness";
+	# cone_long has no normal map either. Small, so culled close and no shadows.
+	{"id": 53, "dir": "cone_open", "name": "ConeOpen", "ranges": [12.0, 24.0, 40.0], "res": "1k", "roughness": 0.85, "shadows": false},
+	{"id": 54, "dir": "cone_long", "name": "ConeLong", "ranges": [12.0, 24.0, 40.0], "res": "1k", "roughness": 0.85, "shadows": false},
 ]
 
 func _glb(e: Dictionary) -> String:
 	return BASE + "%s/%s.glb" % [e.dir, e.get("file", e.dir)]
 
 ## Texture of one role (diff / orm / nor_gl) -- .jpg or .png, whichever the import wrote.
-func _tex(dir: String, role: String) -> Texture2D:
+func _tex(dir: String, role: String, res: String = "2k") -> Texture2D:
 	for ext in [".jpg", ".png"]:
-		var path := BASE + "%s/textures/%s_%s_2k%s" % [dir, dir, role, ext]
+		var path := BASE + "%s/textures/%s_%s_%s%s" % [dir, dir, role, res, ext]
 		if ResourceLoader.exists(path):
 			return load(path)
 	return null
@@ -94,20 +99,30 @@ func setup_materials(only_ids: Array = []) -> String:
 					push_error("setup_ground_debris_assets: %s failed to load for %s" % [prop, e.dir])
 			out.append("saved %s (err=%d)" % [mat_path, ResourceSaver.save(smat, mat_path)])
 			continue
+		var res: String = e.get("res", "2k")
 		var mat := StandardMaterial3D.new()
-		mat.albedo_texture = _tex(e.dir, "diff")
+		mat.albedo_texture = _tex(e.dir, "diff", res)
+		mat.metallic = 0.0
+		if e.has("roughness"):
+			# No ORM texture (the cones): flat roughness, and the normal map only if there is one.
+			mat.roughness = e.roughness
+			mat.normal_texture = _tex(e.dir, "nor_gl", res)
+			mat.normal_enabled = mat.normal_texture != null
+			if mat.albedo_texture == null:
+				push_error("setup_ground_debris_assets: albedo_texture failed to load for %s" % e.dir)
+			out.append("saved %s (err=%d)" % [mat_path, ResourceSaver.save(mat, mat_path)])
+			continue
 		mat.normal_enabled = true
-		mat.normal_texture = _tex(e.dir, "nor_gl")  # OpenGL convention (glTF; stick_arbem's _N tested), no flip
+		mat.normal_texture = _tex(e.dir, "nor_gl", res)  # OpenGL convention (glTF; stick_arbem's _N tested), no flip
 		# Megascans ORM packing (glTF): R = AO, G = roughness, B = metallic. Wood is never metallic,
 		# so metallic stays 0 and the B channel is unused.
-		var orm := _tex(e.dir, "orm")
+		var orm := _tex(e.dir, "orm", res)
 		mat.roughness = 1.0  # multiplier on the texture
 		mat.roughness_texture = orm
 		mat.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
 		mat.ao_enabled = true
 		mat.ao_texture = orm
 		mat.ao_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
-		mat.metallic = 0.0
 		for prop: String in ["albedo_texture", "normal_texture", "roughness_texture"]:
 			if mat.get(prop) == null:
 				push_error("setup_ground_debris_assets: %s failed to load for %s" % [prop, e.dir])

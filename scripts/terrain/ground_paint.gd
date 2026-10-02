@@ -77,7 +77,8 @@ const BARE_CLIFF_REACH := 5.0 ## ...and no effect from here
 ## (Kirill): the scene is moonlit and the colour grade remaps by brightness, so halving the
 ## ground's albedo crushes it; matching albedo numbers is the wrong target. Now mostly a hue
 ## shift (less red and blue = greener, less yellow) with ~15 % darkening. Tune by eye.
-const GRASS_TINT := Color(0.62, 0.85, 0.55)
+## 2026-10-02 (Kirill, tuning panel): lightened from (0.62, 0.85, 0.55) so the lantern reads on it.
+const GRASS_TINT := Color(0.688, 0.938, 0.612)
 ## Ground under the tall blade patches is darkened through the terrain COLOR map (multiplied into
 ## albedo, 1 px = 1 m): x (1 - PATCH_SHADE) under a full patch, following the same softened patch
 ## keep the litter blend uses, so the shade fades out over ~1 m at the outline. This is the

@@ -131,7 +131,17 @@ at grove edges). What is missing is the materials that make thin ground read as 
 5. **Baked grounding.** Darken the ground at patch borders and under ferns/bushes in the ground
    paint (patch map + plant positions are known); fade plant and blade colour toward dark at the
    base in their shaders; soften foliage lighting so shadowed sides don't go black.
-6. **Pine cones.** New small kind in `scripts/terrain/deadfall_scatter.gd` + rows in
+6. **Pine cones.** BUILT 2026-10-02, not yet judged in-game. Two models from
+   `raw-assets/models/cones/`: `cone_open` (`pinecone.fbx`, game-ready, 1.5k tris, scaled x1.6 to
+   9 cm) and `cone_long` (`pinecone_photoscan.glb`, 29k tris decimated to 1.7k, 12 cm, albedo
+   only), both exported lying along X with 1K textures by `import_megascans_glb.py`
+   (`--loose-roles --tex-size 1024`). Mesh ids 53 / 54, no shadows, no collision, cull 40 m.
+   Placement: `DeadfallScatter._scatter_cones` (`CONE_*` constants) -- 5-14 cones under 55 % of
+   the pines (`TreeScatter.tree_mesh_ids` says which trees are pines), the group shifted downhill
+   on a slope, plus 2-6 against the uphill side of logs with a pine within 4 m; kept off rocks,
+   cliffs, trunks, stumps / logs and litter mounds. First run: 2281 cones (2232 under 265 of 520
+   pines, 49 against logs), 0.1 s. Not used: `source/model.glb` (99k tris, 8K texture, a second
+   open cone, very dark). Original notes: New small kind in `scripts/terrain/deadfall_scatter.gd` + rows in
    `tools/setup_ground_debris_assets.gd` (next free mesh ids, 53+). Clusters under pines, biased
    downhill, a few against logs. No collision, no shadows, cull ~30-40 m, in `SMALL_KINDS`.
    NOT through `_try_place` as is (linear scan of `ctx.placed`): light path with slope / road /
@@ -157,8 +167,8 @@ in the terrain, grass and foliage shaders together).
 
 ## Assets on hand
 
-- **Needle / leaf textures and pine cone meshes:** found by the user 2026-10-01; location not
-  yet given.
+- **Pine cone meshes:** `raw-assets/models/cones/` (three models; two in use, see step 6).
+- **Needle / leaf textures:** found by the user 2026-10-01; location not yet given.
 - **`raw-assets/models/forest_ground_soil_pine_free.glb`** (54 MB): photogrammetry scan of pine
   forest floor. 11 chunks, ~500k tris, one 8192 px albedo JPEG, no normal/roughness/height. The
   texture is a scan atlas (patchwork islands, bottom third empty) -- not tileable. Measured

@@ -15,7 +15,8 @@
 ## Every piece is a capsule footprint along its local X (the glbs are exported with the long axis
 ## on X). Logs follow the ground: both ends are sampled and the log is tilted along that line,
 ## rejected where the ground bulges through it or drops away under it.
-## Rendering: Terrain3D instancer, mesh ids 38-49 (tools/setup_ground_debris_assets.gd).
+## Rendering: Terrain3D instancer, mesh ids 38-49 (tools/setup_ground_debris_assets.gd); litter
+## mounds 50-52 and pine cones 53-54 have their own sections below.
 ## Collision: stumps = simplified convex hull, logs = trimesh (not convex -- the large log's root
 ## plate would turn a hull into a wedge), both built once per mesh id from the glb's LOD2 and
 ## shared by every instance; branches and sticks none.
@@ -82,6 +83,33 @@ const MOUND_RIM_SAMPLES := 8
 const MOUND_RIM_SLACK := 0.04 ## m of ground drop under the rim the mesh already covers (its rim is 0.08 m down)
 const MOUND_MAX_DROP := 0.14 ## m: more than this and the mound is skipped (sinking it further would bury the dome)
 const MOUND_MIN_NORMAL_Y := 0.9## flatter ground only (~25 deg): a rigid dome floats on one side on a slope
+
+## -- Pine cones (2026-10-02): a handful under some of the pines, the group shifted downhill on a
+## slope, and a few stopped against the uphill side of logs that have a pine nearby. No collision,
+## no shadows, no keep-out; they may touch each other. Placed by _scatter_cones -- like the mounds,
+## NOT through _try_place. Meshes lie on their side along X with the lowest point at y = 0.
+const CONE_OPEN_ID := 53 ## open cone, 9 x 8 x 8 cm at scale 1
+const CONE_LONG_ID := 54 ## long closed cone, 12 x 6 x 6 cm
+const CONE_MIX := [[CONE_OPEN_ID, 0.65], [CONE_LONG_ID, 0.35]]
+const CONE_RADIUS := {CONE_OPEN_ID: 0.04, CONE_LONG_ID: 0.03} ## m at scale 1: height of the cone's axis above its lowest point
+const CONE_SCALE_MIN := 0.8
+const CONE_SCALE_MAX := 1.3
+const CONE_TREE_P := 0.55 ## chance a pine has cones under it
+const CONE_PER_TREE_MIN := 5
+const CONE_PER_TREE_MAX := 14
+const CONE_TRUNK_CLEAR := 0.5 ## m x tree scale: nearest a cone lands to the trunk centre
+const CONE_DROP_RADIUS := 3.2 ## m x tree scale: farthest (about the crown's radius)
+const CONE_DOWNHILL_SHIFT := 1.2 ## m the group's centre moves downhill at CONE_SLOPE_FULL or steeper
+const CONE_SLOPE_FULL := 0.35 ## slope (rise/run) for the full shift
+const CONE_LOG_P := 0.4 ## chance a log with a pine within CONE_LOG_SUPPLY gets cones against it
+const CONE_LOG_SUPPLY := 4.0 ## m from the log's middle (max 4: _nearest_trunk looks at 3x3 cells)
+const CONE_PER_LOG_MIN := 2
+const CONE_PER_LOG_MAX := 6
+const CONE_LOG_GAP := 0.25 ## m, max distance from the log's footprint
+const CONE_MIN_NORMAL_Y := 0.8 ## steeper and a cone would have rolled on
+const CONE_PAD := 0.08 ## m kept from rocks, cliffs, trunks and litter mounds (a cone on a mound would be buried in it)
+const CONE_EMBED := 0.15 ## sunk into the ground by this share of the cone's radius
+const CONE_PITCH_MAX_DEG := 12.0 ## one end dips by up to this
 
 ## -- Rock-banked debris --
 const ROCK_BANK_MIN_RADIUS := 1.0 ## m, only rocks with a keep-out radius at least this big (~scale 1.1+)
@@ -150,6 +178,8 @@ static func scatter_deadfall(parent_node: Node, terrain: Terrain3D, heights: Pac
 		active[id] = assets != null and assets.get_mesh_asset(id) != null
 	for id in MOUND_MESH_IDS:
 		instancer.clear_by_mesh(id)
+	for row in CONE_MIX:
+		instancer.clear_by_mesh(int(row[0]))
 	deadfall_keep_circles.clear()
 	_keep_grid.clear()
 	if not active.values().has(true):
@@ -172,6 +202,7 @@ static func scatter_deadfall(parent_node: Node, terrain: Terrain3D, heights: Pac
 		"circles": [] as Array[Vector3], # outcrops + rocks (index -> skip when banking on that rock)
 		"trunk_grid": _build_trunk_grid(),
 		"placed": [] as Array[Dictionary], # {a, b, r, kind} capsules placed so far (pixel space)
+		"mounds": [] as Array[Vector3], # litter mounds placed (px, pz, rim radius) -- cones keep off them
 		"transforms": {}, "colors": {},
 		"counts": {"rock_banked": 0, "trunk_banked": 0, "free": 0, "clumps": 0, "rej_slope": 0, "rej_road": 0, "rej_block": 0, "rej_fit": 0, "rej_edge": 0},
 	}
@@ -282,13 +313,11 @@ static func scatter_deadfall(parent_node: Node, terrain: Terrain3D, heights: Pac
 		for k in n + 1:
 			var q := a.lerp(b, float(k) / float(n))
 			deadfall_keep_circles.append(Vector3(q.x, q.y, r))
-	for kc in deadfall_keep_circles:
-		for gz in range(floori((kc.y - kc.z) / KEEP_GRID_CELL), floori((kc.y + kc.z) / KEEP_GRID_CELL) + 1):
-			for gx in range(floori((kc.x - kc.z) / KEEP_GRID_CELL), floori((kc.x + kc.z) / KEEP_GRID_CELL) + 1):
-				var cell := Vector2i(gx, gz)
-				if not _keep_grid.has(cell):
-					_keep_grid[cell] = []
-				_keep_grid[cell].append(kc)
+	_bucket_circles(_keep_grid, deadfall_keep_circles)
+
+	# 4. Pine cones -- after the keep-out grid (they stay out of stumps and logs), and after every
+	# other roll, so adding them changed nothing above.
+	_scatter_cones(ctx, instancer, assets, rng)
 
 	var counts: Dictionary = ctx.counts
 	_debug_transforms = ctx.transforms
@@ -357,6 +386,7 @@ static func _scatter_mounds(ctx: Dictionary, instancer: Terrain3DInstancer, asse
 			continue
 		var pos := Vector3(p.x, h0, p.y) - normal * maxf(0.0, drop - MOUND_RIM_SLACK) + (ctx.import_position as Vector3)
 		xforms[id].append(Transform3D(basis.scaled(Vector3.ONE * scale), pos))
+		ctx.mounds.append(Vector3(p.x, p.y, rim))
 		placed += 1
 	for id in ids:
 		var list: Array[Transform3D] = xforms[id]
@@ -368,12 +398,137 @@ static func _scatter_mounds(ctx: Dictionary, instancer: Terrain3DInstancer, asse
 		instancer.add_transforms(id, list, colors, true)
 	print("TERRAIN_GEN: litter mounds -- %d placed of %d spots (%d at trunks, %d at stumps/logs); %d skipped where the ground curves away under the rim" % [placed, spots.size(), at_trunks, spots.size() - at_trunks, rej_fit])
 
+## Pine cones: see the CONE_* constants. Light checks only (edge, slope, road, rocks / cliffs /
+## trunks / stumps / logs / mounds through grids); cones may overlap each other.
+static func _scatter_cones(ctx: Dictionary, instancer: Terrain3DInstancer, assets: Terrain3DAssets, rng: RandomNumberGenerator) -> void:
+	var t0 := Time.get_ticks_msec()
+	var mix: Array = []
+	for row in CONE_MIX:
+		if assets != null and assets.get_mesh_asset(int(row[0])) != null:
+			mix.append(row)
+	if mix.is_empty():
+		print("TERRAIN_GEN: no pine cone mesh assets registered (ids %d, %d) -- run setup_mesh_assets() in tools/setup_ground_debris_assets.gd" % [CONE_OPEN_ID, CONE_LONG_ID])
+		return
+	var width: int = ctx.width
+	var length: int = ctx.length
+	var road_weight: PackedFloat32Array = ctx.road_weight
+	var block := {} # outcrops + rocks + litter mounds
+	_bucket_circles(block, ctx.circles)
+	_bucket_circles(block, ctx.mounds)
+	var pine_grid := _build_trunk_grid(true)
+
+	# Spots under pines: a disc around the trunk, its centre shifted downhill on a slope.
+	var spots: Array[Vector2] = []
+	var pines := 0
+	var pines_with := 0
+	for i in TreeScatter.tree_points.size():
+		if not TreeScatter.TREE_IDS_PINE.has(TreeScatter.tree_mesh_ids[i]):
+			continue
+		pines += 1
+		if rng.randf() >= CONE_TREE_P:
+			continue
+		pines_with += 1
+		var tp := TreeScatter.tree_points[i]
+		var c := Vector2(tp.x, tp.y)
+		var tn := TerrainUtil.sample_normal(ctx.heights, width, length, c.x, c.y)
+		var slope := sqrt(maxf(0.0, 1.0 - tn.y * tn.y)) / maxf(tn.y, 0.2)
+		c -= _uphill(ctx, c) * CONE_DOWNHILL_SHIFT * minf(1.0, slope / CONE_SLOPE_FULL)
+		for k in rng.randi_range(CONE_PER_TREE_MIN, CONE_PER_TREE_MAX):
+			var a := rng.randf() * TAU
+			spots.append(c + Vector2(cos(a), sin(a)) * lerpf(CONE_TRUNK_CLEAR, CONE_DROP_RADIUS, sqrt(rng.randf())) * tp.z)
+	var under_pines := spots.size()
+	# Spots against logs: along the uphill side (what rolled down stopped there); flat ground -> either side.
+	for cap: Dictionary in ctx.placed:
+		if cap.kind != "log" or rng.randf() >= CONE_LOG_P:
+			continue
+		var a: Vector2 = cap.a
+		var b: Vector2 = cap.b
+		var mid := a.lerp(b, 0.5)
+		if _nearest_trunk(pine_grid, mid, CONE_LOG_SUPPLY).z <= 0.0:
+			continue
+		var across := (b - a).orthogonal().normalized()
+		var uphill := _uphill(ctx, mid)
+		if (across.dot(uphill) < 0.0) if uphill != Vector2.ZERO else (rng.randf() < 0.5):
+			across = -across
+		for k in rng.randi_range(CONE_PER_LOG_MIN, CONE_PER_LOG_MAX):
+			spots.append(a.lerp(b, rng.randf()) + across * (float(cap.r) + rng.randf() * CONE_LOG_GAP))
+
+	var xforms := {}
+	for row in mix:
+		xforms[int(row[0])] = [] as Array[Transform3D]
+	var placed_pines := 0
+	var placed_logs := 0
+	for i in spots.size():
+		var p := spots[i]
+		if p.x < EDGE_MARGIN + 1.0 or p.y < EDGE_MARGIN + 1.0 or p.x > width - 2 - EDGE_MARGIN or p.y > length - 2 - EDGE_MARGIN:
+			continue
+		var normal := TerrainUtil.sample_normal(ctx.heights, width, length, p.x, p.y)
+		if normal.y < CONE_MIN_NORMAL_Y:
+			continue
+		if road_weight[clampi(int(round(p.y)), 0, length - 1) * width + clampi(int(round(p.x)), 0, width - 1)] > 0.0:
+			continue
+		if _grid_hit(block, p, CONE_PAD) or keep_blocked(p.x, p.y, 0.0):
+			continue
+		var tr := _nearest_trunk(ctx.trunk_grid, p, 1.0)
+		if tr.z > 0.0 and p.distance_to(Vector2(tr.x, tr.y)) < TRUNK_RADIUS * tr.z + CONE_PAD:
+			continue
+		var in_rect := false
+		for kr: Dictionary in ctx.rects:
+			var d: Vector2 = p - kr.c
+			var lx := d.dot(kr.ax)
+			var lz := d.dot(kr.az)
+			if lx >= float(kr.x0) - CONE_PAD and lx <= float(kr.x1) + CONE_PAD and lz >= float(kr.z0) - CONE_PAD and lz <= float(kr.z1) + CONE_PAD:
+				in_rect = true
+				break
+		if in_rect:
+			continue
+		var id := _pick(mix, rng)
+		var scale := rng.randf_range(CONE_SCALE_MIN, CONE_SCALE_MAX)
+		# Lying on its side: any heading, any roll about its own axis (X), one end dipped a little.
+		var basis := Basis(Quaternion(Vector3.UP, normal)) * Basis(Vector3.UP, rng.randf() * TAU) \
+				* Basis(Vector3.BACK, deg_to_rad(rng.randf_range(-CONE_PITCH_MAX_DEG, CONE_PITCH_MAX_DEG))) * Basis(Vector3.RIGHT, rng.randf() * TAU)
+		basis = basis.scaled(Vector3.ONE * scale)
+		# The roll is about the cone's axis, which sits CONE_RADIUS above the mesh origin: place the
+		# axis, then step back to the origin.
+		var r := float(CONE_RADIUS[id])
+		var axis_pos := Vector3(p.x, _h(ctx, p.x, p.y), p.y) + normal * (r * scale * (1.0 - CONE_EMBED))
+		xforms[id].append(Transform3D(basis, axis_pos - basis * Vector3(0.0, r, 0.0) + (ctx.import_position as Vector3)))
+		if i < under_pines:
+			placed_pines += 1
+		else:
+			placed_logs += 1
+	var per_id: Array[String] = []
+	for id: int in xforms:
+		var list: Array[Transform3D] = xforms[id]
+		per_id.append("id %d: %d" % [id, list.size()])
+		if list.is_empty():
+			continue
+		var colors := PackedColorArray()
+		colors.resize(list.size())
+		colors.fill(Color.WHITE)
+		instancer.add_transforms(id, list, colors, true)
+	print("TERRAIN_GEN: pine cones -- %d placed of %d spots (%s): %d under %d of %d pines, %d against logs; %d ms" % [
+		placed_pines + placed_logs, spots.size(), ", ".join(per_id), placed_pines, pines_with, pines, placed_logs, Time.get_ticks_msec() - t0])
+
 ## True if a footprint of radius `pad` at (px, pz) overlaps a stump or log placed this run.
 static func keep_blocked(px: float, pz: float, pad: float) -> bool:
-	var p := Vector2(px, pz)
-	for gz in range(floori((pz - pad) / KEEP_GRID_CELL), floori((pz + pad) / KEEP_GRID_CELL) + 1):
-		for gx in range(floori((px - pad) / KEEP_GRID_CELL), floori((px + pad) / KEEP_GRID_CELL) + 1):
-			for kc: Vector3 in _keep_grid.get(Vector2i(gx, gz), []):
+	return _grid_hit(_keep_grid, Vector2(px, pz), pad)
+
+## Adds circles (px, pz, radius) to a grid of KEEP_GRID_CELL cells: each cell lists the circles overlapping it.
+static func _bucket_circles(grid: Dictionary, circles: Array[Vector3]) -> void:
+	for kc in circles:
+		for gz in range(floori((kc.y - kc.z) / KEEP_GRID_CELL), floori((kc.y + kc.z) / KEEP_GRID_CELL) + 1):
+			for gx in range(floori((kc.x - kc.z) / KEEP_GRID_CELL), floori((kc.x + kc.z) / KEEP_GRID_CELL) + 1):
+				var cell := Vector2i(gx, gz)
+				if not grid.has(cell):
+					grid[cell] = []
+				grid[cell].append(kc)
+
+## True if a circle of radius `pad` at p overlaps any circle bucketed in `grid`.
+static func _grid_hit(grid: Dictionary, p: Vector2, pad: float) -> bool:
+	for gz in range(floori((p.y - pad) / KEEP_GRID_CELL), floori((p.y + pad) / KEEP_GRID_CELL) + 1):
+		for gx in range(floori((p.x - pad) / KEEP_GRID_CELL), floori((p.x + pad) / KEEP_GRID_CELL) + 1):
+			for kc: Vector3 in grid.get(Vector2i(gx, gz), []):
 				if p.distance_to(Vector2(kc.x, kc.y)) < kc.z + pad:
 					return true
 	return false
@@ -562,10 +717,13 @@ static func _segment_distance(p1: Vector2, p2: Vector2, q1: Vector2, q2: Vector2
 		minf(p1.distance_to(Geometry2D.get_closest_point_to_segment(p1, q1, q2)), p2.distance_to(Geometry2D.get_closest_point_to_segment(p2, q1, q2))),
 		minf(q1.distance_to(Geometry2D.get_closest_point_to_segment(q1, p1, p2)), q2.distance_to(Geometry2D.get_closest_point_to_segment(q2, p1, p2))))
 
-## Trunks (TreeScatter.tree_points: px, pz, scale) bucketed in 4 m cells.
-static func _build_trunk_grid() -> Dictionary:
+## Trunks (TreeScatter.tree_points: px, pz, scale) bucketed in 4 m cells. pines_only: the cones' supply.
+static func _build_trunk_grid(pines_only: bool = false) -> Dictionary:
 	var grid := {}
-	for tp in TreeScatter.tree_points:
+	for i in TreeScatter.tree_points.size():
+		if pines_only and not TreeScatter.TREE_IDS_PINE.has(TreeScatter.tree_mesh_ids[i]):
+			continue
+		var tp := TreeScatter.tree_points[i]
 		var c := Vector2i(floori(tp.x / 4.0), floori(tp.y / 4.0))
 		if not grid.has(c):
 			grid[c] = []

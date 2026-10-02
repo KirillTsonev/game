@@ -1,0 +1,7 @@
+[gd_resource type="StandardMaterial3D" format=3 uid="uid://decohmgr32827"]
+
+[ext_resource type="Texture2D" uid="uid://cw5yjfh55mjem" path="res://assets/models/ground_debris/cone_long/textures/cone_long_diff_1k.png" id="1_qse7m"]
+
+[resource]
+albedo_texture = ExtResource("1_qse7m")
+roughness = 0.85

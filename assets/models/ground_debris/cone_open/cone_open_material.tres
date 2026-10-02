@@ -1,0 +1,10 @@
+[gd_resource type="StandardMaterial3D" format=3 uid="uid://r6dywk2n232f"]
+
+[ext_resource type="Texture2D" uid="uid://cswgs8pe0pbqh" path="res://assets/models/ground_debris/cone_open/textures/cone_open_diff_1k.jpg" id="1_ufuyy"]
+[ext_resource type="Texture2D" uid="uid://bqip0q7c74ml5" path="res://assets/models/ground_debris/cone_open/textures/cone_open_nor_gl_1k.jpg" id="2_46llm"]
+
+[resource]
+albedo_texture = ExtResource("1_ufuyy")
+roughness = 0.85
+normal_enabled = true
+normal_texture = ExtResource("2_46llm")
