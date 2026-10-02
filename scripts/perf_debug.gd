@@ -6,7 +6,8 @@ extends Node
 ##   G = grass overlay: cycles a decal over the whole map -- off / density / dry / tall
 ##       (GrassScatter.cycle_debug_overlay).
 ##   H = grass probe: every density factor at the player's feet (GrassScatter.debug_probe).
-##   J = grass field on/off (GrassField) -- A/B its FPS cost.
+##   J = layer panel (scripts/debug/layer_toggle_panel.gd): checkboxes to show/hide the grass,
+##       tree, rock, fern/shrub and deadfall layers -- A/B their FPS cost. Same cursor handling as Y.
 ##   K = grass culling readback: tufts actually drawn per variant vs buffer capacity.
 ##   Y = grass tuning panel (scripts/debug/grass_tuning_panel.gd): distance bands + widening.
 ##       Y opens it with the cursor; click outside to look around again; Y = cursor back / close.
@@ -16,6 +17,7 @@ extends Node
 const TIMING_FRAMES := 120
 
 var _grass_panel: GrassTuningPanel
+var _layer_panel: LayerTogglePanel
 var _timing_left := 0
 var _gpu_sum := 0.0
 var _cpu_sum := 0.0
@@ -62,11 +64,11 @@ func _input(event: InputEvent) -> void:
 	elif event.physical_keycode == KEY_G:
 		print(GrassScatter.cycle_debug_overlay(get_tree().current_scene))
 	elif event.physical_keycode == KEY_J:
-		var field := get_tree().current_scene.get_node_or_null("GrassField") as Node3D
-		if field:
-			field.visible = not field.visible
-			field.process_mode = Node.PROCESS_MODE_INHERIT if field.visible else Node.PROCESS_MODE_DISABLED
-			print("[Grass] field %s -- %d FPS at toggle (let it settle a few seconds and compare)" % ["ON" if field.visible else "OFF", Engine.get_frames_per_second()])
+		if not is_instance_valid(_layer_panel):
+			_layer_panel = LayerTogglePanel.new()
+			_layer_panel.visible = false
+			get_tree().root.add_child(_layer_panel)
+		_layer_panel.toggle()
 	elif event.physical_keycode == KEY_K:
 		var field := get_tree().current_scene.get_node_or_null("GrassField")
 		if field:

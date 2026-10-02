@@ -28,6 +28,7 @@ at grove edges). What is missing is the materials that make thin ground read as 
 ## References (what was learned)
 
 **Unity HDRP forest video** (the "lush" look the user wants):
+
 - Its "empty" patches are short green ground cover, same colour as the blades, with tall grass
   tapering into them and a dark rim (occlusion / contact shadows) at the border. Not parallax.
 - Grass is one continuous detail layer over the whole terrain, no biome rules -- its own
@@ -35,6 +36,7 @@ at grove edges). What is missing is the materials that make thin ground read as 
 - Its object pooling exists for choppable plants; not relevant (ours are instanced).
 
 **Godot forest thread** (ToniMacaroniy):
+
 - Stock Godot can do it. Engine changes were only cloud shadows, tonemap tweaks, SSAO/SSIL
   tweaks, and the lighting calculation in the foliage shader.
 - "Assets are heavily processed and use specific shaders." Method: **divide each vegetation
