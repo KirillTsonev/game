@@ -66,6 +66,30 @@ const BARE_NY_FULL := 0.8 ## normal.y at/below this (~37 deg) -> fully bare
 const BARE_NY_NONE := 0.93 ## at/above this (~21 deg) -> slope adds no bare soil
 const BARE_CLIFF_CLEAR := 1.5 ## m from a cliff face / cliff-mesh footprint / outcrop: fully bare within this
 const BARE_CLIFF_REACH := 5.0 ## ...and no effect from here
+## -- Grass colour match + baked grounding (2026-10-02, docs/forest_floor_plan.md steps 1 + 5) --
+## GRASS_TINT: Terrain3D's per-texture albedo multiplier (linear, no sRGB conversion in the shader)
+## for the Grass texture, set at runtime in paint() -- terrain_assets.tres keeps white. Grass002
+## averages linear ~(0.040, 0.070, 0.017) (tools/assign_flat_textures.gd diag_average_color):
+## yellower and ~5x brighter than the blades' mean albedo (base_color x their root-to-tip AO
+## ~ (0.0016, 0.013, 0.0003)). White = off. The value reaches the shader as written (checked:
+## _texture_color_array holds it unconverted).
+## First try (0.25, 0.48, 0.16) -- green down to the blade-tip albedo -- read PITCH BLACK in-game
+## (Kirill): the scene is moonlit and the colour grade remaps by brightness, so halving the
+## ground's albedo crushes it; matching albedo numbers is the wrong target. Now mostly a hue
+## shift (less red and blue = greener, less yellow) with ~15 % darkening. Tune by eye.
+const GRASS_TINT := Color(0.62, 0.85, 0.55)
+## Ground under the tall blade patches is darkened through the terrain COLOR map (multiplied into
+## albedo, 1 px = 1 m): x (1 - PATCH_SHADE) under a full patch, following the same softened patch
+## keep the litter blend uses, so the shade fades out over ~1 m at the outline. This is the
+## occlusion the blades would cast on the soil; it survives distance and the painterly pass.
+## Not shaded: the short-grass gaps, road vertices. Not done: shade under ferns / bushes
+## (UnderstoryScatter keeps no plant positions).
+const PATCH_SHADE := 0.35 ## was 0.45 with the first tint (pitch black together), then 0.25
+## The short-grass gaps get a lighter shade (where grass_cull.glsl's SHORT_COVER_* gate lets short
+## blades grow). Kirill, after the hue match: the blades, the short ones most, blended into the
+## texture -- same hue AND same value. The separation is now by value: darker ground, lighter
+## blade tops (short_tip_blend in grass_blade.gdshader).
+const GAP_SHADE := 0.18
 const ROCK_TYPES: Array[int] = [ROCK_FACE_ID, AERIAL_ROCKS_ID, ROCKY_TRAIL_ID, ROCKY_TERRAIN_ID, COAST_SAND_ROCKS_ID]
 
 ## -- Litter under canopy (2026-10-01, docs/forest_floor_plan.md step 2) --
@@ -286,6 +310,10 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 				GrassScatter._stamp_circle(road_d, width, length, px, pz, 0.0, LITTER_ROAD_REACH)
 	var control := PackedInt32Array()
 	control.resize(n)
+	# Colour-map multiplier per vertex, 255 = unchanged (PATCH_SHADE).
+	var patch_shade := PackedByteArray()
+	patch_shade.resize(n)
+	patch_shade.fill(255)
 	var counts := {"road": 0, "soil": 0, "rock": 0}
 	var type_counts := {}
 	for id in ROCK_TYPES:
@@ -321,6 +349,7 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 					+ _patch_keep_half(px * 2, pz * 2 - 1, cov, width, length)
 					+ _patch_keep_half(px * 2, pz * 2 + 1, cov, width, length)) / 6.0
 			grass_sum += g
+			patch_shade[i] = int(round(255.0 * (1.0 - PATCH_SHADE * g - GAP_SHADE * (1.0 - g) * smoothstep(0.05, 0.25, cov))))
 			var spray := spray_n[i] / 255.0 - 0.5
 
 			# Rockiness.
@@ -533,6 +562,8 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 	var data: Terrain3DData = terrain.get_data()
 	var rs := terrain.get_region_size()
 	var regions_written := 0
+	var regions_shaded := 0
+	var color_src: PackedByteArray = (maps.color as Image).get_data() if maps.get("color") is Image and (maps.color as Image).get_format() == Image.FORMAT_RGBA8 else PackedByteArray()
 	for loc: Vector2i in data.get_region_locations():
 		var region: Terrain3DRegion = data.get_region(loc)
 		if region == null:
@@ -543,6 +574,10 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 		var bytes := img.get_data()
 		var ox := loc.x * rs - int(corner.x) # region pixel (0,0) in heightmap-pixel space
 		var oz := loc.y * rs - int(corner.z)
+		# Colour map: the generated macro colour (maps.color) x the patch shade.
+		var cimg: Image = region.get_color_map()
+		var shade_ok := cimg != null and cimg.get_format() == Image.FORMAT_RGBA8 and color_src.size() == n * 4
+		var cbytes := cimg.get_data() if shade_ok else PackedByteArray()
 		var wrote := false
 		for lz in rs:
 			var pz := oz + lz
@@ -554,10 +589,31 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 					continue
 				bytes.encode_u32((lz * rs + lx) * 4, control[pz * width + px])
 				wrote = true
+				if shade_ok:
+					var si := (pz * width + px) * 4
+					var di := (lz * rs + lx) * 4
+					var s := patch_shade[pz * width + px]
+					cbytes[di] = color_src[si] * s / 255
+					cbytes[di + 1] = color_src[si + 1] * s / 255
+					cbytes[di + 2] = color_src[si + 2] * s / 255
 		if wrote:
 			region.set_control_map(Image.create_from_data(rs, rs, false, Image.FORMAT_RF, bytes))
 			regions_written += 1
+			if shade_ok:
+				# The region's colour map carries mipmaps (the shader samples it mipmapped):
+				# rebuild from level 0 and regenerate them.
+				var shaded := Image.create_from_data(rs, rs, false, Image.FORMAT_RGBA8, cbytes.slice(0, rs * rs * 4))
+				if cimg.has_mipmaps():
+					shaded.generate_mipmaps()
+				region.set_color_map(shaded)
+				regions_shaded += 1
 	data.update_maps(Terrain3DRegion.TYPE_CONTROL, true, false)
+	if regions_shaded > 0:
+		data.update_maps(Terrain3DRegion.TYPE_COLOR, true, false)
+	var grass_asset: Terrain3DTextureAsset = terrain.get_assets().get_texture(GRASS_ID) if terrain.get_assets() else null
+	if grass_asset:
+		grass_asset.set_albedo_color(GRASS_TINT)
+	print("GROUND_PAINT v2: grounding -- patch shade %.2f written to %d region colour map(s); Grass tint %s" % [PATCH_SHADE, regions_shaded, GRASS_TINT if grass_asset else "NOT SET"])
 	if terrain.material:
 		terrain.material.set_shader_param(&"blend_sharpness", BLEND_SHARPNESS)
 

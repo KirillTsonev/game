@@ -10,7 +10,6 @@ extends Node
 ##   K = grass culling readback: tufts actually drawn per variant vs buffer capacity.
 ##   Y = grass tuning panel (scripts/debug/grass_tuning_panel.gd): distance bands + widening.
 ##       Y opens it with the cursor; click outside to look around again; Y = cursor back / close.
-
 ##   P = GPU/CPU frame time: averages the viewport's measured render time over TIMING_FRAMES frames
 ##       and prints avg / worst ms (works with VSync / the 60 FPS cap -- use this, not FPS).
 
@@ -76,7 +75,6 @@ func _input(event: InputEvent) -> void:
 		var player := get_tree().current_scene.get_node_or_null("Player") as Node3D
 		if player:
 			print(GrassScatter.debug_probe(player.global_position))
-
 func _probe_tree_spot() -> void:
 	var scene := get_tree().current_scene
 	var player := scene.get_node_or_null("Player") as Node3D

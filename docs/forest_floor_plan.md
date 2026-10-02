@@ -118,6 +118,10 @@ at grove edges). What is missing is the materials that make thin ground read as 
    blade patches (soil only at road verges, rock, dense canopy); widen the patch edge ramp and
    taper blade height toward it; optionally a 3-6 cm blade band out to 15-20 m as an extra layer
    in `GrassField` (never as placed instances).
+   Also 2026-10-02, not yet judged: the Grass texture is tinted toward the blade colour at runtime
+   (`GRASS_TINT` in `ground_paint.gd` -- step 1 for the grass texture only), and the ground under
+   the tall patches is darkened through the terrain colour map (`PATCH_SHADE` -- the patch part
+   of step 5; nothing yet under ferns / bushes, the understory keeps no plant positions).
 5. **Baked grounding.** Darken the ground at patch borders and under ferns/bushes in the ground
    paint (patch map + plant positions are known); fade plant and blade colour toward dark at the
    base in their shaders; soften foliage lighting so shadowed sides don't go black.

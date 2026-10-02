@@ -117,6 +117,12 @@
 //     face the camera and they show their face from above. Then (same day): beyond
 //     short_face_range (5-15 m) they turn to face the camera, +-short_face_jitter. Not closer:
 //     a blade tracking the camera visibly swivels as the player walks past it.
+//   - SHORT BLADE TIPS (2026-10-02, Kirill: after the Grass ground texture was tinted toward
+//     the blade colour, the blades -- the short ones most -- blended into it). Short blades get
+//     short_tip_blend of the tip colour, over the upper half (h^2, not the quartic) since a 10 cm
+//     blade has no room for a tip-only highlight. Full-height blades are unchanged (tip_blend 0,
+//     see "NO BRIGHT TIPS" -- if the glow facing the moon comes back in the gaps, lower this).
+//     The ground side of the separation is GAP_SHADE / PATCH_SHADE in ground_paint.gd.
 //   - LESS DRY GRASS (2026-09-29): v_dry threshold smoothstep(0.30, 0.60) -> (0.45, 0.75) so fewer
 //     patches turn straw, and dry_tip_color (0.75, 0.62, 0.30) -> (0.58, 0.50, 0.26) so the ones
 //     that do are less glaring. The bake's dry channel itself is unchanged.
@@ -159,6 +165,8 @@ uniform vec3 dry_tip_color : source_color = vec3(0.58, 0.50, 0.26); // was (0.75
 // How much of tip_color / dry_tip_color reaches the blade tips (see header "NO BRIGHT TIPS").
 // 0 = base colour root to tip (the fix), 1 = the full GodotGrass base->tip gradient.
 uniform float tip_blend : hint_range(0.0, 1.0) = 0.0;
+// The same, for short blades only (see header "SHORT BLADE TIPS").
+uniform float short_tip_blend : hint_range(0.0, 1.0) = 0.35;
 // Direct light on a face pointing straight away from the light (see header "BACKLIGHT FLOOR").
 uniform float backlight_floor : hint_range(0.0, 0.5) = 0.08;
 // 1 = colours as authored, 0 = greyscale (see header "BLADE SATURATION").
@@ -173,6 +181,7 @@ uniform float color_variation : hint_range(0.0, 0.5) = 0.15; // brightness +-
 uniform float hue_variation : hint_range(0.0, 1.0) = 0.5; // bluish-green <-> yellowish-green
 
 varying float v_dry;
+varying float v_short; // 1 = short blade (gap layer / patch rim), 0 = full-height blade
 varying vec2 v_jitter; // per-blade (brightness, hue) hashes for fragment()
 
 // Source: https://www.shadertoy.com/view/Xt3cDn
@@ -263,6 +272,7 @@ void vertex() {
 	float turn_angle_base = (mix(-0.15, 0.15, hash0) + clump2 * clumping_factor) * TAU;
 	// Short blades face every way and lean more (see header "SHORT BLADES FACE EVERY WAY").
 	float shortness = 1.0 - smoothstep(short_height.x, short_height.y, height_scale);
+	v_short = shortness;
 	float short_angle = hash12(root.zx + vec2(17.3, 53.9)) * TAU;
 	// ... and past short_face_range.x m they turn to show the camera their face. The blade's +Z
 	// points AWAY from the camera, so the bend leans the tip away and tilts the face up toward an
@@ -325,9 +335,11 @@ void fragment() {
 	vec3 b = mix(base_color, dry_base_color, v_dry);
 	vec3 t = mix(tip_color, dry_tip_color, v_dry);
 	// No bright tips by default (see header "NO BRIGHT TIPS"): tip_blend 0 = base colour to the tip.
-	t = mix(b, t, tip_blend);
+	// Short blades keep some tip colour, spread over the upper half (see header "SHORT BLADE TIPS").
+	float short_tip = short_tip_blend * v_short;
+	t = mix(b, t, max(tip_blend, short_tip));
 	float height_factor = 1.0 - uv.y;
-	ALBEDO = mix(b, t, ease_in_quartic(height_factor));
+	ALBEDO = mix(b, t, mix(ease_in_quartic(height_factor), height_factor * height_factor, v_short));
 	ALBEDO *= mix(0.1, 1.0, height_factor * height_factor); // AO
 	// Color becomes more uniform as distance increases
 	ALBEDO = mix(mix(b, t, 0.5) * 0.5, ALBEDO, fog_factor);

@@ -164,6 +164,29 @@ func force_reimport() -> String:
 		log_lines.append("%s -> size=%s format=%s alpha=%s" % [p, tex.get_size(), img.get_format() if img != null else "n/a", alpha_state])
 	return "\n".join(log_lines)
 
+## Average LINEAR colour of each layer's albedo (read from the source PNG, not the compressed
+## import) -- the input for per-texture tints (TerrainGroundPaint.GRASS_TINT).
+func diag_average_color() -> String:
+	var log_lines: Array[String] = []
+	for id in TEXTURES_BY_ID.keys():
+		var img := Image.load_from_file(ProjectSettings.globalize_path(TEXTURES_BY_ID[id]["albedo"]))
+		if img == null:
+			log_lines.append("id=%d ERROR: could not load" % id)
+			continue
+		img.convert(Image.FORMAT_RGBA8) # srgb_to_linear only handles RGB8 / RGBA8
+		img.srgb_to_linear()
+		img.convert(Image.FORMAT_RGBAF)
+		while img.get_width() > 16:
+			img.shrink_x2()
+		var sum := Vector3.ZERO
+		for y in img.get_height():
+			for x in img.get_width():
+				var c := img.get_pixel(x, y)
+				sum += Vector3(c.r, c.g, c.b)
+		sum /= float(img.get_width() * img.get_height())
+		log_lines.append("id=%d name=%s linear avg = (%.4f, %.4f, %.4f)" % [id, TEXTURES_BY_ID[id]["name"], sum.x, sum.y, sum.z])
+	return "\n".join(log_lines)
+
 func diag_uv_scale() -> String:
 	var assets: Terrain3DAssets = load(ASSETS_PATH)
 	if assets == null:
