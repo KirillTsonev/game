@@ -3,5 +3,7 @@
 [ext_resource type="Texture2D" uid="uid://cw5yjfh55mjem" path="res://assets/models/ground_debris/cone_long/textures/cone_long_diff_1k.png" id="1_qse7m"]
 
 [resource]
+albedo_color = Color(0.7, 0.7, 0.7, 1)
 albedo_texture = ExtResource("1_qse7m")
+metallic_specular = 0.3
 roughness = 0.85

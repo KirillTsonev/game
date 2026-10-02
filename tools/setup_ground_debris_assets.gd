@@ -44,8 +44,12 @@ const DEBRIS := [
 	# 2026-10-02: pine cones (raw-assets/models/cones/), 9 cm open cone + 12 cm long closed cone,
 	# lying on their side along X. Not Megascans: 1K textures ("res"), no ORM -> flat "roughness";
 	# cone_long has no normal map either. Small, so culled close and no shadows.
-	{"id": 53, "dir": "cone_open", "name": "ConeOpen", "ranges": [12.0, 24.0, 40.0], "res": "1k", "roughness": 0.85, "shadows": false},
-	{"id": 54, "dir": "cone_long", "name": "ConeLong", "ranges": [12.0, 24.0, 40.0], "res": "1k", "roughness": 0.85, "shadows": false},
+	# "albedo" (same day): neutral albedo multiplier, as for the scree (setup_scree_assets.gd). The
+	# cones shone under the lantern: average linear luma 0.11 (open; 16 % of it pale scale tips above
+	# 0.24) / 0.07 (long) against ~0.045 for the tinted Grass ground they lie on, and they cast no
+	# shadow. These bring both to ~0.05. Specular is lowered with it (0.3, like the rocks).
+	{"id": 53, "dir": "cone_open", "name": "ConeOpen", "ranges": [12.0, 24.0, 40.0], "res": "1k", "roughness": 0.85, "albedo": 0.45, "shadows": false},
+	{"id": 54, "dir": "cone_long", "name": "ConeLong", "ranges": [12.0, 24.0, 40.0], "res": "1k", "roughness": 0.85, "albedo": 0.7, "shadows": false},
 ]
 
 func _glb(e: Dictionary) -> String:
@@ -105,6 +109,14 @@ func setup_materials(only_ids: Array = []) -> String:
 		mat.metallic = 0.0
 		if e.has("roughness"):
 			# No ORM texture (the cones): flat roughness, and the normal map only if there is one.
+			# Reuse the saved material when there is one -- the Terrain3DMeshAssets hold that instance.
+			var saved := (load(mat_path) as StandardMaterial3D) if ResourceLoader.exists(mat_path) else null
+			if saved:
+				saved.albedo_texture = mat.albedo_texture
+				mat = saved
+			var k: float = e.get("albedo", 1.0)
+			mat.albedo_color = Color(k, k, k)
+			mat.metallic_specular = 0.3
 			mat.roughness = e.roughness
 			mat.normal_texture = _tex(e.dir, "nor_gl", res)
 			mat.normal_enabled = mat.normal_texture != null

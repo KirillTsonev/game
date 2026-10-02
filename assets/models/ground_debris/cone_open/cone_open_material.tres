@@ -4,7 +4,9 @@
 [ext_resource type="Texture2D" uid="uid://bqip0q7c74ml5" path="res://assets/models/ground_debris/cone_open/textures/cone_open_nor_gl_1k.jpg" id="2_46llm"]
 
 [resource]
+albedo_color = Color(0.45, 0.45, 0.45, 1)
 albedo_texture = ExtResource("1_ufuyy")
+metallic_specular = 0.3
 roughness = 0.85
 normal_enabled = true
 normal_texture = ExtResource("2_46llm")
