@@ -16,9 +16,9 @@
 ## Two noise layers: large-scale GLADES (forest-floor clearings) and small-scale CLUMPING.
 ## Candidates: one jittered spot per CANDIDATE_STEP cell; the cheap probability roll happens
 ## first, the costlier checks (slope, road, rock keep-outs, trunk ring) only for spots that pass.
-## Rendering: Terrain3D instancer, mesh ids 28-32 (baked + registered by
-## tools/setup_understory_assets.gd build_understory_assets(): draw distance 70 m, shadows to
-## 35 m, no collision).
+## Rendering: Terrain3D instancer, mesh ids 28-32 + 55-63 (baked + registered by
+## tools/setup_understory_assets.gd build_understory_assets(); LODs and shadows: docs/vegetation.md;
+## no collision).
 class_name UnderstoryScatter
 extends RefCounted
 
@@ -28,10 +28,32 @@ const BROAD_FERN_ID := 29 ## bush_01 -- broad pinnate leaves, the large/broad fe
 const BUSH02_GREEN_ID := 30 ## bush_02 with the green hue-shifted texture (orange version unused)
 const BUSH04_ID := 31 ## grassy/spiky shrub
 const BUSH05_ID := 32 ## rounded shrub on a woody stem
-const UNDERSTORY_MESH_IDS: Array[int] = [FERN_ID, BROAD_FERN_ID, BUSH02_GREEN_ID, BUSH04_ID, BUSH05_ID]
+## Megascans lady fern, 9 variants (2026-10-02): A/E/F/G/H full clumps (1.3-1.9 m wide, 0.6-1.0 m
+## tall), B/I small plants, C/D single-frond sprigs.
+const LADY_FERN_A_ID := 55
+const LADY_FERN_B_ID := 56
+const LADY_FERN_C_ID := 57
+const LADY_FERN_D_ID := 58
+const LADY_FERN_E_ID := 59
+const LADY_FERN_F_ID := 60
+const LADY_FERN_G_ID := 61
+const LADY_FERN_H_ID := 62
+const LADY_FERN_I_ID := 63
+const LADY_FERN_IDS: Array[int] = [LADY_FERN_A_ID, LADY_FERN_B_ID, LADY_FERN_C_ID, LADY_FERN_D_ID, LADY_FERN_E_ID, LADY_FERN_F_ID, LADY_FERN_G_ID, LADY_FERN_H_ID, LADY_FERN_I_ID]
+const UNDERSTORY_MESH_IDS: Array[int] = [FERN_ID, BROAD_FERN_ID, BUSH02_GREEN_ID, BUSH04_ID, BUSH05_ID,
+	LADY_FERN_A_ID, LADY_FERN_B_ID, LADY_FERN_C_ID, LADY_FERN_D_ID, LADY_FERN_E_ID, LADY_FERN_F_ID, LADY_FERN_G_ID, LADY_FERN_H_ID, LADY_FERN_I_ID]
 
 ## Species mix within each group: [id, weight, scale_min, scale_max].
-const FERN_MIX := [[FERN_ID, 0.8, 0.8, 1.3], [BROAD_FERN_ID, 0.2, 0.65, 0.95]]
+## Ferns: lady ferns 60 % (clumps 8 % each, small 6 %, sprigs 4 %), fern_02 25 %, bush_01 15 %.
+## The lady ferns are real-size scans, so their scale stays near 1; the largest (A) is kept from
+## growing further.
+const FERN_MIX := [
+	[FERN_ID, 0.25, 0.8, 1.3], [BROAD_FERN_ID, 0.15, 0.65, 0.95],
+	[LADY_FERN_A_ID, 0.08, 0.7, 1.0], [LADY_FERN_E_ID, 0.08, 0.75, 1.1], [LADY_FERN_F_ID, 0.08, 0.8, 1.15],
+	[LADY_FERN_G_ID, 0.08, 0.8, 1.2], [LADY_FERN_H_ID, 0.08, 0.8, 1.15],
+	[LADY_FERN_B_ID, 0.06, 0.9, 1.3], [LADY_FERN_I_ID, 0.06, 0.85, 1.25],
+	[LADY_FERN_C_ID, 0.04, 0.9, 1.3], [LADY_FERN_D_ID, 0.04, 0.8, 1.1],
+]
 const SHRUB_MIX := [[BUSH04_ID, 0.4, 0.8, 1.2], [BUSH05_ID, 0.35, 0.8, 1.2], [BUSH02_GREEN_ID, 0.25, 0.75, 1.1]]
 
 ## -- Density fields --
@@ -188,8 +210,11 @@ static func scatter_understory(parent_node: Node, terrain: Terrain3D, heights: P
 
 	last_counts = counts
 	var total: int = counts.fern_group + counts.shrub_group
-	print("TERRAIN_GEN: understory -- %d plant(s): %d fern-group (fern %d, broad fern %d) + %d shrub(s) (bush04 %d, bush05 %d, bush02 green %d) from %d candidate spots (%.1f%%); rolled %d, rejected slope %d / road %d / rock %d / deadfall %d / trunk %d; fields %d ms, total %d ms" % [
-		total, counts.fern_group, counts[FERN_ID], counts[BROAD_FERN_ID], counts.shrub_group, counts[BUSH04_ID], counts[BUSH05_ID], counts[BUSH02_GREEN_ID],
+	var lady := 0
+	for id in LADY_FERN_IDS:
+		lady += counts[id]
+	print("TERRAIN_GEN: understory -- %d plant(s): %d fern-group (fern %d, broad fern %d, lady fern %d) + %d shrub(s) (bush04 %d, bush05 %d, bush02 green %d) from %d candidate spots (%.1f%%); rolled %d, rejected slope %d / road %d / rock %d / deadfall %d / trunk %d; fields %d ms, total %d ms" % [
+		total, counts.fern_group, counts[FERN_ID], counts[BROAD_FERN_ID], lady, counts.shrub_group, counts[BUSH04_ID], counts[BUSH05_ID], counts[BUSH02_GREEN_ID],
 		counts.candidates, 100.0 * total / maxf(1.0, counts.candidates), counts.rolled, counts.rej_slope, counts.rej_road, counts.rej_rock, counts.rej_deadfall, counts.rej_trunk,
 		t_fields, Time.get_ticks_msec() - t0])
 

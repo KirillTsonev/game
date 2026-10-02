@@ -1,0 +1,16 @@
+[gd_scene format=3 uid="uid://dg6vudl11bjl"]
+
+[ext_resource type="ArrayMesh" uid="uid://bp52kh0651vru" path="res://assets/models/understory/lady_fern/lady_fern_b_var_b_near.res" id="1_87yn3"]
+[ext_resource type="ArrayMesh" uid="uid://c7ywyrb0w1don" path="res://assets/models/understory/lady_fern/lady_fern_b_var_b_far.res" id="2_p1t2q"]
+[ext_resource type="ArrayMesh" uid="uid://3mbcvlw4a3ef" path="res://assets/models/understory/lady_fern/lady_fern_b_impostor.res" id="3_1tohk"]
+
+[node name="LadyFernB" type="Node3D" unique_id=1958036552]
+
+[node name="LOD0" type="MeshInstance3D" parent="." unique_id=988033995]
+mesh = ExtResource("1_87yn3")
+
+[node name="LOD1" type="MeshInstance3D" parent="." unique_id=506322438]
+mesh = ExtResource("2_p1t2q")
+
+[node name="LOD2" type="MeshInstance3D" parent="." unique_id=556451059]
+mesh = ExtResource("3_1tohk")

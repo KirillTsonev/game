@@ -16,7 +16,7 @@ Last reviewed: 2026-09-30.
 | `assets/models/cliffs/<name>/` | cliff / outcrop set dressing (namaqualand_cliff_01/02, mountainside): `<name>_2k.glb`, `textures/` incl. `_patch_diff.png` / `_fill_diff.png` repair textures |
 | `assets/models/scree/` | scree rock/stone sets |
 | `assets/models/candidates/vegetation/` | the Fab vegetation pack (see `docs/vegetation.md`) |
-| `assets/models/understory/<dir>/` | understory shrubs + ferns, kept apart from the trees: `<dir>.fbx`, `<dir>_material.tres`, `textures/<dir>_{diffuse,normal,translucency}.tga` -- set up by `tools/setup_understory_assets.gd` (see `docs/vegetation.md`) |
+| `assets/models/understory/<dir>/` | understory shrubs + ferns, kept apart from the trees: `<dir>.fbx`, `<dir>_material.tres`, `textures/<dir>_{diffuse,normal,translucency}.tga` (`lady_fern`: one glb with 9 variants + PNG textures, exported by `tools/blender/import_megascans_plant.py`) -- set up by `tools/setup_understory_assets.gd` (see `docs/vegetation.md`) |
 | `assets/models/ground_debris/<dir>/` | deadfall props (Megascans, Fab "mid" glb, 2K): stumps `stump_broken` / `stump_old` / `stump_rotten_large` / `stump_rotten_tall`, logs `log_fallen_nordic` (5.7 m) / `log_fallen_large` (7.1 m), `branch_fallen` (1 m), sticks
 `stick_arbem` (FBX, x3) and `sticks_debris/sticks_debris_a..d` (4 glbs sharing one folder, texture set and
 material; x3.5-4) -- small Megascans twigs scaled up to 0.6-0.9 m. Embedded textures written out: `<dir>.glb` (one mesh, no images), `textures/<dir>_{diff,nor_gl}_2k.jpg` + `<dir>_orm_2k.png` (R = AO, G = roughness, B = metallic). Logs + branch re-centred on their bbox; stumps keep the scan's pivot. Sources in `raw-assets/models/{stumps,logs}/`. Each glb holds `<dir>_LOD0..2` (source, 35 %, 10 % tris; `stump_broken` 35 / 10 / 3 %, and stood upright with `--rotate 0,90,0` -- its scan lies on its side), built by `tools/blender/import_megascans_glb.py`; materials + Terrain3D ids 38-44 by `tools/setup_ground_debris_assets.gd`; placed by `scripts/terrain/deadfall_scatter.gd` (see `docs/vegetation.md`, "Deadfall") |
@@ -31,8 +31,8 @@ LogFallenLarge, BranchFallen, StickArbem, StickDebrisA-D), 50-52 litter mounds (
 `ground_debris/litter_mound/`, built by `tools/blender/bake_pine_litter.py`, material =
 `litter_mound.gdshader` on the PineLitter terrain textures -- see `docs/forest_floor_plan.md`),
 53-54 pine cones (ConeOpen, ConeLong: `ground_debris/cone_open/`, `cone_long/`, 1K textures, no
-ORM -- same plan, step 6).
-Ids are a contiguous list: a new asset is appended at the next id (**55**).
+ORM -- same plan, step 6), 55-63 lady ferns (LadyFernA-I, understory -- `docs/vegetation.md`).
+Ids are a contiguous list: a new asset is appended at the next id (**64**).
 
 ---
 

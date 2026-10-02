@@ -1,0 +1,25 @@
+[gd_resource type="ShaderMaterial" format=3 uid="uid://by8uqqlnld2i4"]
+
+[ext_resource type="Shader" uid="uid://yqspkhsaqiya" path="res://shaders/foliage/foliage_impostor.gdshader" id="1_qq0k6"]
+[ext_resource type="Texture2D" uid="uid://nmugvs6vrfqi" path="res://assets/models/understory/lady_fern/lady_fern_i_impostor.png" id="2_wybnb"]
+
+[resource]
+resource_name = "LadyFernI_impostor_material"
+render_priority = 0
+shader = ExtResource("1_qq0k6")
+shader_parameter/albedo_tex = ExtResource("2_wybnb")
+shader_parameter/albedo_color = Color(1, 1, 1, 1)
+shader_parameter/saturation = 1.0
+shader_parameter/alpha_gain = 1.0
+shader_parameter/alpha_gain_far = -1.0
+shader_parameter/gain_near_dist = 130.0
+shader_parameter/gain_far_dist = 170.0
+shader_parameter/roughness = 0.9
+shader_parameter/backlight_color = Color(0.28, 0.36, 0.12, 1)
+shader_parameter/alpha_cutoff = 0.5
+shader_parameter/mip_alpha_scale = 0.25
+shader_parameter/shadow_alpha_cutoff = 0.35
+shader_parameter/shadow_mip_alpha_scale = 0.6
+shader_parameter/view_normal_mix = 0.0
+shader_parameter/use_normal_tex = false
+shader_parameter/normal_views = 4

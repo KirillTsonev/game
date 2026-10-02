@@ -210,6 +210,23 @@ material override), `debug_print_sizes()`.
 | `bush_04` | shrub, grassy/spiky | 500 | 1.1 x 1.0 | Nobiax Bushes, CC0 |
 | `bush_05` | shrub, rounded, woody stem | 880 | 1.3 x 1.1 | Nobiax Bushes, CC0 |
 | `bush_02` | shrub, dense round (autumn colour -- tint green if it clashes) | 384 | 1.3 x 1.3 | Nobiax Bushes, CC0 |
+| `lady_fern` | 9 fern variants A-I in one glb (2026-10-02) | near 74-1129, far 47-282 | 0.7-1.9 x 0.4-1.0 | Megascans Lady Fern (`wdvlditia`) |
+
+- **Lady fern (2026-10-02).** Source: `raw-assets/models/bushes/lady_fern_wdvlditia_ue_mid` (Fab
+  glTF, 9 variants x LOD0 / LOD1 / billboard). `tools/blender/import_megascans_plant.py` writes
+  `lady_fern/lady_fern.glb` (per variant `Var<X>_Near` = the source LOD1, `Var<X>_Far` = 25 % of
+  it; no images) and `textures/lady_fern_{diffuse,normal}.png` (2K; diffuse alpha = opacity).
+  Not used: the source LOD0 (209-3064 tris -- user chose LOD1 for cost), its billboard LOD (our
+  own impostors instead) and the ORT map. The source has no vertex normals; the script computes
+  smooth ones. A / E / F / G / H are full clumps (1.3-1.9 m wide), B / I small plants, C / D
+  single-frond sprigs. One shared `lady_fern_material.tres` (double-sided, flat backlight, grey
+  albedo 0.50: the diffuse measured 4.6x brighter than fern_02). Mesh ids **55-63**
+  (LadyFernA-I): Near to 50 m -> Far to 150 m -> impostor, like Fern02. The normal map is assumed
+  OpenGL (glTF convention) -- not checked in-game. In the setup tool the plant row carries
+  `"ext": "glb", "tex_ext": "png"`, and every setup method takes `only` (list of dirs, e.g.
+  `[["lady_fern"]]`) so one plant can be set up without re-saving the others. A new PNG normal
+  map needs `compress/normal_map=1` + `roughness/mode=1` set in its `.import` by hand before
+  `set_texture_import_mode(path, "vram")`.
 
 - FBX files are in cm; Godot's importer converts to metres by itself, so bushes use
   root_scale 1.0. `fern_02` is modelled ~3.6 m wide -> root_scale 0.45.
@@ -284,7 +301,8 @@ material override), `debug_print_sizes()`.
   tree scale, cover = 1 - exp(-0.9 x sum)); cliff-foot shade (low side of each cliff feature
   whose face points away from the sun, band = cliff height / tan(sun elevation), 3-12 m); a
   small low-ground moisture bonus.
-- **Ferns** (fern_02 80 %, bush_01 20 %): `FERN_MAX_P` x smoothstep(0.15, 0.7, shade).
+- **Ferns** (lady fern variants 60 %, fern_02 25 %, bush_01 15 % -- `FERN_MIX`; was fern_02 80 % /
+  bush_01 20 % until 2026-10-02): `FERN_MAX_P` x smoothstep(0.15, 0.7, shade).
   **Shrubs** (bush_04 40 %, bush_05 35 %, bush_02 green 25 %): peak at grove edges
   (4c(1-c)), some under canopy, `SHRUB_OPEN_P` in the open.
 - **Noise**: glades (~50 m, `GLADE_*`) and clumping (~8 m, `CLUMP_*`).
@@ -294,6 +312,8 @@ material override), `debug_print_sizes()`.
 - **First run (2026-09-25):** ~25k plants (14k fern, 3.5k broad fern, 7.3k shrubs) from ~106k
   candidates; generation 1.27 s. Render cost of the whole layer incl. shadows, measured by
   clearing it in the same view: ~0.37 M of ~11 M tris/frame -- the trees dominate.
+- **With the lady ferns (2026-10-02):** 22.9k plants -- 15.9k fern-group (9.5k lady fern, 4.0k
+  fern_02, 2.4k bush_01) + 7.0k shrubs; generation 1.55 s. Render cost not measured.
 - Tuning knobs are the constants at the top of the module (all commented).
 
 ### Original plan notes

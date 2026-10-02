@@ -3,7 +3,11 @@ extends Node
 
 ## Setup for the understory layer (shrubs + ferns), kept apart from the trees:
 ## res://assets/models/understory/<dir>/<dir>.fbx + textures/<dir>_{diffuse,normal,translucency}.tga
-## Sources: Nobiax "Bushes" pack (CC0) -> bush_01/02/04/05; Yughues "Fern v2" -> fern_02 (credit).
+## Sources: Nobiax "Bushes" pack (CC0) -> bush_01/02/04/05; Yughues "Fern v2" -> fern_02 (credit);
+## Megascans "Lady Fern" (wdvlditia, 9 variants) -> lady_fern/lady_fern.glb + textures/lady_fern_*.png,
+## exported by tools/blender/import_megascans_plant.py (2026-10-02).
+## Every setup method takes `only`: a list of dirs to limit the run to (empty = all), so adding a
+## plant leaves the existing ones untouched (no re-save / reimport).
 ## Run via call_method(runtime:false) on tools/setup_understory_assets.tscn, node ".".
 
 const BASE := "res://assets/models/understory/"
@@ -19,7 +23,26 @@ const PLANTS := [
 	{"dir": "bush_04", "kind": "shrub", "scale": 1.0, "translucency": true},  # grassy/spiky
 	{"dir": "bush_05", "kind": "shrub", "scale": 1.0, "translucency": true},  # rounded, woody stem
 	{"dir": "fern_02", "kind": "fern", "scale": 0.45, "translucency": false, "cull_back": true},  # the real fern, 5 LODs (sibling nodes FernPlantV2_LOD0..4)
+	# Megascans lady fern: one glb, 9 variants x (Var<X>_Near = source LOD1, Var<X>_Far = 25 % of it).
+	# Already in metres and upright. "ext" = model file type (default fbx), "tex_ext" = textures (default tga).
+	{"dir": "lady_fern", "kind": "fern", "scale": 1.0, "translucency": false, "ext": "glb", "tex_ext": "png"},
 ]
+
+func _plant(dir: String) -> Dictionary:
+	for p: Dictionary in PLANTS:
+		if p.dir == dir:
+			return p
+	return {}
+
+func _model_path(dir: String) -> String:
+	return BASE + "%s/%s.%s" % [dir, dir, _plant(dir).get("ext", "fbx")]
+
+## res://.../<dir>/textures/<dir>_<role>.<tga|png>
+func _tex_path(dir: String, role: String) -> String:
+	return BASE + "%s/textures/%s_%s.%s" % [dir, dir, role, _plant(dir).get("tex_ext", "tga")]
+
+func _wanted(only: Array, dir: String) -> bool:
+	return only.is_empty() or only.has(dir)
 ## "cull_back": fern_02 is modelled double-layered (every frond duplicated back-to-back with
 ## flipped normals -- debug_print_shading: 598 up / 598 down). With CULL_DISABLED both layers
 ## draw and self-shadow -> near-black fronds (seen in-game 2026-09-25). The bushes are
@@ -65,17 +88,31 @@ const UNDERSTORY_ASSETS := [
 	{"id": 30, "name": "Bush02Green", "dir": "bush_02", "mat": "bush_02_green", "lods": ["bush_02", "IMPOSTOR"], "ranges": [80.0, 0.0], "last_shadow_lod": 1},
 	{"id": 31, "name": "Bush04", "dir": "bush_04", "mat": "bush_04", "lods": ["bush_04", "IMPOSTOR"], "ranges": [80.0, 0.0], "last_shadow_lod": 1},
 	{"id": 32, "name": "Bush05", "dir": "bush_05", "mat": "bush_05", "lods": ["bush_05", "IMPOSTOR"], "ranges": [80.0, 0.0], "last_shadow_lod": 1},
+	# Lady fern variants (2026-10-02), same scheme as Fern02: Near (source LOD1) to 50 m, Far to 150 m,
+	# then the impostor. A/E/F/G/H = full clumps (1.3-1.9 m wide, 446-1129 tris), B/I = small plants
+	# (196 / 254 tris), C/D = single-frond sprigs (124 / 74 tris). Ids 33-54 are rocks / deadfall.
+	{"id": 55, "name": "LadyFernA", "dir": "lady_fern", "mat": "lady_fern", "lods": ["VarA_Near", "VarA_Far", "IMPOSTOR"], "ranges": [50.0, 150.0, 0.0], "last_shadow_lod": 2},
+	{"id": 56, "name": "LadyFernB", "dir": "lady_fern", "mat": "lady_fern", "lods": ["VarB_Near", "VarB_Far", "IMPOSTOR"], "ranges": [50.0, 150.0, 0.0], "last_shadow_lod": 2},
+	{"id": 57, "name": "LadyFernC", "dir": "lady_fern", "mat": "lady_fern", "lods": ["VarC_Near", "VarC_Far", "IMPOSTOR"], "ranges": [50.0, 150.0, 0.0], "last_shadow_lod": 2},
+	{"id": 58, "name": "LadyFernD", "dir": "lady_fern", "mat": "lady_fern", "lods": ["VarD_Near", "VarD_Far", "IMPOSTOR"], "ranges": [50.0, 150.0, 0.0], "last_shadow_lod": 2},
+	{"id": 59, "name": "LadyFernE", "dir": "lady_fern", "mat": "lady_fern", "lods": ["VarE_Near", "VarE_Far", "IMPOSTOR"], "ranges": [50.0, 150.0, 0.0], "last_shadow_lod": 2},
+	{"id": 60, "name": "LadyFernF", "dir": "lady_fern", "mat": "lady_fern", "lods": ["VarF_Near", "VarF_Far", "IMPOSTOR"], "ranges": [50.0, 150.0, 0.0], "last_shadow_lod": 2},
+	{"id": 61, "name": "LadyFernG", "dir": "lady_fern", "mat": "lady_fern", "lods": ["VarG_Near", "VarG_Far", "IMPOSTOR"], "ranges": [50.0, 150.0, 0.0], "last_shadow_lod": 2},
+	{"id": 62, "name": "LadyFernH", "dir": "lady_fern", "mat": "lady_fern", "lods": ["VarH_Near", "VarH_Far", "IMPOSTOR"], "ranges": [50.0, 150.0, 0.0], "last_shadow_lod": 2},
+	{"id": 63, "name": "LadyFernI", "dir": "lady_fern", "mat": "lady_fern", "lods": ["VarI_Near", "VarI_Far", "IMPOSTOR"], "ranges": [50.0, 150.0, 0.0], "last_shadow_lod": 2},
 ]
 
 ## Bakes each UNDERSTORY_ASSETS entry to <dir>/<name>_<node>.res meshes + a <dir>/<Name>.tscn
 ## with LOD0..n children, and registers/updates it as a Terrain3D mesh asset in
 ## terrain_assets.tres. Safe to re-run (overwrites). Run in the EDITOR process (call_method,
 ## runtime:false) -- same reason as setup_tree_assets.gd: the editor holds terrain_assets.tres.
-func build_understory_assets() -> String:
+func build_understory_assets(only: Array = []) -> String:
 	var assets: Terrain3DAssets = load(ASSETS_PATH)
 	var out: Array[String] = []
 	for e: Dictionary in UNDERSTORY_ASSETS:
-		var src: Node = (ResourceLoader.load(BASE + "%s/%s.fbx" % [e.dir, e.dir], "", ResourceLoader.CACHE_MODE_IGNORE) as PackedScene).instantiate()
+		if not _wanted(only, e.dir):
+			continue
+		var src: Node = (ResourceLoader.load(_model_path(e.dir), "", ResourceLoader.CACHE_MODE_IGNORE) as PackedScene).instantiate()
 		var baked: Dictionary = {}  # FBX node name -> baked ArrayMesh
 		var root := Node3D.new()
 		root.name = e.name
@@ -159,6 +196,15 @@ const IMPOSTORS := [
 	["Bush02Green", "bush_02", "bush_02", "bush_02_green"],
 	["Bush04", "bush_04", "bush_04", "bush_04"],
 	["Bush05", "bush_05", "bush_05", "bush_05"],
+	["LadyFernA", "lady_fern", "VarA_Near", "lady_fern"],
+	["LadyFernB", "lady_fern", "VarB_Near", "lady_fern"],
+	["LadyFernC", "lady_fern", "VarC_Near", "lady_fern"],
+	["LadyFernD", "lady_fern", "VarD_Near", "lady_fern"],
+	["LadyFernE", "lady_fern", "VarE_Near", "lady_fern"],
+	["LadyFernF", "lady_fern", "VarF_Near", "lady_fern"],
+	["LadyFernG", "lady_fern", "VarG_Near", "lady_fern"],
+	["LadyFernH", "lady_fern", "VarH_Near", "lady_fern"],
+	["LadyFernI", "lady_fern", "VarI_Near", "lady_fern"],
 ]
 
 func _impostor_base(name: String, dir: String) -> String:
@@ -175,7 +221,7 @@ func _material_entry(name: String) -> Dictionary:
 ## SubViewport attached to the editor, and saves <dir>/<name>_impostor.png (2*RES x RES: front
 ## left, side right) + <dir>/<name>_impostor.res (two crossed quads, UP normals). Each view is a
 ## square S = max(plant width, height), bottom-aligned, so the quads match the plant's footprint.
-func bake_impostors() -> String:
+func bake_impostors(only: Array = []) -> String:
 	var out: Array[String] = []
 	var vp := SubViewport.new()
 	vp.size = Vector2i(IMPOSTOR_RES, IMPOSTOR_RES)
@@ -198,8 +244,10 @@ func bake_impostors() -> String:
 	for row: Array in IMPOSTORS:
 		var name: String = row[0]
 		var dir: String = row[1]
+		if not _wanted(only, dir):
+			continue
 		var m := _material_entry(row[3])
-		var src: Node = (ResourceLoader.load(BASE + "%s/%s.fbx" % [dir, dir], "", ResourceLoader.CACHE_MODE_IGNORE) as PackedScene).instantiate()
+		var src: Node = (ResourceLoader.load(_model_path(dir), "", ResourceLoader.CACHE_MODE_IGNORE) as PackedScene).instantiate()
 		var node := src.find_child(row[2], true, false) as MeshInstance3D
 		if node == null:
 			out.append("%s: node %s not found" % [name, row[2]])
@@ -209,7 +257,7 @@ func bake_impostors() -> String:
 		src.free()
 		var mat := ShaderMaterial.new()
 		mat.shader = cap_shader
-		mat.set_shader_parameter("albedo_tex", load(BASE + "%s/textures/%s_%s.tga" % [dir, dir, m.diffuse]))
+		mat.set_shader_parameter("albedo_tex", load(_tex_path(dir, m.diffuse)))
 		mat.set_shader_parameter("albedo_color", Color(m.albedo, m.albedo, m.albedo))
 		mi.mesh = mesh
 		mi.material_override = mat
@@ -279,16 +327,20 @@ func _impostor_mesh(aabb: AABB, s_front: float, s_side: float) -> ArrayMesh:
 	return am
 
 ## Impostor PNGs: VRAM-compressed with mipmaps (same as leaf diffuse). Run after bake + rescan.
-func impostor_import() -> String:
+func impostor_import(only: Array = []) -> String:
 	var out: Array[String] = []
 	for row: Array in IMPOSTORS:
+		if not _wanted(only, row[1]):
+			continue
 		out.append(set_texture_import_mode(_impostor_base(row[0], row[1]) + ".png", "vram"))
 	return "\n".join(out)
 
 ## <dir>/<name>_impostor_material.tres on foliage_impostor.gdshader (tint already baked in).
-func setup_impostor_materials() -> String:
+func setup_impostor_materials(only: Array = []) -> String:
 	var out: Array[String] = []
 	for row: Array in IMPOSTORS:
+		if not _wanted(only, row[1]):
+			continue
 		var base := _impostor_base(row[0], row[1])
 		var mat := ShaderMaterial.new()
 		mat.resource_name = "%s_impostor_material" % row[0]
@@ -406,22 +458,24 @@ const SHADOW_MIP_ALPHA_SCALE := 0.6
 const ROUGHNESS := 0.85
 const FERN_BACKLIGHT := Color(0.28, 0.36, 0.12)  # flat leaf-glow for plants without a translucency map
 
-## Import settings for every plant FBX: root_scale from PLANTS, and DISCARD embedded /
+## Import settings for every plant model (FBX / glb): root_scale from PLANTS, and DISCARD embedded /
 ## referenced textures (fbx/embedded_image_handling=0) -- the materials below are applied as
 ## overrides, and fern_02.fbx references textures on the artist's old E:\ drive. See
 ## docs/adding_models.md rules 3 + 4. Editing .import alone doesn't reimport -> forced here.
-func configure_imports() -> String:
+func configure_imports(only: Array = []) -> String:
 	var out: Array[String] = []
 	var paths := PackedStringArray()
 	for p: Dictionary in PLANTS:
-		var fbx: String = BASE + "%s/%s.fbx" % [p.dir, p.dir]
+		if not _wanted(only, p.dir):
+			continue
+		var fbx: String = _model_path(p.dir)
 		var cfg := ConfigFile.new()
 		var err := cfg.load(fbx + ".import")
 		if err != OK:
 			out.append("%s: could not read .import (err=%d)" % [p.dir, err])
 			continue
 		cfg.set_value("params", "nodes/root_scale", float(p.scale))
-		cfg.set_value("params", "fbx/embedded_image_handling", 0)
+		cfg.set_value("params", "%s/embedded_image_handling" % ("gltf" if fbx.ends_with(".glb") else "fbx"), 0)
 		# NO import-generated shadow meshes: they keep vertex positions only (no UVs), so the
 		# alpha-scissor leaf cutout samples a transparent texel in the shadow pass and the plant
 		# casts no shadow at all (seen in-game 2026-09-25). The baked trees have none either.
@@ -452,12 +506,16 @@ const MATERIALS := [
 	{"name": "bush_04", "dir": "bush_04", "diffuse": "diffuse", "albedo": 0.76, "backlight_tex": true, "backlight": 0.57},
 	{"name": "bush_05", "dir": "bush_05", "diffuse": "diffuse", "albedo": 0.65, "backlight_tex": true, "backlight": 0.79},
 	{"name": "fern_02", "dir": "fern_02", "diffuse": "diffuse", "albedo": 1.0, "backlight_tex": false, "cull_back": true},
+	# Lady fern: diffuse measured 0.145 (4.6x fern_02, import_megascans_plant.py) -> 0.50. Single-layer
+	# cards -> double-sided. Flat backlight (its translucency is one channel of a packed ORT map).
+	{"name": "lady_fern", "dir": "lady_fern", "diffuse": "diffuse", "albedo": 0.50, "backlight_tex": false},
 ]
 
-func setup_materials() -> String:
+func setup_materials(only: Array = []) -> String:
 	var out: Array[String] = []
 	for m: Dictionary in MATERIALS:
-		var tex: String = BASE + "%s/textures/%s_" % [m.dir, m.dir]
+		if not _wanted(only, m.dir):
+			continue
 		# ShaderMaterial on the foliage cutout shader (shaders/foliage/, docs/shadows.md): mip-scaled
 		# alpha + separate shadow-pass cutoff so leaf shadows neither vanish up close nor fade out
 		# ~20 m ahead. Replaced StandardMaterial3D 2026-09-25.
@@ -465,11 +523,11 @@ func setup_materials() -> String:
 		mat.resource_name = "%s_material" % m.name
 		mat.shader = load(FOLIAGE_SHADER_BACK if m.get("cull_back", false) else FOLIAGE_SHADER_DOUBLE)
 		var textures := {
-			"albedo_tex": load(tex + "%s.tga" % m.diffuse),
-			"normal_tex": load(tex + "normal.tga"),
+			"albedo_tex": load(_tex_path(m.dir, m.diffuse)),
+			"normal_tex": load(_tex_path(m.dir, "normal")),
 		}
 		if m.backlight_tex:
-			textures["backlight_tex"] = load(tex + "translucency.tga")
+			textures["backlight_tex"] = load(_tex_path(m.dir, "translucency"))
 		for param: String in textures:
 			if textures[param] == null:
 				push_error("setup_understory_assets: %s failed to load for %s" % [param, m.name])
@@ -493,7 +551,7 @@ func setup_materials() -> String:
 func debug_print_shading() -> String:
 	var out: Array[String] = []
 	for p: Dictionary in PLANTS:
-		var scene: PackedScene = ResourceLoader.load(BASE + "%s/%s.fbx" % [p.dir, p.dir], "", ResourceLoader.CACHE_MODE_IGNORE)
+		var scene: PackedScene = ResourceLoader.load(_model_path(p.dir), "", ResourceLoader.CACHE_MODE_IGNORE)
 		var root: Node3D = scene.instantiate()
 		var mi: MeshInstance3D = root.find_children("*", "MeshInstance3D", true, false)[0]
 		var b := Basis.IDENTITY
@@ -516,7 +574,7 @@ func debug_print_shading() -> String:
 				down += 1
 		var am := mi.mesh as ArrayMesh
 		var fmt: int = am.surface_get_format(0) if am else 0
-		var img: Image = (load(BASE + "%s/textures/%s_normal.tga" % [p.dir, p.dir]) as Texture2D).get_image()
+		var img: Image = (load(_tex_path(p.dir, "normal")) as Texture2D).get_image()
 		if img.is_compressed():
 			img.decompress()
 		var g := 0.0
@@ -539,11 +597,13 @@ func debug_print_shading() -> String:
 ## averaged below the cutoff, no shadows; mips were then turned off (-> distant shimmer, and far
 ## shadows still faded). Now the foliage shader (shaders/foliage/, docs/shadows.md) boosts alpha
 ## by the sampled mip level, so mips are back ON. Do NOT strip mips again to "fix" shadows.
-func leaf_diffuse_import() -> String:
+func leaf_diffuse_import(only: Array = []) -> String:
 	var out: Array[String] = []
 	for p: Dictionary in PLANTS:
-		out.append(set_texture_import_mode(BASE + "%s/textures/%s_diffuse.tga" % [p.dir, p.dir], "vram"))
-	out.append(set_texture_import_mode(BASE + "bush_02/textures/bush_02_diffuse_green.tga", "vram"))
+		if _wanted(only, p.dir):
+			out.append(set_texture_import_mode(_tex_path(p.dir, "diffuse"), "vram"))
+	if _wanted(only, "bush_02"):
+		out.append(set_texture_import_mode(BASE + "bush_02/textures/bush_02_diffuse_green.tga", "vram"))
 	return "\n".join(out)
 
 ## Shadow A/B test (2026-09-25): force a texture's import mode and reimport.
@@ -571,7 +631,7 @@ func debug_print_alpha_mips() -> String:
 	var out: Array[String] = []
 	var paths: Array[String] = []
 	for p: Dictionary in PLANTS:
-		paths.append(BASE + "%s/textures/%s_diffuse.tga" % [p.dir, p.dir])
+		paths.append(_tex_path(p.dir, "diffuse"))
 	paths.append(BASE + "bush_02/textures/bush_02_diffuse_green.tga")
 	for path in paths:
 		var tex: Texture2D = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE)
@@ -619,7 +679,7 @@ func debug_print_alpha_mips() -> String:
 func debug_print_sizes() -> String:
 	var out: Array[String] = []
 	for p: Dictionary in PLANTS:
-		var path: String = BASE + "%s/%s.fbx" % [p.dir, p.dir]
+		var path: String = _model_path(p.dir)
 		var scene: PackedScene = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE)
 		if scene == null:
 			out.append("%s: could not load %s" % [p.dir, path])
