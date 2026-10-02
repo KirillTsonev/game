@@ -56,6 +56,15 @@ const TUSSOCK_ROCK_CLEAR := 0.45 ## m -- no tussocks closer than this to a rock 
 const TUSSOCK_SLOPE_BARE_NY := 0.45 ## normal.y below this (~63 deg) -> no tussocks either
 const TUSSOCK_SLOPE_FULL_NY := 0.62
 
+## -- Worn patches (2026-10-02): sparse bare-soil patches in the open ground. They were made in
+## TerrainGroundPaint from its own noise, which the grass never saw, so the short gap blades grew
+## across them. Now baked here: worn = smoothstep(WORN_LO, WORN_HI, mean of a regional + a detail
+## noise), coverage x (1 - worn) (tussocks may still grow), and the ground paint reads `worn`.
+const WORN_REGION_FREQ := 0.045 ## ~22 m: where worn patches occur
+const WORN_DETAIL_FREQ := 0.25 ## ~4 m: their ragged outlines
+const WORN_LO := 0.74
+const WORN_HI := 0.88
+
 ## -- Patch map (2026-09-27): the blade PATCH noise, baked once here instead of computed per
 ## blade in grass_cull.glsl, so the GPU grass and the ground texture (TerrainGroundPaint) read the
 ## SAME patches -- the grass texture then lies exactly under the blades. PATCH_RES px per metre,
@@ -102,6 +111,7 @@ static var height_texture: ImageTexture ## maps.height (FORMAT_RF, raw metres)
 static var color_texture: ImageTexture ## maps.color (Terrain3D colour-variation map)
 static var patch_image: Image ## blade patch noise, R8, PATCH_RES px/m (see PATCH_* above)
 static var patch_texture: ImageTexture
+static var worn := PackedByteArray() ## worn-soil weight per map pixel, 0..255 (see WORN_*)
 static var map_corner := Vector3.ZERO ## world position of pixel (0, 0) -- WorldGenerator's heightmap_corner
 static var map_size := Vector2i.ZERO
 static var height_min := 0.0
@@ -185,6 +195,11 @@ static func bake(_parent_node: Node, maps: Dictionary, corner: Vector3, rng: Ran
 	var patch_n := _noise_bytes(rng.randi(), PATCH_NOISE_FREQ, width, length)
 	var clump_n := _noise_bytes(rng.randi(), CLUMP_NOISE_FREQ, width, length)
 	var dry_n := _noise_bytes(rng.randi(), DRY_NOISE_FREQ, width, length)
+	var patch_seed := rng.randi() # drawn here so the worn seeds below don't shift the patch layout
+	var worn_a := _noise_bytes(rng.randi(), WORN_REGION_FREQ, width, length)
+	var worn_b := _noise_bytes(rng.randi(), WORN_DETAIL_FREQ, width, length)
+	worn = PackedByteArray()
+	worn.resize(n)
 	var t_fields := Time.get_ticks_msec() - t0
 
 	# -- Per-pixel combine --
@@ -230,7 +245,9 @@ static func bake(_parent_node: Node, maps: Dictionary, corner: Vector3, rng: Ran
 			var canopy_f := lerpf(1.0, CANOPY_MIN_FACTOR, canopy)
 			var meadow_f := lerpf(MEADOW_VAR_MIN, 1.0, patch_n[i] / 255.0)
 			var clump := clump_n[i] / 255.0
-			var density := OPEN_COVERAGE * meadow_f * slope_f * rock_f * road_f * canopy_f # = coverage
+			var worn_w := smoothstep(WORN_LO, WORN_HI, (worn_a[i] + worn_b[i]) / 510.0)
+			worn[i] = int(worn_w * 255.0 + 0.5)
+			var density := OPEN_COVERAGE * meadow_f * slope_f * rock_f * road_f * canopy_f * (1.0 - worn_w) # = coverage
 			var tussock := road_f * smoothstep(0.0, TUSSOCK_ROCK_CLEAR, rock_d[i]) * smoothstep(TUSSOCK_SLOPE_BARE_NY, TUSSOCK_SLOPE_FULL_NY, ny)
 
 			var verge := rock_f * road_f # 0 right at a rock/road edge, 1 in the open
@@ -259,7 +276,7 @@ static func bake(_parent_node: Node, maps: Dictionary, corner: Vector3, rng: Ran
 	color_texture = ImageTexture.create_from_image(maps.color)
 	# Blade patch noise (see PATCH_*): one C++ get_image call, 2 octaves, normalised 0..1.
 	var pn := FastNoiseLite.new()
-	pn.seed = rng.randi()
+	pn.seed = patch_seed
 	pn.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
 	pn.fractal_type = FastNoiseLite.FRACTAL_FBM
 	pn.fractal_octaves = 2
@@ -501,6 +518,7 @@ static func reset_run_state() -> void:
 	density_image = null
 	patch_image = null
 	patch_texture = null
+	worn = PackedByteArray()
 	density_texture = null
 	height_texture = null
 	color_texture = null

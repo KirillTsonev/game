@@ -39,7 +39,7 @@ const ROAD_ID := 1 ## TerrainRoad.ROAD_TEXTURE_ID
 const ROCK_FACE_ID := 2 ## rock_face_03 -- bare rock ground
 const COAST_SAND_ROCKS_ID := 3 ## coast_sand_rocks_02 -- cliff meets grass
 const AERIAL_ROCKS_ID := 4 ## aerial_rocks_04 -- mossy rock ground
-const GRASS_ID := 5 ## grass_ground
+const GRASS_ID := 5 ## grass002 (ambientCG)
 const ROCKY_TRAIL_ID := 6 ## rocky_trail_02 -- scree
 const ROCKY_TERRAIN_ID := 7 ## rocky_terrain_03 -- scree with grass
 const PINE_LITTER_ID := 8 ## pine_litter -- needle litter under canopy (baked from a floor scan)
@@ -50,7 +50,7 @@ const PINE_LITTER_ID := 8 ## pine_litter -- needle litter under canopy (baked fr
 ## Ground as the overlay, blend = "bare":
 ##   - the road verge: 1 within BARE_ROAD_CLEAR m of a road vertex (their base is Ground, so the
 ##     pair swap there shows the same texture), 0 from BARE_ROAD_REACH m;
-##   - sparse worn patches: noise above BARE_WORN_LO..HI, at most BARE_WORN_MAX.
+##   - sparse worn patches: GrassScatter.worn, at most BARE_WORN_MAX.
 ## The header's "SOIL: Ground <-> Grass" description and GRASS_TEXTURE_GROW predate this.
 ## Verge (user 2026-10-01: no uniform soil strip along the road): worn-to-soil stretches where the
 ## verge noise is above BARE_VERGE_LO..HI, grass up to the stones elsewhere. Road vertices get the
@@ -59,8 +59,8 @@ const BARE_VERGE_LO := 0.47
 const BARE_VERGE_HI := 0.6
 const BARE_ROAD_CLEAR := 0.8
 const BARE_ROAD_REACH := 3.5
-const BARE_WORN_LO := 0.74
-const BARE_WORN_HI := 0.88
+## 2026-10-02: the worn-patch noise is GrassScatter's (GrassScatter.worn / WORN_*), so the grass
+## thins out over the same patches; only the blend cap is set here.
 const BARE_WORN_MAX := 0.8
 const BARE_NY_FULL := 0.8 ## normal.y at/below this (~37 deg) -> fully bare
 const BARE_NY_NONE := 0.93 ## at/above this (~21 deg) -> slope adds no bare soil
@@ -288,6 +288,10 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 	var litter_ramp := 0
 
 	var coverage_bytes := GrassScatter.density_image.get_data() # RGBA8, R = coverage
+	var worn_bytes := GrassScatter.worn
+	if worn_bytes.size() != n:
+		worn_bytes = PackedByteArray()
+		worn_bytes.resize(n)
 	var old_control: PackedByteArray = (maps.control as Image).get_data() # FORMAT_RF: uint32 bits
 	# Distance to the road's painted vertices: litter fades out toward them (LITTER_ROAD_*).
 	var road_d := _new_field(n, LITTER_ROAD_REACH)
@@ -405,7 +409,7 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 			# Bare soil (BARE_*): the road verge + sparse worn patches. Everything else is Grass.
 			var bare := maxf(
 				verge * (1.0 - smoothstep(BARE_ROAD_CLEAR, BARE_ROAD_REACH, road_d[j])),
-				BARE_WORN_MAX * smoothstep(BARE_WORN_LO, BARE_WORN_HI, 0.5 * (type_a[i] / 255.0) + 0.5 * (small_n[i] / 255.0)))
+				BARE_WORN_MAX * worn_bytes[i] / 255.0)
 			# No turf on steep ground or against cliffs (user screenshot 2026-10-01: grass up a bank
 			# and blending into a cliff mesh) -- there the soil under the rock texture is Ground.
 			bare = maxf(bare, maxf(1.0 - smoothstep(BARE_NY_FULL, BARE_NY_NONE, ny), 1.0 - smoothstep(BARE_CLIFF_CLEAR, BARE_CLIFF_REACH, cliff_d[j])))

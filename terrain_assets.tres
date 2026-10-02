@@ -1,19 +1,19 @@
 [gd_resource type="Terrain3DAssets" format=3 uid="uid://68hcdv41lqr"]
 
-[ext_resource type="Material" uid="uid://2qnbj31li50a" path="res://assets/models/rocks/boulder_01/boulder_01_material.tres" id="1_n76bi"]
+[ext_resource type="Material" uid="uid://bhilhmxne3bmj" path="res://assets/models/rocks/boulder_01/boulder_01_capped_material.tres" id="1_qrb1v"]
 [ext_resource type="PackedScene" uid="uid://cwu8fg4vxhdtf" path="res://assets/models/rocks/boulder_01/boulder_01_2k.glb" id="2_n76bi"]
-[ext_resource type="Material" uid="uid://clge6ytb44t6p" path="res://assets/models/rocks/stone_01/stone_01_material.tres" id="3_0l76h"]
+[ext_resource type="Material" uid="uid://b04ac5adj6l7l" path="res://assets/models/rocks/stone_01/stone_01_capped_material.tres" id="3_d2h71"]
 [ext_resource type="PackedScene" uid="uid://bdjcf5ndqx6u7" path="res://assets/models/rocks/stone_01/stone_01_2k.glb" id="4_8lgbh"]
-[ext_resource type="Material" uid="uid://blyd0ek7wq44w" path="res://assets/models/rocks/rock_07/rock_07_material.tres" id="5_2cdbh"]
+[ext_resource type="Material" uid="uid://dm87x14o3k8bj" path="res://assets/models/rocks/rock_07/rock_07_capped_material.tres" id="5_2acpf"]
 [ext_resource type="PackedScene" uid="uid://6eh3yscjses8" path="res://assets/models/rocks/rock_07/rock_07_2k.glb" id="6_3c5pf"]
-[ext_resource type="Material" uid="uid://cl7hd0yk5motc" path="res://assets/models/rocks/rock_09/rock_09_material.tres" id="7_r7j83"]
+[ext_resource type="Material" uid="uid://kjqdjew0njyl" path="res://assets/models/rocks/rock_09/rock_09_capped_material.tres" id="7_6wq5w"]
 [ext_resource type="PackedScene" uid="uid://jng4hd3557gs" path="res://assets/models/rocks/rock_09/rock_09_2k.glb" id="8_i6lvd"]
-[ext_resource type="Material" uid="uid://cmpksmc8qtaqw" path="res://assets/models/scree/namaqualand_rocks_01_material.tres" id="9_1dqfk"]
+[ext_resource type="Material" uid="uid://c4ih28kna4keb" path="res://assets/models/scree/namaqualand_rocks_01_capped_material.tres" id="9_41kqr"]
 [ext_resource type="PackedScene" uid="uid://26q0pl7yl77o" path="res://assets/models/scree/namaqualand_rocks_01_a.glb" id="10_mgul0"]
 [ext_resource type="PackedScene" uid="uid://c2r64lj02migf" path="res://assets/models/scree/namaqualand_rocks_01_b.glb" id="11_h623j"]
 [ext_resource type="PackedScene" uid="uid://dfb7dg4yrh0q0" path="res://assets/models/scree/namaqualand_rocks_01_c.glb" id="12_7pgp4"]
 [ext_resource type="PackedScene" uid="uid://skgr5csn13yq" path="res://assets/models/scree/namaqualand_rocks_01_d.glb" id="13_yinya"]
-[ext_resource type="Material" uid="uid://bi3215mar3guh" path="res://assets/models/scree/namaqualand_stones_01_material.tres" id="14_bjsif"]
+[ext_resource type="Material" uid="uid://dfjo77bnqngp4" path="res://assets/models/scree/namaqualand_stones_01_capped_material.tres" id="14_br08d"]
 [ext_resource type="PackedScene" uid="uid://dt8clut6hj2tx" path="res://assets/models/scree/namaqualand_stones_01_a.glb" id="15_8qjuh"]
 [ext_resource type="PackedScene" uid="uid://dnwm7vq0qdhwl" path="res://assets/models/scree/namaqualand_stones_01_b.glb" id="16_8e4eq"]
 [ext_resource type="PackedScene" uid="uid://o41kkdtdgd5t" path="res://assets/models/scree/namaqualand_stones_01_c.glb" id="17_6i7ya"]
@@ -36,25 +36,25 @@
 [ext_resource type="PackedScene" uid="uid://denfqjc54cs8" path="res://assets/models/understory/bush_01/Bush01.tscn" id="37_gv63u"]
 [ext_resource type="Texture2D" uid="uid://c1lu4puqbg6r2" path="res://textures/source/ground_albedo_height_1k.png" id="39_6bfbq"]
 [ext_resource type="PackedScene" uid="uid://bkq7ujylik6or" path="res://assets/models/understory/bush_02/Bush02Green.tscn" id="39_e33tj"]
-[ext_resource type="Material" uid="uid://dhdoxnmjnbin" path="res://assets/models/rocks/namaqualand_boulder_02/namaqualand_boulder_02_material.tres" id="39_idynt"]
 [ext_resource type="PackedScene" uid="uid://c22lweavs6r0l" path="res://assets/models/candidates/vegetation/trees/PackDecidC2.tscn" id="39_vl2ef"]
+[ext_resource type="Material" uid="uid://ksis12lugedk" path="res://assets/models/rocks/namaqualand_boulder_02/namaqualand_boulder_02_capped_material.tres" id="39_wpoff"]
 [ext_resource type="Texture2D" uid="uid://wc82hg5ty2oe" path="res://textures/source/ground_normal_roughness_1k.png" id="40_vl2ef"]
 [ext_resource type="PackedScene" uid="uid://d1mxp6mg7sixe" path="res://assets/models/rocks/namaqualand_boulder_02/namaqualand_boulder_02_2k.glb" id="40_xp8ly"]
-[ext_resource type="Material" uid="uid://drucqgd75442a" path="res://assets/models/rocks/namaqualand_boulder_03/namaqualand_boulder_03_material.tres" id="41_8027u"]
+[ext_resource type="Material" uid="uid://cbwks77lttw4s" path="res://assets/models/rocks/namaqualand_boulder_03/namaqualand_boulder_03_capped_material.tres" id="41_2bixs"]
 [ext_resource type="PackedScene" uid="uid://kgxu81l60kmy" path="res://assets/models/understory/bush_04/Bush04.tscn" id="41_gdy8x"]
 [ext_resource type="Texture2D" uid="uid://b8ji3x2m0868p" path="res://textures/source/road_albedo_height_1k.png" id="41_gv63u"]
 [ext_resource type="PackedScene" uid="uid://l0aikjxc1g3f" path="res://assets/models/rocks/namaqualand_boulder_03/namaqualand_boulder_03_2k.glb" id="42_81xqu"]
 [ext_resource type="Texture2D" uid="uid://cj0ipjb7dxu5r" path="res://textures/source/road_normal_roughness_1k.png" id="42_hasxv"]
 [ext_resource type="Texture2D" uid="uid://df6vgy35b1caj" path="res://textures/source/rock_face_03_albedo_height_1k.png" id="43_e33tj"]
-[ext_resource type="Material" uid="uid://b025uiaitorjo" path="res://assets/models/rocks/namaqualand_boulder_04/namaqualand_boulder_04_material.tres" id="43_mhf0x"]
 [ext_resource type="PackedScene" uid="uid://cqc5481cg7mi3" path="res://assets/models/understory/bush_05/Bush05.tscn" id="43_r3kdc"]
+[ext_resource type="Material" uid="uid://thyybcn0rlyf" path="res://assets/models/rocks/namaqualand_boulder_04/namaqualand_boulder_04_capped_material.tres" id="43_sp2r7"]
 [ext_resource type="Texture2D" uid="uid://chi4gj4lc0od3" path="res://textures/source/rock_face_03_normal_roughness_1k.png" id="44_ierxv"]
 [ext_resource type="PackedScene" uid="uid://cafuagcgnm4iw" path="res://assets/models/rocks/namaqualand_boulder_04/namaqualand_boulder_04_2k.glb" id="44_nv4lo"]
 [ext_resource type="Texture2D" uid="uid://014rff7homkf" path="res://textures/source/coast_sand_rocks_02_albedo_height_1k.png" id="45_gdy8x"]
-[ext_resource type="Material" uid="uid://f3mxvb0we21j" path="res://assets/models/rocks/namaqualand_boulder_05/namaqualand_boulder_05_material.tres" id="45_we7sw"]
+[ext_resource type="Material" uid="uid://bejdf1w8415pu" path="res://assets/models/rocks/namaqualand_boulder_05/namaqualand_boulder_05_capped_material.tres" id="45_x81x7"]
 [ext_resource type="PackedScene" uid="uid://3kswee8rf3ql" path="res://assets/models/rocks/namaqualand_boulder_05/namaqualand_boulder_05_2k.glb" id="46_ree8b"]
 [ext_resource type="Texture2D" uid="uid://c2cwcqb8nk2jv" path="res://textures/source/coast_sand_rocks_02_normal_roughness_1k.png" id="46_v5bka"]
-[ext_resource type="Material" uid="uid://c5jtga4xnpgek" path="res://assets/models/rocks/namaqualand_boulder_06/namaqualand_boulder_06_material.tres" id="47_osfy8"]
+[ext_resource type="Material" uid="uid://be1p85t7mkx0k" path="res://assets/models/rocks/namaqualand_boulder_06/namaqualand_boulder_06_capped_material.tres" id="47_nw0df"]
 [ext_resource type="Texture2D" uid="uid://6t77cohtroge" path="res://textures/source/aerial_rocks_04_albedo_height_1k.png" id="47_r3kdc"]
 [ext_resource type="Texture2D" uid="uid://b1dw085d2nd8t" path="res://textures/source/aerial_rocks_04_normal_roughness_1k.png" id="48_bwc52"]
 [ext_resource type="PackedScene" uid="uid://dmo61f2rgr1w1" path="res://assets/models/rocks/namaqualand_boulder_06/namaqualand_boulder_06_2k.glb" id="48_whgbg"]
@@ -115,7 +115,7 @@ name = "Boulder01"
 id = 1
 scene_file = ExtResource("2_n76bi")
 density = 0.05
-material_override = ExtResource("1_n76bi")
+material_override = ExtResource("1_qrb1v")
 last_lod = 3
 last_shadow_lod = 3
 lod0_range = 22.0
@@ -128,7 +128,7 @@ name = "Stone01"
 id = 2
 scene_file = ExtResource("4_8lgbh")
 density = 0.05
-material_override = ExtResource("3_0l76h")
+material_override = ExtResource("3_d2h71")
 last_lod = 3
 last_shadow_lod = 3
 lod0_range = 22.0
@@ -141,7 +141,7 @@ name = "Rock07"
 id = 3
 scene_file = ExtResource("6_3c5pf")
 density = 0.05
-material_override = ExtResource("5_2cdbh")
+material_override = ExtResource("5_2acpf")
 last_lod = 3
 last_shadow_lod = 3
 lod0_range = 60.0
@@ -154,7 +154,7 @@ name = "Rock09"
 id = 4
 scene_file = ExtResource("8_i6lvd")
 density = 0.05
-material_override = ExtResource("7_r7j83")
+material_override = ExtResource("7_6wq5w")
 last_lod = 3
 last_shadow_lod = 3
 lod0_range = 60.0
@@ -167,7 +167,7 @@ name = "ScreeRockA"
 id = 5
 scene_file = ExtResource("10_mgul0")
 density = 0.05
-material_override = ExtResource("9_1dqfk")
+material_override = ExtResource("9_41kqr")
 last_lod = 3
 last_shadow_lod = 3
 
@@ -176,7 +176,7 @@ name = "ScreeRockB"
 id = 6
 scene_file = ExtResource("11_h623j")
 density = 0.05
-material_override = ExtResource("9_1dqfk")
+material_override = ExtResource("9_41kqr")
 last_lod = 3
 last_shadow_lod = 3
 
@@ -185,7 +185,7 @@ name = "ScreeRockC"
 id = 7
 scene_file = ExtResource("12_7pgp4")
 density = 0.05
-material_override = ExtResource("9_1dqfk")
+material_override = ExtResource("9_41kqr")
 last_lod = 3
 last_shadow_lod = 3
 
@@ -194,7 +194,7 @@ name = "ScreeRockD"
 id = 8
 scene_file = ExtResource("13_yinya")
 density = 0.05
-material_override = ExtResource("9_1dqfk")
+material_override = ExtResource("9_41kqr")
 last_lod = 3
 last_shadow_lod = 3
 
@@ -203,7 +203,7 @@ name = "ScreeStoneA"
 id = 9
 scene_file = ExtResource("15_8qjuh")
 density = 0.05
-material_override = ExtResource("14_bjsif")
+material_override = ExtResource("14_br08d")
 last_lod = 3
 last_shadow_lod = 3
 
@@ -212,7 +212,7 @@ name = "ScreeStoneB"
 id = 10
 scene_file = ExtResource("16_8e4eq")
 density = 0.05
-material_override = ExtResource("14_bjsif")
+material_override = ExtResource("14_br08d")
 last_lod = 3
 last_shadow_lod = 3
 
@@ -221,7 +221,7 @@ name = "ScreeStoneC"
 id = 11
 scene_file = ExtResource("17_6i7ya")
 density = 0.05
-material_override = ExtResource("14_bjsif")
+material_override = ExtResource("14_br08d")
 last_lod = 3
 last_shadow_lod = 3
 
@@ -230,7 +230,7 @@ name = "ScreeStoneD"
 id = 12
 scene_file = ExtResource("18_qyqq7")
 density = 0.05
-material_override = ExtResource("14_bjsif")
+material_override = ExtResource("14_br08d")
 last_lod = 3
 last_shadow_lod = 3
 
@@ -239,7 +239,7 @@ name = "ScreeStoneE"
 id = 13
 scene_file = ExtResource("19_8eref")
 density = 0.05
-material_override = ExtResource("14_bjsif")
+material_override = ExtResource("14_br08d")
 last_lod = 3
 last_shadow_lod = 3
 
@@ -453,7 +453,7 @@ name = "NamaBoulder02"
 id = 33
 scene_file = ExtResource("40_xp8ly")
 density = 0.05
-material_override = ExtResource("39_idynt")
+material_override = ExtResource("39_wpoff")
 last_lod = 3
 last_shadow_lod = 3
 lod0_range = 22.0
@@ -466,7 +466,7 @@ name = "NamaBoulder03"
 id = 34
 scene_file = ExtResource("42_81xqu")
 density = 0.05
-material_override = ExtResource("41_8027u")
+material_override = ExtResource("41_2bixs")
 last_lod = 3
 last_shadow_lod = 3
 lod0_range = 22.0
@@ -479,7 +479,7 @@ name = "NamaBoulder04"
 id = 35
 scene_file = ExtResource("44_nv4lo")
 density = 0.05
-material_override = ExtResource("43_mhf0x")
+material_override = ExtResource("43_sp2r7")
 last_lod = 3
 last_shadow_lod = 3
 lod0_range = 22.0
@@ -492,7 +492,7 @@ name = "NamaBoulder05"
 id = 36
 scene_file = ExtResource("46_ree8b")
 density = 0.05
-material_override = ExtResource("45_we7sw")
+material_override = ExtResource("45_x81x7")
 last_lod = 2
 last_shadow_lod = 2
 lod0_range = 22.0
@@ -504,7 +504,7 @@ name = "NamaBoulder06"
 id = 37
 scene_file = ExtResource("48_whgbg")
 density = 0.05
-material_override = ExtResource("47_osfy8")
+material_override = ExtResource("47_nw0df")
 last_lod = 3
 last_shadow_lod = 3
 lod0_range = 22.0

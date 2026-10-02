@@ -1,0 +1,20 @@
+[gd_resource type="ShaderMaterial" format=3 uid="uid://dm87x14o3k8bj"]
+
+[ext_resource type="Shader" uid="uid://cxsslhunfc8at" path="res://shaders/rock/rock_highlight_cap.gdshader" id="1_cc1ks"]
+[ext_resource type="Texture2D" uid="uid://d0hyvm3a4k4ki" path="res://assets/models/rocks/rock_07/textures/rock_07_diff_2k.jpg" id="2_joyk6"]
+[ext_resource type="Texture2D" uid="uid://ddri2wubcq55x" path="res://assets/models/rocks/rock_07/textures/rock_07_nor_gl_2k.exr" id="3_aerpc"]
+[ext_resource type="Texture2D" uid="uid://daxya0206m2t2" path="res://assets/models/rocks/rock_07/textures/rock_07_rough_2k.exr" id="4_sdygr"]
+
+[resource]
+render_priority = 0
+shader = ExtResource("1_cc1ks")
+shader_parameter/albedo = Color(1, 1, 1, 1)
+shader_parameter/texture_albedo = ExtResource("2_joyk6")
+shader_parameter/texture_normal = ExtResource("3_aerpc")
+shader_parameter/normal_scale = 1.0
+shader_parameter/texture_roughness = ExtResource("4_sdygr")
+shader_parameter/roughness = 1.0
+shader_parameter/specular = 0.5
+shader_parameter/ao_light_affect = 0.0
+shader_parameter/cap_knee = 0.08
+shader_parameter/cap_limit = 0.1

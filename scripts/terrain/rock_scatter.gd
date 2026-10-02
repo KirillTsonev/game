@@ -170,6 +170,13 @@ const KNOT_TALUS_BLOCK_PAD := 0.5 ## extra radius a boulder blocks in the walk c
 ## trunks never grow through a rock. Rebuilt every run.
 static var rock_keep_circles: Array[Vector3] = []
 
+## The two scree materials (the boulders' are <dir>/<dir>_material.tres next to each glb).
+## Read by tools/assign_flat_textures.gd diag_rock_averages().
+const SCREE_MATERIAL_PATHS: Array[String] = [
+	"res://assets/models/scree/namaqualand_rocks_01_material.tres",
+	"res://assets/models/scree/namaqualand_stones_01_material.tres",
+]
+
 static func scatter_boulders(parent_node: Node, terrain: Terrain3D, heights: PackedFloat32Array, width: int, length: int, cliff_features: Array[Dictionary], import_position: Vector3, rng: RandomNumberGenerator, road_weight: PackedFloat32Array, cliff_plan: Array[Dictionary], cliff_top_profiles: Dictionary, outcrop_plan: Array[Dictionary], knots: Array) -> void:
 	var instancer: Terrain3DInstancer = terrain.get_instancer()
 	# Clear any previous run's instances first -- this script regenerates

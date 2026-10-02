@@ -73,13 +73,19 @@ at grove edges). What is missing is the materials that make thin ground read as 
 
 ## Build order
 
-1. **Colour-match plants and ground to one palette.** Editor tool: average colour of each leaf
+1. **Colour-match plants and ground to one palette.** CLOSED 2026-10-02 (user decision): only the
+   Grass ground texture is tinted (`GRASS_TINT` in `ground_paint.gd`); ferns and shrubs look good
+   as they are, and a blanket tint would blend everything into one. Lessons: dividing by the
+   texture average and matching albedo numbers turned the ground pitch black under the moon +
+   grade -- use the averages for hue only, set brightness by eye; and blades need a VALUE
+   difference from the ground (lighter tops, darker floor) or they vanish into it. If a single
+   asset later looks pasted in, tint that one. Original notes: Editor tool: average colour of each leaf
    texture over its opaque pixels; setup tools set material tint = palette colour / average (same
    result as the reference's divide-then-colourise, no texture rewrite). Terrain3D textures have a
    per-texture tint too. Anchor: the grass blade colour, unless the user supplies a reference.
    Care: pack trees are tinted by vertex colour (incl. the brown "dry" variants); the colour grade
    remaps by brightness, so judge in-game with the grade on. **Open: palette anchor.**
-2. **Litter under canopy.** FIRST PASS BUILT 2026-10-01, not yet judged in-game by the user:
+2. **Litter under canopy.** BUILT 2026-10-01, ACCEPTED by the user 2026-10-02 ("litter is good"):
    texture id 8 `PineLitter` (baked from the floor scan, see "Assets on hand"), painted by
    `ground_paint.gd` from canopy cover x noise (`LITTER_*` constants; three vertex pairs, see the
    comment there), and litter mounds at trunk bases and against stumps / logs
@@ -113,8 +119,8 @@ at grove edges). What is missing is the materials that make thin ground read as 
    the blade height taper toward patch edges and short blade layers in the gaps to 60 m
    (`PATCH_TAPER` / `EDGE_*` / `SHORT_*` in `grass_cull.glsl`, `SHORT_LAYERS` in `grass_field.gd`;
    the first try, one layer to 40 m, was too sparse and invisible from a distance).
-   Known gap: the short layer doesn't know the worn-soil noise patches of the ground paint, so it
-   grows over them. Cost not measured. Original notes: Short-grass/moss texture in the gaps between
+   The worn-soil patches are baked by `GrassScatter` (`worn`, `WORN_*`) since 2026-10-02, so
+   grass coverage drops to zero on them and the ground paint reads the same field. Cost not measured. Original notes: Short-grass/moss texture in the gaps between
    blade patches (soil only at road verges, rock, dense canopy); widen the patch edge ramp and
    taper blade height toward it; optionally a 3-6 cm blade band out to 15-20 m as an extra layer
    in `GrassField` (never as placed instances).

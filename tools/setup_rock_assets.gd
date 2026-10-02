@@ -209,3 +209,78 @@ func configure_rock_lods() -> String:
 	assets.update_mesh_list()
 	results.append("saved %s (err=%d)" % [ASSETS_PATH, assets.save(ASSETS_PATH)])
 	return "\n".join(results)
+
+## 2026-10-02 HIGHLIGHT CAP: boulders AND scree render through
+## shaders/rock/rock_highlight_cap.gdshader (see its header) -- the standard rock material with
+## only the pale parts of the albedo darkened, so they stop blooming under the lantern.
+## For every rock / scree mesh asset this builds a ShaderMaterial from the StandardMaterial3D
+## setup_materials() saved (same textures and values), saves it beside it as
+## <name>_capped_material.tres and makes it the mesh asset's override. The standard .tres stays
+## the source of truth: after re-running setup_materials() / setup_mesh_assets() here or in
+## setup_scree_assets.gd, run this again (they put the standard material back).
+## Tuning: HIGHLIGHT_CAP_KNEE / _LIMIT below, then run this again (the values are saved in the
+## capped materials; linear albedo luminance -- ordinary boulders average 0.10-0.14).
+## Editor process only (a runtime set_material_override makes Terrain3D rebuild the asset
+## thumbnail, which fails in Play mode with ~8 errors per asset).
+## enable = false puts the standard materials back.
+const HIGHLIGHT_CAP_KNEE := 0.08 ## below this nothing changes
+const HIGHLIGHT_CAP_LIMIT := 0.1 ## brighter texels approach this, never pass it
+
+## Inspector button: open tools/setup_rock_assets.tscn, select the root node, click it.
+## The result is printed to the Output panel.
+@export_tool_button("Apply highlight cap") var _highlight_cap_button: Callable = _run_highlight_cap
+
+func _run_highlight_cap() -> void:
+	print(setup_highlight_cap())
+
+func setup_highlight_cap(enable: bool = true) -> String:
+	var assets: Terrain3DAssets = load(ASSETS_PATH)
+	if assets == null:
+		return "ERROR: could not load %s" % ASSETS_PATH
+	var shader: Shader = load("res://shaders/rock/rock_highlight_cap.gdshader")
+	var std_by_id := {} # mesh id -> standard material path
+	for rock: Dictionary in ROCKS:
+		std_by_id[rock.id] = "res://assets/models/rocks/%s/%s_material.tres" % [rock.dir, rock.dir]
+	for id in RockScatter.SCREE_FIST_MESH_IDS:
+		std_by_id[id] = RockScatter.SCREE_MATERIAL_PATHS[0]
+	for id in RockScatter.SCREE_GRAVEL_MESH_IDS:
+		std_by_id[id] = RockScatter.SCREE_MATERIAL_PATHS[1]
+	var results: Array[String] = []
+	var capped_by_path := {}
+	for id: int in std_by_id:
+		var std_path: String = std_by_id[id]
+		var asset: Terrain3DMeshAsset = assets.get_mesh_asset(id)
+		var src := load(std_path) as StandardMaterial3D
+		if asset == null or src == null:
+			results.append("id=%d: no mesh asset or no StandardMaterial3D at %s -- skipped" % [id, std_path])
+			continue
+		if not enable:
+			asset.set_material_override(src)
+			results.append("id=%d -> %s" % [id, std_path.get_file()])
+			continue
+		if not capped_by_path.has(std_path):
+			var capped_path := std_path.replace("_material.tres", "_capped_material.tres")
+			var sm := (load(capped_path) as ShaderMaterial) if ResourceLoader.exists(capped_path) else null
+			if sm == null:
+				sm = ShaderMaterial.new()
+			sm.shader = shader
+			sm.set_shader_parameter("albedo", src.albedo_color)
+			sm.set_shader_parameter("texture_albedo", src.albedo_texture)
+			sm.set_shader_parameter("texture_normal", src.normal_texture)
+			sm.set_shader_parameter("normal_scale", src.normal_scale)
+			sm.set_shader_parameter("texture_roughness", src.roughness_texture)
+			sm.set_shader_parameter("roughness", src.roughness)
+			sm.set_shader_parameter("specular", src.metallic_specular)
+			sm.set_shader_parameter("texture_ao", src.ao_texture if src.ao_enabled else null)
+			sm.set_shader_parameter("ao_light_affect", src.ao_light_affect if src.ao_enabled else 0.0)
+			sm.set_shader_parameter("cap_knee", float(HIGHLIGHT_CAP_KNEE))
+			sm.set_shader_parameter("cap_limit", float(HIGHLIGHT_CAP_LIMIT))
+			var err := ResourceSaver.save(sm, capped_path)
+			sm.take_over_path(capped_path) # so terrain_assets.tres references the file instead of embedding a copy
+			results.append("saved %s (err=%d)" % [capped_path, err])
+			capped_by_path[std_path] = sm
+		asset.set_material_override(capped_by_path[std_path])
+		results.append("id=%d -> %s" % [id, (capped_by_path[std_path] as ShaderMaterial).resource_path.get_file()])
+	assets.update_mesh_list()
+	results.append("saved %s (err=%d)" % [ASSETS_PATH, assets.save(ASSETS_PATH)])
+	return "\n".join(results)

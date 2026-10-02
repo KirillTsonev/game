@@ -1,0 +1,22 @@
+[gd_resource type="ShaderMaterial" format=3 uid="uid://b04ac5adj6l7l"]
+
+[ext_resource type="Shader" uid="uid://cxsslhunfc8at" path="res://shaders/rock/rock_highlight_cap.gdshader" id="1_4y8fs"]
+[ext_resource type="Texture2D" uid="uid://dvn7mfon4cdvk" path="res://assets/models/rocks/stone_01/textures/stone_01_diff_2k.jpg" id="2_u2q0k"]
+[ext_resource type="Texture2D" uid="uid://cwn3e5rrhpgv4" path="res://assets/models/rocks/stone_01/textures/stone_01_mask_2k.png" id="3_uv86n"]
+[ext_resource type="Texture2D" uid="uid://xqv0nlogvjun" path="res://assets/models/rocks/stone_01/textures/stone_01_nor_gl_2k.exr" id="4_hax0w"]
+[ext_resource type="Texture2D" uid="uid://cq0sn2t13c655" path="res://assets/models/rocks/stone_01/textures/stone_01_rough_2k.exr" id="5_0vmea"]
+
+[resource]
+render_priority = 0
+shader = ExtResource("1_4y8fs")
+shader_parameter/albedo = Color(1, 1, 1, 1)
+shader_parameter/texture_albedo = ExtResource("2_u2q0k")
+shader_parameter/texture_normal = ExtResource("4_hax0w")
+shader_parameter/normal_scale = 1.0
+shader_parameter/texture_roughness = ExtResource("5_0vmea")
+shader_parameter/roughness = 1.0
+shader_parameter/specular = 0.5
+shader_parameter/texture_ao = ExtResource("3_uv86n")
+shader_parameter/ao_light_affect = 0.0
+shader_parameter/cap_knee = 0.08
+shader_parameter/cap_limit = 0.1

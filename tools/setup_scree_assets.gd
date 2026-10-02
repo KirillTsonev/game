@@ -24,9 +24,13 @@ const SCREE_DIR := "res://assets/models/scree/"
 ## Poly Haven 2K maps (diff jpg, nor_gl + rough exr) copied into
 ## SCREE_DIR/textures/. nor_gl is already OpenGL-convention (Y+), same as the
 ## existing rock props -- no green-channel flip.
+## "albedo" (2026-10-02): neutral albedo multiplier. Both sets are much paler than the boulders
+## they lie among (average linear luma 0.26 / 0.20 against ~0.11-0.14; assign_flat_textures.gd
+## diag_rock_averages) and glowed under the lantern + bloom. These bring them to ~0.12; grey, so
+## the hue is unchanged.
 const TEX_SETS := [
-	{"set": "namaqualand_rocks_01"},
-	{"set": "namaqualand_stones_01"},
+	{"set": "namaqualand_rocks_01", "albedo": 0.45},
+	{"set": "namaqualand_stones_01", "albedo": 0.6},
 ]
 
 ## id -> glb stem (under SCREE_DIR) + which set's material it uses + a name.
@@ -77,7 +81,12 @@ func setup_materials() -> String:
 	for ts: Dictionary in TEX_SETS:
 		var set_name: String = ts.set
 		var base := SCREE_DIR + "textures/"
-		var mat := StandardMaterial3D.new()
+		# Reuse the saved material when there is one: the Terrain3DMeshAssets hold that instance,
+		# and a fresh object saved over the path would leave them on the old one until a reload.
+		var mat_path := _mat_path(set_name)
+		var mat := (load(mat_path) as StandardMaterial3D) if ResourceLoader.exists(mat_path) else null
+		if mat == null:
+			mat = StandardMaterial3D.new()
 		mat.albedo_texture = load(base + "%s_diff_2k.jpg" % set_name)
 		mat.normal_enabled = true
 		mat.normal_texture = load(base + "%s_nor_gl_2k.exr" % set_name)
@@ -87,10 +96,11 @@ func setup_materials() -> String:
 		# same reasoning as the road/boulder materials.
 		mat.metallic = 0.0
 		mat.metallic_specular = 0.3
+		var k: float = ts.albedo
+		mat.albedo_color = Color(k, k, k)
 		for tex_label: String in ["albedo_texture", "normal_texture", "roughness_texture"]:
 			if mat.get(tex_label) == null:
 				push_error("setup_scree_assets: %s failed to load for %s" % [tex_label, set_name])
-		var mat_path := _mat_path(set_name)
 		var err := ResourceSaver.save(mat, mat_path)
 		results.append("saved %s (err=%d)" % [mat_path, err])
 	return "\n".join(results)

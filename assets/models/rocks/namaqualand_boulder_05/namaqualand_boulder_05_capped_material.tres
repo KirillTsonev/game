@@ -1,0 +1,20 @@
+[gd_resource type="ShaderMaterial" format=3 uid="uid://bejdf1w8415pu"]
+
+[ext_resource type="Shader" uid="uid://cxsslhunfc8at" path="res://shaders/rock/rock_highlight_cap.gdshader" id="1_7tb57"]
+[ext_resource type="Texture2D" uid="uid://m8bk2285kaeu" path="res://assets/models/rocks/namaqualand_boulder_05/textures/namaqualand_boulder_05_diff_2k.jpg" id="2_vbjlq"]
+[ext_resource type="Texture2D" uid="uid://bnnd66vl8lfln" path="res://assets/models/rocks/namaqualand_boulder_05/textures/namaqualand_boulder_05_nor_gl_2k.exr" id="3_bf0jp"]
+[ext_resource type="Texture2D" uid="uid://5w7gnj8w5051" path="res://assets/models/rocks/namaqualand_boulder_05/textures/namaqualand_boulder_05_rough_2k.exr" id="4_10h6c"]
+
+[resource]
+render_priority = 0
+shader = ExtResource("1_7tb57")
+shader_parameter/albedo = Color(1, 1, 1, 1)
+shader_parameter/texture_albedo = ExtResource("2_vbjlq")
+shader_parameter/texture_normal = ExtResource("3_bf0jp")
+shader_parameter/normal_scale = 1.0
+shader_parameter/texture_roughness = ExtResource("4_10h6c")
+shader_parameter/roughness = 1.0
+shader_parameter/specular = 0.5
+shader_parameter/ao_light_affect = 0.0
+shader_parameter/cap_knee = 0.08
+shader_parameter/cap_limit = 0.1

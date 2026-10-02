@@ -1,8 +1,13 @@
 [gd_resource type="StandardMaterial3D" format=3 uid="uid://cmpksmc8qtaqw"]
 
 [ext_resource type="Texture2D" uid="uid://n038mcxavx0k" path="res://assets/models/scree/textures/namaqualand_rocks_01_diff_2k.jpg" id="1_i7fbw"]
+[ext_resource type="Texture2D" uid="uid://ckvkcikkf8qxv" path="res://assets/models/scree/textures/namaqualand_rocks_01_nor_gl_2k.exr" id="2_6km1t"]
+[ext_resource type="Texture2D" uid="uid://b3b6h0pumupru" path="res://assets/models/scree/textures/namaqualand_rocks_01_rough_2k.exr" id="3_y7wnc"]
 
 [resource]
+albedo_color = Color(0.45, 0.45, 0.45, 1)
 albedo_texture = ExtResource("1_i7fbw")
 metallic_specular = 0.3
+roughness_texture = ExtResource("3_y7wnc")
 normal_enabled = true
+normal_texture = ExtResource("2_6km1t")

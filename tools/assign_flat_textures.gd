@@ -187,6 +187,49 @@ func diag_average_color() -> String:
 		log_lines.append("id=%d name=%s linear avg = (%.4f, %.4f, %.4f)" % [id, TEXTURES_BY_ID[id]["name"], sum.x, sum.y, sum.z])
 	return "\n".join(log_lines)
 
+## Average LINEAR albedo + average roughness of every boulder / scree material (RockScatter's
+## lists), over the used texels only (near-black atlas padding is skipped). For judging which
+## rock sets are paler than the rest (measured 2026-10-02: namaqualand_boulder_05 and both scree sets are 2-2.5x the others).
+func diag_rock_averages() -> String:
+	var paths: Array[String] = RockScatter.SCREE_MATERIAL_PATHS.duplicate()
+	for mesh_id in RockScatter.ROCK_MESH_IDS:
+		var dir: String = (RockScatter.ROCK_SCENE_PATHS[mesh_id] as String).get_base_dir()
+		paths.append("%s/%s_material.tres" % [dir, dir.get_file()])
+	var log_lines: Array[String] = []
+	for p in paths:
+		var mat := ResourceLoader.load(p, "", ResourceLoader.CACHE_MODE_IGNORE) as StandardMaterial3D
+		if mat == null or mat.albedo_texture == null:
+			log_lines.append("%s ERROR: no material / albedo" % p)
+			continue
+		var a := _diag_mean(mat.albedo_texture, true)
+		var r := _diag_mean(mat.roughness_texture, false) if mat.roughness_texture else Vector3(-1, -1, -1)
+		log_lines.append("%s albedo linear (%.3f, %.3f, %.3f) luma %.3f | roughness %.2f" % [p.get_file().trim_suffix("_material.tres"), a.x, a.y, a.z, a.dot(Vector3(0.2126, 0.7152, 0.0722)), r.x])
+	return "\n".join(log_lines)
+
+func _diag_mean(tex: Texture2D, srgb: bool) -> Vector3:
+	var img := tex.get_image()
+	if img == null:
+		return Vector3(-1, -1, -1)
+	img = img.duplicate() # the editor hands back the same Image on a second call; don't convert it in place
+	if img.is_compressed():
+		img.decompress()
+	if srgb:
+		img.convert(Image.FORMAT_RGBA8)
+		img.srgb_to_linear()
+	img.convert(Image.FORMAT_RGBAF)
+	while img.get_width() > 64:
+		img.shrink_x2()
+	var sum := Vector3.ZERO
+	var count := 0
+	for y in img.get_height():
+		for x in img.get_width():
+			var c := img.get_pixel(x, y)
+			if c.r + c.g + c.b < 0.006:
+				continue
+			sum += Vector3(c.r, c.g, c.b)
+			count += 1
+	return sum / float(maxi(count, 1))
+
 func diag_uv_scale() -> String:
 	var assets: Terrain3DAssets = load(ASSETS_PATH)
 	if assets == null:
