@@ -98,6 +98,9 @@ Ids are a contiguous list: a new asset is appended at the next id (**64**).
    `scripts/terrain/terrain_config.gd` for cliff faces, `OUTCROP_DEFS` in
    `scripts/terrain/outcrops.gd` for flat outcrops): `glb`,
    `diff`, `nor`, `rough` paths plus the size fields the existing entries use.
+   Megascans (Fab) cliffs (2026-10-02, `nordic_coastal_cliff_huge`): steps 1-2 via
+   `tools/blender/import_megascans_glb.py --out cliffs` (example in its header -- width on X,
+   rock face toward +Z, 4 LODs), and the def uses `"orm"` (packed AO/roughness) instead of `"rough"`.
 4. Optional repair textures: `<name>_<kind>_diff.png` (kind = `patch`, `fill`, ...) next to
    the diffuse -- found by string replacement on the diffuse path.
 5. Collision is added per mesh node as trimesh on one LOD (`_should_add_cliff_collision`,

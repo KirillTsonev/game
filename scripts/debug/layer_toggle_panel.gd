@@ -3,7 +3,8 @@
 ##
 ## - Grass: the GrassField node (hidden + its processing stopped, so the GPU cull pass stops too).
 ## - Trees / Rocks / Ferns + shrubs / Deadfall: Terrain3DMeshAsset.enabled on that layer's mesh ids.
-##   Rendering only -- colliders stay, so a hidden tree or boulder still blocks the player.
+##   Their colliders go with them (TreeColliders / BoulderColliders / DeadfallColliders disabled),
+##   so a hidden tree or boulder can be walked through.
 ## Mouse: same as the grass tuning panel -- J opens it with the cursor; click outside to look
 ## around again; J = cursor back, J again to close.
 class_name LayerTogglePanel
@@ -75,6 +76,7 @@ func _on_layer_toggled(on: bool, key: StringName) -> void:
 			field.process_mode = Node.PROCESS_MODE_INHERIT if on else Node.PROCESS_MODE_DISABLED
 	else:
 		_set_meshes_enabled(_mesh_ids(key), on)
+		_set_colliders_enabled(key, on)
 	_status.text = "%s %s -- %d FPS at toggle (let it settle)" % [key, "ON" if on else "OFF", Engine.get_frames_per_second()]
 	print("[Layers] " + _status.text)
 
@@ -89,6 +91,24 @@ func _mesh_ids(key: StringName) -> Array[int]:
 		&"deadfall":
 			return DeadfallScatter.DEADFALL_MESH_IDS # stumps, logs, branches, sticks -- not mounds/cones
 	return []
+
+## The layer's collider container (one StaticBody3D per instance). A StaticBody3D whose processing
+## is disabled is removed from the physics space (disable_mode = REMOVE, the default), so
+## disabling the container takes every body under it out; INHERIT puts them back.
+func _set_colliders_enabled(key: StringName, on: bool) -> void:
+	var container_name := ""
+	match key:
+		&"trees":
+			container_name = TreeScatter.TREE_COLLIDER_CONTAINER_NAME
+		&"rocks":
+			container_name = RockScatter.BOULDER_COLLIDER_CONTAINER_NAME
+		&"deadfall":
+			container_name = DeadfallScatter.COLLIDER_CONTAINER_NAME
+	if container_name.is_empty():
+		return # ferns / shrubs have no colliders
+	var container := get_tree().current_scene.get_node_or_null(container_name)
+	if container:
+		container.process_mode = Node.PROCESS_MODE_INHERIT if on else Node.PROCESS_MODE_DISABLED
 
 func _set_meshes_enabled(ids: Array[int], on: bool) -> void:
 	var terrain := get_tree().current_scene.get_node_or_null("Terrain3D") as Terrain3D

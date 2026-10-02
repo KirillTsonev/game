@@ -52,7 +52,17 @@ static func dress_cliff_faces(parent_node: Node, plan: Array[Dictionary], import
 		mat.albedo_texture = load(def.diff)
 		mat.normal_enabled = true
 		mat.normal_texture = load(def.nor)
-		mat.roughness_texture = load(def.rough)
+		if def.has("orm"):
+			# 2026-10-02: Megascans (Fab) cliffs ship one packed ORM map instead of a roughness EXR
+			# -- R = ambient occlusion, G = roughness (B = metallic, 0 for rock, unused).
+			var orm: Texture2D = load(def.orm)
+			mat.roughness_texture = orm
+			mat.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
+			mat.ao_enabled = true
+			mat.ao_texture = orm
+			mat.ao_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
+		else:
+			mat.roughness_texture = load(def.rough)
 		# Double-sided: these Poly Haven cliff scans are thin, one-sided displacement
 		# shells, not closed volumes -- with the default CULL_BACK, viewing one from
 		# behind or through a gap in the shell rendered nothing (sky/terrain showing

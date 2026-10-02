@@ -7,6 +7,9 @@
 #       [--dir <folder>]   (several assets in one folder sharing its textures -- the debris-pack sticks)
 #       [--rotate x,y,z] [--floor]   (degrees; stand a sideways scan up -- then --recenter --floor)
 #       [--loose-roles] [--tex-size <px>]   (non-Megascans sources -- the pine cones, 2026-10-02)
+#       [--out <category>]   (assets/models/<category>/<name>/ instead of ground_debris -- cliffs, 2026-10-02:
+#        nordic_coastal_cliff_huge = --out cliffs --scale 0.7 --recenter --tex-size 2048
+#        --ratios 1,0.5,0.25,0.12; a cliff needs its width on X and the rock face toward Godot +Z -- --rotate if not)
 #
 # Written for the deadfall stumps/logs (2026-09-30). Fab's converted glbs are one mesh under a chain
 # of Sketchfab empties, with base colour / ORM / normal embedded as Image_0/1/2.
@@ -51,7 +54,8 @@ folder = args[args.index("--dir") + 1] if "--dir" in args else name  # also the 
 loose_roles = "--loose-roles" in args
 tex_size = int(args[args.index("--tex-size") + 1]) if "--tex-size" in args else 0
 res_tag = f"{tex_size // 1024}k" if tex_size else "2k"
-dst = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "assets", "models", "ground_debris", folder))
+category = args[args.index("--out") + 1] if "--out" in args else "ground_debris"  # assets/models/<category>/
+dst = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "assets", "models", category, folder))
 os.makedirs(os.path.join(dst, "textures"), exist_ok=True)
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
