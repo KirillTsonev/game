@@ -82,6 +82,24 @@ const OUTCROP_DEFS := [
     "tilt_to_ground": true,
     "max_tilt_deg": 18.0
   },
+	# 2026-10-04 (trial): Megascans "Nordic Beach Rock Formation" (uktjfiu) -- a stack of rock slabs
+	# on a flat base, same rock as beach_rock_formation. Source is only 4.2 x 4.2 x 1.26 m; scaled
+	# x2 (same script) to 8.4 x 8.4 x 2.5 m so it reads as an outcrop. Same settings as above.
+	{
+    "name": "beach_rock_slabs",
+    "glb": "res://assets/models/outcrops/beach_rock_slabs/beach_rock_slabs.glb",
+    "diff": "res://assets/models/outcrops/beach_rock_slabs/textures/beach_rock_slabs_diff_2k.jpg",
+    "nor": "res://assets/models/outcrops/beach_rock_slabs/textures/beach_rock_slabs_nor_gl_2k.jpg",
+    "orm": "res://assets/models/outcrops/beach_rock_slabs/textures/beach_rock_slabs_orm_2k.png",
+    "scale_min": 0.6,
+    "scale_max": 1.0,
+    "sink_fraction": 0.1,
+    "max_ground_spread": 0.8,
+    "fit_terrain": false,
+    "lay_flat": false,
+    "tilt_to_ground": true,
+    "max_tilt_deg": 18.0
+  },
 ]
 const OUTCROP_COUNT_MIN_BASE := 1 ## per ERRATIC_DENSITY_BASE_AREA (256x256), scaled by real map area like erratics
 const OUTCROP_COUNT_MAX_BASE := 3

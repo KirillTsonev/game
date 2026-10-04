@@ -102,6 +102,21 @@ clean when this file was last updated.
   per-slice top and back extents, six rendered views) is written in the session scratchpad each
   time; it is not in the repo.
 
+## Outcrops: deferred until the model list is settled (noted 2026-10-04)
+
+Kirill is trying outcrop models one at a time (`raw-assets/models/outcrops/` ->
+`assets/models/outcrops/<name>/`, defs in `OUTCROP_DEFS`, `scripts/terrain/outcrops.gd`). Once he
+has decided which stay, he wants at least one of each on a map and an even pick between them.
+Not done yet, on purpose:
+
+- **Today:** the count is rolled from 1-3 per 256 x 256 m scaled by map area (2-6 on the current
+  256 x 512 map, average 4), and each slot picks a model at random -- so a model is often missing
+  (one run gave 4 x `beach_rock_formation`, 1 x `beach_rock_slabs`, 0 x `mountainside`).
+- **Planned change in `plan_outcrops`:** pick the least-used model per slot (the cliffs' rule);
+  raise the minimum roll to the number of models; when a slot fails its 16 placement tries, retry
+  with the same model before moving on (models with tilt / bumpiness limits fail more often).
+- The map is expected to grow, which raises the count by itself; no fixed total wanted.
+
 ## Next steps
 
 1. Kirill judges the knots with the mixed meshes and the lava cliff in-game; tune `push_back` /
