@@ -262,12 +262,14 @@ static func build_cliff_dressing_obstacle_mask(plan: Array[Dictionary], width: i
 ## plain `heights` array to match each mesh's footprint -- doing this after Terrain3D import
 ## would mean rewriting live Terrain3D region data instead of a plain array. Mesh instancing
 ## itself still happens later, in _dress_cliff_faces, once Terrain3D and heightmap_corner exist.
-static func plan_cliff_dressing(cliff_features: Array[Dictionary], heights: PackedFloat32Array, width: int, length: int, rng: RandomNumberGenerator) -> Array[Dictionary]:
+static func plan_cliff_dressing(cliff_features: Array[Dictionary], heights: PackedFloat32Array, width: int, length: int, rng: RandomNumberGenerator, initial_usage: Dictionary = {}) -> Array[Dictionary]:
 	var plan: Array[Dictionary] = []
 	# 2026-09-17: tracks how many times each CLIFF_DRESSING_DEFS model has been placed so
 	# far across the WHOLE map (declared here, above the per-feature loop, so it balances
 	# globally rather than resetting per fault) -- see the least-used-first selection below.
-	var dressing_usage_count: Dictionary = {}
+	# 2026-10-04: starts from initial_usage (the knots' mesh counts, built before this), so the
+	# models the knots used most are picked least here and the map total evens out.
+	var dressing_usage_count: Dictionary = initial_usage.duplicate()
 	for feature in cliff_features:
 		# Only single-sided-step archetypes have an actual face to dress.
 		if not feature.has("step_height"):

@@ -14,6 +14,7 @@ later step and has not been started.
 |---|---|---|
 | `nordic_coastal_cliff_huge` | kept, committed (`57fe3b1 feat: new cliff`) | promontory, source x0.7 -> 13.1 x 7.1 x 11.3 m (W x H x D) |
 | `nordic_coastal_cliff_large` | kept, **uncommitted**, being tuned | thin wall, source x2 -> 13.5 x 6.0 x 3.4 m |
+| `icelandic_lava_cliff_huge` | added 2026-10-04, **uncommitted**, awaiting Kirill's verdict | long blocky wall, source x1.3 -> 20.05 x 5.67 x 6.69 m, no rotation; loads and places with zero errors |
 | first wedge (`large_..._ulkiejkva`) | rejected, deleted | curved back edge left a gap behind its tall end |
 | `tundra_mossy_boulder` | rejected, deleted | "doesn't look good" at x5 scale |
 

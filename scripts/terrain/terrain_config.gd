@@ -91,7 +91,7 @@ const CLIFF_DRESSING_DEFS := [
 	# 2026-10-02: Megascans "Huge Nordic Coastal Cliff" (Fab) -- a promontory: straight open back at
 	# full height, rock mass projecting forward, ground skirt. Source is 18.7 m wide; scaled x0.7 by
 	# tools/blender/import_megascans_glb.py (--out cliffs). "orm" instead of "rough" (see
-	# CliffInstancer.dress_cliff_faces). Not used by the knot rows (knots.gd CLIFF_SMALL/BIG).
+	# CliffInstancer.dress_cliff_faces). In knots only as CLIFF_MID_DEEP (knots.gd).
 	{
     "name": "nordic_coastal_cliff_huge", 
     "glb": "res://assets/models/cliffs/nordic_coastal_cliff_huge/nordic_coastal_cliff_huge.glb", 
@@ -121,8 +121,23 @@ const CLIFF_DRESSING_DEFS := [
     "height": 6.0, 
     "depth": 3.41, 
     "top_despike": 2.0, 
-    "push_back": 0.75, 
+    "push_back": 0.75,
     "top_lift": 0.25
+  },
+	# 2026-10-04: Megascans "Huge Icelandic Lava Cliff" (sieoz) -- a long blocky wall, even top
+	# (falls ~0.9 m toward +X), straight open back, debris skirt along the foot. Source is 15.4 m
+	# wide and only 4.4 m tall; scaled x1.3 (same script, no rotation needed).
+	{
+    "name": "icelandic_lava_cliff_huge",
+    "glb": "res://assets/models/cliffs/icelandic_lava_cliff_huge/icelandic_lava_cliff_huge.glb",
+    "diff": "res://assets/models/cliffs/icelandic_lava_cliff_huge/textures/icelandic_lava_cliff_huge_diff_2k.jpg",
+    "nor": "res://assets/models/cliffs/icelandic_lava_cliff_huge/textures/icelandic_lava_cliff_huge_nor_gl_2k.jpg",
+    "orm": "res://assets/models/cliffs/icelandic_lava_cliff_huge/textures/icelandic_lava_cliff_huge_orm_2k.png",
+    "real_size": 20.05,
+    "height": 5.67,
+    "depth": 6.69,
+    "push_back": 1,
+    "top_lift": 0.1
   },
 ]
 const CLIFF_DRESSING_EMBED_DEPTH := 1.5 ## sink the mesh's base this far below the sampled terrain height (scaled by that instance's own scale jitter) so its bottom edge never floats visibly above the ground regardless of the source mesh's own base/pivot

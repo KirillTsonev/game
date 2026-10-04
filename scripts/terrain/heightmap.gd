@@ -423,7 +423,7 @@ static func build_heightmap(master_seed: int = TerrainConfig.MASTER_SEED) -> Dic
 
 	var cliff_dressing_rng := RandomNumberGenerator.new()
 	cliff_dressing_rng.seed = master_seed ^ 0x434C4646 # 'CLFF' salt
-	var cliff_dressing_plan := CliffDressing.plan_cliff_dressing(cliff_features, heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, cliff_dressing_rng)
+	var cliff_dressing_plan := CliffDressing.plan_cliff_dressing(cliff_features, heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, cliff_dressing_rng, knot_result.mesh_usage)
 	# 2026-09-29: fixed landmark (landmarks.gd) -- drop planned meshes in its disk BEFORE they
 	# shape the terrain (the landmark is stamped over that area further down). No-op without data.
 	var lm_meshes_removed := TerrainLandmarks.filter_cliff_plan(cliff_dressing_plan)
@@ -468,6 +468,19 @@ static func build_heightmap(master_seed: int = TerrainConfig.MASTER_SEED) -> Dic
 	# flatten/raise passes, since build_knots already shaped their ground (knots run first now, see
 	# above). From here instancing, collision, keep-outs and ground paint treat them like any mesh.
 	cliff_dressing_plan.append_array(knot_meshes)
+	# 2026-10-04: per-model tally of the final plan (fault lines + landmark + knots) -- the knot
+	# and fault-line pickers both balance on use counts, this shows how even it came out.
+	var mesh_tally: Array[String] = []
+	for def in TerrainConfig.CLIFF_DRESSING_DEFS:
+		var total := 0
+		var in_knots := 0
+		for e in cliff_dressing_plan:
+			if e.def_name == def.name:
+				total += 1
+				if e.has("knot"):
+					in_knots += 1
+		mesh_tally.append("%s %d (%d in knots)" % [def.name, total, in_knots])
+	print("TERRAIN_GEN: cliff mesh usage -- " + ", ".join(mesh_tally))
 	t_stage = Time.get_ticks_msec()
 
 	# Control map: defaults to ground everywhere; the road step below paints

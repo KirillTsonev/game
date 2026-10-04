@@ -79,8 +79,18 @@ const KNOT_OCCUPIED_MARGIN := 4.0 ## keep this gap from anything taken (and betw
 const KNOT_ROW_GAP := 1.5 ## metres between meshes in a row -- far under CLIFF_DRESSING_RAISE_JOIN_THRESHOLD, so their plateaus bridge into one
 const KNOT_ROW_YAW_JITTER := 0.2 ## radians a whole row may turn off the knot's axis
 const KNOT_MESH_YAW_JITTER := 0.08 ## per-mesh extra yaw so a row isn't perfectly planar
-const CLIFF_SMALL := "namaqualand_cliff_01"
-const CLIFF_BIG := "namaqualand_cliff_02"
+## Row meshes by width class (2026-10-04, Kirill: "include the new cliff meshes in the knots").
+## Rows keep their position, facing and rough width; _assign_row_models picks one width-matched
+## combo per row, least-used meshes first:
+##   ~20 m: one WIDE, or MID + SMALL          ~28 m: WIDE + SMALL, or MID + MID
+##   bench: SMALL + SMALL, one MID, or one WIDE
+## CLIFF_MID_DEEP (the promontory, 11 m deep) only goes in rows with nothing stacked close behind
+## (wall bench, floor back row) -- in the others its body would dig into the next row.
+const CLIFF_SMALL := "namaqualand_cliff_01" ## 8.3 m
+const CLIFF_MID := ["nordic_coastal_cliff_large"] ## ~13 m, wall-shaped
+const CLIFF_MID_DEEP := ["nordic_coastal_cliff_huge"] ## ~13 m, deep
+const CLIFF_WIDE := ["namaqualand_cliff_02", "icelandic_lava_cliff_huge"] ## ~20 m
+enum RowWidth { BENCH, W20, W28 }
 
 ## Walkability check: a 1-pixel (1 m) step may climb at most this much (tan 40 deg -- margin
 ## under CharacterBody3D's default 45-degree floor_max_angle).
@@ -141,6 +151,7 @@ static func build_knots(heights: PackedFloat32Array, width: int, length: int, rn
 
 	var knots: Array[Dictionary] = []
 	var mesh_plan: Array[Dictionary] = []
+	var mesh_usage: Dictionary = {} # def name -> meshes placed in knots so far (see _assign_row_models)
 	for p in plan:
 		var type: int = p.type
 		var slot_pz: float = p.pz
@@ -161,6 +172,7 @@ static func build_knots(heights: PackedFloat32Array, width: int, length: int, rn
 		tt = _prof(prof, "place", tt)
 		var knot_index := knots.size()
 		knot["index"] = knot_index
+		_assign_row_models(knot, rng, mesh_usage)
 		var before := heights.duplicate()
 		var entries := _build_rows(knot, heights, width, length, rng, top_profiles, knot_index)
 		tt = _prof(prof, "rows", tt)
@@ -211,7 +223,7 @@ static func build_knots(heights: PackedFloat32Array, width: int, length: int, rn
 		fa.store_string("\n".join(diag))
 		fa.close()
 	print("TERRAIN_GEN: knots -- %d/%d placed, %d cliff mesh(es), %d changed pixel(s) OUTSIDE knot circles (must be 0) (%.2fs)" % [knots.size(), plan.size(), mesh_plan.size(), outside, (Time.get_ticks_msec() - t_start) / 1000.0])
-	return {"knots": knots, "mesh_plan": mesh_plan}
+	return {"knots": knots, "mesh_plan": mesh_plan, "mesh_usage": mesh_usage}
 
 ## TEMP 2026-09-29 knot profiling helper: adds (now - t0) usec to prof[key], returns now.
 static func _prof(prof: Dictionary, key: String, t0: int) -> int:
@@ -423,28 +435,79 @@ static func _make_template(type: int, rng: RandomNumberGenerator) -> Dictionary:
 	if type == KnotType.FLOOR:
 		# Back row first (low cliff facing -u), then the front row facing +u -- their plateaus
 		# meet into one mesa with sloped sides -- then the upper row on the front half.
-		rows.append(_row(rng, "back", -26.0, s * rng.randf_range(-3.0, 3.0), -1.0, [CLIFF_BIG], 1.2, 1.3, 0.0))
-		var front_models: Array = [CLIFF_BIG, CLIFF_SMALL] if rng.randf() < 0.5 else [CLIFF_SMALL, CLIFF_BIG]
-		rows.append(_row(rng, "front", 16.0, s * rng.randf_range(-2.0, 2.0), 1.0, front_models, 1.2, 1.3, 0.0))
+		rows.append(_row(rng, "back", -26.0, s * rng.randf_range(-3.0, 3.0), -1.0, RowWidth.W20, true, 1.2, 1.3, 0.0))
+		rows.append(_row(rng, "front", 16.0, s * rng.randf_range(-2.0, 2.0), 1.0, RowWidth.W28, false, 1.2, 1.3, 0.0))
 		# u=0, not 5 (round 3b): at 5 the upper row's own flatten zone (up to 10 m in front of it)
 		# reached back over the front row's rim and cut its plateau 1-3 m below the rock top
 		# (Kirill's screenshot, transect 13.6 -> 12.5 m right behind @22). Now its foot sample
 		# (CLIFF_DRESSING_FOOT_SAMPLE_OFFSET = 8 m ahead) lands on the front row's flat plateau.
-		rows.append(_row(rng, "upper", 0.0, s * rng.randf_range(-2.0, 2.0), 1.0, [CLIFF_BIG], 1.25, 1.35, 0.0))
+		rows.append(_row(rng, "upper", 0.0, s * rng.randf_range(-2.0, 2.0), 1.0, RowWidth.W20, false, 1.25, 1.35, 0.0))
 		centre_u = -5.0
 		radius = KNOT_FLOOR_RADIUS
 	else:
 		# Bench first (low, facing the valley), then the shelf row facing the mountain with its
 		# foot dropped into a dip -- its raise builds the shelf out over the slope toward the bench.
-		var bench_models: Array = [CLIFF_SMALL, CLIFF_SMALL] if rng.randf() < 0.5 else [CLIFF_BIG]
-		rows.append(_row(rng, "bench", 22.0, s * rng.randf_range(-3.0, 3.0), 1.0, bench_models, 1.0, 1.2, 0.0))
-		rows.append(_row(rng, "shelf", -12.0, s * rng.randf_range(-2.0, 2.0), -1.0, [CLIFF_BIG, CLIFF_SMALL], 1.15, 1.3, rng.randf_range(2.0, 3.0)))
+		rows.append(_row(rng, "bench", 22.0, s * rng.randf_range(-3.0, 3.0), 1.0, RowWidth.BENCH, true, 1.0, 1.2, 0.0))
+		rows.append(_row(rng, "shelf", -12.0, s * rng.randf_range(-2.0, 2.0), -1.0, RowWidth.W28, false, 1.15, 1.3, rng.randf_range(2.0, 3.0)))
 		centre_u = 4.0
 		radius = KNOT_WALL_RADIUS
 	return {"type": type, "side": s, "rows": rows, "centre_u": centre_u, "reach": radius}
 
-static func _row(rng: RandomNumberGenerator, row_name: String, u: float, v: float, facing: float, models: Array, s_min: float, s_max: float, foot_drop: float) -> Dictionary:
-	return {"name": row_name, "u": u, "v": v, "facing": facing, "models": models, "s_min": s_min, "s_max": s_max, "foot_drop": foot_drop, "yaw": rng.randf_range(-KNOT_ROW_YAW_JITTER, KNOT_ROW_YAW_JITTER)}
+## Every width-matched mesh combo a row may use (see CLIFF_SMALL .. CLIFF_WIDE).
+## allow_deep: the row may use CLIFF_MID_DEEP.
+static func _row_combos(row_width: int, allow_deep: bool) -> Array:
+	var mids: Array = CLIFF_MID + CLIFF_MID_DEEP if allow_deep else CLIFF_MID
+	var combos: Array = []
+	match row_width:
+		RowWidth.BENCH:
+			combos.append([CLIFF_SMALL, CLIFF_SMALL])
+			for m in mids:
+				combos.append([m])
+			for w in CLIFF_WIDE:
+				combos.append([w])
+		RowWidth.W20:
+			for w in CLIFF_WIDE:
+				combos.append([w])
+			for m in mids:
+				combos.append([m, CLIFF_SMALL])
+		_:
+			for w in CLIFF_WIDE:
+				combos.append([w, CLIFF_SMALL])
+			for a in mids.size():
+				for b in range(a, mids.size()):
+					combos.append([mids[a], mids[b]])
+	return combos
+
+## Fills in each row's "models" for a PLACED knot (templates are rolled per placement candidate, so
+## counting there would count meshes that never get built). 2026-10-04 (Kirill: "ensure all our
+## cliffs are used more or less evenly ... both in general and in knots"): per row, the combo whose
+## meshes have been used least so far across all knots wins (mean use count, ties random); `usage`
+## (def name -> count) is updated and later seeds CliffDressing.plan_cliff_dressing's own counts.
+static func _assign_row_models(knot: Dictionary, rng: RandomNumberGenerator, usage: Dictionary) -> void:
+	for row in knot.rows:
+		var best: Array = []
+		var best_cost := INF
+		for combo in _row_combos(int(row.width), bool(row.allow_deep)):
+			var cost := 0.0
+			var seen: Dictionary = {}
+			for m in combo:
+				cost += float(int(usage.get(m, 0)) + int(seen.get(m, 0)))
+				seen[m] = int(seen.get(m, 0)) + 1
+			cost /= float(combo.size())
+			if cost < best_cost - 0.0001:
+				best_cost = cost
+				best = [combo]
+			elif absf(cost - best_cost) <= 0.0001:
+				best.append(combo)
+		var models: Array = (best[rng.randi() % best.size()] as Array).duplicate()
+		if models.size() == 2 and rng.randf() < 0.5:
+			models.reverse()
+		for m in models:
+			usage[m] = int(usage.get(m, 0)) + 1
+		row["models"] = models
+
+static func _row(rng: RandomNumberGenerator, row_name: String, u: float, v: float, facing: float, row_width: int, allow_deep: bool, s_min: float, s_max: float, foot_drop: float) -> Dictionary:
+	return {"name": row_name, "u": u, "v": v, "facing": facing, "width": row_width, "allow_deep": allow_deep, "models": [], "s_min": s_min, "s_max": s_max, "foot_drop": foot_drop, "yaw": rng.randf_range(-KNOT_ROW_YAW_JITTER, KNOT_ROW_YAW_JITTER)}
 
 static func _set_frame(knot: Dictionary, ax: float, az: float, theta: float) -> void:
 	knot["ax"] = ax
@@ -1366,7 +1429,7 @@ static func _print_knot(knot: Dictionary) -> void:
 	for row in knot.rows:
 		var model_names := ""
 		for m in row.models:
-			model_names += ("+" if model_names != "" else "") + String(m).replace("namaqualand_", "")
+			model_names += ("+" if model_names != "" else "") + String(m).replace("namaqualand_", "").replace("_coastal", "").replace("icelandic_", "")
 		rows_desc.append("%s(%s, facing %s)" % [row.name, model_names, "+u" if float(row.facing) > 0.0 else "-u"])
 	var unreached: Array[String] = knot.unreached
 	var ramps: Array[String] = knot.ramps

@@ -1,6 +1,6 @@
-KNOT_PROFILE occupancy 69 ms, place 30 ms, rows 311 ms, clip+mark 53 ms, levels+mesh_block 10 ms, reach+ramps 873 ms, self-check 23 ms -- total 1.37s
-KNOT #0 wall_right at px (212, 149): levels bench top 10.1, shelf top 15.4 -- unreached [] -- ramps [] -- drops [] -- covered []
-KNOT #1 wall_right at px (213, 386): levels bench top 6.3, shelf top 14.5 -- unreached [] -- ramps [] -- drops [] -- covered []
-KNOT #2 wall_left at px (40, 163): levels bench top 7.9, shelf top 19.5 -- unreached [] -- ramps [] -- drops [] -- covered []
-KNOT #3 floor at px (87, 256): levels back top 10.9, front top 13.3, upper top 18.7 -- unreached [] -- ramps ["upper top 25 deg"] -- drops ["back top <- upper top (7.8 m drop)", "front top <- upper top (5.5 m drop)"] -- covered []
-KNOT #4 floor at px (165, 298): levels back top 13.7, front top 8.4, upper top 13.7 -- unreached [] -- ramps ["back top 26 deg"] -- drops [] -- covered []
+KNOT_PROFILE occupancy 66 ms, place 29 ms, rows 312 ms, clip+mark 54 ms, levels+mesh_block 12 ms, reach+ramps 488 ms, self-check 23 ms -- total 0.98s
+KNOT #0 wall_right at px (213, 147): levels bench top 8.1, shelf top 14.3 -- unreached [] -- ramps [] -- drops [] -- covered []
+KNOT #1 wall_right at px (211, 389): levels bench top 4.9, shelf top 11.4 -- unreached [] -- ramps [] -- drops [] -- covered []
+KNOT #2 wall_left at px (40, 163): levels bench top 11.4, shelf top 17.9 -- unreached [] -- ramps [] -- drops [] -- covered []
+KNOT #3 floor at px (168, 251): levels front top 9.9, upper top 16.9 -- unreached [] -- ramps ["upper top 26 deg"] -- drops [] -- covered ["back top (8 m2 standable)"]
+KNOT #4 floor at px (88, 328): levels back top 16.7, front top 12.2, upper top 17.2 -- unreached [] -- ramps ["back top 26 deg"] -- drops [] -- covered []
