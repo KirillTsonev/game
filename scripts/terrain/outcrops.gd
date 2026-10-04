@@ -12,25 +12,54 @@ extends RefCounted
 ## material, trimesh collision) for Terrain3D's instancer, so each one is a real node under
 ## OUTCROP_NODE_NAME, same as CliffDressing. See _scatter_outcrops.
 const OUTCROP_NODE_NAME := "RockOutcrops"
+## Per-outcrop settings (2026-10-04, Kirill: "make it per outcrop similarly to how we do
+## CLIFF_DRESSING_DEFS with individual settings" -- these were global OUTCROP_* constants tuned for
+## mountainside). REQUIRED on every def:
+##   "scale_min" / "scale_max"  random uniform scale per placed instance
+##   "sink_fraction"            sink this fraction of the laid-flat model's own thickness below the
+##                              LOWEST ground under its footprint. TUNING: higher = buried deeper
+##   "max_ground_spread"        reject spots where the ground under the footprint varies more than
+##                              this (metres). TUNING: lower = flatter spots only (fewer placed)
+##   "fit_terrain"              true = fit_terrain_to_outcrops raises the ground to the model's
+##                              underside + builds a soil bank around it; false = terrain untouched
+## REQUIRED when "fit_terrain" is true:
+##   "fit_clearance"            terrain under the rock stops this far BELOW its underside
+##   "rim_tuck"                 ground at the outline rises this far ABOVE the local underside, so
+##                              the lip tucks into the soil instead of hovering
+##   "rim_inset"                the rim the terrain aims at is pulled this far (metres, whole
+##                              pixels) INSIDE the real outline; the ring between gets full rim
+##                              height so soil covers the lip. 0 = rim on the outline
+##   "bank_slope"               target rise/run of the soil bank (bank width = rim lift / this,
+##                              clamped to OUTCROP_FIT_FADE_MIN..MAX)
 const OUTCROP_DEFS := [
-	{"name": "mountainside", "glb": "res://assets/models/cliffs/mountainside/mountainside_2k.glb", "diff": "res://assets/models/cliffs/mountainside/textures/mountainside_diff_2k.jpg", "nor": "res://assets/models/cliffs/mountainside/textures/mountainside_nor_gl_2k.exr", "rough": "res://assets/models/cliffs/mountainside/textures/mountainside_rough_2k.exr"},
+	{
+    "name": "mountainside",
+    "glb": "res://assets/models/cliffs/mountainside/mountainside_2k.glb",
+    "diff": "res://assets/models/cliffs/mountainside/textures/mountainside_diff_2k.jpg",
+    "nor": "res://assets/models/cliffs/mountainside/textures/mountainside_nor_gl_2k.exr",
+    "rough": "res://assets/models/cliffs/mountainside/textures/mountainside_rough_2k.exr",
+    "scale_min": 0.6,
+    "scale_max": 1.0,
+    "sink_fraction": 0.1,
+    "max_ground_spread": 2.5,
+    "fit_terrain": true,
+    "fit_clearance": 0.08,
+    "rim_tuck": 0.35,
+    "rim_inset": 0.85,
+    "bank_slope": 0.35
+  },
+	# 2026-10-04: Megascans "Massive Tundra Rock Formation" (a 26 x 14 m single-sheet patch of sloping
+	# ground with a rock ridge) was tried here, with and without the terrain fit, and rejected
+	# (Kirill: "doesn't fit"). A Megascans def gives "orm" instead of "rough" (see place_outcrops).
 ]
 const OUTCROP_COUNT_MIN_BASE := 1 ## per ERRATIC_DENSITY_BASE_AREA (256x256), scaled by real map area like erratics
 const OUTCROP_COUNT_MAX_BASE := 3
-const OUTCROP_SCALE_MIN := 0.6
-const OUTCROP_SCALE_MAX := 1.0
-const OUTCROP_SINK_FRACTION := 0.1 ## sink this fraction of the laid-flat slab's own thickness below its lowest ground contact (round 2: 0.25 -> 0.1 now that _fit_terrain_to_outcrops raises the ground to meet the rest of the contour)
 const OUTCROP_UNDERSIDE_CELL := 0.25 ## model units per cell of each outcrop's underside grid -- see _load_outcrop_models
-const OUTCROP_FIT_CLEARANCE := 0.08 ## terrain under the rock stops this far BELOW its underside (never above -- see _fit_terrain_to_outcrops)
-const OUTCROP_RIM_TUCK := 0.35 ## round 3: ground at the rock's outline rises this far ABOVE its local underside, so the lip tucks into the soil instead of hovering
-const OUTCROP_RIM_INSET := 0.85 ## round 4: the rim the terrain aims at is pulled this far (world units, whole pixels) INSIDE the rock's real outline; the ring in between gets full rim height so soil covers the lip. Terrain only -- never moves the mesh. 0 = old behaviour
-const OUTCROP_BANK_SLOPE := 0.35 ## round 3: target rise/run of the soil bank -- bank width = rim lift / this, clamped below
 const OUTCROP_FIT_FADE_MIN := 4.0 ## narrowest soil bank (world units)
 const OUTCROP_FIT_FADE_MAX := 12.0 ## widest soil bank; also used for outcrop spacing + the road obstacle radius
 const OUTCROP_BANK_SMOOTH_PASSES := 4 ## round 5: 3x3 relaxation passes over the raised soil bank ONLY, after every outcrop has been fitted. The IDW blend in pass 3 is peaky near rim pixels and switches formula at the footprint outline, which left faceted creases that read as choppy edges under a low sun. 0 = old behaviour
 const OUTCROP_BANK_SMOOTH_STRENGTH := 0.65 ## how far each bank pixel moves toward its 3x3 mean per pass (0..1)
 const OUTCROP_MAX_SLOPE_NORMAL_Y := 0.9
-const OUTCROP_MAX_GROUND_SPREAD := 2.5 ## reject spots where the ground under the footprint varies more than this (world units) -- keeps the slab on genuinely flat floor
 const OUTCROP_CLEARANCE := 4.0 ## extra gap kept from cliff-dressing placements and other outcrops
 const OUTCROP_MAX_PLACEMENT_ATTEMPTS := 16
 
@@ -41,7 +70,7 @@ const OUTCROP_MAX_PLACEMENT_ATTEMPTS := 16
 ## _scatter_boulders: random floor spot, random yaw/scale, rejected if too steep, too uneven
 ## under the footprint, on the road, or too close to a cliff-dressing placement / another
 ## outcrop. Seated on the LOWEST ground under its footprint (so no edge floats) and sunk by
-## OUTCROP_SINK_FRACTION of its own thickness. (Round 1 left the terrain untouched -- round 2
+## the def's "sink_fraction" of its own thickness. (Round 1 left the terrain untouched -- round 2
 ## below conforms it to the rock.)
 ## 2026-09-20 round 2 ("the mesh's contour is uneven so there again are gaps between the mesh
 ## and the ground"): split into plan -> fit terrain -> instance, same shape as the cliff system,
@@ -99,7 +128,7 @@ static func load_outcrop_models() -> Array[Dictionary]:
 ## Picks outcrop spots (pixel space) on the valley floor: random floor spot, yaw, scale;
 ## rejected if too steep, too uneven under the footprint, off the map, or too close to a
 ## cliff-dressing placement / another outcrop. Seat height = lowest ground under the
-## footprint, minus OUTCROP_SINK_FRACTION of the slab's thickness; _fit_terrain_to_outcrops
+## footprint, minus the def's "sink_fraction" of the slab's thickness; _fit_terrain_to_outcrops
 ## then raises the ground up to the rock wherever it still falls short.
 static func plan_outcrops(models: Array[Dictionary], heights: PackedFloat32Array, width: int, length: int, rng: RandomNumberGenerator, cliff_plan: Array[Dictionary]) -> Array[Dictionary]:
 	var plan: Array[Dictionary] = []
@@ -127,7 +156,7 @@ static func plan_outcrops(models: Array[Dictionary], heights: PackedFloat32Array
 		var lo: Vector3 = model.lo
 		var hi: Vector3 = model.hi
 		for attempt in OUTCROP_MAX_PLACEMENT_ATTEMPTS:
-			var s := rng.randf_range(OUTCROP_SCALE_MIN, OUTCROP_SCALE_MAX)
+			var s := rng.randf_range(float(model.def.scale_min), float(model.def.scale_max))
 			var yaw := rng.randf_range(0.0, TAU)
 			var yaw_basis := Basis(Vector3.UP, yaw)
 			var radius := Vector2(maxf(absf(lo.x), absf(hi.x)), maxf(absf(lo.z), absf(hi.z))).length() * s
@@ -164,11 +193,11 @@ static func plan_outcrops(models: Array[Dictionary], heights: PackedFloat32Array
 					max_h = maxf(max_h, h)
 				if not ok:
 					break
-			if not ok or max_h - min_h > OUTCROP_MAX_GROUND_SPREAD:
+			if not ok or max_h - min_h > float(model.def.max_ground_spread):
 				continue
 
 			var thickness := (hi.y - lo.y) * s
-			var y := min_h - lo.y * s - thickness * OUTCROP_SINK_FRACTION
+			var y := min_h - lo.y * s - thickness * float(model.def.sink_fraction)
 			plan.append({"model": model_idx, "px": px, "pz": pz, "yaw": yaw, "scale": s, "y": y, "radius": radius})
 			keep_out.append(Vector3(px, pz, radius))
 			break
@@ -178,7 +207,7 @@ static func plan_outcrops(models: Array[Dictionary], heights: PackedFloat32Array
 
 ## Raise-only: conforms the heightmap to each planned outcrop's real underside so its uneven
 ## contour meets the ground everywhere. Under the rock, each terrain pixel is lifted to just
-## BELOW the lowest underside within ~0.75 pixel of it (OUTCROP_FIT_CLEARANCE below it) --
+## BELOW the lowest underside within ~0.75 pixel of it (the def's "fit_clearance" below it) --
 ## below, not above, because a scanned shell's underside may be the very same surface as its
 ## textured face, so overlapping it would bury the face. MIN over the neighbourhood so the
 ## linearly-interpolated terrain between heightmap vertices never pokes up through the rock.
@@ -190,13 +219,13 @@ static func plan_outcrops(models: Array[Dictionary], heights: PackedFloat32Array
 ## every footprint pixel (-> star/ridge spikes), and aimed below the MIN underside nearby minus a
 ## clearance (-> fell short of the visible, often curled-up lip). Now edge-driven + smooth:
 ##   RIM   -- footprint pixels touching a non-footprint pixel. Target = local (mean) underside
-##            + OUTCROP_RIM_TUCK, so the lip tucks INTO the ground; smoothed along the outline
+##            + the def's "rim_tuck", so the lip tucks INTO the ground; smoothed along the outline
 ##            (never lowered below its own target, so it always reaches).
 ##   BANK  -- outside the rock: inverse-distance-weighted blend of the NEAREST rim targets
 ##            (smooth, no per-pixel max), eased to natural ground with smoothstep over a width
-##            that grows with the climb (lift / OUTCROP_BANK_SLOPE, clamped FADE_MIN..MAX).
+##            that grows with the climb (lift / the def's "bank_slope", clamped FADE_MIN..MAX).
 ##   UNDER -- inside the rock: the same smooth blend, capped at the MIN underside nearby minus
-##            OUTCROP_FIT_CLEARANCE so it can never poke up through the slab.
+##            the def's "fit_clearance" so it can never poke up through the slab.
 ## Raise-only throughout.
 static func fit_terrain_to_outcrops(plan: Array[Dictionary], models: Array[Dictionary], heights: PackedFloat32Array, width: int, length: int) -> void:
 	var total_rim := 0
@@ -210,6 +239,12 @@ static func fit_terrain_to_outcrops(plan: Array[Dictionary], models: Array[Dicti
 	var bank: Dictionary = {}
 	for entry in plan:
 		var m: Dictionary = models[entry.model]
+		if not bool(m.def.fit_terrain):
+			continue # per-def (see OUTCROP_DEFS): this model sits on the terrain as it is
+		var fit_clearance: float = m.def.fit_clearance
+		var rim_tuck: float = m.def.rim_tuck
+		var rim_inset: float = m.def.rim_inset
+		var bank_slope: float = m.def.bank_slope
 		var s: float = entry.scale
 		var px: float = entry.px
 		var pz: float = entry.pz
@@ -255,7 +290,7 @@ static func fit_terrain_to_outcrops(plan: Array[Dictionary], models: Array[Dicti
 				if u_n == 0:
 					continue
 				var idx := qz * width + qx
-				fp_cap[idx] = seat_y + u_min * s - OUTCROP_FIT_CLEARANCE
+				fp_cap[idx] = seat_y + u_min * s - fit_clearance
 				fp_surf[idx] = seat_y + (u_sum / float(u_n)) * s
 		if fp_cap.is_empty():
 			continue
@@ -263,12 +298,12 @@ static func fit_terrain_to_outcrops(plan: Array[Dictionary], models: Array[Dicti
 			pinned[pidx] = true
 
 		# Round 4 ("even when the edge is as tall as the mesh itself there are still gaps in some
-		# places"): erode the footprint inward by OUTCROP_RIM_INSET px -> `core`. The rim is taken
+		# places"): erode the footprint inward by the def's "rim_inset" px -> `core`. The rim is taken
 		# on the core's outline, and the RING between core and the real outline gets the full rim
 		# height with no cap, so soil climbs over the rock's outer lip. Terrain only -- the mesh's
 		# placement was fixed in _plan_outcrops and is never moved by this.
 		var core: Dictionary = fp_cap.duplicate()
-		for step in int(ceil(OUTCROP_RIM_INSET)):
+		for step in int(ceil(rim_inset)):
 			var drop: Array[int] = []
 			for cidx in core:
 				var cx0: int = cidx % width
@@ -297,7 +332,7 @@ static func fit_terrain_to_outcrops(plan: Array[Dictionary], models: Array[Dicti
 					is_rim = true
 					break
 			if is_rim:
-				rim.append(Vector3(qx, qz, float(fp_surf[idx]) + OUTCROP_RIM_TUCK))
+				rim.append(Vector3(qx, qz, float(fp_surf[idx]) + rim_tuck))
 		if rim.is_empty():
 			continue
 		# Smooth rim targets along the outline (within 2 px), never below their own target.
@@ -318,7 +353,7 @@ static func fit_terrain_to_outcrops(plan: Array[Dictionary], models: Array[Dicti
 		for rp in rim:
 			max_lift = maxf(max_lift, rp.z - heights[int(rp.y) * width + int(rp.x)])
 		max_lift_all = maxf(max_lift_all, max_lift)
-		var fade := clampf(max_lift / OUTCROP_BANK_SLOPE, OUTCROP_FIT_FADE_MIN, OUTCROP_FIT_FADE_MAX)
+		var fade := clampf(max_lift / bank_slope, OUTCROP_FIT_FADE_MIN, OUTCROP_FIT_FADE_MAX)
 		max_fade_used = maxf(max_fade_used, fade)
 
 		# Pass 3: smooth blended target everywhere in range; apply after the scan.
@@ -338,7 +373,7 @@ static func fit_terrain_to_outcrops(plan: Array[Dictionary], models: Array[Dicti
 				var in_fp := fp_cap.has(idx)
 				var in_core := core.has(idx)
 				# outside the real outline, fade from the REAL edge (core rim is ~inset further in)
-				var d_out := maxf(0.0, d_near - OUTCROP_RIM_INSET)
+				var d_out := maxf(0.0, d_near - rim_inset)
 				if not in_fp and d_out >= fade:
 					continue
 				var wsum := 0.0
@@ -434,7 +469,16 @@ static func place_outcrops(parent_node: Node, plan: Array[Dictionary], models: A
 			mat.albedo_texture = load(m.def.diff)
 			mat.normal_enabled = true
 			mat.normal_texture = load(m.def.nor)
-			mat.roughness_texture = load(m.def.rough)
+			if m.def.has("orm"):
+				# Megascans packed ORM (R = AO, G = roughness) -- same as CliffInstancer.dress_cliff_faces.
+				var orm: Texture2D = load(m.def.orm)
+				mat.roughness_texture = orm
+				mat.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
+				mat.ao_enabled = true
+				mat.ao_texture = orm
+				mat.ao_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
+			else:
+				mat.roughness_texture = load(m.def.rough)
 			mat.cull_mode = BaseMaterial3D.CULL_DISABLED # thin one-sided scan shell, same as cliff dressing
 			mats[entry.model] = mat
 		var instance := (m.scene as PackedScene).instantiate()
