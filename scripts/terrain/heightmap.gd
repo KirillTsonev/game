@@ -444,7 +444,7 @@ static func build_heightmap(master_seed: int = TerrainConfig.MASTER_SEED) -> Dic
 	var outcrop_models := TerrainOutcrops.load_outcrop_models()
 	var outcrop_rng := RandomNumberGenerator.new()
 	outcrop_rng.seed = master_seed ^ 0x4F555443 # 'OUTC' salt
-	var outcrop_plan := TerrainOutcrops.plan_outcrops(outcrop_models, heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, outcrop_rng, cliff_dressing_plan)
+	var outcrop_plan := TerrainOutcrops.plan_outcrops(outcrop_models, heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, outcrop_rng, cliff_dressing_plan, knots)
 	var lm_outcrops_removed := TerrainLandmarks.filter_outcrops(outcrop_plan) # 2026-09-29 landmark disk
 	var knot_outcrops_removed := TerrainKnots.filter_outcrops(outcrop_plan, knots) # 2026-09-29 knots-first
 	TerrainOutcrops.fit_terrain_to_outcrops(outcrop_plan, outcrop_models, heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH)

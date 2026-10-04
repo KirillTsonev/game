@@ -31,6 +31,17 @@ const OUTCROP_NODE_NAME := "RockOutcrops"
 ##                              height so soil covers the lip. 0 = rim on the outline
 ##   "bank_slope"               target rise/run of the soil bank (bank width = rim lift / this,
 ##                              clamped to OUTCROP_FIT_FADE_MIN..MAX)
+## OPTIONAL (only with "fit_terrain" false -- the fit assumes an upright model):
+##   "tilt_to_ground"           true = lean the model to the ground's slope under its footprint
+##                              (see _tilted_seat) instead of standing it upright on the lowest
+##                              ground. "max_ground_spread" is then measured from the leaned base:
+##                              how bumpy the ground may be, not how sloped
+##   "max_tilt_deg"             REQUIRED with "tilt_to_ground": steepest lean; steeper spots are
+##                              rejected
+## OPTIONAL on any def:
+##   "lay_flat"                 false = keep the model's own orientation (it already stands upright
+##                              on a flat base). Default true: rotate it so its mean surface normal
+##                              points up (mountainside is a cliff scan lying on its back)
 const OUTCROP_DEFS := [
 	{
     "name": "mountainside",
@@ -51,6 +62,26 @@ const OUTCROP_DEFS := [
 	# 2026-10-04: Megascans "Massive Tundra Rock Formation" (a 26 x 14 m single-sheet patch of sloping
 	# ground with a rock ridge) was tried here, with and without the terrain fit, and rejected
 	# (Kirill: "doesn't fit"). A Megascans def gives "orm" instead of "rough" (see place_outcrops).
+	# 2026-10-04 (trial): Megascans "Nordic Beach Rock Formation" (vfgkajyga) -- a stepped rock mass,
+	# 12.5 x 7.2 x 3.0 m at source scale (not rescaled), single-sheet shell facing up with a flat
+	# base. Converted by tools/blender/import_megascans_glb.py (--out outcrops). No terrain fit:
+	# upright on the lowest ground, part of its base floated on a slope (Kirill), so it leans with
+	# the ground instead ("tilt_to_ground").
+	{
+    "name": "beach_rock_formation",
+    "glb": "res://assets/models/outcrops/beach_rock_formation/beach_rock_formation.glb",
+    "diff": "res://assets/models/outcrops/beach_rock_formation/textures/beach_rock_formation_diff_2k.jpg",
+    "nor": "res://assets/models/outcrops/beach_rock_formation/textures/beach_rock_formation_nor_gl_2k.jpg",
+    "orm": "res://assets/models/outcrops/beach_rock_formation/textures/beach_rock_formation_orm_2k.png",
+    "scale_min": 0.6,
+    "scale_max": 1.0,
+    "sink_fraction": 0.1,
+    "max_ground_spread": 0.8,
+    "fit_terrain": false,
+    "lay_flat": false,
+    "tilt_to_ground": true,
+    "max_tilt_deg": 18.0
+  },
 ]
 const OUTCROP_COUNT_MIN_BASE := 1 ## per ERRATIC_DENSITY_BASE_AREA (256x256), scaled by real map area like erratics
 const OUTCROP_COUNT_MAX_BASE := 3
@@ -96,7 +127,10 @@ static func load_outcrop_models() -> Array[Dictionary]:
 		if verts.is_empty():
 			continue
 		face_dir = face_dir.normalized() if face_dir.length_squared() > 0.000001 else Vector3.BACK
-		var lay_flat := Basis(Quaternion(face_dir, Vector3.UP))
+		# "lay_flat": false -- the model already stands the right way up on a flat base; turning its
+		# mean surface normal to UP would lean that base (beach_rock_formation: 5.4 deg, ~1 m over
+		# its 12 m length -- that end floated).
+		var lay_flat := Basis(Quaternion(face_dir, Vector3.UP)) if bool(def.get("lay_flat", true)) else Basis.IDENTITY
 		var lo := Vector3(INF, INF, INF)
 		var hi := Vector3(-INF, -INF, -INF)
 		var flat_verts := PackedVector3Array()
@@ -130,7 +164,7 @@ static func load_outcrop_models() -> Array[Dictionary]:
 ## cliff-dressing placement / another outcrop. Seat height = lowest ground under the
 ## footprint, minus the def's "sink_fraction" of the slab's thickness; _fit_terrain_to_outcrops
 ## then raises the ground up to the rock wherever it still falls short.
-static func plan_outcrops(models: Array[Dictionary], heights: PackedFloat32Array, width: int, length: int, rng: RandomNumberGenerator, cliff_plan: Array[Dictionary]) -> Array[Dictionary]:
+static func plan_outcrops(models: Array[Dictionary], heights: PackedFloat32Array, width: int, length: int, rng: RandomNumberGenerator, cliff_plan: Array[Dictionary], knots: Array = []) -> Array[Dictionary]:
 	var plan: Array[Dictionary] = []
 	if models.is_empty():
 		return plan
@@ -143,6 +177,14 @@ static func plan_outcrops(models: Array[Dictionary], heights: PackedFloat32Array
 	for entry in cliff_plan:
 		var r := float(cliff_sizes.get(entry.def_name, 10.0)) * 0.5 * float(entry.scale_jitter)
 		keep_out.append(Vector3(entry.px, entry.pz, r))
+	# 2026-10-04: knot circles and the landmark disk too. Outcrops used to be planned blind to them
+	# and then dropped by TerrainKnots.filter_outcrops / TerrainLandmarks.filter_outcrops (2-3 of 5
+	# every run on seed 858829582); a spot there is now retried elsewhere instead. Those filters
+	# stay as a safety net.
+	for k in knots:
+		keep_out.append(Vector3(float(k.cx), float(k.cz), float(k.reach)))
+	if TerrainLandmarks.is_active():
+		keep_out.append(Vector3(TerrainLandmarks.CENTER_PX.x, TerrainLandmarks.CENTER_PX.y, TerrainLandmarks.RADIUS))
 
 	var area_scale := (float(width) * float(length)) / TerrainConfig.ERRATIC_DENSITY_BASE_AREA
 	var count_min := maxi(1, int(round(OUTCROP_COUNT_MIN_BASE * area_scale)))
@@ -193,17 +235,87 @@ static func plan_outcrops(models: Array[Dictionary], heights: PackedFloat32Array
 					max_h = maxf(max_h, h)
 				if not ok:
 					break
-			if not ok or max_h - min_h > float(model.def.max_ground_spread):
+			if not ok:
 				continue
 
 			var thickness := (hi.y - lo.y) * s
-			var y := min_h - lo.y * s - thickness * float(model.def.sink_fraction)
-			plan.append({"model": model_idx, "px": px, "pz": pz, "yaw": yaw, "scale": s, "y": y, "radius": radius})
+			var tilt := Basis.IDENTITY
+			var y := 0.0
+			if bool(model.def.get("tilt_to_ground", false)):
+				var seat := _tilted_seat(model, heights, width, length, px, pz, yaw_basis, s)
+				if seat.is_empty():
+					continue
+				tilt = seat.tilt
+				y = float(seat.y) - thickness * float(model.def.sink_fraction)
+				print("TERRAIN_GEN_DEBUG outcrop %s at px (%.0f, %.0f): leaned %.1f deg to the ground, scale %.2f" % [model.def.name, px, pz, rad_to_deg(acos(clampf((tilt * Vector3.UP).y, -1.0, 1.0))), s])
+			else:
+				if max_h - min_h > float(model.def.max_ground_spread):
+					continue
+				y = min_h - lo.y * s - thickness * float(model.def.sink_fraction)
+			plan.append({"model": model_idx, "px": px, "pz": pz, "yaw": yaw, "scale": s, "y": y, "radius": radius, "tilt": tilt})
 			keep_out.append(Vector3(px, pz, radius))
 			break
 
 	print("TERRAIN_GEN: planned %d/%d flat rock outcrop(s)" % [plan.size(), roll_count])
 	return plan
+
+## "tilt_to_ground" seat (2026-10-04, Kirill: beach_rock_formation "is standing on a slope and part
+## of its base floats in the air, maybe we can dynamically tilt it"). Fits a plane to the ground
+## under the footprint (least squares over an OUTCROP_TILT_GRID x OUTCROP_TILT_GRID sample grid),
+## leans the model so its base is parallel to that plane, and seats it so no base sample point is
+## above the ground. Returns {"tilt": Basis, "y": float (origin height before the sink)}, or {} when
+## the spot is rejected: the plane leans more than the def's "max_tilt_deg", or the ground departs
+## from the leaned base by more than its "max_ground_spread".
+const OUTCROP_TILT_GRID := 7
+static func _tilted_seat(model: Dictionary, heights: PackedFloat32Array, width: int, length: int, px: float, pz: float, yaw_basis: Basis, s: float) -> Dictionary:
+	var lo: Vector3 = model.lo
+	var hi: Vector3 = model.hi
+	var steps := float(OUTCROP_TILT_GRID - 1)
+	# Plane h = a * dx + b * dz + c through the ground samples (normal equations).
+	var sxx := 0.0
+	var sxz := 0.0
+	var szz := 0.0
+	var sx := 0.0
+	var sz := 0.0
+	var sxh := 0.0
+	var szh := 0.0
+	var sh := 0.0
+	for gz in OUTCROP_TILT_GRID:
+		for gx in OUTCROP_TILT_GRID:
+			var w := yaw_basis * (Vector3(lerpf(lo.x, hi.x, gx / steps), 0.0, lerpf(lo.z, hi.z, gz / steps)) * s)
+			var h := TerrainUtil.sample_height_bilinear(heights, width, length, clampf(px + w.x, 0.0, float(width - 1)), clampf(pz + w.z, 0.0, float(length - 1)))
+			sxx += w.x * w.x
+			sxz += w.x * w.z
+			szz += w.z * w.z
+			sx += w.x
+			sz += w.z
+			sxh += w.x * h
+			szh += w.z * h
+			sh += h
+	var m := Basis(Vector3(sxx, sxz, sx), Vector3(sxz, szz, sz), Vector3(sx, sz, float(OUTCROP_TILT_GRID * OUTCROP_TILT_GRID)))
+	if absf(m.determinant()) < 0.000001:
+		return {}
+	var abc := m.inverse() * Vector3(sxh, szh, sh)
+	var normal := Vector3(-abc.x, 1.0, -abc.y).normalized()
+	if rad_to_deg(acos(clampf(normal.y, -1.0, 1.0))) > float(model.def.max_tilt_deg):
+		return {}
+	var tilt := Basis(Quaternion(Vector3.UP, normal))
+	# Seat: the model's base plane (its lowest laid-flat y), leaned, against the real ground.
+	var min_d := INF
+	var max_d := -INF
+	for gz in OUTCROP_TILT_GRID:
+		for gx in OUTCROP_TILT_GRID:
+			var v := tilt * (yaw_basis * (Vector3(lerpf(lo.x, hi.x, gx / steps), lo.y, lerpf(lo.z, hi.z, gz / steps)) * s))
+			var qx := px + v.x
+			var qz := pz + v.z
+			if qx < 0.0 or qz < 0.0 or qx > float(width - 1) or qz > float(length - 1):
+				return {}
+			var d := TerrainUtil.sample_height_bilinear(heights, width, length, qx, qz) - v.y
+			min_d = minf(min_d, d)
+			max_d = maxf(max_d, d)
+	if max_d - min_d > float(model.def.max_ground_spread):
+		return {}
+	return {"tilt": tilt, "y": min_d}
 
 ## Raise-only: conforms the heightmap to each planned outcrop's real underside so its uneven
 ## contour meets the ground everywhere. Under the rock, each terrain pixel is lifted to just
@@ -487,7 +599,7 @@ static func place_outcrops(parent_node: Node, plan: Array[Dictionary], models: A
 			instance.free()
 			continue
 		var s: float = entry.scale
-		var basis := (Basis(Vector3.UP, float(entry.yaw)) * (m.lay_flat as Basis)).scaled(Vector3.ONE * s)
+		var basis := ((entry.get("tilt", Basis.IDENTITY) as Basis) * Basis(Vector3.UP, float(entry.yaw)) * (m.lay_flat as Basis)).scaled(Vector3.ONE * s)
 		mesh_root.transform = Transform3D(basis, Vector3(import_position.x + float(entry.px), float(entry.y), import_position.z + float(entry.pz)))
 		mesh_root.name = "%s_%d" % [m.def.name, placed]
 		container.add_child.call_deferred(mesh_root)
