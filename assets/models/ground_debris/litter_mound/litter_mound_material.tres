@@ -10,4 +10,5 @@ shader = ExtResource("1_omm3n")
 shader_parameter/albedo_height = ExtResource("2_0rqjc")
 shader_parameter/normal_roughness = ExtResource("3_p6xq4")
 shader_parameter/tint = Color(1, 1, 1, 1)
-shader_parameter/normal_strength = 1.0
+shader_parameter/normal_depth = 0.5
+shader_parameter/ao_strength = 0.5
