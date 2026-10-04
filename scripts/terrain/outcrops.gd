@@ -119,6 +119,24 @@ const OUTCROP_DEFS := [
     "tilt_to_ground": true,
     "max_tilt_deg": 18.0
   },
+	# 2026-10-04 (trial): Megascans "Nordic Beach Rock Formation" (vewjdajqx) -- a ridge of upright
+	# rock fins, tall at both ends with a lower saddle between, flat base. 8.4 x 4.3 x 3.1 m at
+	# source scale (not rescaled).
+	{
+    "name": "beach_rock_ridge",
+    "glb": "res://assets/models/outcrops/beach_rock_ridge/beach_rock_ridge.glb",
+    "diff": "res://assets/models/outcrops/beach_rock_ridge/textures/beach_rock_ridge_diff_2k.jpg",
+    "nor": "res://assets/models/outcrops/beach_rock_ridge/textures/beach_rock_ridge_nor_gl_2k.jpg",
+    "orm": "res://assets/models/outcrops/beach_rock_ridge/textures/beach_rock_ridge_orm_2k.png",
+    "scale_min": 0.6,
+    "scale_max": 1.0,
+    "sink_fraction": 0.1,
+    "max_ground_spread": 0.8,
+    "fit_terrain": false,
+    "lay_flat": false,
+    "tilt_to_ground": true,
+    "max_tilt_deg": 18.0
+  },
 ]
 const OUTCROP_COUNT_MIN_BASE := 1 ## per ERRATIC_DENSITY_BASE_AREA (256x256), scaled by real map area like erratics
 const OUTCROP_COUNT_MAX_BASE := 3
