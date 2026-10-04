@@ -214,6 +214,7 @@ material override), `debug_print_sizes()`.
 | `bush_05` | shrub, rounded, woody stem | 880 | 1.3 x 1.1 | Nobiax Bushes, CC0 |
 | `bush_02` | shrub, dense round (autumn colour -- tint green if it clashes) | 384 | 1.3 x 1.3 | Nobiax Bushes, CC0 |
 | `lady_fern` | 9 fern variants A-I in one glb (2026-10-02) | near 74-1129, far 47-282 | 0.7-1.9 x 0.4-1.0 | Megascans Lady Fern (`wdvlditia`) |
+| `elderberry` | tall bush, variants A + B (2026-10-04) | near 3150 / 3968, far 787 / 992 | 1.2 x 1.2, 2.3 x 1.4 (scaled x1.4-1.9 in-game) | Megascans Elderberry (`wfzobb2ia`) |
 
 - **Lady fern (2026-10-02).** Source: `raw-assets/models/bushes/lady_fern_wdvlditia_ue_mid` (Fab
   glTF, 9 variants x LOD0 / LOD1 / billboard). `tools/blender/import_megascans_plant.py` writes
@@ -230,6 +231,19 @@ material override), `debug_print_sizes()`.
   `[["lady_fern"]]`) so one plant can be set up without re-saving the others. A new PNG normal
   map needs `compress/normal_map=1` + `roughness/mode=1` set in its `.import` by hand before
   `set_texture_import_mode(path, "vram")`.
+
+- **Elderberry -- the tall bush (2026-10-04).** Megascans Elderberry (`wfzobb2ia`), variants A and B
+  only, in `understory/elderberry/`. Meshes from the MID pack
+  (`raw-assets/models/tall bushes/elderberry_wfzobb2ia_ue_mid`), source LOD2 as Near (3150 / 3968
+  tris; LOD1 is 11k / 24k), Far = 25 % of it; textures from the HIGH pack (4K, same atlas layout
+  as the 2K -- checked), because the plant is scaled up in-game:
+  `import_megascans_plant.py -- <mid> elderberry --lod 2 --variants A,B --textures <high>`.
+  As scanned A is 1.2 m wide x 1.19 m tall, B 2.3 m x 1.43 m; `SHRUB_MIX` scales them x1.5-1.9 and
+  x1.4-1.75 -> about 1.8-2.5 m tall. Mesh ids **69 / 70** (ElderberryA / B): Near to 50 m -> Far to
+  150 m -> impostor. Material: grey albedo 0.71 (diffuse 2.2x fern_02), flat backlight,
+  double-sided. No collision. First run: 721 of 6781 shrubs. Not yet judged in-game; render cost
+  not measured. Not imported: variants C-G (0.5-0.9 m), and the raspberry and sage packs in the
+  same folder (raspberry up to 1.04 m, a possible bramble; sage is a 0.3-0.7 m herb).
 
 - FBX files are in cm; Godot's importer converts to metres by itself, so bushes use
   root_scale 1.0. `fern_02` is modelled ~3.6 m wide -> root_scale 0.45.

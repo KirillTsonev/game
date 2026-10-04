@@ -4,7 +4,7 @@ Why the forest still reads as "empty patches", what the reference scenes do diff
 decided, and the build order. A PLAN: nothing in "Build order" is built yet unless marked.
 Related: `docs/vegetation.md` (layers that exist), `docs/shadows.md` (shadow setup).
 
-Written: 2026-10-01.
+Written: 2026-10-01. Last updated: 2026-10-04 (tall bushes).
 
 ---
 
@@ -20,6 +20,7 @@ empty (user screenshot, night, under canopy). Cause, from comparing against the 
 3. **Grass patches end abruptly** (`PATCH_EDGE` 0.06), like cut turf.
 4. **No grounding.** Nothing darkens where plants meet the ground.
 5. **No mid-storey.** Shrubs top out at 1.0-1.6 m; you can see a long way between bare trunks.
+   (Addressed 2026-10-04 by step 7: saplings 2-4 m and elderberry tall bushes 1.8-2.5 m.)
 6. **Lighting.** Ambient light was disabled, so everything not moonlit was near black (fixed, below).
 
 The placement RULES are already right (grass thins under canopy, ferns follow shade, shrubs peak
@@ -116,7 +117,7 @@ at grove edges). What is missing is the materials that make thin ground read as 
    uniform pick from 8 pines + 6 deciduous), so per-species litter needs species-biased stands
    first, plus tree ids alongside `TreeScatter.tree_points`.
 3. **Moss** as a ground type in shade (canopy / cliff shade grids), not only on rocky ground.
-4. **Green gaps and soft patch edges in the open.** PARTLY BUILT, not yet judged in-game: Grass is
+4. **Green gaps and soft patch edges in the open.** DONE (user, 2026-10-04). Earlier notes: Grass is
    the default ground texture since 2026-10-01 (`BARE_*` in `ground_paint.gd`); 2026-10-02 added
    the blade height taper toward patch edges and short blade layers in the gaps to 60 m
    (`PATCH_TAPER` / `EDGE_*` / `SHORT_*` in `grass_cull.glsl`, `SHORT_LAYERS` in `grass_field.gd`;
@@ -130,7 +131,7 @@ at grove edges). What is missing is the materials that make thin ground read as 
    (`GRASS_TINT` in `ground_paint.gd` -- step 1 for the grass texture only), and the ground under
    the tall patches is darkened through the terrain colour map (`PATCH_SHADE` -- the patch part
    of step 5; nothing yet under ferns / bushes, the understory keeps no plant positions).
-5. **Baked grounding.** Darken the ground at patch borders and under ferns/bushes in the ground
+5. **Baked grounding.** DONE (user, 2026-10-04). Original notes: Darken the ground at patch borders and under ferns/bushes in the ground
    paint (patch map + plant positions are known); fade plant and blade colour toward dark at the
    base in their shaders; soften foliage lighting so shadowed sides don't go black.
 6. **Pine cones.** BUILT 2026-10-02, not yet judged in-game. Two models from
@@ -152,6 +153,15 @@ at grove edges). What is missing is the materials that make thin ground read as 
    (mesh ids 64-68, `scripts/terrain/sapling_scatter.gd`); details in `docs/vegetation.md`,
    "Saplings". The pack candidates turned out unsuitable (`Tree_05` is a 26.6 m tree, `Tree_B`
    6.1 m, `Branch_C` not wanted). Density and render cost still to be judged in-game.
+   **Tall bushes added 2026-10-04:** Megascans elderberry, variants A + B, scaled up to about
+   1.8-2.5 m tall (B is 3.2-4 m wide) -- they fill the height gap between the 1.0-1.6 m shrubs
+   and the saplings. Mesh ids 69 / 70, placed as part of the shrub group in
+   `scripts/terrain/understory_scatter.gd` (the two elderberry rows in `SHRUB_MIX`: weight =
+   how many, last two numbers = scale range), so they peak at grove edges like the low bushes.
+   Meshes from the mid pack's LOD2 (3,150 / 3,968 tris to 50 m, a 25 % version to 150 m, then
+   the impostor), 4K textures from the high pack, no collision. First run: 721 of 6,781 shrubs
+   (~11 %), no errors. Not yet judged in-game (look, scale, density); render cost not measured.
+   Import details: `docs/vegetation.md`, "Understory assets".
 8. **Sparse litter on the road** (added 2026-10-01; do AFTER step 1 and once the litter look of
    step 2 is accepted -- both change how it should look). Real roads under trees are swept clean
    in the middle; litter collects along the edges, in the joints between stones and in drifts.
@@ -172,6 +182,17 @@ in the terrain, grass and foliage shaders together).
 ## Assets on hand
 
 - **Pine cone meshes:** `raw-assets/models/cones/` (three models; two in use, see step 6).
+- **`raw-assets/models/tall bushes/`** (Megascans / Fab glTF packs, checked 2026-10-04; heights
+  as scanned):
+  - `elderberry_wfzobb2ia_ue_mid` (2K) and `_ue_high` (4K): 7 variants, 0.52-1.49 m tall. Same
+    plants and the same atlas layout in both; the high pack only has denser meshes (A 98.5k /
+    19.3k / 7.1k tris, B 200.5k / 43.9k / 13.7k for LOD0 / 1 / 2). In use: A + B, mid meshes
+    with the high textures (step 7). Not imported: C-G (0.5-0.9 m, ordinary shrub height).
+  - `raspberry_wf0oefeja_ue_mid`: 8 variants, 0.16-1.04 m. Not a tall bush. F / E / D (1.04 /
+    0.77 / 0.65 m) could make bramble thickets at grove edges (the "cane fruit" of the
+    reference notes); the atlas has red berries and some yellowed leaves. Not imported.
+  - `sage_ve3gbfoja_ue_mid`: 8 variants (B is a single leaf), 0.28-0.73 m. A herb -- low ground
+    cover at most. Not imported.
 - **Needle / leaf textures:** found by the user 2026-10-01; location not yet given.
 - **`raw-assets/models/forest_ground_soil_pine_free.glb`** (54 MB): photogrammetry scan of pine
   forest floor. 11 chunks, ~500k tris, one 8192 px albedo JPEG, no normal/roughness/height. The

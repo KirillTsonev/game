@@ -16,7 +16,7 @@
 ## Two noise layers: large-scale GLADES (forest-floor clearings) and small-scale CLUMPING.
 ## Candidates: one jittered spot per CANDIDATE_STEP cell; the cheap probability roll happens
 ## first, the costlier checks (slope, road, rock keep-outs, trunk ring) only for spots that pass.
-## Rendering: Terrain3D instancer, mesh ids 28-32 + 55-63 (baked + registered by
+## Rendering: Terrain3D instancer, mesh ids 28-32 + 55-63 + 69-70 (baked + registered by
 ## tools/setup_understory_assets.gd build_understory_assets(); LODs and shadows: docs/vegetation.md;
 ## no collision).
 class_name UnderstoryScatter
@@ -40,8 +40,13 @@ const LADY_FERN_G_ID := 61
 const LADY_FERN_H_ID := 62
 const LADY_FERN_I_ID := 63
 const LADY_FERN_IDS: Array[int] = [LADY_FERN_A_ID, LADY_FERN_B_ID, LADY_FERN_C_ID, LADY_FERN_D_ID, LADY_FERN_E_ID, LADY_FERN_F_ID, LADY_FERN_G_ID, LADY_FERN_H_ID, LADY_FERN_I_ID]
+## Megascans elderberry, the tall bush (2026-10-04): A 1.2 m wide x 1.19 m tall, B 2.3 m wide x
+## 1.43 m tall as scanned; scaled up in SHRUB_MIX to ~1.8-2.5 m.
+const ELDERBERRY_A_ID := 69
+const ELDERBERRY_B_ID := 70
 const UNDERSTORY_MESH_IDS: Array[int] = [FERN_ID, BROAD_FERN_ID, BUSH02_GREEN_ID, BUSH04_ID, BUSH05_ID,
-	LADY_FERN_A_ID, LADY_FERN_B_ID, LADY_FERN_C_ID, LADY_FERN_D_ID, LADY_FERN_E_ID, LADY_FERN_F_ID, LADY_FERN_G_ID, LADY_FERN_H_ID, LADY_FERN_I_ID]
+	LADY_FERN_A_ID, LADY_FERN_B_ID, LADY_FERN_C_ID, LADY_FERN_D_ID, LADY_FERN_E_ID, LADY_FERN_F_ID, LADY_FERN_G_ID, LADY_FERN_H_ID, LADY_FERN_I_ID,
+	ELDERBERRY_A_ID, ELDERBERRY_B_ID]
 
 ## Species mix within each group: [id, weight, scale_min, scale_max].
 ## Ferns: lady ferns 60 % (clumps 8 % each, small 6 %, sprigs 4 %), fern_02 25 %, bush_01 15 %.
@@ -54,7 +59,11 @@ const FERN_MIX := [
 	[LADY_FERN_B_ID, 0.06, 0.9, 1.3], [LADY_FERN_I_ID, 0.06, 0.85, 1.25],
 	[LADY_FERN_C_ID, 0.04, 0.9, 1.3], [LADY_FERN_D_ID, 0.04, 0.8, 1.1],
 ]
-const SHRUB_MIX := [[BUSH04_ID, 0.4, 0.8, 1.2], [BUSH05_ID, 0.35, 0.8, 1.2], [BUSH02_GREEN_ID, 0.25, 0.75, 1.1]]
+## Shrubs: the three low bushes keep their 40 / 35 / 25 split; the elderberries are added on top
+## (weights are relative, ~11 % of all shrubs) and scaled up to tall bushes: A -> 1.8-2.3 m,
+## B -> 2.0-2.5 m tall (3.2-4 m wide).
+const SHRUB_MIX := [[BUSH04_ID, 0.4, 0.8, 1.2], [BUSH05_ID, 0.35, 0.8, 1.2], [BUSH02_GREEN_ID, 0.25, 0.75, 1.1],
+	[ELDERBERRY_A_ID, 0.07, 1.5, 1.9], [ELDERBERRY_B_ID, 0.05, 1.4, 1.75]]
 
 ## -- Density fields --
 const CELL := 2.0 ## m per density-grid cell
@@ -213,8 +222,8 @@ static func scatter_understory(parent_node: Node, terrain: Terrain3D, heights: P
 	var lady := 0
 	for id in LADY_FERN_IDS:
 		lady += counts[id]
-	print("TERRAIN_GEN: understory -- %d plant(s): %d fern-group (fern %d, broad fern %d, lady fern %d) + %d shrub(s) (bush04 %d, bush05 %d, bush02 green %d) from %d candidate spots (%.1f%%); rolled %d, rejected slope %d / road %d / rock %d / deadfall %d / trunk %d; fields %d ms, total %d ms" % [
-		total, counts.fern_group, counts[FERN_ID], counts[BROAD_FERN_ID], lady, counts.shrub_group, counts[BUSH04_ID], counts[BUSH05_ID], counts[BUSH02_GREEN_ID],
+	print("TERRAIN_GEN: understory -- %d plant(s): %d fern-group (fern %d, broad fern %d, lady fern %d) + %d shrub(s) (bush04 %d, bush05 %d, bush02 green %d, elderberry %d) from %d candidate spots (%.1f%%); rolled %d, rejected slope %d / road %d / rock %d / deadfall %d / trunk %d; fields %d ms, total %d ms" % [
+		total, counts.fern_group, counts[FERN_ID], counts[BROAD_FERN_ID], lady, counts.shrub_group, counts[BUSH04_ID], counts[BUSH05_ID], counts[BUSH02_GREEN_ID], counts[ELDERBERRY_A_ID] + counts[ELDERBERRY_B_ID],
 		counts.candidates, 100.0 * total / maxf(1.0, counts.candidates), counts.rolled, counts.rej_slope, counts.rej_road, counts.rej_rock, counts.rej_deadfall, counts.rej_trunk,
 		t_fields, Time.get_ticks_msec() - t0])
 

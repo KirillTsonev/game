@@ -5,7 +5,8 @@ extends Node
 ## res://assets/models/understory/<dir>/<dir>.fbx + textures/<dir>_{diffuse,normal,translucency}.tga
 ## Sources: Nobiax "Bushes" pack (CC0) -> bush_01/02/04/05; Yughues "Fern v2" -> fern_02 (credit);
 ## Megascans "Lady Fern" (wdvlditia, 9 variants) -> lady_fern/lady_fern.glb + textures/lady_fern_*.png,
-## exported by tools/blender/import_megascans_plant.py (2026-10-02).
+## exported by tools/blender/import_megascans_plant.py (2026-10-02); Megascans "Elderberry"
+## (wfzobb2ia, variants A + B) -> elderberry/, same script (2026-10-04).
 ## Every setup method takes `only`: a list of dirs to limit the run to (empty = all), so adding a
 ## plant leaves the existing ones untouched (no re-save / reimport).
 ## Run via call_method(runtime:false) on tools/setup_understory_assets.tscn, node ".".
@@ -26,6 +27,10 @@ const PLANTS := [
 	# Megascans lady fern: one glb, 9 variants x (Var<X>_Near = source LOD1, Var<X>_Far = 25 % of it).
 	# Already in metres and upright. "ext" = model file type (default fbx), "tex_ext" = textures (default tga).
 	{"dir": "lady_fern", "kind": "fern", "scale": 1.0, "translucency": false, "ext": "glb", "tex_ext": "png"},
+	# Megascans elderberry (wfzobb2ia), the tall bush (2026-10-04): variants A + B only, Near = the MID
+	# pack's LOD2, 4K textures from the HIGH pack (same atlas). 1.19 / 1.43 m tall as scanned; scaled
+	# up to ~2-2.5 m by UnderstoryScatter.SHRUB_MIX, not here.
+	{"dir": "elderberry", "kind": "shrub", "scale": 1.0, "translucency": false, "ext": "glb", "tex_ext": "png"},
 ]
 
 func _plant(dir: String) -> Dictionary:
@@ -100,6 +105,10 @@ const UNDERSTORY_ASSETS := [
 	{"id": 61, "name": "LadyFernG", "dir": "lady_fern", "mat": "lady_fern", "lods": ["VarG_Near", "VarG_Far", "IMPOSTOR"], "ranges": [50.0, 150.0, 0.0], "last_shadow_lod": 2},
 	{"id": 62, "name": "LadyFernH", "dir": "lady_fern", "mat": "lady_fern", "lods": ["VarH_Near", "VarH_Far", "IMPOSTOR"], "ranges": [50.0, 150.0, 0.0], "last_shadow_lod": 2},
 	{"id": 63, "name": "LadyFernI", "dir": "lady_fern", "mat": "lady_fern", "lods": ["VarI_Near", "VarI_Far", "IMPOSTOR"], "ranges": [50.0, 150.0, 0.0], "last_shadow_lod": 2},
+	# Elderberry, the tall bush (2026-10-04): Near 3150 / 3968 tris to 50 m, Far (25 %) to 150 m, then
+	# the impostor. Ids 64-68 are the saplings (tools/setup_tree_assets.gd).
+	{"id": 69, "name": "ElderberryA", "dir": "elderberry", "mat": "elderberry", "lods": ["VarA_Near", "VarA_Far", "IMPOSTOR"], "ranges": [50.0, 150.0, 0.0], "last_shadow_lod": 2},
+	{"id": 70, "name": "ElderberryB", "dir": "elderberry", "mat": "elderberry", "lods": ["VarB_Near", "VarB_Far", "IMPOSTOR"], "ranges": [50.0, 150.0, 0.0], "last_shadow_lod": 2},
 ]
 
 ## Bakes each UNDERSTORY_ASSETS entry to <dir>/<name>_<node>.res meshes + a <dir>/<Name>.tscn
@@ -205,6 +214,8 @@ const IMPOSTORS := [
 	["LadyFernG", "lady_fern", "VarG_Near", "lady_fern"],
 	["LadyFernH", "lady_fern", "VarH_Near", "lady_fern"],
 	["LadyFernI", "lady_fern", "VarI_Near", "lady_fern"],
+	["ElderberryA", "elderberry", "VarA_Near", "elderberry"],
+	["ElderberryB", "elderberry", "VarB_Near", "elderberry"],
 ]
 
 func _impostor_base(name: String, dir: String) -> String:
@@ -509,6 +520,8 @@ const MATERIALS := [
 	# Lady fern: diffuse measured 0.145 (4.6x fern_02, import_megascans_plant.py) -> 0.50. Single-layer
 	# cards -> double-sided. Flat backlight (its translucency is one channel of a packed ORT map).
 	{"name": "lady_fern", "dir": "lady_fern", "diffuse": "diffuse", "albedo": 0.50, "backlight_tex": false},
+	# Elderberry: diffuse measured 0.069 (2.2x fern_02) -> 0.71. Double-sided cards, flat backlight.
+	{"name": "elderberry", "dir": "elderberry", "diffuse": "diffuse", "albedo": 0.71, "backlight_tex": false},
 ]
 
 func setup_materials(only: Array = []) -> String:

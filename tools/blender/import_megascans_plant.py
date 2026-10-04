@@ -3,6 +3,12 @@
 #
 #   "D:\Downloads\Godot_v4.7.2-stable_win64.exe\Blender 5.2\blender.exe" -b --factory-startup
 #       --python tools/blender/import_megascans_plant.py -- <src_dir> <name> [--far-ratio 0.25]
+#       [--lod 1] [--variants A,B] [--textures <other_pack_dir>]
+#
+# --lod: which source LOD becomes Var<X>_Near (default 1). --variants: keep only these (default
+# all). --textures: take Textures/ from another tier of the same asset (same atlas layout, other
+# resolution). Elderberry (2026-10-04): mid pack, --lod 2 --variants A,B, 4K textures from the high
+# pack -- its LOD1 is 11k-24k tris, and the plant is scaled up in-game.
 #
 # Written for the lady fern (2026-10-02). <src_dir> holds standard/<id>_tier_2_nonUE.gltf (the
 # plain-glTF version: alpha MASK, base colour + opacity in one texture, no vertex colours) and
@@ -30,6 +36,9 @@ FAR_MIN_TRIS = 48
 args = sys.argv[sys.argv.index("--") + 1:]
 src_dir, name = args[0], args[1]
 far_ratio = float(args[args.index("--far-ratio") + 1]) if "--far-ratio" in args else 0.25
+near_lod = "_LOD" + (args[args.index("--lod") + 1] if "--lod" in args else "1")
+variants = ["Var" + v for v in args[args.index("--variants") + 1].split(",")] if "--variants" in args else []
+tex_dir = args[args.index("--textures") + 1] if "--textures" in args else src_dir
 root = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 dst = os.path.join(root, "assets", "models", "understory", name)
 os.makedirs(os.path.join(dst, "textures"), exist_ok=True)
@@ -51,8 +60,10 @@ def activate(o):
 
 keep = []
 report = []
-for ob in sorted([o for o in bpy.data.objects if o.type == 'MESH' and o.name.endswith("_LOD1")], key=lambda o: o.name):
+for ob in sorted([o for o in bpy.data.objects if o.type == 'MESH' and o.name.endswith(near_lod)], key=lambda o: o.name):
     var = ob.name.split("_")[-2]  # SM_<id>_VarA_LOD1 -> VarA
+    if variants and var not in variants:
+        continue
     activate(ob)
     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
     me = ob.data
@@ -85,7 +96,7 @@ for m in bpy.data.materials:
 print("VARIANTS\n  " + "\n  ".join(report))
 
 # 3. textures
-tex = glob.glob(os.path.join(src_dir, "Textures", "T_*_2K_B-O.png")) + glob.glob(os.path.join(src_dir, "Textures", "T_*_2K_N.png"))
+tex = glob.glob(os.path.join(tex_dir, "Textures", "T_*_?K_B-O.png")) + glob.glob(os.path.join(tex_dir, "Textures", "T_*_?K_N.png"))
 tex = [t for t in tex if "Billboard" not in t]
 if len(tex) != 2:
     raise RuntimeError(f"expected one B-O and one N texture, got {tex}")

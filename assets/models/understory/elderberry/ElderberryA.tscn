@@ -1,0 +1,16 @@
+[gd_scene format=3 uid="uid://hjx6ecdy40hk"]
+
+[ext_resource type="ArrayMesh" uid="uid://dw11eab584vp3" path="res://assets/models/understory/elderberry/elderberry_a_var_a_near.res" id="1_qft07"]
+[ext_resource type="ArrayMesh" uid="uid://c718svpg6chsj" path="res://assets/models/understory/elderberry/elderberry_a_var_a_far.res" id="2_bpajk"]
+[ext_resource type="ArrayMesh" uid="uid://dayjkbrgn2wiy" path="res://assets/models/understory/elderberry/elderberry_a_impostor.res" id="3_y1kob"]
+
+[node name="ElderberryA" type="Node3D" unique_id=1836975741]
+
+[node name="LOD0" type="MeshInstance3D" parent="." unique_id=1671160212]
+mesh = ExtResource("1_qft07")
+
+[node name="LOD1" type="MeshInstance3D" parent="." unique_id=2045435313]
+mesh = ExtResource("2_bpajk")
+
+[node name="LOD2" type="MeshInstance3D" parent="." unique_id=159514473]
+mesh = ExtResource("3_y1kob")
