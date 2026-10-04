@@ -2,7 +2,7 @@
 ## at one layer on its own. Opened with J via PerfDebug (scripts/perf_debug.gd). Built in code, no scene.
 ##
 ## - Grass: the GrassField node (hidden + its processing stopped, so the GPU cull pass stops too).
-## - Trees / Rocks / Ferns + shrubs / Saplings / Deadfall: Terrain3DMeshAsset.enabled on that layer's mesh ids.
+## - Trees / Rocks / Ferns + shrubs / Saplings / Flowers / Deadfall: Terrain3DMeshAsset.enabled on that layer's mesh ids.
 ##   Their colliders go with them (TreeColliders / BoulderColliders / DeadfallColliders disabled;
 ##   saplings: their soft stem push is switched off),
 ##   so a hidden tree or boulder can be walked through.
@@ -20,6 +20,7 @@ const LAYERS := [
 	[&"rocks", "Rocks (boulders + scree)"],
 	[&"understory", "Ferns / shrubs"],
 	[&"saplings", "Saplings"],
+	[&"flowers", "Flowers"],
 	[&"deadfall", "Logs / stumps / branches"],
 	[&"cliffs", "Cliff meshes"],
 ]
@@ -101,6 +102,8 @@ func _mesh_ids(key: StringName) -> Array[int]:
 			return UnderstoryScatter.UNDERSTORY_MESH_IDS
 		&"saplings":
 			return SaplingScatter.SAPLING_MESH_IDS
+		&"flowers":
+			return FlowerScatter.FLOWER_MESH_IDS
 		&"deadfall":
 			return DeadfallScatter.DEADFALL_MESH_IDS # stumps, logs, branches, sticks -- not mounds/cones
 	return []

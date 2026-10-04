@@ -1,0 +1,8 @@
+[gd_scene format=3 uid="uid://btfdper7jj8qq"]
+
+[ext_resource type="ArrayMesh" uid="uid://dhglmm42131eu" path="res://assets/models/understory/dandelion/dandelion_var_a_near.res" id="1_gqpai"]
+
+[node name="Dandelion" type="Node3D" unique_id=944517819]
+
+[node name="LOD0" type="MeshInstance3D" parent="." unique_id=1520795060]
+mesh = ExtResource("1_gqpai")

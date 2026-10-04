@@ -1,0 +1,16 @@
+[gd_scene format=3 uid="uid://p1ag1qxafxy6"]
+
+[ext_resource type="ArrayMesh" uid="uid://bv7trd8nprni2" path="res://assets/models/understory/poppy/poppy_h_var_h_near.res" id="1_bvrh7"]
+[ext_resource type="ArrayMesh" uid="uid://cyaxew05thomv" path="res://assets/models/understory/poppy/poppy_h_var_h_far.res" id="2_cylg4"]
+[ext_resource type="ArrayMesh" uid="uid://c3dxwlqcmrnd6" path="res://assets/models/understory/poppy/poppy_h_impostor.res" id="3_wcg76"]
+
+[node name="PoppyH" type="Node3D" unique_id=1736355401]
+
+[node name="LOD0" type="MeshInstance3D" parent="." unique_id=1003075532]
+mesh = ExtResource("1_bvrh7")
+
+[node name="LOD1" type="MeshInstance3D" parent="." unique_id=547578097]
+mesh = ExtResource("2_cylg4")
+
+[node name="LOD2" type="MeshInstance3D" parent="." unique_id=870772045]
+mesh = ExtResource("3_wcg76")

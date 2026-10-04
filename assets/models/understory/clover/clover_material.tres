@@ -1,0 +1,22 @@
+[gd_resource type="ShaderMaterial" format=3 uid="uid://dnn7sauipvcd4"]
+
+[ext_resource type="Shader" uid="uid://bfwcquu5ovbu1" path="res://shaders/foliage/foliage_cutout_double.gdshader" id="1_nyt4x"]
+[ext_resource type="Texture2D" uid="uid://fxiidv1rcs0g" path="res://assets/models/understory/clover/textures/clover_diffuse.png" id="2_avjf7"]
+[ext_resource type="Texture2D" uid="uid://cgs3k3td7e6sr" path="res://assets/models/understory/clover/textures/clover_normal.png" id="3_if86u"]
+
+[resource]
+resource_name = "clover_material"
+render_priority = 0
+shader = ExtResource("1_nyt4x")
+shader_parameter/albedo_tex = ExtResource("2_avjf7")
+shader_parameter/albedo_color = Color(0.49, 0.49, 0.49, 1)
+shader_parameter/saturation = 1.6
+shader_parameter/use_vertex_color = false
+shader_parameter/normal_tex = ExtResource("3_if86u")
+shader_parameter/normal_scale = 1.0
+shader_parameter/roughness = 0.85
+shader_parameter/backlight_color = Color(0.28, 0.36, 0.12, 1)
+shader_parameter/alpha_cutoff = 0.5
+shader_parameter/mip_alpha_scale = 0.25
+shader_parameter/shadow_alpha_cutoff = 0.35
+shader_parameter/shadow_mip_alpha_scale = 0.6

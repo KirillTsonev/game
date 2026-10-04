@@ -10,7 +10,7 @@ render_mode blend_mix, depth_draw_opaque, cull_disabled, diffuse_burley, specula
 
 uniform sampler2D albedo_tex : source_color, filter_linear_mipmap_anisotropic, repeat_disable;
 uniform vec3 albedo_color : source_color = vec3(1.0);
-uniform float saturation : hint_range(0.0, 1.5) = 1.0;
+uniform float saturation : hint_range(0.0, 2.5) = 1.0;
 // Leaf-coverage boost applied here instead of in the bake (trees, 2026-09-25), so it can be tuned
 // live (PerfDebug keys). The tree atlases store true coverage; the understory ones are baked with
 // their alpha as-is and keep the default 1.0.
@@ -59,7 +59,7 @@ void fragment() {
 	vec4 tex = texture(albedo_tex, UV);
 	// saturation < 1 pulls the baked colour toward its grey (trees 2026-09-25: the unlit bake came
 	// out more saturated than the lit real crowns at the 150 m switch, 0.66 vs 0.58 measured).
-	vec3 c = mix(vec3(dot(tex.rgb, vec3(0.2126, 0.7152, 0.0722))), tex.rgb, saturation);
+	vec3 c = max(mix(vec3(dot(tex.rgb, vec3(0.2126, 0.7152, 0.0722))), tex.rgb, saturation), vec3(0.0));
 	ALBEDO = c * albedo_color;
 	float mip = impostor_mip_level(UV, vec2(textureSize(albedo_tex, 0)));
 	float gain = alpha_gain;

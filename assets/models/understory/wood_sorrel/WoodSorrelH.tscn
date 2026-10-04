@@ -1,0 +1,12 @@
+[gd_scene format=3 uid="uid://d2kkfmiu5jeom"]
+
+[ext_resource type="ArrayMesh" uid="uid://yqluu8j5hwft" path="res://assets/models/understory/wood_sorrel/wood_sorrel_h_var_h_near.res" id="1_755j0"]
+[ext_resource type="ArrayMesh" uid="uid://da2sumlyutwb6" path="res://assets/models/understory/wood_sorrel/wood_sorrel_h_var_h_far.res" id="2_sbd2n"]
+
+[node name="WoodSorrelH" type="Node3D" unique_id=899880468]
+
+[node name="LOD0" type="MeshInstance3D" parent="." unique_id=1268900480]
+mesh = ExtResource("1_755j0")
+
+[node name="LOD1" type="MeshInstance3D" parent="." unique_id=940931487]
+mesh = ExtResource("2_sbd2n")

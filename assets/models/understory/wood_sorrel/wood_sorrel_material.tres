@@ -1,0 +1,22 @@
+[gd_resource type="ShaderMaterial" format=3 uid="uid://b80fxd8q5ux1t"]
+
+[ext_resource type="Shader" uid="uid://bfwcquu5ovbu1" path="res://shaders/foliage/foliage_cutout_double.gdshader" id="1_58yya"]
+[ext_resource type="Texture2D" uid="uid://bnmcferl8ksr6" path="res://assets/models/understory/wood_sorrel/textures/wood_sorrel_diffuse.png" id="2_6gg3i"]
+[ext_resource type="Texture2D" uid="uid://cm7bjigypmau" path="res://assets/models/understory/wood_sorrel/textures/wood_sorrel_normal.png" id="3_pqydw"]
+
+[resource]
+resource_name = "wood_sorrel_material"
+render_priority = 0
+shader = ExtResource("1_58yya")
+shader_parameter/albedo_tex = ExtResource("2_6gg3i")
+shader_parameter/albedo_color = Color(0.38, 0.38, 0.38, 1)
+shader_parameter/saturation = 1.6
+shader_parameter/use_vertex_color = false
+shader_parameter/normal_tex = ExtResource("3_pqydw")
+shader_parameter/normal_scale = 1.0
+shader_parameter/roughness = 0.85
+shader_parameter/backlight_color = Color(0.28, 0.36, 0.12, 1)
+shader_parameter/alpha_cutoff = 0.5
+shader_parameter/mip_alpha_scale = 0.25
+shader_parameter/shadow_alpha_cutoff = 0.35
+shader_parameter/shadow_mip_alpha_scale = 0.6

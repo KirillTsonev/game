@@ -1,0 +1,8 @@
+[gd_scene format=3 uid="uid://ddy5lpa7xg40y"]
+
+[ext_resource type="ArrayMesh" uid="uid://cawhcdse403ss" path="res://assets/models/understory/clover/clover_d_var_d_near.res" id="1_uid1d"]
+
+[node name="CloverD" type="Node3D" unique_id=253156898]
+
+[node name="LOD0" type="MeshInstance3D" parent="." unique_id=1015419123]
+mesh = ExtResource("1_uid1d")

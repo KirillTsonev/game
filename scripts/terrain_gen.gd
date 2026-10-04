@@ -14,6 +14,7 @@
 ##   DeadfallScatter deadfall_scatter.gd stumps, fallen logs, branch clumps (uphill of rocks/trunks, in stands)
 ##   UnderstoryScatter understory_scatter.gd  shrubs + ferns, density from canopy + shaded cliff feet
 ##   SaplingScatter  sapling_scatter.gd  mid-storey saplings (scaled-down canopy trees) at grove edges
+##   FlowerScatter   flower_scatter.gd   wood sorrel under canopy; poppies, dandelions, clover in the open
 ##   TerrainUtil     terrain_util.gd     height/normal sampling, zone ranges, mesh helpers
 ## New system -> new module there (class_name + extends RefCounted + static funcs), called from
 ## _ready() below. Per-run mutable state = static vars reset in the module's reset_run_state().
@@ -27,6 +28,7 @@ func _ready() -> void:
 	TreeScatter.reset_run_state()
 	UnderstoryScatter.reset_run_state()
 	SaplingScatter.reset_run_state()
+	FlowerScatter.reset_run_state()
 	DeadfallScatter.reset_run_state()
 	GrassScatter.reset_run_state()
 	# Whole-_ready() timing (2026-09-16): the earlier per-stage prints only
@@ -201,6 +203,14 @@ func _ready() -> void:
 	# Grass step 2: the player-following GPU renderer that reads that bake (added deferred).
 	GrassField.spawn(get_parent())
 	print("TERRAIN_GEN: grass density bake (%.2fs)" % ((Time.get_ticks_msec() - t_ready_stage) / 1000.0))
+	t_ready_stage = Time.get_ticks_msec()
+
+	# Flowers: wood sorrel under the canopy; poppies, dandelions and clover on open grassed ground --
+	# reads the grass coverage just baked, so after it. Own cosmetic stream.
+	var flower_rng := RandomNumberGenerator.new()
+	flower_rng.seed = resolved_seed ^ 0x464C5752 # 'FLWR' salt
+	FlowerScatter.scatter_flowers(terrain, maps.heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, heightmap_corner, flower_rng, maps.road_weight, maps.cliff_dressing_plan, maps.cliff_dressing_top_profiles, maps.outcrop_plan)
+	print("TERRAIN_GEN: flower scattering (%.2fs)" % ((Time.get_ticks_msec() - t_ready_stage) / 1000.0))
 	t_ready_stage = Time.get_ticks_msec()
 
 	# Ground texturing (2026-09-27): rewrites the control map in place -- Grass texture from the

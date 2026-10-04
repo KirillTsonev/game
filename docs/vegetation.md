@@ -391,6 +391,59 @@ per sapling in `SaplingColliders`, radius = tree trunk radius x scale with a 5 c
 
 ---
 
+## Flowers -- wood sorrel, poppies, dandelions, clover (built 2026-10-04)
+
+Small flowering plants: sorrel on the shaded forest floor, the other three on open grassed ground.
+Not yet judged in-game (look, brightness, counts); render cost not measured.
+
+- **Assets** in `assets/models/understory/<dir>/`, set up by `tools/setup_understory_assets.gd` like
+  the other understory plants (same foliage shader, grey albedo matched to fern_02, flat backlight):
+
+  | ids | name | dir | source | tris (near) | size | LODs |
+  |---|---|---|---|---|---|---|
+  | 71-78 | WoodSorrelA-H | `wood_sorrel` | Megascans Violet Wood Sorrel (`uchkajuia`), LOD1 | 70-632 | 0.3-0.5 m wide, 6-19 cm tall | Near 25 m, Far 60 m, then culled; no shadows |
+  | 79-83 | PoppyA/B/C/D/H | `poppy` | Megascans Field Poppy (`vmcobd0ja`), LOD2 | 166-1474 | 0.3-1.0 m wide, 0.43-0.70 m tall | Near 40 m, Far 120 m, impostor; shadows |
+  | 84 | Dandelion | `dandelion` | `grass_vegitation_mix.glb` | 369 | 0.45 m wide, 0.21 m tall | one LOD, culled at 60 m; no shadows |
+  | 85-88 | CloverA-D | `clover` | `grass_vegitation_mix.glb` | 581-777 | 0.9-1.3 m pieces, 0.14 m tall | one LOD, culled at 60 m; no shadows |
+
+  - Poppy: only the red variants. E and F are pink, G has no flowers (classified by sampling the
+    atlas through each variant's UVs). The impostors of the thin variants A and H are only 3-4 %
+    opaque -- they may vanish at distance.
+  - Clover + dandelion come from one Sketchfab scene (a ~2.5 m meadow patch, 195.7k tris, most of it
+    45 copies of a grass blade patch). `tools/blender/import_herb_mix.py` takes the clover carpet
+    (cut into 2 x 2 pieces by whole leaves) and the most upright of its 14 dandelion clumps; the
+    scene's grass is not used (the GPU grass covers the ground). Textures are 1K; the clover has no
+    normal map (a flat one is written). Why not the whole scene as one mesh: cost, a visible disc
+    of foreign grass, a rigid 2.5 m patch on uneven ground, and the same arrangement repeating.
+  - New PNG normal maps: `normal_map_import(only)` in the setup tool flags them and reimports.
+  - Setup order for a new flower: `configure_imports` -> `leaf_diffuse_import` ->
+    `normal_map_import` -> `setup_materials` -> (impostors, poppies only) ->
+    `build_understory_assets`, each with `only` = the new dirs.
+- **Placement** (`scripts/terrain/flower_scatter.gd`, after the grass bake, own rng `'FLWR'`): one
+  jittered candidate per 0.8 m cell.
+  - Wood sorrel: canopy cover above 0.35, in colonies (~11 m noise). Tilted to the ground.
+  - Open ground only (canopy cover below 0.25 and grass coverage above 0.3):
+    poppies in drifts (~33 m noise) plus a bonus within 3 m of the road; dandelions thinly
+    everywhere; clover patches on near-level ground (normal.y >= 0.93) -- a patch is 2-4 carpet
+    pieces overlapping within 0.9 m plus 2-5 dandelions, each tilted to the ground under it.
+  - Rejects: slope, road, rocks / cliffs / outcrops, stumps and logs. No collision.
+  - All knobs are the constants at the top of the module. "Flowers" in the J layer panel toggles
+    the layer.
+- **Visibility pass (user, 2026-10-04: "they get lost among the other foliage"):** colour strength
+  1.6 (`FLOWER_SATURATION` in the setup tool -> the `saturation` uniform, new in
+  `foliage_cutout.gdshaderinc`, default 1.0 for every other plant; the poppy impostors get the
+  same value) and all sizes x1.3 (`SIZE_BOOST` in `flower_scatter.gd`). After changing the
+  saturation: `setup_materials` + `setup_impostor_materials` for the flower dirs. Brightness (the
+  grey albedo 0.38-0.54) is unchanged -- the next knob if they are still lost. Gotcha: after
+  editing the include, the saved materials dropped the new uniform until `setup_materials` reloaded
+  the include itself with CACHE_MODE_REPLACE (it does now).
+- **First run (seed 858829582):** 11,565 wood sorrel, 698 poppies (97 on road verges), 954
+  dandelions, 484 clover pieces in 173 patches; 0.98 s of generation.
+- Not imported: the bigleaf hydrangea in `raw-assets/models/flowers/` (a garden shrub, 3.6k-7.1k
+  tris at LOD2 -- left for later, user decision). Mushrooms: no models yet.
+
+---
+
 ## Deadfall -- stumps, logs, branch clumps (built 2026-09-30)
 
 Megascans props (Fab "mid" glbs, 2K) in `assets/models/ground_debris/<dir>/`, Terrain3D ids 38-49:

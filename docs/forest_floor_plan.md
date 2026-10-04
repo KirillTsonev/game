@@ -4,7 +4,7 @@ Why the forest still reads as "empty patches", what the reference scenes do diff
 decided, and the build order. A PLAN: nothing in "Build order" is built yet unless marked.
 Related: `docs/vegetation.md` (layers that exist), `docs/shadows.md` (shadow setup).
 
-Written: 2026-10-01. Last updated: 2026-10-04 (tall bushes).
+Written: 2026-10-01. Last updated: 2026-10-04 (tall bushes, flowers).
 
 ---
 
@@ -175,6 +175,14 @@ at grove edges). What is missing is the materials that make thin ground read as 
    against the current look before and after. Sample the litter with plain samplers, no
    `hint_normal` (see `litter_mound.gdshader` for why).
 
+9. **Flowers and mushrooms** (added 2026-10-04). Flowers BUILT 2026-10-04, not yet judged in-game:
+   wood sorrel in colonies under the canopy; red poppies in drifts and along road verges,
+   dandelions, and clover patches on open grassed ground. Mesh ids 71-88, placement in
+   `scripts/terrain/flower_scatter.gd`; details in `docs/vegetation.md`, "Flowers". First run:
+   11,565 sorrel, 698 poppies, 954 dandelions, 484 clover pieces in 173 patches; generation
+   +0.98 s; render cost not measured. Hydrangea left for later (user decision). **Mushrooms: not
+   started -- no models yet.**
+
 Later / optional: grounding decals for stumps, logs, boulders; road ruts and puddles; cliff and
 church stains; cloud shadows (no projector on Godot's directional light -- would have to be faked
 in the terrain, grass and foliage shaders together).
@@ -193,6 +201,11 @@ in the terrain, grass and foliage shaders together).
     reference notes); the atlas has red berries and some yellowed leaves. Not imported.
   - `sage_ve3gbfoja_ue_mid`: 8 variants (B is a single leaf), 0.28-0.73 m. A herb -- low ground
     cover at most. Not imported.
+- **`raw-assets/models/flowers/`** (checked 2026-10-04): violet wood sorrel, field poppy and
+  `grass_vegitation_mix.glb` are in use (step 9). `bigleaf_hydrangea_vgztealha_ue_mid` is not: 8
+  garden shrubs with blue flower heads, 0.3-1.4 m tall, 3.6k-7.1k tris at LOD2 -- only plausible
+  as planting by the church. Its variant B is a flat 1.1 m patch of dead fallen leaves (568 tris),
+  usable on its own as leaf litter.
 - **Needle / leaf textures:** found by the user 2026-10-01; location not yet given.
 - **`raw-assets/models/forest_ground_soil_pine_free.glb`** (54 MB): photogrammetry scan of pine
   forest floor. 11 chunks, ~500k tris, one 8192 px albedo JPEG, no normal/roughness/height. The

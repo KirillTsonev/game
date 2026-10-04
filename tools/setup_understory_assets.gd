@@ -31,6 +31,14 @@ const PLANTS := [
 	# pack's LOD2, 4K textures from the HIGH pack (same atlas). 1.19 / 1.43 m tall as scanned; scaled
 	# up to ~2-2.5 m by UnderstoryScatter.SHRUB_MIX, not here.
 	{"dir": "elderberry", "kind": "shrub", "scale": 1.0, "translucency": false, "ext": "glb", "tex_ext": "png"},
+	# Flowers (2026-10-04), placed by scripts/terrain/flower_scatter.gd. wood_sorrel + poppy: Megascans
+	# (uchkajuia, 8 variants, Near = source LOD1; vmcobd0ja, the 5 red variants A/B/C/D/H, Near = source
+	# LOD2), import_megascans_plant.py. clover + dandelion: taken out of the Sketchfab scene
+	# grass_vegitation_mix.glb by tools/blender/import_herb_mix.py (clover = its carpet cut in 4 pieces).
+	{"dir": "wood_sorrel", "kind": "flower", "scale": 1.0, "translucency": false, "ext": "glb", "tex_ext": "png"},
+	{"dir": "poppy", "kind": "flower", "scale": 1.0, "translucency": false, "ext": "glb", "tex_ext": "png"},
+	{"dir": "clover", "kind": "flower", "scale": 1.0, "translucency": false, "ext": "glb", "tex_ext": "png"},
+	{"dir": "dandelion", "kind": "flower", "scale": 1.0, "translucency": false, "ext": "glb", "tex_ext": "png"},
 ]
 
 func _plant(dir: String) -> Dictionary:
@@ -109,6 +117,31 @@ const UNDERSTORY_ASSETS := [
 	# the impostor. Ids 64-68 are the saplings (tools/setup_tree_assets.gd).
 	{"id": 69, "name": "ElderberryA", "dir": "elderberry", "mat": "elderberry", "lods": ["VarA_Near", "VarA_Far", "IMPOSTOR"], "ranges": [50.0, 150.0, 0.0], "last_shadow_lod": 2},
 	{"id": 70, "name": "ElderberryB", "dir": "elderberry", "mat": "elderberry", "lods": ["VarB_Near", "VarB_Far", "IMPOSTOR"], "ranges": [50.0, 150.0, 0.0], "last_shadow_lod": 2},
+	# Flowers (2026-10-04) -- keep in sync with FlowerScatter's ids. "shadows": false = casts none
+	# (plants a few cm tall). Unlike the ferns and bushes, the small ones are CULLED at their last range
+	# (no impostor): a 10 cm plant is under a pixel long before that. Poppies keep the fern scheme
+	# (impostor, never culled, shadows) -- they are 0.4-0.7 m and red.
+	# Wood sorrel: Near 70-632 tris to 25 m, Far (25 %, min 48) to 60 m.
+	{"id": 71, "name": "WoodSorrelA", "dir": "wood_sorrel", "mat": "wood_sorrel", "lods": ["VarA_Near", "VarA_Far"], "ranges": [25.0, 60.0], "last_shadow_lod": 0, "shadows": false},
+	{"id": 72, "name": "WoodSorrelB", "dir": "wood_sorrel", "mat": "wood_sorrel", "lods": ["VarB_Near", "VarB_Far"], "ranges": [25.0, 60.0], "last_shadow_lod": 0, "shadows": false},
+	{"id": 73, "name": "WoodSorrelC", "dir": "wood_sorrel", "mat": "wood_sorrel", "lods": ["VarC_Near", "VarC_Far"], "ranges": [25.0, 60.0], "last_shadow_lod": 0, "shadows": false},
+	{"id": 74, "name": "WoodSorrelD", "dir": "wood_sorrel", "mat": "wood_sorrel", "lods": ["VarD_Near", "VarD_Far"], "ranges": [25.0, 60.0], "last_shadow_lod": 0, "shadows": false},
+	{"id": 75, "name": "WoodSorrelE", "dir": "wood_sorrel", "mat": "wood_sorrel", "lods": ["VarE_Near", "VarE_Far"], "ranges": [25.0, 60.0], "last_shadow_lod": 0, "shadows": false},
+	{"id": 76, "name": "WoodSorrelF", "dir": "wood_sorrel", "mat": "wood_sorrel", "lods": ["VarF_Near", "VarF_Far"], "ranges": [25.0, 60.0], "last_shadow_lod": 0, "shadows": false},
+	{"id": 77, "name": "WoodSorrelG", "dir": "wood_sorrel", "mat": "wood_sorrel", "lods": ["VarG_Near", "VarG_Far"], "ranges": [25.0, 60.0], "last_shadow_lod": 0, "shadows": false},
+	{"id": 78, "name": "WoodSorrelH", "dir": "wood_sorrel", "mat": "wood_sorrel", "lods": ["VarH_Near", "VarH_Far"], "ranges": [25.0, 60.0], "last_shadow_lod": 0, "shadows": false},
+	# Poppy: Near 166-1474 tris to 40 m, Far (25 %) to 120 m, then the impostor.
+	{"id": 79, "name": "PoppyA", "dir": "poppy", "mat": "poppy", "lods": ["VarA_Near", "VarA_Far", "IMPOSTOR"], "ranges": [40.0, 120.0, 0.0], "last_shadow_lod": 2},
+	{"id": 80, "name": "PoppyB", "dir": "poppy", "mat": "poppy", "lods": ["VarB_Near", "VarB_Far", "IMPOSTOR"], "ranges": [40.0, 120.0, 0.0], "last_shadow_lod": 2},
+	{"id": 81, "name": "PoppyC", "dir": "poppy", "mat": "poppy", "lods": ["VarC_Near", "VarC_Far", "IMPOSTOR"], "ranges": [40.0, 120.0, 0.0], "last_shadow_lod": 2},
+	{"id": 82, "name": "PoppyD", "dir": "poppy", "mat": "poppy", "lods": ["VarD_Near", "VarD_Far", "IMPOSTOR"], "ranges": [40.0, 120.0, 0.0], "last_shadow_lod": 2},
+	{"id": 83, "name": "PoppyH", "dir": "poppy", "mat": "poppy", "lods": ["VarH_Near", "VarH_Far", "IMPOSTOR"], "ranges": [40.0, 120.0, 0.0], "last_shadow_lod": 2},
+	# Dandelion clump (369 tris) and the four clover carpet pieces (581-777 tris): one LOD, culled at 60 m.
+	{"id": 84, "name": "Dandelion", "dir": "dandelion", "mat": "dandelion", "lods": ["VarA_Near"], "ranges": [60.0], "last_shadow_lod": 0, "shadows": false},
+	{"id": 85, "name": "CloverA", "dir": "clover", "mat": "clover", "lods": ["VarA_Near"], "ranges": [60.0], "last_shadow_lod": 0, "shadows": false},
+	{"id": 86, "name": "CloverB", "dir": "clover", "mat": "clover", "lods": ["VarB_Near"], "ranges": [60.0], "last_shadow_lod": 0, "shadows": false},
+	{"id": 87, "name": "CloverC", "dir": "clover", "mat": "clover", "lods": ["VarC_Near"], "ranges": [60.0], "last_shadow_lod": 0, "shadows": false},
+	{"id": 88, "name": "CloverD", "dir": "clover", "mat": "clover", "lods": ["VarD_Near"], "ranges": [60.0], "last_shadow_lod": 0, "shadows": false},
 ]
 
 ## Bakes each UNDERSTORY_ASSETS entry to <dir>/<name>_<node>.res meshes + a <dir>/<Name>.tscn
@@ -180,7 +213,7 @@ func build_understory_assets(only: Array = []) -> String:
 			a.set_lod_range(i, e.ranges[i])
 		a.set_last_lod((e.lods as Array).size() - 1)
 		a.set_last_shadow_lod(e.last_shadow_lod)
-		a.set_cast_shadows(GeometryInstance3D.SHADOW_CASTING_SETTING_ON)
+		a.set_cast_shadows(GeometryInstance3D.SHADOW_CASTING_SETTING_ON if e.get("shadows", true) else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 		a.set_shadow_impostor(0)
 		a.set_fade_margin(e.get("fade", UNDERSTORY_FADE_MARGIN))
 		out.append("id=%d %s (%s): lod_count=%d last_lod=%d last_shadow_lod=%d | %s" % [
@@ -216,6 +249,11 @@ const IMPOSTORS := [
 	["LadyFernI", "lady_fern", "VarI_Near", "lady_fern"],
 	["ElderberryA", "elderberry", "VarA_Near", "elderberry"],
 	["ElderberryB", "elderberry", "VarB_Near", "elderberry"],
+	["PoppyA", "poppy", "VarA_Near", "poppy"],
+	["PoppyB", "poppy", "VarB_Near", "poppy"],
+	["PoppyC", "poppy", "VarC_Near", "poppy"],
+	["PoppyD", "poppy", "VarD_Near", "poppy"],
+	["PoppyH", "poppy", "VarH_Near", "poppy"],
 ]
 
 func _impostor_base(name: String, dir: String) -> String:
@@ -360,6 +398,7 @@ func setup_impostor_materials(only: Array = []) -> String:
 		if tex == null:
 			out.append("%s: MISSING impostor texture" % row[0])
 		mat.set_shader_parameter("albedo_tex", tex)
+		mat.set_shader_parameter("saturation", _material_entry(row[3]).get("saturation", 1.0))
 		mat.set_shader_parameter("backlight_color", FERN_BACKLIGHT)
 		mat.set_shader_parameter("alpha_cutoff", ALPHA_SCISSOR)
 		mat.set_shader_parameter("mip_alpha_scale", MIP_ALPHA_SCALE)
@@ -468,6 +507,9 @@ const SHADOW_ALPHA_CUTOFF := 0.35
 const SHADOW_MIP_ALPHA_SCALE := 0.6
 const ROUGHNESS := 0.85
 const FERN_BACKLIGHT := Color(0.28, 0.36, 0.12)  # flat leaf-glow for plants without a translucency map
+## Colour strength of the flower materials (1 = as scanned). After changing it rerun
+## setup_materials + setup_impostor_materials for the flower dirs; no rebuild needed.
+const FLOWER_SATURATION := 1.6
 
 ## Import settings for every plant model (FBX / glb): root_scale from PLANTS, and DISCARD embedded /
 ## referenced textures (fbx/embedded_image_handling=0) -- the materials below are applied as
@@ -522,10 +564,22 @@ const MATERIALS := [
 	{"name": "lady_fern", "dir": "lady_fern", "diffuse": "diffuse", "albedo": 0.50, "backlight_tex": false},
 	# Elderberry: diffuse measured 0.069 (2.2x fern_02) -> 0.71. Double-sided cards, flat backlight.
 	{"name": "elderberry", "dir": "elderberry", "diffuse": "diffuse", "albedo": 0.71, "backlight_tex": false},
+	# Flowers: grey from the import scripts' luminance print (whole plant incl. petals vs fern_02 0.031):
+	# wood sorrel 0.269, poppy 0.194, clover 0.157, dandelion 0.124. Clover's normal map is flat (the
+	# source scene has none).
+	# "saturation" (default 1.0): shader colour strength, also used by the plant's impostor. The
+	# flowers got lost among the other foliage at 1.0 (user, 2026-10-04) -> FLOWER_SATURATION.
+	{"name": "wood_sorrel", "dir": "wood_sorrel", "diffuse": "diffuse", "albedo": 0.38, "backlight_tex": false, "saturation": FLOWER_SATURATION},
+	{"name": "poppy", "dir": "poppy", "diffuse": "diffuse", "albedo": 0.44, "backlight_tex": false, "saturation": FLOWER_SATURATION},
+	{"name": "clover", "dir": "clover", "diffuse": "diffuse", "albedo": 0.49, "backlight_tex": false, "saturation": FLOWER_SATURATION},
+	{"name": "dandelion", "dir": "dandelion", "diffuse": "diffuse", "albedo": 0.54, "backlight_tex": false, "saturation": FLOWER_SATURATION},
 ]
 
 func setup_materials(only: Array = []) -> String:
 	var out: Array[String] = []
+	# The shader body lives in an include: reload it first, or the shaders recompile against the
+	# editor's stale copy and a new uniform is dropped from the saved material (seen 2026-10-04).
+	ResourceLoader.load("res://shaders/foliage/foliage_cutout.gdshaderinc", "", ResourceLoader.CACHE_MODE_REPLACE)
 	for m: Dictionary in MATERIALS:
 		if not _wanted(only, m.dir):
 			continue
@@ -534,7 +588,9 @@ func setup_materials(only: Array = []) -> String:
 		# ~20 m ahead. Replaced StandardMaterial3D 2026-09-25.
 		var mat := ShaderMaterial.new()
 		mat.resource_name = "%s_material" % m.name
-		mat.shader = load(FOLIAGE_SHADER_BACK if m.get("cull_back", false) else FOLIAGE_SHADER_DOUBLE)
+		# CACHE_MODE_REPLACE: the editor's stale copy of an edited shader silently drops parameters
+		# for uniforms added since it was loaded.
+		mat.shader = ResourceLoader.load(FOLIAGE_SHADER_BACK if m.get("cull_back", false) else FOLIAGE_SHADER_DOUBLE, "", ResourceLoader.CACHE_MODE_REPLACE)
 		var textures := {
 			"albedo_tex": load(_tex_path(m.dir, m.diffuse)),
 			"normal_tex": load(_tex_path(m.dir, "normal")),
@@ -547,6 +603,7 @@ func setup_materials(only: Array = []) -> String:
 				out.append("%s: MISSING %s" % [m.name, param])
 			mat.set_shader_parameter(param, textures[param])
 		mat.set_shader_parameter("albedo_color", Color(m.albedo, m.albedo, m.albedo))
+		mat.set_shader_parameter("saturation", m.get("saturation", 1.0))
 		mat.set_shader_parameter("roughness", ROUGHNESS)
 		mat.set_shader_parameter("backlight_color", Color(m.backlight, m.backlight, m.backlight) if m.backlight_tex else FERN_BACKLIGHT)
 		mat.set_shader_parameter("alpha_cutoff", ALPHA_SCISSOR)
@@ -617,6 +674,26 @@ func leaf_diffuse_import(only: Array = []) -> String:
 			out.append(set_texture_import_mode(_tex_path(p.dir, "diffuse"), "vram"))
 	if _wanted(only, "bush_02"):
 		out.append(set_texture_import_mode(BASE + "bush_02/textures/bush_02_diffuse_green.tga", "vram"))
+	return "\n".join(out)
+
+## PNG normal maps of the glb plants (Megascans / herb mix): a new PNG imports as a plain colour
+## texture, so flag it as a normal map (compress/normal_map=1, roughness/mode=1), then VRAM + mipmaps.
+## Pass `only` -- an empty list redoes every glb plant's normal map.
+func normal_map_import(only: Array = []) -> String:
+	var out: Array[String] = []
+	for p: Dictionary in PLANTS:
+		if p.get("tex_ext", "tga") != "png" or not _wanted(only, p.dir):
+			continue
+		var path := _tex_path(p.dir, "normal")
+		var cfg := ConfigFile.new()
+		var err := cfg.load(path + ".import")
+		if err != OK:
+			out.append("could not read %s.import (err=%d)" % [path, err])
+			continue
+		cfg.set_value("params", "compress/normal_map", 1)
+		cfg.set_value("params", "roughness/mode", 1)
+		cfg.save(path + ".import")
+		out.append(set_texture_import_mode(path, "vram"))
 	return "\n".join(out)
 
 ## Shadow A/B test (2026-09-25): force a texture's import mode and reimport.

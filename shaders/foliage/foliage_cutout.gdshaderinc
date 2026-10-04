@@ -13,6 +13,9 @@
 
 uniform sampler2D albedo_tex : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform vec3 albedo_color : source_color = vec3(1.0);
+// Colour strength of the texel around its own grey: 1 = as painted, above 1 = more vivid (the
+// flowers, 2026-10-04: they got lost among the other foliage).
+uniform float saturation : hint_range(0.0, 2.5) = 1.0;
 // Multiply the texel (rgb AND alpha) by the vertex colour -- same as StandardMaterial3D's
 // vertex_color_use_as_albedo. The Fab pack trees tint their leaf cards this way.
 uniform bool use_vertex_color = false;
@@ -43,7 +46,8 @@ void fragment() {
 	if (use_vertex_color) {
 		tex *= COLOR;
 	}
-	ALBEDO = tex.rgb * albedo_color;
+	vec3 c = max(mix(vec3(dot(tex.rgb, vec3(0.2126, 0.7152, 0.0722))), tex.rgb, saturation), vec3(0.0));
+	ALBEDO = c * albedo_color;
 	float mip = foliage_mip_level(UV, vec2(textureSize(albedo_tex, 0)));
 	float scale = IN_SHADOW_PASS ? shadow_mip_alpha_scale : mip_alpha_scale;
 	ALPHA = tex.a * (1.0 + mip * scale);
