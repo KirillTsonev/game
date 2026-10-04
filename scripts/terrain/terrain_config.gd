@@ -64,15 +64,66 @@ const BOULDER_END_INSET_FRACTION := 0.15 ## keep boulders off the very tapering 
 ## debug cube in _dress_cliff_faces, which is sized from these to show each placement's real
 ## footprint before any terrain-fitting work touches the heightmap again).
 const CLIFF_DRESSING_DEFS := [
-	{"name": "namaqualand_cliff_01", "glb": "res://assets/models/cliffs/namaqualand_cliff_01/namaqualand_cliff_01_2k.glb", "diff": "res://assets/models/cliffs/namaqualand_cliff_01/textures/namaqualand_cliff_01_diff_2k.jpg", "nor": "res://assets/models/cliffs/namaqualand_cliff_01/textures/namaqualand_cliff_01_nor_gl_2k.exr", "rough": "res://assets/models/cliffs/namaqualand_cliff_01/textures/namaqualand_cliff_01_rough_2k.exr", "real_size": 8.3, "height": 4.96, "depth": 4.39},
+	{
+    "name": "namaqualand_cliff_01", 
+    "glb": "res://assets/models/cliffs/namaqualand_cliff_01/namaqualand_cliff_01_2k.glb", 
+    "diff": "res://assets/models/cliffs/namaqualand_cliff_01/textures/namaqualand_cliff_01_diff_2k.jpg", 
+    "nor": "res://assets/models/cliffs/namaqualand_cliff_01/textures/namaqualand_cliff_01_nor_gl_2k.exr", 
+    "rough": "res://assets/models/cliffs/namaqualand_cliff_01/textures/namaqualand_cliff_01_rough_2k.exr", 
+    "real_size": 8.3, 
+    "height": 4.96, 
+    "depth": 4.39,
+    "top_lift": 0.1
+  },
 	# 2026-09-20: mountainside moved out of the cliff system -> OUTCROP_DEFS (laid flat,
 	# scattered on the valley floor by _scatter_outcrops). Kirill: "looks very out of place".
-	{"name": "namaqualand_cliff_02", "glb": "res://assets/models/cliffs/namaqualand_cliff_02/namaqualand_cliff_02_2k.glb", "diff": "res://assets/models/cliffs/namaqualand_cliff_02/textures/namaqualand_cliff_02_diff_2k.jpg", "nor": "res://assets/models/cliffs/namaqualand_cliff_02/textures/namaqualand_cliff_02_nor_gl_2k.exr", "rough": "res://assets/models/cliffs/namaqualand_cliff_02/textures/namaqualand_cliff_02_rough_2k.exr", "real_size": 20.2, "height": 7.18, "depth": 6.59},
+	{
+    "name": "namaqualand_cliff_02", 
+    "glb": "res://assets/models/cliffs/namaqualand_cliff_02/namaqualand_cliff_02_2k.glb", 
+    "diff": "res://assets/models/cliffs/namaqualand_cliff_02/textures/namaqualand_cliff_02_diff_2k.jpg", 
+    "nor": "res://assets/models/cliffs/namaqualand_cliff_02/textures/namaqualand_cliff_02_nor_gl_2k.exr", 
+    "rough": "res://assets/models/cliffs/namaqualand_cliff_02/textures/namaqualand_cliff_02_rough_2k.exr", 
+    "real_size": 20.2, 
+    "height": 7.18, 
+    "depth": 6.59,
+    "top_lift": 0.1
+    },
 	# 2026-10-02: Megascans "Huge Nordic Coastal Cliff" (Fab) -- a promontory: straight open back at
 	# full height, rock mass projecting forward, ground skirt. Source is 18.7 m wide; scaled x0.7 by
 	# tools/blender/import_megascans_glb.py (--out cliffs). "orm" instead of "rough" (see
 	# CliffInstancer.dress_cliff_faces). Not used by the knot rows (knots.gd CLIFF_SMALL/BIG).
-	{"name": "nordic_coastal_cliff_huge", "glb": "res://assets/models/cliffs/nordic_coastal_cliff_huge/nordic_coastal_cliff_huge.glb", "diff": "res://assets/models/cliffs/nordic_coastal_cliff_huge/textures/nordic_coastal_cliff_huge_diff_2k.jpg", "nor": "res://assets/models/cliffs/nordic_coastal_cliff_huge/textures/nordic_coastal_cliff_huge_nor_gl_2k.jpg", "orm": "res://assets/models/cliffs/nordic_coastal_cliff_huge/textures/nordic_coastal_cliff_huge_orm_2k.png", "real_size": 13.06, "height": 7.05, "depth": 11.25},
+	{
+    "name": "nordic_coastal_cliff_huge", 
+    "glb": "res://assets/models/cliffs/nordic_coastal_cliff_huge/nordic_coastal_cliff_huge.glb", 
+    "diff": "res://assets/models/cliffs/nordic_coastal_cliff_huge/textures/nordic_coastal_cliff_huge_diff_2k.jpg", 
+    "nor": "res://assets/models/cliffs/nordic_coastal_cliff_huge/textures/nordic_coastal_cliff_huge_nor_gl_2k.jpg", 
+    "orm": "res://assets/models/cliffs/nordic_coastal_cliff_huge/textures/nordic_coastal_cliff_huge_orm_2k.png", 
+    "real_size": 13.06, 
+    "height": 7.05, 
+    "depth": 11.25,
+    "top_lift": 0.1
+  },
+	# 2026-10-02: Megascans "Large Nordic Coastal Cliff" (ulujfanga) -- a thin wall, even top, open
+	# back. Source is 6.75 m wide; scaled x2 (same script). "top_despike": the raised ground behind
+	# ignores the boulder standing proud of its top (see _compute_cliff_dressing_top_profile).
+	# "push_back": metres the mesh is slid backward into that raised ground (any def may set it;
+	# see CliffInstancer.dress_cliff_faces). TUNING: 0 = off, negative pulls it forward.
+	# "top_lift" (REQUIRED on every def): metres the raised ground behind the mesh overshoots its
+	# top (see CliffDressing.raise_terrain_behind_cliff_dressing). TUNING: raise until gaps close,
+	# 0 = exact match.
+	{
+    "name": "nordic_coastal_cliff_large", 
+    "glb": "res://assets/models/cliffs/nordic_coastal_cliff_large/nordic_coastal_cliff_large.glb", 
+    "diff": "res://assets/models/cliffs/nordic_coastal_cliff_large/textures/nordic_coastal_cliff_large_diff_2k.jpg", 
+    "nor": "res://assets/models/cliffs/nordic_coastal_cliff_large/textures/nordic_coastal_cliff_large_nor_gl_2k.jpg", 
+    "orm": "res://assets/models/cliffs/nordic_coastal_cliff_large/textures/nordic_coastal_cliff_large_orm_2k.png", 
+    "real_size": 13.49, 
+    "height": 6.0, 
+    "depth": 3.41, 
+    "top_despike": 2.0, 
+    "push_back": 0.75, 
+    "top_lift": 0.25
+  },
 ]
 const CLIFF_DRESSING_EMBED_DEPTH := 1.5 ## sink the mesh's base this far below the sampled terrain height (scaled by that instance's own scale jitter) so its bottom edge never floats visibly above the ground regardless of the source mesh's own base/pivot
 ## 2026-09-17 reorder: cliff dressing is now PLANNED (and its footprint flattened into the

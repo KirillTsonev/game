@@ -140,6 +140,12 @@ static func dress_cliff_faces(parent_node: Node, plan: Array[Dictionary], import
 			mesh_root.scale = Vector3.ONE * scale_jitter
 			mesh_root.rotation = Vector3(0.0, face_angle, 0.0)
 			mesh_root.position = Vector3(import_position.x + px, height - TerrainConfig.CLIFF_DRESSING_EMBED_DEPTH * scale_jitter, import_position.z + pz)
+			# 2026-10-02: optional per-def "push_back" (world metres, default 0) -- slides the mesh
+			# (and its collision) backward, away from its face, into the ground raised behind it.
+			# The terrain itself is shaped for the un-pushed position and does not move.
+			var push_back: float = chosen.get("push_back", 0.0)
+			if push_back != 0.0:
+				mesh_root.position -= Vector3(sin(face_angle), 0.0, cos(face_angle)) * push_back
 			container.add_child.call_deferred(mesh_root)
 			apply_cliff_material_recursive(mesh_root, materials[def_name])
 			apply_cliff_lod_ranges(mesh_root)

@@ -267,7 +267,7 @@ static func stamp(heights: PackedFloat32Array, width: int, length: int, cliff_pl
 	cliff_plan.append_array(added)
 	# 2026-09-30: the copied ground keeps the reference run's top lift, and the plane fit moves the
 	# meshes rigidly vs the terrain per pixel -> top the ground behind them back up to mesh top +
-	# CLIFF_DRESSING_RAISE_TOP_LIFT (top-up only -- see CLIFF_DRESSING_SEAM_MIN_COVERAGE).
+	# each def's "top_lift" (top-up only -- see CLIFF_DRESSING_SEAM_MIN_COVERAGE).
 	var seam_px := 0
 	if not added.is_empty():
 		seam_px = CliffDressing.raise_terrain_behind_cliff_dressing(added, heights, width, length, top_profiles, 0, true)
@@ -294,8 +294,8 @@ static func stamp(heights: PackedFloat32Array, width: int, length: int, cliff_pl
 		cliff_features.append(f)
 		feat_added += 1
 	var stats := {"plane": plane, "ring_px": ring_px, "changed": changed, "max_change": max_change, "meshes": added.size(), "seam_px": seam_px}
-	print("TERRAIN_GEN: LANDMARK verticality_knot_01 stamped at px (%.0f, %.0f) r %.0f [%s] -- plane offset %.2f m, tilt (%.3f, %.3f) from %d ring px; %d px changed (max %.2f m); %d cliff mesh(es), %d px topped up to mesh top + %.2f m; cliff features -%d +%d" % [
-		c.x, c.y, r, ("polygon %d pts" % poly.size()) if poly.size() >= 3 else "circle", pa, pb, pc, ring_px, changed, max_change, added.size(), seam_px, CliffDressing.CLIFF_DRESSING_RAISE_TOP_LIFT, feat_removed, feat_added])
+	print("TERRAIN_GEN: LANDMARK verticality_knot_01 stamped at px (%.0f, %.0f) r %.0f [%s] -- plane offset %.2f m, tilt (%.3f, %.3f) from %d ring px; %d px changed (max %.2f m); %d cliff mesh(es), %d px topped up to mesh top + per-def top_lift; cliff features -%d +%d" % [
+		c.x, c.y, r, ("polygon %d pts" % poly.size()) if poly.size() >= 3 else "circle", pa, pb, pc, ring_px, changed, max_change, added.size(), seam_px, feat_removed, feat_added])
 	return stats
 
 # ---------------------------------------------------------------------------------------------

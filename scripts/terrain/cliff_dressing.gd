@@ -80,8 +80,9 @@ const CLIFF_DRESSING_RAISE_RAMP_DISTANCE := 10.0
 ## with the model) to give that meeting a deliberate bit of overlap instead of a knife-edge.
 ## TUNING: raise until the gaps close, then stop -- too much and the soil visibly climbs over
 ## the crest and is seen from the front, which is the opposite failure. 0.0 restores the old
-## exact-match behaviour. The per-run value is echoed in the round19 raise-pass print.
-const CLIFF_DRESSING_RAISE_TOP_LIFT := 0.1
+## exact-match behaviour.
+## 2026-10-04: was one global CLIFF_DRESSING_RAISE_TOP_LIFT; now a REQUIRED per-def "top_lift"
+## (world metres) in TerrainConfig.CLIFF_DRESSING_DEFS, so each model is tuned on its own.
 ## 2026-09-30 (Kirill: the TOP_LIFT didn't apply to the fixed landmark's cliff meshes): the landmark
 ## stamp (landmarks.gd) pastes captured heights and adds its meshes AFTER the raise pass, so its
 ## ground keeps whatever lift the reference run had -- and its plane fit shifts terrain per pixel
@@ -577,6 +578,22 @@ static func _compute_cliff_dressing_top_profile(def: Dictionary) -> Dictionary:
 			has_data[j] = 1
 		i = right
 
+	# 2026-10-02 (Kirill, nordic_coastal_cliff_large: a boulder standing ~0.75 m proud of the top,
+	# ~1.5 m wide -- the raised ground behind followed it up as a bump, but that knob is solid rock
+	# with no gap behind it to fill). Optional per def: "top_despike" = the widest knob (metres,
+	# model units) to ignore. A morphological opening (min over the window, then max) removes peaks
+	# narrower than that down to their shoulders; it never raises a sample and leaves anything
+	# wider untouched.
+	if def.has("top_despike") and span > 0.0:
+		var radius := int(ceil(float(def.top_despike) / (span / float(sample_count - 1)) * 0.5))
+		for pass_i in 2:
+			var src := heights.duplicate()
+			for k in sample_count:
+				var v := src[k]
+				for j in range(maxi(0, k - radius), mini(sample_count - 1, k + radius) + 1):
+					v = minf(v, src[j]) if pass_i == 0 else maxf(v, src[j])
+				heights[k] = v
+
 	return {"x_min": x_min, "x_max": x_max, "heights": heights, "y_min": y_min, "y_max": y_max, "z_min": z_min, "z_max": z_max}
 
 ## Builds the per-model top profiles used by _raise_terrain_behind_cliff_dressing, once per
@@ -831,6 +848,9 @@ static func raise_terrain_behind_cliff_dressing(plan: Array[Dictionary], heights
 	var raise_wp_sum := PackedFloat32Array()
 	raise_wp_sum.resize(width * length)
 	raise_wp_sum.fill(0.0)
+	var raise_wl_sum := PackedFloat32Array() ## same weighting as raise_wp_sum, for the per-def top lift (seam_only tolerance)
+	raise_wl_sum.resize(width * length)
+	raise_wl_sum.fill(0.0)
 	var raise_keep := PackedFloat32Array() ## running prod(1 - w_i) per pixel
 	raise_keep.resize(width * length)
 	raise_keep.fill(1.0)
@@ -885,6 +905,7 @@ static func raise_terrain_behind_cliff_dressing(plan: Array[Dictionary], heights
 		var face_angle: float = entry.face_angle
 		var scale_jitter: float = entry.scale_jitter
 		var low_height: float = entry.height
+		var top_lift: float = def.top_lift
 
 		# Same rotated local basis as _flatten_terrain_for_cliff_dressing -- local +Z
 		# (axis_local_z) matches the mesh's own face_dir (front/open/low side), so "behind"
@@ -1201,9 +1222,10 @@ static func raise_terrain_behind_cliff_dressing(plan: Array[Dictionary], heights
 				# the real top height at this X slice, then rescale back into world units.
 				var mesh_local_x := local_x / scale_jitter
 				var top_local_y := _sample_cliff_top_profile_flanked(top_profile, mesh_local_x, flank_top_left, flank_top_right) # round 17
-				# + TOP_LIFT: deliberate overlap so ground and rock don't meet at a knife-edge --
-				# see CLIFF_DRESSING_RAISE_TOP_LIFT's own comment for why and how to tune it.
-				var plateau_height := origin_y + top_local_y * scale_jitter + CLIFF_DRESSING_RAISE_TOP_LIFT
+				# + top_lift: deliberate overlap so ground and rock don't meet at a knife-edge --
+				# see the 2026-09-21 comment above CLIFF_DRESSING_RAISE_PROXIMITY_FALLOFF for why
+				# and how to tune it.
+				var plateau_height := origin_y + top_local_y * scale_jitter + top_lift
 
 				var idx := qz * width + qx
 				var raise_w := depth_weight * lateral_weight
@@ -1216,6 +1238,7 @@ static func raise_terrain_behind_cliff_dressing(plan: Array[Dictionary], heights
 				var avg_w := raise_w / (1.0 + prox_d * prox_d)
 				raise_w_sum[idx] += avg_w
 				raise_wp_sum[idx] += avg_w * plateau_height
+				raise_wl_sum[idx] += avg_w * top_lift
 				raise_keep[idx] *= (1.0 - raise_w)
 				touched_x0 = mini(touched_x0, qx)
 				touched_x1 = maxi(touched_x1, qx)
@@ -1247,7 +1270,7 @@ static func raise_terrain_behind_cliff_dressing(plan: Array[Dictionary], heights
 				var short := target - natural
 				if short <= 0.0 or coverage < CLIFF_DRESSING_SEAM_MIN_COVERAGE:
 					continue
-				var seam_max := CLIFF_DRESSING_RAISE_TOP_LIFT + CLIFF_DRESSING_SEAM_TOLERANCE
+				var seam_max := raise_wl_sum[i] / w_sum + CLIFF_DRESSING_SEAM_TOLERANCE
 				var seam_w := smoothstep(CLIFF_DRESSING_SEAM_MIN_COVERAGE, 1.0, coverage) * (1.0 - smoothstep(seam_max - CLIFF_DRESSING_SEAM_TOLERANCE * 0.5, seam_max, short))
 				if seam_w <= 0.0:
 					continue

@@ -8,7 +8,7 @@
 #       [--rotate x,y,z] [--floor]   (degrees; stand a sideways scan up -- then --recenter --floor)
 #       [--loose-roles] [--tex-size <px>]   (non-Megascans sources -- the pine cones, 2026-10-02)
 #       [--out <category>]   (assets/models/<category>/<name>/ instead of ground_debris -- cliffs, 2026-10-02:
-#        nordic_coastal_cliff_huge = --out cliffs --scale 0.7 --recenter --tex-size 2048
+#        nordic_coastal_cliff_huge = --out cliffs --scale 0.7 --recenter --tex-size 2048 (_large: --scale 2)
 #        --ratios 1,0.5,0.25,0.12; a cliff needs its width on X and the rock face toward Godot +Z -- --rotate if not)
 #
 # Written for the deadfall stumps/logs (2026-09-30). Fab's converted glbs are one mesh under a chain

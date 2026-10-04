@@ -5,6 +5,8 @@
 ## - Trees / Rocks / Ferns + shrubs / Deadfall: Terrain3DMeshAsset.enabled on that layer's mesh ids.
 ##   Their colliders go with them (TreeColliders / BoulderColliders / DeadfallColliders disabled),
 ##   so a hidden tree or boulder can be walked through.
+## - Cliff meshes: the CliffDressing node (fault-line, knot and landmark cliffs; hidden + colliders
+##   off). The terrain shaped around them stays. Outcrops are not included.
 ## Mouse: same as the grass tuning panel -- J opens it with the cursor; click outside to look
 ## around again; J = cursor back, J again to close.
 class_name LayerTogglePanel
@@ -17,6 +19,7 @@ const LAYERS := [
 	[&"rocks", "Rocks (boulders + scree)"],
 	[&"understory", "Ferns / shrubs"],
 	[&"deadfall", "Logs / stumps / branches"],
+	[&"cliffs", "Cliff meshes"],
 ]
 
 var _shown: Dictionary = {} # layer key -> bool
@@ -74,6 +77,12 @@ func _on_layer_toggled(on: bool, key: StringName) -> void:
 		if field:
 			field.visible = on
 			field.process_mode = Node.PROCESS_MODE_INHERIT if on else Node.PROCESS_MODE_DISABLED
+	elif key == &"cliffs":
+		# Their colliders are children of the meshes, so disabling the container removes those too.
+		var cliffs := get_tree().current_scene.get_node_or_null(CliffInstancer.CLIFF_DRESSING_NODE_NAME) as Node3D
+		if cliffs:
+			cliffs.visible = on
+			cliffs.process_mode = Node.PROCESS_MODE_INHERIT if on else Node.PROCESS_MODE_DISABLED
 	else:
 		_set_meshes_enabled(_mesh_ids(key), on)
 		_set_colliders_enabled(key, on)

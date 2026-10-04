@@ -98,7 +98,9 @@ Ids are a contiguous list: a new asset is appended at the next id (**64**).
    `scripts/terrain/terrain_config.gd` for cliff faces, `OUTCROP_DEFS` in
    `scripts/terrain/outcrops.gd` for flat outcrops): `glb`,
    `diff`, `nor`, `rough` paths plus the size fields the existing entries use.
-   Megascans (Fab) cliffs (2026-10-02, `nordic_coastal_cliff_huge`): steps 1-2 via
+   Cliff defs also REQUIRE `"top_lift"` (metres the raised ground behind overshoots the mesh
+   top -- start at 0.1-0.2, raise until no gaps show along the crest).
+   Megascans (Fab) cliffs (2026-10-02, `nordic_coastal_cliff_huge` / `_large`): steps 1-2 via
    `tools/blender/import_megascans_glb.py --out cliffs` (example in its header -- width on X,
    rock face toward +Z, 4 LODs), and the def uses `"orm"` (packed AO/roughness) instead of `"rough"`.
 4. Optional repair textures: `<name>_<kind>_diff.png` (kind = `patch`, `fill`, ...) next to
