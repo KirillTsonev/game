@@ -100,6 +100,25 @@ const OUTCROP_DEFS := [
     "tilt_to_ground": true,
     "max_tilt_deg": 18.0
   },
+	# 2026-10-04 (trial): Megascans "Nordic Beach Rock Formation" (vflrejtfa) -- a blocky rock tower
+	# rising from a long skirt of smaller blocks, flat base. Source is 4.6 x 7.1 x 2.95 m; scaled
+	# x1.5 (same script) to 6.9 x 10.7 x 4.4 m. "sink_fraction" is of the model's HEIGHT and this
+	# one is tall, so 0.07 sinks it about as deep as 0.1 does the flatter ones.
+	{
+    "name": "beach_rock_tower",
+    "glb": "res://assets/models/outcrops/beach_rock_tower/beach_rock_tower.glb",
+    "diff": "res://assets/models/outcrops/beach_rock_tower/textures/beach_rock_tower_diff_2k.jpg",
+    "nor": "res://assets/models/outcrops/beach_rock_tower/textures/beach_rock_tower_nor_gl_2k.jpg",
+    "orm": "res://assets/models/outcrops/beach_rock_tower/textures/beach_rock_tower_orm_2k.png",
+    "scale_min": 0.6,
+    "scale_max": 1.0,
+    "sink_fraction": 0.07,
+    "max_ground_spread": 0.8,
+    "fit_terrain": false,
+    "lay_flat": false,
+    "tilt_to_ground": true,
+    "max_tilt_deg": 18.0
+  },
 ]
 const OUTCROP_COUNT_MIN_BASE := 1 ## per ERRATIC_DENSITY_BASE_AREA (256x256), scaled by real map area like erratics
 const OUTCROP_COUNT_MAX_BASE := 3
@@ -207,11 +226,23 @@ static func plan_outcrops(models: Array[Dictionary], heights: PackedFloat32Array
 	var area_scale := (float(width) * float(length)) / TerrainConfig.ERRATIC_DENSITY_BASE_AREA
 	var count_min := maxi(1, int(round(OUTCROP_COUNT_MIN_BASE * area_scale)))
 	var count_max := maxi(count_min, int(round(OUTCROP_COUNT_MAX_BASE * area_scale)))
-	var roll_count := rng.randi_range(count_min, count_max)
+	# 2026-10-04 (Kirill: "at least one of each on a map ... ensure there's an equal pick of each
+	# mesh"): never fewer slots than models, and each slot takes the model PLACED fewest times so
+	# far (ties random) -- was a plain random pick per slot, which often left a model out (one run:
+	# 4 x beach_rock_formation, 1 x beach_rock_slabs, 0 x mountainside). A slot that finds no spot
+	# doesn't count, so its model is still the least used and gets the next slot too.
+	var roll_count := maxi(rng.randi_range(count_min, count_max), models.size())
 	var floor_x_range := TerrainUtil.zone_pixel_range("floor", width, rng)
+	var placed_per_model: Array[int] = []
+	placed_per_model.resize(models.size())
 
 	for i in roll_count:
-		var model_idx := rng.randi() % models.size()
+		var fewest: int = placed_per_model.min()
+		var least_used: Array[int] = []
+		for mi in models.size():
+			if placed_per_model[mi] == fewest:
+				least_used.append(mi)
+		var model_idx: int = least_used[rng.randi() % least_used.size()]
 		var model: Dictionary = models[model_idx]
 		var lo: Vector3 = model.lo
 		var hi: Vector3 = model.hi
@@ -271,10 +302,14 @@ static func plan_outcrops(models: Array[Dictionary], heights: PackedFloat32Array
 					continue
 				y = min_h - lo.y * s - thickness * float(model.def.sink_fraction)
 			plan.append({"model": model_idx, "px": px, "pz": pz, "yaw": yaw, "scale": s, "y": y, "radius": radius, "tilt": tilt})
+			placed_per_model[model_idx] += 1
 			keep_out.append(Vector3(px, pz, radius))
 			break
 
-	print("TERRAIN_GEN: planned %d/%d flat rock outcrop(s)" % [plan.size(), roll_count])
+	var per_model: Array[String] = []
+	for mi in models.size():
+		per_model.append("%s %d" % [models[mi].def.name, placed_per_model[mi]])
+	print("TERRAIN_GEN: planned %d/%d flat rock outcrop(s) -- %s" % [plan.size(), roll_count, ", ".join(per_model)])
 	return plan
 
 ## "tilt_to_ground" seat (2026-10-04, Kirill: beach_rock_formation "is standing on a slope and part

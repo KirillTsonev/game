@@ -102,20 +102,26 @@ clean when this file was last updated.
   per-slice top and back extents, six rendered views) is written in the session scratchpad each
   time; it is not in the repo.
 
-## Outcrops: deferred until the model list is settled (noted 2026-10-04)
+## Outcrops: model trial in progress (2026-10-04)
 
 Kirill is trying outcrop models one at a time (`raw-assets/models/outcrops/` ->
-`assets/models/outcrops/<name>/`, defs in `OUTCROP_DEFS`, `scripts/terrain/outcrops.gd`). Once he
-has decided which stay, he wants at least one of each on a map and an even pick between them.
-Not done yet, on purpose:
+`assets/models/outcrops/<name>/`, defs in `OUTCROP_DEFS`, `scripts/terrain/outcrops.gd`) and will
+decide later which stay. He wants at least one of each on a map and an even pick between them.
 
-- **Today:** the count is rolled from 1-3 per 256 x 256 m scaled by map area (2-6 on the current
-  256 x 512 map, average 4), and each slot picks a model at random -- so a model is often missing
-  (one run gave 4 x `beach_rock_formation`, 1 x `beach_rock_slabs`, 0 x `mountainside`).
-- **Planned change in `plan_outcrops`:** pick the least-used model per slot (the cliffs' rule);
-  raise the minimum roll to the number of models; when a slot fails its 16 placement tries, retry
-  with the same model before moving on (models with tilt / bumpiness limits fail more often).
-- The map is expected to grow, which raises the count by itself; no fixed total wanted.
+- **Count:** rolled from 1-3 per 256 x 256 m scaled by map area (2-6 on the current 256 x 512 map),
+  and never fewer than the number of models. The map is expected to grow, which raises the count
+  by itself; no fixed total wanted.
+- **Pick (done 2026-10-04, in `plan_outcrops`):** each slot takes the model placed fewest times so
+  far, ties random. A slot that finds no spot in its 16 tries doesn't count, so the same model
+  gets the next slot. The run prints the per-model counts on the `planned N/N` line.
+- **Still open:** a model that keeps failing its tries can still end up missing (no extra slots
+  are added for it); not seen yet.
+- **In trial:** `beach_rock_formation` (12.5 x 7.2 x 3.0 m, real size), `beach_rock_slabs`
+  (source x2 -> 8.4 x 8.4 x 2.5 m), `beach_rock_stack` (source x2 -> 8.6 x 6.4 x 4.8 m). All three:
+  no terrain fit, `"lay_flat": false`, `"tilt_to_ground": true` (leans with the ground, max 18 deg).
+  `mountainside` keeps its terrain fit. Rejected: tundra rock formation, mossy cobble patches.
+- Outcrop placement now avoids knots and the landmark up front (they used to be planned there and
+  dropped afterwards), so every rolled outcrop survives.
 
 ## Next steps
 
