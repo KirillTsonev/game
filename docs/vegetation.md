@@ -188,7 +188,10 @@ Inside `Vegetation.fbx` (sizes in FBX units; bake one to confirm real size):
 
 - **Shrubs:** `Tree_B` (176 tris, 4 colour variants), leaf clusters `Plane_014`-`017`
   (32 / 192 tris).
-- **Sapling-like:** `Branch_C` (~1.8k tris), `Tree_05` (small deciduous, ~2.4k tris).
+- **Not saplings (measured 2026-10-04):** `Tree_05` is a full tree (26.6 m tall, 16-18 m wide,
+  ~2.4k tris, leaf texture `Branch_T2.png` still 256 px) -- a possible 15th canopy tree.
+  `Tree_B` is 6.1 x 3.9 m. `Branch_C` (~1.8k tris) is not wanted. The mid-storey uses scaled-down
+  canopy trees instead -- see "Saplings" below.
 - **Ground layer:** `Grass_P_001`-`014` (16-408 tris), logs / stumps `Trunk_*` (54-132 tris).
 - **Snow variants** (`_N` textures/models) -- kept for a possible snow version.
 - **No ferns** in the pack. Plan: build fern meshes from a few crossed cards (16-64 tris)
@@ -330,6 +333,47 @@ material override), `debug_print_sizes()`.
   first ~20-25 m rather than dropping them.
 - Later idea: a rustle sound when walking through foliage, using a spatial grid of the
   understory positions.
+
+---
+
+## Saplings -- the mid-storey (built 2026-10-04)
+
+The saplings are the canopy trees themselves, scaled down per instance to 2-4 m. Kirill compared
+whole scaled-down trees against cut pine tops in-game and picked the scaled-down ones. No new
+models, textures or bark work. Collision (added at Kirill's request): one upright stem cylinder
+per sapling in `SaplingColliders`, radius = tree trunk radius x scale with a 5 cm minimum
+(`STEM_MIN_RADIUS`), fixed 1.6 m tall (`STEM_HEIGHT`). The foliage itself does not collide.
+
+- **Mesh assets 64-68** (`SAPLINGS` + `build_sapling_assets()` in `tools/setup_tree_assets.gd`;
+  `call_method`, `runtime:false`, scene `tools/setup_tree_assets.tscn`, node `.`). Each points at
+  the tree's existing baked mesh (shared file) and a copy of its impostor:
+
+  | id | name | tree | tris | scale -> height |
+  |---|---|---|---|---|
+  | 64 | SaplingPineB | PackPineB | 1,922 | 0.15 -> 3.5 m |
+  | 65 | SaplingPineA2 | PackPineA2 | 2,891 | 0.13 -> 3.6 m |
+  | 66 | SaplingPineC2 | PackPineC2 | 4,796 | 0.20 -> 3.5 m |
+  | 67 | SaplingDecidC2 | PackDecidC2 | 5,833 | 0.30 -> 3.6 m |
+  | 68 | SaplingDecidA2 | PackDecidA2 | 7,228 | 0.20 -> 3.7 m |
+
+  Only leafy colour variants (the dry ones are bare twigs). Left out as too heavy: PackPineD2
+  (11.3k), PackDecidB2 (8.6k).
+- **Why own ids:** the canopy ids draw the full mesh to 175 m. Saplings: full mesh to **80 m**
+  (`SAPLING_LOD0_RANGE`), then the impostor, never culled. Like the bushes: hard switch, no fade,
+  shadows on both LODs.
+- **Impostor material copy** (`trees/<name>_impostor_material.tres`): always uses the tree
+  impostor's far fullness (`alpha_gain` = the tree's `alpha_gain_far`, blend off), because a
+  sapling at 80 m is as small on screen as its tree at 270-600 m. Not yet judged in-game.
+- **Rerun `build_sapling_assets()`** after `build_pack_trees()`, `bake_tree_impostors()` or
+  `tree_impostor_import()`.
+- **Placement** (`scripts/terrain/sapling_scatter.gd`, after the understory, own rng `'SAPL'`): one
+  jittered candidate per 3 m cell; chance = `OPEN_P` + `MAX_P` x (grove-edge bump 4c(1-c) +
+  a little under canopy) x patch noise (~25 m patches). Kind follows the nearest canopy tree
+  within 14 m (pine / deciduous, 80 %). Size = the scale in `PINE_MIX` / `DECID_MIX` x 0.6-1.1.
+  Rejects: slope, road, rocks, stumps / logs, 2 m x tree scale round trunks, 1.6 m between
+  saplings. The scales live in the scatter module, not in the mesh assets.
+- **First run (seed 858829582):** 735 saplings (423 pine, 312 deciduous) from 14k candidates,
+  0.13 s. Render cost not measured -- toggle "Saplings" in the J layer panel to compare.
 
 ---
 

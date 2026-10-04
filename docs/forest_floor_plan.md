@@ -148,8 +148,10 @@ at grove edges). What is missing is the materials that make thin ground read as 
    downhill, a few against logs. No collision, no shadows, cull ~30-40 m, in `SMALL_KINDS`.
    NOT through `_try_place` as is (linear scan of `ctx.placed`): light path with slope / road /
    rock checks only, overlaps allowed.
-7. **Mid-storey at grove edges.** Saplings and tall shrubs 2-4 m (pack candidates: `Tree_05`,
-   `Branch_C`, `Tree_B`). The one step with a real rendering cost.
+7. **Mid-storey at grove edges.** BUILT 2026-10-04: saplings 2-4 m = the canopy trees scaled down
+   (mesh ids 64-68, `scripts/terrain/sapling_scatter.gd`); details in `docs/vegetation.md`,
+   "Saplings". The pack candidates turned out unsuitable (`Tree_05` is a 26.6 m tree, `Tree_B`
+   6.1 m, `Branch_C` not wanted). Density and render cost still to be judged in-game.
 8. **Sparse litter on the road** (added 2026-10-01; do AFTER step 1 and once the litter look of
    step 2 is accepted -- both change how it should look). Real roads under trees are swept clean
    in the middle; litter collects along the edges, in the joints between stones and in drifts.

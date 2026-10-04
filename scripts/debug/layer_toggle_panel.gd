@@ -2,8 +2,9 @@
 ## at one layer on its own. Opened with J via PerfDebug (scripts/perf_debug.gd). Built in code, no scene.
 ##
 ## - Grass: the GrassField node (hidden + its processing stopped, so the GPU cull pass stops too).
-## - Trees / Rocks / Ferns + shrubs / Deadfall: Terrain3DMeshAsset.enabled on that layer's mesh ids.
-##   Their colliders go with them (TreeColliders / BoulderColliders / DeadfallColliders disabled),
+## - Trees / Rocks / Ferns + shrubs / Saplings / Deadfall: Terrain3DMeshAsset.enabled on that layer's mesh ids.
+##   Their colliders go with them (TreeColliders / BoulderColliders / DeadfallColliders disabled;
+##   saplings: their soft stem push is switched off),
 ##   so a hidden tree or boulder can be walked through.
 ## - Cliff meshes: the CliffDressing node (fault-line, knot and landmark cliffs; hidden + colliders
 ##   off). The terrain shaped around them stays. Outcrops are not included.
@@ -18,6 +19,7 @@ const LAYERS := [
 	[&"trees", "Trees"],
 	[&"rocks", "Rocks (boulders + scree)"],
 	[&"understory", "Ferns / shrubs"],
+	[&"saplings", "Saplings"],
 	[&"deadfall", "Logs / stumps / branches"],
 	[&"cliffs", "Cliff meshes"],
 ]
@@ -97,6 +99,8 @@ func _mesh_ids(key: StringName) -> Array[int]:
 			return RockScatter.ROCK_MESH_IDS + RockScatter.SCREE_MESH_IDS
 		&"understory":
 			return UnderstoryScatter.UNDERSTORY_MESH_IDS
+		&"saplings":
+			return SaplingScatter.SAPLING_MESH_IDS
 		&"deadfall":
 			return DeadfallScatter.DEADFALL_MESH_IDS # stumps, logs, branches, sticks -- not mounds/cones
 	return []
@@ -113,6 +117,8 @@ func _set_colliders_enabled(key: StringName, on: bool) -> void:
 			container_name = RockScatter.BOULDER_COLLIDER_CONTAINER_NAME
 		&"deadfall":
 			container_name = DeadfallScatter.COLLIDER_CONTAINER_NAME
+		&"saplings":
+			SaplingScatter.push_enabled = on # no colliders: the stems steer the player instead
 	if container_name.is_empty():
 		return # ferns / shrubs have no colliders
 	var container := get_tree().current_scene.get_node_or_null(container_name)

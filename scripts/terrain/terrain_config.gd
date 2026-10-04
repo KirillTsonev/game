@@ -136,8 +136,8 @@ const CLIFF_DRESSING_DEFS := [
     "real_size": 20.05,
     "height": 5.67,
     "depth": 6.69,
-    "push_back": 1,
-    "top_lift": 0.1
+    "push_back": 1.2,
+    "top_lift": 0.2
   },
 ]
 const CLIFF_DRESSING_EMBED_DEPTH := 1.5 ## sink the mesh's base this far below the sampled terrain height (scaled by that instance's own scale jitter) so its bottom edge never floats visibly above the ground regardless of the source mesh's own base/pivot

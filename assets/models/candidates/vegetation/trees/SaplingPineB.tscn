@@ -1,0 +1,12 @@
+[gd_scene format=3 uid="uid://lduglk5ybt7q"]
+
+[ext_resource type="ArrayMesh" uid="uid://dcg8gxy32ut6b" path="res://assets/models/candidates/vegetation/trees/PackPineB.res" id="1_ymtto"]
+[ext_resource type="ArrayMesh" uid="uid://im7qj73dfj71" path="res://assets/models/candidates/vegetation/trees/SaplingPineB_impostor.res" id="2_j07yh"]
+
+[node name="SaplingPineB" type="Node3D" unique_id=731418733]
+
+[node name="LOD0" type="MeshInstance3D" parent="." unique_id=282905745]
+mesh = ExtResource("1_ymtto")
+
+[node name="LOD1" type="MeshInstance3D" parent="." unique_id=302313192]
+mesh = ExtResource("2_j07yh")

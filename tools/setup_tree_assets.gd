@@ -619,3 +619,87 @@ func tree_impostor_import() -> String:
 		mat.set_shader_parameter("shadow_mip_alpha_scale", UNDERSTORY_TOOL.SHADOW_MIP_ALPHA_SCALE)
 		out.append("%s: material err=%d" % [entry.name, ResourceSaver.save(mat, base + "_material.tres")])
 	return "reimported %d png(s)\n%s" % [paths.size(), "\n".join(out)]
+
+## -- Saplings (2026-10-04) --
+## The mid-storey saplings are the canopy trees themselves, scaled down per instance by
+## SaplingScatter (scripts/terrain/sapling_scatter.gd holds the scales -- Kirill picked whole
+## scaled-down trees over cut pine tops). They need their OWN mesh ids: the canopy ids draw the
+## full mesh to TREE_IMPOSTOR_RANGE (175 m), far too long for a 2-4 m plant.
+## Each sapling asset = the tree's baked mesh (shared file, nothing re-baked) to
+## SAPLING_LOD0_RANGE, then a copy of the tree's impostor, never culled. Like the bushes: hard
+## switch (no fade -- fading drops shadows) and shadows on both LODs.
+## The impostor copy has its own material: a sapling at 80 m is as small on screen as its tree at
+## 270-600 m, so it always uses the tree impostor's FAR fullness (alpha_gain_far), not the
+## distance blend tied to the 175 m switch.
+## Rerun build_sapling_assets() after anything that changes the tree meshes or their impostors
+## (build_pack_trees(), bake_tree_impostors(), tree_impostor_import()).
+## Keep ids in sync with SaplingScatter.SAPLING_MESH_IDS / PINE_MIX / DECID_MIX.
+const SAPLING_LOD0_RANGE := 80.0
+const SAPLINGS := [
+	{"id": 64, "tree": "PackPineB", "name": "SaplingPineB"},
+	{"id": 65, "tree": "PackPineA2", "name": "SaplingPineA2"},
+	{"id": 66, "tree": "PackPineC2", "name": "SaplingPineC2"},
+	{"id": 67, "tree": "PackDecidC2", "name": "SaplingDecidC2"},
+	{"id": 68, "tree": "PackDecidA2", "name": "SaplingDecidA2"},
+]
+
+func build_sapling_assets() -> String:
+	var assets: Terrain3DAssets = load(ASSETS_PATH)
+	var out: Array[String] = []
+	for e: Dictionary in SAPLINGS:
+		var mesh_path: String = PACK_OUT_DIR + "%s.res" % e.tree
+		var src_imp: String = PACK_OUT_DIR + "%s_impostor" % e.tree
+		if not ResourceLoader.exists(mesh_path) or not ResourceLoader.exists(src_imp + ".res") or not ResourceLoader.exists(src_imp + "_material.tres"):
+			out.append("%s: %s has no baked mesh / impostor -- skipped" % [e.name, e.tree])
+			continue
+		var imp_base: String = PACK_OUT_DIR + "%s_impostor" % e.name
+		var mat := (ResourceLoader.load(src_imp + "_material.tres", "", ResourceLoader.CACHE_MODE_REPLACE) as ShaderMaterial).duplicate() as ShaderMaterial
+		mat.resource_name = "%s_impostor_material" % e.name
+		var far_gain: float = mat.get_shader_parameter("alpha_gain_far")
+		mat.set_shader_parameter("alpha_gain", far_gain)
+		mat.set_shader_parameter("alpha_gain_far", -1.0)  # off: one fullness at every distance
+		var err_mat := ResourceSaver.save(mat, imp_base + "_material.tres")
+		var imesh := (ResourceLoader.load(src_imp + ".res", "", ResourceLoader.CACHE_MODE_REPLACE) as ArrayMesh).duplicate() as ArrayMesh
+		imesh.surface_set_material(0, ResourceLoader.load(imp_base + "_material.tres", "", ResourceLoader.CACHE_MODE_REPLACE))
+		var err_mesh := ResourceSaver.save(imesh, imp_base + ".res")
+		var root := Node3D.new()
+		root.name = e.name
+		var lod0 := MeshInstance3D.new()
+		lod0.name = "LOD0"
+		lod0.mesh = load(mesh_path)
+		root.add_child(lod0)
+		lod0.owner = root
+		var lod1 := MeshInstance3D.new()
+		lod1.name = "LOD1"
+		lod1.mesh = ResourceLoader.load(imp_base + ".res", "", ResourceLoader.CACHE_MODE_REPLACE)
+		root.add_child(lod1)
+		lod1.owner = root
+		var ps := PackedScene.new()
+		ps.pack(root)
+		root.free()
+		var scene_path: String = PACK_OUT_DIR + "%s.tscn" % e.name
+		ResourceSaver.save(ps, scene_path)
+		var a: Terrain3DMeshAsset = assets.get_mesh_asset(e.id)
+		var is_new := a == null
+		if is_new:
+			a = Terrain3DMeshAsset.new()
+			a.set_id(e.id)
+		a.set_name(e.name)
+		a.set_scene_file(ResourceLoader.load(scene_path, "", ResourceLoader.CACHE_MODE_REPLACE))
+		a.set_material_override(null)
+		a.set_height_offset(0.0)
+		a.set_density(0.1)
+		if is_new:
+			assets.set_mesh_asset(e.id, a)
+		a.set_lod_range(0, SAPLING_LOD0_RANGE)
+		a.set_lod_range(1, 0.0)  # impostor: never culled
+		a.set_last_lod(1)
+		a.set_last_shadow_lod(1)
+		a.set_cast_shadows(GeometryInstance3D.SHADOW_CASTING_SETTING_ON)
+		a.set_shadow_impostor(0)
+		a.set_fade_margin(0.0)
+		out.append("id=%d %s (%s) <- %s: lod_count=%d last_lod=%d last_shadow_lod=%d, impostor gain %.2f, material err=%d, impostor mesh err=%d" % [
+			e.id, e.name, "created" if is_new else "updated", e.tree, a.get_lod_count(), a.get_last_lod(), a.get_last_shadow_lod(), far_gain, err_mat, err_mesh])
+	assets.update_mesh_list()
+	out.append("saved %s (err=%d)" % [ASSETS_PATH, assets.save(ASSETS_PATH)])
+	return "\n".join(out)

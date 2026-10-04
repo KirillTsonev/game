@@ -13,6 +13,7 @@
 ##   TreeScatter     tree_scatter.gd     trees + debug_tree_probe
 ##   DeadfallScatter deadfall_scatter.gd stumps, fallen logs, branch clumps (uphill of rocks/trunks, in stands)
 ##   UnderstoryScatter understory_scatter.gd  shrubs + ferns, density from canopy + shaded cliff feet
+##   SaplingScatter  sapling_scatter.gd  mid-storey saplings (scaled-down canopy trees) at grove edges
 ##   TerrainUtil     terrain_util.gd     height/normal sampling, zone ranges, mesh helpers
 ## New system -> new module there (class_name + extends RefCounted + static funcs), called from
 ## _ready() below. Per-run mutable state = static vars reset in the module's reset_run_state().
@@ -25,6 +26,7 @@ func _ready() -> void:
 	RockScatter.reset_run_state()
 	TreeScatter.reset_run_state()
 	UnderstoryScatter.reset_run_state()
+	SaplingScatter.reset_run_state()
 	DeadfallScatter.reset_run_state()
 	GrassScatter.reset_run_state()
 	# Whole-_ready() timing (2026-09-16): the earlier per-stage prints only
@@ -181,6 +183,14 @@ func _ready() -> void:
 	understory_rng.seed = resolved_seed ^ 0x554E4452 # 'UNDR' salt
 	UnderstoryScatter.scatter_understory(get_parent(), terrain, maps.heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, heightmap_corner, understory_rng, maps.road_weight, maps.cliff_features, maps.cliff_dressing_plan, maps.cliff_dressing_top_profiles, maps.outcrop_plan)
 	print("TERRAIN_GEN: understory scattering (%.2fs)" % ((Time.get_ticks_msec() - t_ready_stage) / 1000.0))
+	t_ready_stage = Time.get_ticks_msec()
+
+	# Saplings (mid-storey): scaled-down canopy trees at grove edges -- reads the canopy, the rock
+	# keep-outs and the deadfall, so after all three. Own cosmetic stream.
+	var sapling_rng := RandomNumberGenerator.new()
+	sapling_rng.seed = resolved_seed ^ 0x5341504C # 'SAPL' salt
+	SaplingScatter.scatter_saplings(terrain, maps.heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, heightmap_corner, sapling_rng, maps.road_weight, maps.cliff_dressing_plan, maps.cliff_dressing_top_profiles, maps.outcrop_plan)
+	print("TERRAIN_GEN: sapling scattering (%.2fs)" % ((Time.get_ticks_msec() - t_ready_stage) / 1000.0))
 	t_ready_stage = Time.get_ticks_msec()
 
 	# Grass step 1: bake the groundcover density/dry/tall texture (no instances -- the GPU

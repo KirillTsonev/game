@@ -1,0 +1,12 @@
+[gd_scene format=3 uid="uid://c55recokgnr7k"]
+
+[ext_resource type="ArrayMesh" uid="uid://cvsmkqedaxmdq" path="res://assets/models/candidates/vegetation/trees/PackDecidA2.res" id="1_5sbpa"]
+[ext_resource type="ArrayMesh" uid="uid://vbxqrhqygtjm" path="res://assets/models/candidates/vegetation/trees/SaplingDecidA2_impostor.res" id="2_xsq88"]
+
+[node name="SaplingDecidA2" type="Node3D" unique_id=1771493085]
+
+[node name="LOD0" type="MeshInstance3D" parent="." unique_id=890067190]
+mesh = ExtResource("1_5sbpa")
+
+[node name="LOD1" type="MeshInstance3D" parent="." unique_id=355814327]
+mesh = ExtResource("2_xsq88")

@@ -119,6 +119,9 @@ func _physics_process(delta: float) -> void:
 		velocity.x = move_toward(velocity.x, 0, speed)
 		velocity.z = move_toward(velocity.z, 0, speed)
 
+	# Saplings have no colliders: their stems bend the path around them instead (brush past, no stop).
+	velocity = SaplingScatter.steer_around_stems(global_position, velocity)
+
 	# Snapshot BEFORE move_and_slide() -- it mutates `velocity` in place based
 	# on collision response, so if the player is fully blocked in every
 	# direction it zeroes velocity.x/z right along with actually stopping
