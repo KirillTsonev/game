@@ -138,11 +138,14 @@ const OUTCROP_DEFS := [
     "max_tilt_deg": 18.0
   },
 ]
-const OUTCROP_COUNT_MIN_BASE := 1 ## per ERRATIC_DENSITY_BASE_AREA (256x256), scaled by real map area like erratics
-const OUTCROP_COUNT_MAX_BASE := 3
+## 2026-10-04: 1..3 -> 6..6 (Kirill, trial: five models now, ~two of each on the 256 x 512 map;
+## 10 was discussed and held back -- four copies of each model is where the repeats start to show).
+## TUNING: MIN < MAX gives run-to-run variation; plan_outcrops never rolls fewer than the model count.
+const OUTCROP_COUNT_MIN_BASE := 6 ## per ERRATIC_DENSITY_BASE_AREA (256x256), scaled by real map area like erratics
+const OUTCROP_COUNT_MAX_BASE := 6
 const OUTCROP_UNDERSIDE_CELL := 0.25 ## model units per cell of each outcrop's underside grid -- see _load_outcrop_models
 const OUTCROP_FIT_FADE_MIN := 4.0 ## narrowest soil bank (world units)
-const OUTCROP_FIT_FADE_MAX := 12.0 ## widest soil bank; also used for outcrop spacing + the road obstacle radius
+const OUTCROP_FIT_FADE_MAX := 12.0 ## widest soil bank; also the room kept for it around a "fit_terrain" outcrop (see _bank_reach)
 const OUTCROP_BANK_SMOOTH_PASSES := 4 ## round 5: 3x3 relaxation passes over the raised soil bank ONLY, after every outcrop has been fitted. The IDW blend in pass 3 is peaky near rim pixels and switches formula at the footprint outline, which left faceted creases that read as choppy edges under a low sun. 0 = old behaviour
 const OUTCROP_BANK_SMOOTH_STRENGTH := 0.65 ## how far each bank pixel moves toward its 3x3 mean per pass (0..1)
 const OUTCROP_MAX_SLOPE_NORMAL_Y := 0.9
@@ -269,8 +272,9 @@ static func plan_outcrops(models: Array[Dictionary], heights: PackedFloat32Array
 			var yaw := rng.randf_range(0.0, TAU)
 			var yaw_basis := Basis(Vector3.UP, yaw)
 			var radius := Vector2(maxf(absf(lo.x), absf(hi.x)), maxf(absf(lo.z), absf(hi.z))).length() * s
-			var fx := TerrainUtil.clamp_range_for_reach(floor_x_range.x, floor_x_range.y, radius + OUTCROP_FIT_FADE_MAX, float(width - 1))
-			var fz := TerrainUtil.clamp_range_for_reach(float(length) * 0.1, float(length) * 0.9, radius + OUTCROP_FIT_FADE_MAX, float(length - 1))
+			var bank := _bank_reach(model.def)
+			var fx := TerrainUtil.clamp_range_for_reach(floor_x_range.x, floor_x_range.y, radius + bank, float(width - 1))
+			var fz := TerrainUtil.clamp_range_for_reach(float(length) * 0.1, float(length) * 0.9, radius + bank, float(length - 1))
 			var px := rng.randf_range(minf(fx.x, fx.y), maxf(fx.x, fx.y))
 			var pz := rng.randf_range(minf(fz.x, fz.y), maxf(fz.x, fz.y))
 
@@ -319,7 +323,7 @@ static func plan_outcrops(models: Array[Dictionary], heights: PackedFloat32Array
 				if max_h - min_h > float(model.def.max_ground_spread):
 					continue
 				y = min_h - lo.y * s - thickness * float(model.def.sink_fraction)
-			plan.append({"model": model_idx, "px": px, "pz": pz, "yaw": yaw, "scale": s, "y": y, "radius": radius, "tilt": tilt})
+			plan.append({"model": model_idx, "px": px, "pz": pz, "yaw": yaw, "scale": s, "y": y, "radius": radius, "tilt": tilt, "bank": bank})
 			placed_per_model[model_idx] += 1
 			keep_out.append(Vector3(px, pz, radius))
 			break
@@ -329,6 +333,13 @@ static func plan_outcrops(models: Array[Dictionary], heights: PackedFloat32Array
 		per_model.append("%s %d" % [models[mi].def.name, placed_per_model[mi]])
 	print("TERRAIN_GEN: planned %d/%d flat rock outcrop(s) -- %s" % [plan.size(), roll_count, ", ".join(per_model)])
 	return plan
+
+## Room kept around an outcrop for its soil bank: OUTCROP_FIT_FADE_MAX when the def fits the
+## terrain (the bank can be that wide), nothing otherwise. Used for the placement range and the
+## road obstacle circle. 2026-10-04: was OUTCROP_FIT_FADE_MAX for every model, so a bank-less 6 m
+## outcrop blocked the road over a 21 m circle (now 9 m) -- too much floor once the count went up.
+static func _bank_reach(def: Dictionary) -> float:
+	return OUTCROP_FIT_FADE_MAX if bool(def.fit_terrain) else 0.0
 
 ## "tilt_to_ground" seat (2026-10-04, Kirill: beach_rock_formation "is standing on a slope and part
 ## of its base floats in the air, maybe we can dynamically tilt it"). Fits a plane to the ground
@@ -625,7 +636,7 @@ static func add_outcrops_to_obstacle_mask(plan: Array[Dictionary], obstacle: Pac
 	for entry in plan:
 		var px: float = entry.px
 		var pz: float = entry.pz
-		var reach: float = float(entry.radius) + OUTCROP_FIT_FADE_MAX + TerrainConfig.CLIFF_DRESSING_ROAD_OBSTACLE_MARGIN
+		var reach: float = float(entry.radius) + float(entry.get("bank", OUTCROP_FIT_FADE_MAX)) + TerrainConfig.CLIFF_DRESSING_ROAD_OBSTACLE_MARGIN
 		for qz in range(clampi(int(floor(pz - reach)), 0, length - 1), clampi(int(ceil(pz + reach)), 0, length - 1) + 1):
 			for qx in range(clampi(int(floor(px - reach)), 0, width - 1), clampi(int(ceil(px + reach)), 0, width - 1) + 1):
 				if Vector2(qx - px, qz - pz).length() <= reach:
