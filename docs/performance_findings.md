@@ -488,6 +488,16 @@ Look-versus-speed choices, each independent:
     effect that also runs in the editor viewport) crashed the editor once.
   - Not done: the other five effects (0.07-0.16 ms each, 0.65 ms together). Radial blur,
     Gaussian blur and glare each copy the frame first; merging passes is the remaining option.
+- **Colour bleed and chromatic aberration: tried and removed, 2026-10-05.** They are the two
+  effects the reference's author names that the project did not run
+  (`godot_notes/dfantasy_reference_breakdown.md`). Added at subtle values (colour bleed after
+  Gaussian blur: strength 1.5, 8 samples, intensity 0.5; chromatic aberration last: strength
+  1.0, 4 samples) they cost 0.18-0.19 and 0.36-0.38 ms (`..._two_new_effects`), and Kirill saw
+  no difference in-game, so both were taken out again. Stronger values were not tried.
+  `baseline4` is still the baseline.
+- Every effect folder of the pack that is not in the chain was deleted the same day
+  (`addons/compositor_effects/` now holds the six in use + `shared/`); all are in git up to
+  `ba7cfd1`.
 - Post effects: 1.5-1.8 ms in total, about half of it the painterly effect.
 
 ### 6. Startup time (in progress, started 2026-10-05)

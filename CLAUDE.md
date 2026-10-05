@@ -533,6 +533,13 @@ automatically) -- a local copy also lives at
 
 ## Compositor Effects addon -- must live under res://addons/
 
+- **UPDATE 2026-10-05:** the whole pack (scripts and shaders) lives in
+  `res://addons/compositor_effects/`, and only the effects in the chain are kept: painterly_sat,
+  radial_blur, gaussian_blur, noise, unreal_bloom, glare, plus `shared/`. The other 27 were
+  deleted (in git up to `ba7cfd1`; color_bleed and chromatic_aberration were tried first and
+  showed no visible difference at subtle settings). The Options menu has a checkbox
+  per effect (`POSTFX_EFFECTS` in `scripts/pause_menu.gd`) -- add a row there when adding one to
+  `assets/compositor.tres`. The notes below describe the original install.
 - The downloaded compositor_effects asset pack (32 post-processing effects
   under `res://compositor_effects/<name>/`, e.g. crt_monitor, glare,
   chromatic_aberration, vignette, unreal_bloom, etc.) ships with every
