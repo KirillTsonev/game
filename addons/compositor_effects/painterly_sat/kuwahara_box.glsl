@@ -1,21 +1,19 @@
 #[compute]
 #version 450
 
-// Classic 4-region Kuwahara filter, accelerated with a summed-area table.
-// Instead of scanning a (2*radius+1)^2 neighborhood per pixel, each of the
-// 4 overlapping quadrant regions' mean color and luma variance is read in
-// O(1) via inclusion-exclusion on the precomputed SAT. Cost is therefore
-// roughly independent of radius, unlike the histogram-based Painterly
-// effect this project also has.
+// Classic 4-region Kuwahara filter (2026-10-05). Each region's sum is ONE read of the box-sum
+// image (box_sum_h.glsl + box_sum_v.glsl), where the summed-area table this replaced
+// (kuwahara_sat.glsl, deleted; in git before 2026-10-05) needed four: box_img(x, y) = the sum over the (r+1) x (r+1) box whose
+// bottom-right corner is pixel (x, y), and the image is r pixels larger than the frame on both
+// axes so the boxes reaching right / down from a pixel are stored at x + r / y + r.
 //
-// orig_img is a clean, untouched copy of the scene made before this pass
-// runs (see post_process_painterly_sat.gd) -- needed so edge detection can
-// safely read neighboring pixels without racing against other invocations
-// writing their own result into dest_img.
+// orig_img is a clean copy of the frame made before this pass (see
+// post_process_painterly_sat.gd) -- the edge detection reads neighbouring pixels while other
+// invocations write their result into dest_img.
 
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
-layout(rgba32f, set = 0, binding = 0) uniform restrict readonly image2D sat_img;
+layout(rgba32f, set = 0, binding = 0) uniform restrict readonly image2D box_img;
 layout(rgba16f, set = 1, binding = 0) uniform restrict readonly image2D orig_img;
 layout(rgba16f, set = 2, binding = 0) uniform restrict writeonly image2D dest_img;
 
@@ -25,23 +23,6 @@ layout(push_constant, std430) uniform PushConstant {
     float edge_sharpness;
     float _pad0;
 } pc;
-
-vec4 sat_lookup(ivec2 size, int x, int y) {
-    // SAT is conceptually zero-padded outside the image.
-    if (x < 0 || y < 0) return vec4(0.0);
-    ivec2 c = ivec2(min(x, size.x - 1), min(y, size.y - 1));
-    return imageLoad(sat_img, c);
-}
-
-vec4 rect_sum(ivec2 size, int x1, int y1, int x2, int y2) {
-    x2 = min(x2, size.x - 1);
-    y2 = min(y2, size.y - 1);
-    vec4 a = sat_lookup(size, x2, y2);
-    vec4 b = sat_lookup(size, x1 - 1, y2);
-    vec4 c = sat_lookup(size, x2, y1 - 1);
-    vec4 d = sat_lookup(size, x1 - 1, y1 - 1);
-    return a - b - c + d;
-}
 
 void main() {
     ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
@@ -69,7 +50,8 @@ void main() {
         int y2 = min(b.w, size.y - 1);
         float area = float(max(x2 - x1 + 1, 1) * max(y2 - y1 + 1, 1));
 
-        vec4 s = rect_sum(size, b.x, b.y, b.z, b.w);
+        // The region's bottom-right corner (unclamped) is where its box sum is stored.
+        vec4 s = imageLoad(box_img, b.zw);
         vec3 mean = s.rgb / area;
         float mean_luma2 = s.a / area;
         float mean_luma = dot(mean, vec3(0.299, 0.587, 0.114));

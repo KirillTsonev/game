@@ -28,7 +28,20 @@ const OPTIONS_PANE_WIDTH := 420.0
 @onready var fsr_slider: HSlider = $Root/Center/OptionsPanel/FSRScaleRow/FSRScaleSlider
 @onready var fsr_value_label: Label = $Root/Center/OptionsPanel/FSRScaleRow/FSRScaleValue
 @onready var shadows_toggle: CheckBox = $Root/Center/OptionsPanel/ShadowsRow/ShadowsToggle
-@onready var postfx_toggle: CheckBox = $Root/Center/OptionsPanel/PostFXRow/PostFXToggle
+
+## One Options row per post effect (2026-10-05; was a single "Post-Processing FX" checkbox):
+## [key, row label]. key = the effect's script file name without "post_process_", the same name
+## the benchmark uses. An effect in res://assets/compositor.tres that is not listed here is left
+## as authored.
+const POSTFX_EFFECTS := [
+	["painterly_sat", "Painterly"],
+	["radial_blur", "Radial Blur"],
+	["gaussian_blur", "Gaussian Blur"],
+	["noise", "Film Grain"],
+	["unreal_bloom", "Bloom"],
+	["glare", "Glare"],
+]
+var _postfx_toggles := {} # key -> CheckBox, built in _build_postfx_rows()
 
 var _is_open: bool = false
 
@@ -42,7 +55,7 @@ func _ready() -> void:
 	fsr_toggle.toggled.connect(_on_fsr_toggled)
 	fsr_slider.value_changed.connect(_on_fsr_scale_changed)
 	shadows_toggle.toggled.connect(_on_shadows_toggled)
-	postfx_toggle.toggled.connect(_on_postfx_toggled)
+	_build_postfx_rows()
 
 	# Apply whatever was saved from last session (if anything) to the
 	# viewport BEFORE the controls read the viewport's state, so both the
@@ -137,9 +150,33 @@ func _on_shadows_toggled(enabled: bool) -> void:
 		light.shadow_enabled = enabled
 	_save_settings()
 
-func _on_postfx_toggled(enabled: bool) -> void:
-	_set_postfx_enabled(enabled)
+func _on_postfx_toggled(_enabled: bool) -> void:
+	_apply_postfx_toggles()
 	_save_settings()
+
+## Adds a "<label>  [x] Enabled" row per POSTFX_EFFECTS entry above the Back button, styled like
+## the rows authored in pause_menu.tscn.
+func _build_postfx_rows() -> void:
+	for spec in POSTFX_EFFECTS:
+		var row := HBoxContainer.new()
+		var label := Label.new()
+		label.text = spec[1]
+		label.custom_minimum_size = Vector2(140, 0)
+		row.add_child(label)
+		var toggle := CheckBox.new()
+		toggle.text = "Enabled"
+		toggle.modulate = shadows_toggle.modulate
+		toggle.button_pressed = true # every effect is authored enabled in compositor.tres
+		toggle.toggled.connect(_on_postfx_toggled)
+		row.add_child(toggle)
+		options_panel.add_child(row)
+		options_panel.move_child(row, back_button.get_index())
+		_postfx_toggles[spec[0]] = toggle
+
+## The POSTFX_EFFECTS key of a compositor effect ("" for one without a script).
+func _postfx_key(effect: CompositorEffect) -> String:
+	var script := effect.get_script() as Script
+	return script.resource_path.get_file().get_basename().trim_prefix("post_process_") if script else ""
 
 ## Finds the scene's sun/shadow-caster the same defensive way player.gd
 ## looks up Terrain3D -- a search rather than a hardcoded path, so this
@@ -161,19 +198,18 @@ func _get_world_environment() -> WorldEnvironment:
 		return null
 	return envs[0]
 
-## Toggles every effect in the compositor's effect array at once, rather
-## than clearing WorldEnvironment.compositor entirely -- this only flips
-## each CompositorEffect's own `enabled` flag (which the renderer already
-## respects per-effect, skipping disabled ones outright), so the Compositor
+## Sets each listed effect's own `enabled` flag from its checkbox, rather
+## than editing WorldEnvironment.compositor's effect array -- the renderer
+## already skips a disabled effect outright, so the Compositor
 ## resource and its effect list stay intact and re-enabling doesn't need to
 ## remember/restore anything.
-func _set_postfx_enabled(enabled: bool) -> void:
+func _apply_postfx_toggles() -> void:
 	var world_env := _get_world_environment()
 	if not world_env or not world_env.compositor:
 		return
 	for effect in world_env.compositor.compositor_effects:
-		if effect:
-			effect.enabled = enabled
+		if effect and _postfx_toggles.has(_postfx_key(effect)):
+			effect.enabled = _postfx_toggles[_postfx_key(effect)].button_pressed
 
 func _apply_deferred_shadows_setting() -> void:
 	var light := _get_directional_light()
@@ -181,7 +217,7 @@ func _apply_deferred_shadows_setting() -> void:
 		light.shadow_enabled = shadows_toggle.button_pressed
 
 func _apply_deferred_postfx_setting() -> void:
-	_set_postfx_enabled(postfx_toggle.button_pressed)
+	_apply_postfx_toggles()
 
 ## Reads whatever the viewport's actual scaling state is (which may have
 ## been set by fsr_debug_toggle.gd's F10 shortcut, or a previous menu
@@ -198,19 +234,16 @@ func _sync_shadows_control_from_light() -> void:
 	if light:
 		shadows_toggle.button_pressed = light.shadow_enabled
 
-## Reads back whether post-FX is currently on from the live compositor
-## effects themselves (true if ANY effect is enabled) rather than trusting
-## the control's last state, same reasoning as the FSR/shadows syncs above.
+## Reads back which post effects are currently on from the live compositor
+## effects themselves rather than trusting
+## the controls' last state, same reasoning as the FSR/shadows syncs above.
 func _sync_postfx_control_from_compositor() -> void:
 	var world_env := _get_world_environment()
 	if not world_env or not world_env.compositor:
 		return
-	var any_enabled := false
 	for effect in world_env.compositor.compositor_effects:
-		if effect and effect.enabled:
-			any_enabled = true
-			break
-	postfx_toggle.button_pressed = any_enabled
+		if effect and _postfx_toggles.has(_postfx_key(effect)):
+			_postfx_toggles[_postfx_key(effect)].set_pressed_no_signal(effect.enabled)
 
 ## Video settings are saved to a small ConfigFile every time they change --
 ## no save button needed, and it's the only persisted state this project
@@ -221,7 +254,8 @@ func _save_settings() -> void:
 	cfg.set_value("video", "fsr_enabled", vp.scaling_3d_mode == SCALING_MODE_FSR)
 	cfg.set_value("video", "fsr_scale", fsr_slider.value)
 	cfg.set_value("video", "shadows_enabled", shadows_toggle.button_pressed)
-	cfg.set_value("video", "postfx_enabled", postfx_toggle.button_pressed)
+	for key: String in _postfx_toggles:
+		cfg.set_value("video", "postfx_" + key, _postfx_toggles[key].button_pressed)
 	var err := cfg.save(SETTINGS_PATH)
 	if err != OK:
 		push_warning("[PauseMenu] Failed to save %s (error %d)" % [SETTINGS_PATH, err])
@@ -239,13 +273,16 @@ func _load_settings() -> void:
 	else:
 		vp.scaling_3d_mode = SCALING_MODE_OFF
 		vp.scaling_3d_scale = 1.0
+	# The post-effect checkboxes are read FIRST and without firing their signal: the shadows
+	# assignment below fires toggled, which saves every control's current value, so they must
+	# already hold the loaded values by then. Each defaults to the old single
+	# "postfx_enabled" setting (true if that was never saved either); the WorldEnvironment
+	# gets the values in _apply_deferred_postfx_setting().
+	var all_postfx: bool = cfg.get_value("video", "postfx_enabled", true)
+	for key: String in _postfx_toggles:
+		_postfx_toggles[key].set_pressed_no_signal(cfg.get_value("video", "postfx_" + key, all_postfx))
 	# shadows_toggle already defaults to button_pressed = true (the scene's
 	# authored default, matching DirectionalLight3D's own default); just
 	# override it here if a save file says otherwise. The actual light
 	# node gets this value in _apply_deferred_shadows_setting().
 	shadows_toggle.button_pressed = cfg.get_value("video", "shadows_enabled", true)
-	# Same pattern as shadows above -- postfx_toggle already defaults to
-	# button_pressed = true (matching every effect's authored enabled = true
-	# in compositor.tres); the WorldEnvironment itself gets this value in
-	# _apply_deferred_postfx_setting().
-	postfx_toggle.button_pressed = cfg.get_value("video", "postfx_enabled", true)

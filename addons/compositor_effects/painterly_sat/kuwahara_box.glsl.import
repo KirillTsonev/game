@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://c2hrlgx7an5m"
+path="res://.godot/imported/kuwahara_box.glsl-22ebcd229b8e63291984b07a48078354.res"
+
+[deps]
+
+source_file="res://addons/compositor_effects/painterly_sat/kuwahara_box.glsl"
+dest_files=["res://.godot/imported/kuwahara_box.glsl-22ebcd229b8e63291984b07a48078354.res"]
+
+[params]
+

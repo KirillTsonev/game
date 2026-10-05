@@ -104,14 +104,17 @@ func run(quit_when_done: bool, label: String) -> void:
 	var world_env := _scene.get_node_or_null("WorldEnvironment") as WorldEnvironment
 	var ssao_on := world_env != null and world_env.environment != null and world_env.environment.ssao_enabled
 	var post_effects_on := 0
+	var post_effects_total := 0 # the Options menu has a checkbox per effect since 2026-10-05
 	if world_env and world_env.compositor:
 		for effect in world_env.compositor.compositor_effects:
-			if effect and effect.enabled:
-				post_effects_on += 1
+			if effect:
+				post_effects_total += 1
+				if effect.enabled:
+					post_effects_on += 1
 	var shadows_arg_off := "--bench-no-shadows" in OS.get_cmdline_user_args()
 	# (SSAO is off in the project since 2026-10-05 and has no menu entry; it is only recorded.)
-	if post_effects_on == 0 or (sun and not sun.shadow_enabled and not shadows_arg_off):
-		push_warning("[Bench] video settings differ from the baseline: sun shadows %s, %d post effects on -- check the Options menu" % ["on" if sun and sun.shadow_enabled else "OFF", post_effects_on])
+	if post_effects_on < post_effects_total or (sun and not sun.shadow_enabled and not shadows_arg_off):
+		push_warning("[Bench] video settings differ from the baseline: sun shadows %s, %d of %d post effects on -- check the Options menu" % ["on" if sun and sun.shadow_enabled else "OFF", post_effects_on, post_effects_total])
 
 	var report := {
 		"meta": {
@@ -158,6 +161,7 @@ func run(quit_when_done: bool, label: String) -> void:
 		if not ABLATION_STATIONS.has(st.name):
 			continue
 		_goto(st)
+		await _debug_compare_effects(st.name)
 		var base_start: Dictionary = await _measure()
 		var rows: Array = []
 		for t in toggles:
@@ -176,7 +180,7 @@ func run(quit_when_done: bool, label: String) -> void:
 			m["delta_gpu_ms"] = _r(base_gpu - m.gpu_ms)
 			m["delta_draw_calls"] = base_start.draw_calls - m.draw_calls
 			m["delta_primitives"] = base_start.primitives - m.primitives
-		report.ablation.append({"station": st.name, "baseline_start": base_start, "baseline_end": base_end, "toggles": rows})
+		report.ablation.append({"station": st.name, "baseline_start": base_start, "baseline_end": base_end, "toggles": rows, "post_passes": await _measure_post_passes()})
 
 	print("[Bench] walking the road...")
 	report["walk"] = await _walk(_road_path())
@@ -472,6 +476,92 @@ static func _path_point(path: PackedVector2Array, cum: PackedFloat32Array, dist:
 	var i := clampi(cum.bsearch(dist), 1, cum.size() - 1)
 	var seg := cum[i] - cum[i - 1]
 	return path[i - 1].lerp(path[i], clampf((dist - cum[i - 1]) / seg, 0.0, 1.0) if seg > 0.0 else 0.0)
+
+# ---------------------------------------------------------------- post effects, pass by pass
+
+## --bench-compare-effects: every compositor effect that has a `debug_compare` variable (an
+## effect being rewritten keeps its old version for this) runs both versions on one frame of
+## this view and reports how far the results differ. Printed, not stored in the report.
+func _debug_compare_effects(station_name: String) -> void:
+	if not "--bench-compare-effects" in OS.get_cmdline_user_args():
+		return
+	var world_env := _scene.get_node_or_null("WorldEnvironment") as WorldEnvironment
+	if world_env == null or world_env.compositor == null:
+		return
+	await _settle()
+	for effect in world_env.compositor.compositor_effects:
+		if effect and effect.enabled and "debug_compare" in effect:
+			effect.set("debug_compare", true)
+			for i in 10:
+				await get_tree().process_frame
+			print("[Bench] %s: %s" % [station_name, effect.get("debug_compare_result")])
+
+const TimestampMarker := preload("res://scripts/debug/perf_timestamp_marker.gd")
+
+func _marker(label: String) -> CompositorEffect:
+	var m: CompositorEffect = TimestampMarker.new()
+	m.label = label
+	return m
+
+## GPU ms of each enabled compositor effect, read directly from GPU timestamps (not by switching
+## things off): a marker "effect" is put before the first real one and after each, and the time
+## between two markers is what lies between them. An effect that has a `timestamps` variable gets
+## it set and marks its own passes ("<effect>/<pass>" at the END of each pass but the last).
+## Returns [{name, gpu_ms}] in draw order; [] without a compositor.
+func _measure_post_passes() -> Array:
+	var world_env := _scene.get_node_or_null("WorldEnvironment") as WorldEnvironment
+	if world_env == null or world_env.compositor == null:
+		return []
+	var original: Array[CompositorEffect] = world_env.compositor.compositor_effects
+	var marked: Array[CompositorEffect] = [_marker("post:begin")]
+	var self_marking: Array[CompositorEffect] = []
+	for effect in original:
+		if effect == null or not effect.enabled:
+			continue
+		var script := effect.get_script() as Script
+		marked.append(effect)
+		marked.append(_marker(script.resource_path.get_file().get_basename().trim_prefix("post_process_") if script else effect.get_class()))
+		if "timestamps" in effect:
+			effect.set("timestamps", true)
+			self_marking.append(effect)
+	world_env.compositor.compositor_effects = marked
+	await _settle()
+	var rd := RenderingServer.get_rendering_device()
+	var own := {"post:begin": true} # our marker labels; other timestamps (the engine's) are skipped
+	for effect in marked:
+		if effect is TimestampMarker:
+			own[effect.label] = true
+	var sums := {} # name -> nanoseconds over all frames
+	var order: Array[String] = []
+	var frames := 0
+	var last_frame := -1
+	for f in MEASURE_FRAMES:
+		await get_tree().process_frame
+		var frame_id := rd.get_captured_timestamps_frame()
+		if frame_id == last_frame:
+			continue
+		last_frame = frame_id
+		var began := false
+		var prev := 0
+		for i in rd.get_captured_timestamps_count():
+			var stamp_name := rd.get_captured_timestamp_name(i)
+			var t := rd.get_captured_timestamp_gpu_time(i)
+			if stamp_name == "post:begin":
+				began = true
+				frames += 1
+			elif began and (own.has(stamp_name) or "/" in stamp_name):
+				if not sums.has(stamp_name):
+					sums[stamp_name] = 0.0
+					order.append(stamp_name)
+				sums[stamp_name] += float(t - prev)
+			prev = t
+	world_env.compositor.compositor_effects = original
+	for effect in self_marking:
+		effect.set("timestamps", false)
+	var rows: Array = []
+	for stamp_name in order:
+		rows.append({"name": stamp_name, "gpu_ms": _r(sums[stamp_name] / maxi(frames, 1) / 1e6)})
+	return rows
 
 # ---------------------------------------------------------------- ablation
 
@@ -773,6 +863,14 @@ static func _summary(report: Dictionary) -> String:
 		out.append("switched off          frame saved  GPU saved  draws saved  tris saved(M)")
 		for m in a.toggles:
 			out.append("%-22s %10.2f %10.2f %12d %14.2f" % [m.name, m.delta_frame_ms, m.delta_gpu_ms, m.delta_draw_calls, m.delta_primitives / 1e6])
+		var passes: Array = a.get("post_passes", [])
+		if not passes.is_empty():
+			var total := 0.0
+			var parts := PackedStringArray()
+			for p in passes:
+				total += p.gpu_ms
+				parts.append("%s %.2f" % [p.name, p.gpu_ms])
+			out.append("POST PASSES, GPU ms from timestamps (\"x/y\" = pass y inside effect x; the bare name = its last pass): %s | total %.2f" % [", ".join(parts), total])
 	var w: Dictionary = report.walk
 	out.append("")
 	out.append("WALK %.0f m in %.1f s: frame %.2f ms, p95 %.2f, p99 %.2f, worst %.2f | GPU %.2f | %d frames over 2x median, %d over 16.7 ms (of %d)" % [w.metres, w.seconds, w.frame_ms, w.p95_ms, w.p99_ms, w.max_ms, w.gpu_ms, w.hitches_over_2x_median, w.frames_over_16_7_ms, w.frames])

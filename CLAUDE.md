@@ -623,6 +623,13 @@ automatically) -- a local copy also lives at
   `res://addons/compositor_effects/painterly_sat/` (does not replace or
   modify the original histogram-bin Painterly effect) -- its cost is
   roughly independent of `stroke_radius`, unlike the original.
+  **Since 2026-10-05 it no longer uses a summed-area table** (the class and folder names stayed):
+  the table's two build passes were 0.69 ms of its 0.94 ms and lost precision; two separable
+  box-sum passes replaced them (0.34 ms in total at radius 4, cost now grows with the radius).
+  Details: `docs/performance_findings.md` step 5.
+- Do not `rescan_filesystem` right after rewriting an `@tool` CompositorEffect script that
+  `main.tscn` uses: the editor crashed once on exactly that (2026-10-05). The benchmark's
+  "POST PASSES" line gives each effect's GPU ms directly (GPU timestamps).
 
 ## Color grading / AgX tonemap
 
@@ -817,9 +824,9 @@ optimisation; never judge by GPU utilisation %.
   frame ms is now real. A station sitting at exactly 5.00 ms is on that 200 FPS limit (only
   `spawn_sky` so far) -- read its GPU ms instead. In the afternoon runs of 2026-10-05 the limit read
   6.06 ms (165 FPS) instead. The report flags a capped run (`frame_capped`).
-- Baseline to compare against: `20261005_143830_40598523_baseline3.json` (SSAO off, understory
-  shadows from the nearest LOD only, short grass to 100 m -- see `docs/performance_findings.md`).
-  Before those three changes: `20261005_105951_ea72f831_baseline2.json` (taken after the
+- Baseline to compare against: `20261005_152817_ba7cfd15_baseline4.json` (SSAO off, understory
+  shadows from the nearest LOD only, short grass to 100 m, painterly sum passes rewritten -- see
+  `docs/performance_findings.md`). Before the first three of those changes: `20261005_105951_ea72f831_baseline2.json` (taken after the
   understory + flower placement changed, see `docs/performance_findings.md` step 6). The earlier
   `..._uncapped.json` has the old plant placement (GPU ms within 4 % of baseline2); the capped
   `..._baseline.json` must not be used at all: for the same scene its GPU ms read 2-19 % lower

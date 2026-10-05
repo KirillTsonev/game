@@ -11,8 +11,15 @@ How to run and compare benchmarks: the "Performance benchmark" section of `CLAUD
   This is the baseline for every later comparison.
 - Setup: 1906x942 window, 3D render scale 0.85, RTX 3070 Laptop GPU, Godot 4.7.2, seed 858829582.
   Fullscreen at a higher resolution will be slower than these figures.
-- **Baseline for later comparisons, since 2026-10-05 afternoon:
-  `20261005_143830_40598523_baseline3.json`.** Three things changed against `baseline2`: SSAO
+- **Baseline for later comparisons, since 2026-10-05 15:28:
+  `20261005_152817_ba7cfd15_baseline4.json`.** Against `baseline3`: the painterly effect's sum
+  passes rewritten (step 5), and the ferns' near LOD and shadows to 60 m instead of 50.
+  GPU ms baseline3 -> baseline4: spawn_ahead 10.59 -> 9.48, road_open 10.31 -> 9.59,
+  exit_look_back 10.05 -> 9.35, forest_dense 9.55 -> 9.01, road_mid 9.12 -> 8.45, cliff_face
+  8.31 -> 7.78, spawn_ground 5.94 -> 5.40, spawn_sky 2.52 -> 1.96. Road walk 10.94 -> 10.19 ms
+  (91 -> 98 FPS), p99 13.16 -> 12.42 ms, GPU 10.28 -> 9.36 ms.
+- Before that, from 14:38 the same day: `20261005_143830_40598523_baseline3.json`. Three things
+  changed against `baseline2`: SSAO
   off (step 5), understory shadows from the nearest LOD only (step 3), and Kirill's short-grass
   range, 25 / 60 m -> 50 / 100 m (`SHORT_LAYERS`; grass now costs 1.3-1.6 ms of GPU where it
   cost 0.9-1.0, instance buffers 64 -> 111 MB). baseline2 -> baseline3:
@@ -246,7 +253,7 @@ left blank where nothing supports an estimate yet.
 | 2   | Mid LOD for trees, also used as the shadow mesh (`shadow_impostor`)     | conclusions 3, 4       | not started                                     |
 | 3   | Cheaper understory shadows: limit casting first, then `shadow_impostor` | conclusions 3, 5, 7    | limit casting done 2026-10-05 (draws -15 to -42 %); `shadow_impostor` not tried |
 | 4   | Shorter sun shadow distance                                             | conclusions 3, 4       | range alone measured: no gain; impostor part untested |
-| 5   | Cheaper screen-space settings                                           | conclusion 6           | SSAO switched off 2026-10-05; MSAA and post effects undecided |
+| 5   | Cheaper screen-space settings                                           | conclusion 6           | SSAO off and painterly rewritten (-0.6 ms) 2026-10-05; MSAA and the other five effects open |
 | 6   | Startup time                                                            | conclusion 8           | cheap wins done: 16.3 s -> 8.8 s to first frame |
 | 7   | Cheaper leaf shading                                                    | conclusions 2, 6       | worth a trial (step 1: part of the view cost is per pixel) |
 | 8   | GPU-driven drawing for the understory view pass                         | conclusion 7           | deferred; reassess after step 3                 |
@@ -441,6 +448,46 @@ Look-versus-speed choices, each independent:
   (`scenes/pause_menu.tscn`, `scripts/pause_menu.gd`), the benchmark's quality toggles removed.
   New baseline with it off: see "The run these numbers come from".
 - 3D MSAA (2x): 0.8-1.2 ms.
+- **Post effects, pass by pass (2026-10-05).** The benchmark now reads each effect's GPU time
+  directly from GPU timestamps ("POST PASSES" in the report; `_measure_post_passes` in
+  `perf_bench.gd` puts a marker effect between the real ones). At 1620x800, before any change:
+
+  | Pass                                   | GPU ms |
+  | -------------------------------------- | ------ |
+  | Painterly: copy of the frame           | 0.05   |
+  | Painterly: horizontal running sum      | 0.43   |
+  | Painterly: vertical running sum        | 0.26   |
+  | Painterly: filter                      | 0.20   |
+  | Radial blur                            | 0.16   |
+  | Gaussian blur                          | 0.14   |
+  | Noise                                  | 0.07   |
+  | Bloom                                  | 0.13   |
+  | Glare                                  | 0.16   |
+
+  The figures are the same within 0.05 ms at all three stations (pixel work only).
+- **Painterly sum passes rewritten 2026-10-05: 0.94 -> 0.34 ms.** The summed-area table's two
+  build passes walked a whole row / column per GPU thread (0.69 ms). They are replaced by two
+  separable box-sum passes, each pixel independent (`box_sum_h.glsl`, `box_sum_v.glsl`,
+  `kuwahara_box.glsl` in `addons/compositor_effects/painterly_sat/`; 0.08 + 0.11 ms, filter
+  0.10 ms). Cost now grows with `stroke_radius` (4 here). All six effects together: about 1.6 ->
+  1.0 ms.
+  - Output: not identical, and the old version was the inaccurate one. Both were compared with
+    the filter computed on the CPU in 64-bit floats at 880 pixels per station: new mean error
+    0.00002 (max 0.0007), old 0.0005-0.0009 (max 0.024-0.028), on a mean level of 0.05-0.06. The
+    table kept running sums over the whole frame in 32-bit floats. 15-30 % of pixels differ
+    from the old output by more than 1 % of their level.
+  - **Kirill checked the look in-game 2026-10-05: "looks good". Kept.** The three old shaders
+    (`prefix_sum_h.glsl`, `prefix_sum_v.glsl`, `kuwahara_sat.glsl`) were deleted; they and the
+    old script are in git (`ba7cfd1`).
+  - For the next effect rewrite: an effect with a `debug_compare` variable is asked by
+    `--bench-compare-effects` to run its old and new version on one frame and report the
+    difference (the hook is in `perf_bench.gd`; the painterly's own compare code was removed
+    after use). A frame's colour buffer cannot be read back with `texture_get_data` -- draw the
+    result into a texture of your own.
+  - Rescanning the editor right after rewriting `post_process_painterly_sat.gd` (an `@tool`
+    effect that also runs in the editor viewport) crashed the editor once.
+  - Not done: the other five effects (0.07-0.16 ms each, 0.65 ms together). Radial blur,
+    Gaussian blur and glare each copy the frame first; merging passes is the remaining option.
 - Post effects: 1.5-1.8 ms in total, about half of it the painterly effect.
 
 ### 6. Startup time (in progress, started 2026-10-05)

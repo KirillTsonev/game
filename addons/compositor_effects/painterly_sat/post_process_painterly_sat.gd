@@ -2,20 +2,20 @@
 extends CompositorEffect
 class_name PostProcessPainterlySAT
 
-## Classic 4-region Kuwahara filter accelerated with a summed-area table
-## (see prefix_sum_h.glsl / prefix_sum_v.glsl / kuwahara_sat.glsl). Cost is
-## roughly INDEPENDENT of stroke_radius, unlike the histogram-based
-## PostProcessPainterlyEffect elsewhere in this addon -- that one scans a
-## full (2*radius+1)^2 neighborhood per pixel per frame, this one reads 4
-## precomputed rectangle sums in O(1) regardless of radius. The trade is
-## two extra full-resolution linear passes (building the SAT) plus somewhat
-## reduced fp32 precision on very large accumulated sums (no Kahan/error
-## compensation here -- shouldn't be visible at normal screen resolutions
-## and HDR ranges, but worth knowing if banding ever shows up).
+## Classic 4-region Kuwahara filter. Each pixel takes the mean colour of whichever of its four
+## (stroke_radius + 1)^2 corner regions has the lowest luma variance.
+##
+## Since 2026-10-05 the region sums come from two separable box-sum passes (box_sum_h.glsl,
+## box_sum_v.glsl: stroke_radius + 1 reads per pixel each) and kuwahara_box.glsl reads one value
+## per region. Before that they came from a summed-area table (prefix_sum_h/v.glsl +
+## kuwahara_sat.glsl, hence the class name, kept so compositor.tres still points here): its two
+## build passes walked a whole row / column per thread and took 0.69 ms of this effect's 0.94 ms
+## (GPU timestamps, 1620x800). The table's cost did not grow with stroke_radius; the box sums'
+## does, linearly -- at the radius 4 used here they are far cheaper. They are also more exact:
+## the table kept running sums over the whole frame in 32-bit floats.
 ##
 ## This is a separate, standalone effect -- it does not replace or modify
-## PostProcessPainterlyEffect. Add it to the WorldEnvironment's Compositor
-## Effects list alongside (or instead of) the original to compare.
+## PostProcessPainterlyEffect (the histogram one) elsewhere in this addon.
 
 @export_group("Settings")
 
@@ -37,6 +37,10 @@ class_name PostProcessPainterlySAT
 		edge_sharpness = v
 		mutex.unlock()
 
+## DEBUG: set by the benchmark (scripts/debug/perf_bench.gd, _measure_post_passes) -- drops a GPU
+## timestamp after each pass so their costs can be told apart.
+var timestamps := false
+
 var rd: RenderingDevice
 var _shader_copy: RID
 var _pipe_copy: RID
@@ -49,9 +53,10 @@ var _pipe_kuwahara: RID
 
 var mutex: Mutex = Mutex.new()
 var _original: RID
-var _row_sum: RID
-var _sat: RID
+var _box_h: RID ## (width + radius) x height
+var _box: RID ## (width + radius) x (height + radius)
 var _last_size: Vector2i = Vector2i()
+var _last_radius := -1
 
 func _init() -> void:
 	effect_callback_type = EFFECT_CALLBACK_TYPE_POST_TRANSPARENT
@@ -60,30 +65,28 @@ func _init() -> void:
 		return
 	_create_pipeline()
 
+## Returns [shader, pipeline] for a compute shader file, or two invalid RIDs.
+func _load_compute(path: String) -> Array[RID]:
+	var file: RDShaderFile = load(path)
+	if file == null:
+		return [RID(), RID()]
+	var shader := rd.shader_create_from_spirv(file.get_spirv())
+	return [shader, rd.compute_pipeline_create(shader) if shader.is_valid() else RID()]
+
 func _create_pipeline() -> void:
-	var copy_file: RDShaderFile = load("res://addons/compositor_effects/shared/copy.glsl")
-	if copy_file != null:
-		_shader_copy = rd.shader_create_from_spirv(copy_file.get_spirv())
-		if _shader_copy.is_valid():
-			_pipe_copy = rd.compute_pipeline_create(_shader_copy)
-
-	var h_file: RDShaderFile = load("res://addons/compositor_effects/painterly_sat/prefix_sum_h.glsl")
-	if h_file != null:
-		_shader_h = rd.shader_create_from_spirv(h_file.get_spirv())
-		if _shader_h.is_valid():
-			_pipe_h = rd.compute_pipeline_create(_shader_h)
-
-	var v_file: RDShaderFile = load("res://addons/compositor_effects/painterly_sat/prefix_sum_v.glsl")
-	if v_file != null:
-		_shader_v = rd.shader_create_from_spirv(v_file.get_spirv())
-		if _shader_v.is_valid():
-			_pipe_v = rd.compute_pipeline_create(_shader_v)
-
-	var k_file: RDShaderFile = load("res://addons/compositor_effects/painterly_sat/kuwahara_sat.glsl")
-	if k_file != null:
-		_shader_kuwahara = rd.shader_create_from_spirv(k_file.get_spirv())
-		if _shader_kuwahara.is_valid():
-			_pipe_kuwahara = rd.compute_pipeline_create(_shader_kuwahara)
+	var dir := "res://addons/compositor_effects/painterly_sat/"
+	var loaded := _load_compute("res://addons/compositor_effects/shared/copy.glsl")
+	_shader_copy = loaded[0]
+	_pipe_copy = loaded[1]
+	loaded = _load_compute(dir + "box_sum_h.glsl")
+	_shader_h = loaded[0]
+	_pipe_h = loaded[1]
+	loaded = _load_compute(dir + "box_sum_v.glsl")
+	_shader_v = loaded[0]
+	_pipe_v = loaded[1]
+	loaded = _load_compute(dir + "kuwahara_box.glsl")
+	_shader_kuwahara = loaded[0]
+	_pipe_kuwahara = loaded[1]
 
 func _make_texture(size: Vector2i, format: RenderingDevice.DataFormat) -> RID:
 	var fmt := RDTextureFormat.new()
@@ -98,25 +101,26 @@ func _make_texture(size: Vector2i, format: RenderingDevice.DataFormat) -> RID:
 	)
 	return rd.texture_create(fmt, RDTextureView.new())
 
-func _dispatch(shader_rid: RID, pipeline_rid: RID, src: RID, dst: RID, groups_x: int, groups_y: int) -> void:
-	var u_src: RDUniform = RDUniform.new()
-	u_src.uniform_type = RenderingDevice.UNIFORM_TYPE_IMAGE
-	u_src.binding = 0
-	u_src.add_id(src)
-	var set_src: RID = UniformSetCacheRD.get_cache(shader_rid, 0, [u_src])
+func _image_set(shader_rid: RID, set_index: int, image: RID) -> RID:
+	var u := RDUniform.new()
+	u.uniform_type = RenderingDevice.UNIFORM_TYPE_IMAGE
+	u.binding = 0
+	u.add_id(image)
+	return UniformSetCacheRD.get_cache(shader_rid, set_index, [u])
 
-	var u_dst: RDUniform = RDUniform.new()
-	u_dst.uniform_type = RenderingDevice.UNIFORM_TYPE_IMAGE
-	u_dst.binding = 0
-	u_dst.add_id(dst)
-	var set_dst: RID = UniformSetCacheRD.get_cache(shader_rid, 1, [u_dst])
-
+## One compute pass: `images` are bound as sets 0, 1, 2 ... in order; `groups` = dispatch size.
+func _dispatch(shader_rid: RID, pipeline_rid: RID, images: Array[RID], groups: Vector2i, push_constant := PackedByteArray()) -> void:
 	var cl: int = rd.compute_list_begin()
 	rd.compute_list_bind_compute_pipeline(cl, pipeline_rid)
-	rd.compute_list_bind_uniform_set(cl, set_src, 0)
-	rd.compute_list_bind_uniform_set(cl, set_dst, 1)
-	rd.compute_list_dispatch(cl, groups_x, groups_y, 1)
+	for i in images.size():
+		rd.compute_list_bind_uniform_set(cl, _image_set(shader_rid, i, images[i]), i)
+	if not push_constant.is_empty():
+		rd.compute_list_set_push_constant(cl, push_constant, push_constant.size())
+	rd.compute_list_dispatch(cl, groups.x, groups.y, 1)
 	rd.compute_list_end()
+
+static func _groups(size: Vector2i, local: Vector2i) -> Vector2i:
+	return Vector2i((size.x + local.x - 1) / local.x, (size.y + local.y - 1) / local.y)
 
 func _render_callback(
 	p_effect_callback_type: EffectCallbackType,
@@ -135,30 +139,24 @@ func _render_callback(
 	if size.x == 0 or size.y == 0:
 		return
 
-	if size != _last_size or not _original.is_valid() or not _row_sum.is_valid() or not _sat.is_valid():
-		if _original.is_valid():
-			rd.free_rid(_original)
-		if _row_sum.is_valid():
-			rd.free_rid(_row_sum)
-		if _sat.is_valid():
-			rd.free_rid(_sat)
-		_original = _make_texture(size, RenderingDevice.DATA_FORMAT_R16G16B16A16_SFLOAT)
-		_row_sum = _make_texture(size, RenderingDevice.DATA_FORMAT_R32G32B32A32_SFLOAT)
-		_sat = _make_texture(size, RenderingDevice.DATA_FORMAT_R32G32B32A32_SFLOAT)
-		_last_size = size
-
 	mutex.lock()
-	var _radius: float = float(stroke_radius)
+	var radius: int = maxi(stroke_radius, 1)
 	var _intensity: float = intensity
 	var _edge: float = edge_sharpness
 	mutex.unlock()
 
-	var push_constant: PackedFloat32Array = PackedFloat32Array([_radius, _intensity, _edge, 0.0])
+	if size != _last_size or radius != _last_radius or not _original.is_valid() or not _box_h.is_valid() or not _box.is_valid():
+		for old: RID in [_original, _box_h, _box]:
+			if old.is_valid():
+				rd.free_rid(old)
+		_original = _make_texture(size, RenderingDevice.DATA_FORMAT_R16G16B16A16_SFLOAT)
+		_box_h = _make_texture(size + Vector2i(radius, 0), RenderingDevice.DATA_FORMAT_R32G32B32A32_SFLOAT)
+		_box = _make_texture(size + Vector2i(radius, radius), RenderingDevice.DATA_FORMAT_R32G32B32A32_SFLOAT)
+		_last_size = size
+		_last_radius = radius
 
-	var k_groups_x: int = (size.x + 15) / 16
-	var k_groups_y: int = (size.y + 15) / 16
-	var h_groups_y: int = (size.y + 63) / 64
-	var v_groups_x: int = (size.x + 63) / 64
+	var push_constant := PackedFloat32Array([float(radius), _intensity, _edge, 0.0]).to_byte_array()
+	var local := Vector2i(16, 16)
 
 	for view: int in render_scene_buffers.get_view_count():
 		var color_image: RID = render_scene_buffers.get_color_layer(view)
@@ -168,41 +166,21 @@ func _render_callback(
 		# 0) Preserve an untouched copy of the frame -- needed so the final
 		#    pass's edge detection can safely read neighboring pixels while
 		#    other invocations are writing their own result into color_image.
-		_dispatch(_shader_copy, _pipe_copy, color_image, _original, k_groups_x, k_groups_y)
+		_dispatch(_shader_copy, _pipe_copy, [color_image, _original], _groups(size, local))
+		if timestamps:
+			rd.capture_timestamp("painterly_sat/copy")
 
-		# 1) Horizontal running sum: color_image -> _row_sum (one thread/row).
-		_dispatch(_shader_h, _pipe_h, color_image, _row_sum, 1, h_groups_y)
+		# 1) Horizontal box sums: color_image -> _box_h.
+		_dispatch(_shader_h, _pipe_h, [color_image, _box_h], _groups(size + Vector2i(radius, 0), local), push_constant)
+		if timestamps:
+			rd.capture_timestamp("painterly_sat/sum_h")
 
-		# 2) Vertical running sum: _row_sum -> _sat, completing the 2D SAT
-		#    (one thread/column).
-		_dispatch(_shader_v, _pipe_v, _row_sum, _sat, v_groups_x, 1)
+		# 2) Vertical box sums: _box_h -> _box, the sum of every (radius + 1)^2 box.
+		_dispatch(_shader_v, _pipe_v, [_box_h, _box], _groups(size + Vector2i(radius, radius), local), push_constant)
+		if timestamps:
+			rd.capture_timestamp("painterly_sat/sum_v")
 
-		# 3) Classic 4-region Kuwahara via O(1) SAT rectangle queries, plus
-		#    optional edge-sharpening off the clean _original copy, written
-		#    into color_image.
-		var u_sat: RDUniform = RDUniform.new()
-		u_sat.uniform_type = RenderingDevice.UNIFORM_TYPE_IMAGE
-		u_sat.binding = 0
-		u_sat.add_id(_sat)
-		var set_sat: RID = UniformSetCacheRD.get_cache(_shader_kuwahara, 0, [u_sat])
+		# 3) Kuwahara from one box-sum read per region, plus optional edge-sharpening off the
+		#    clean _original copy, written into color_image.
+		_dispatch(_shader_kuwahara, _pipe_kuwahara, [_box, _original, color_image], _groups(size, local), push_constant)
 
-		var u_orig: RDUniform = RDUniform.new()
-		u_orig.uniform_type = RenderingDevice.UNIFORM_TYPE_IMAGE
-		u_orig.binding = 0
-		u_orig.add_id(_original)
-		var set_orig: RID = UniformSetCacheRD.get_cache(_shader_kuwahara, 1, [u_orig])
-
-		var u_dst: RDUniform = RDUniform.new()
-		u_dst.uniform_type = RenderingDevice.UNIFORM_TYPE_IMAGE
-		u_dst.binding = 0
-		u_dst.add_id(color_image)
-		var set_dst: RID = UniformSetCacheRD.get_cache(_shader_kuwahara, 2, [u_dst])
-
-		var cl: int = rd.compute_list_begin()
-		rd.compute_list_bind_compute_pipeline(cl, _pipe_kuwahara)
-		rd.compute_list_bind_uniform_set(cl, set_sat, 0)
-		rd.compute_list_bind_uniform_set(cl, set_orig, 1)
-		rd.compute_list_bind_uniform_set(cl, set_dst, 2)
-		rd.compute_list_set_push_constant(cl, push_constant.to_byte_array(), 16)
-		rd.compute_list_dispatch(cl, k_groups_x, k_groups_y, 1)
-		rd.compute_list_end()

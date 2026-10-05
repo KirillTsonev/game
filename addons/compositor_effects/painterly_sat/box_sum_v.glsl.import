@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://bimrwnvrbfim5"
+path="res://.godot/imported/box_sum_v.glsl-b2cdfb8ac33dfaca28a69fbb163796a4.res"
+
+[deps]
+
+source_file="res://addons/compositor_effects/painterly_sat/box_sum_v.glsl"
+dest_files=["res://.godot/imported/box_sum_v.glsl-b2cdfb8ac33dfaca28a69fbb163796a4.res"]
+
+[params]
+
