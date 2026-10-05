@@ -250,7 +250,7 @@ left blank where nothing supports an estimate yet.
 | #   | Remedy                                                                  | Addresses              | Status                                          |
 | --- | ----------------------------------------------------------------------- | ---------------------- | ----------------------------------------------- |
 | 1   | Split the tree cost: view vs shadow, and pixels vs triangles            | sizes steps 2, 4 and 7 | done 2026-10-05, results below                  |
-| 2   | Mid LOD for trees, also used as the shadow mesh (`shadow_impostor`)     | conclusions 3, 4       | shadow mesh done 2026-10-05 (GPU -0.5 to -1.9 ms, frame time unchanged at CPU-limited stations); visible mid LOD not started |
+| 2   | Mid LOD for trees, also used as the shadow mesh (`shadow_impostor`)     | conclusions 3, 4       | shadow mesh done 2026-10-05 (GPU -0.5 to -1.4 ms, road walk frame 10.20 -> 9.75 ms, no CPU cost); visible mid LOD not started |
 | 3   | Cheaper understory shadows: limit casting first, then `shadow_impostor` | conclusions 3, 5, 7    | limit casting done 2026-10-05 (draws -15 to -42 %); `shadow_impostor` not tried |
 | 4   | Shorter sun shadow distance                                             | conclusions 3, 4       | range alone measured: no gain; impostor part untested |
 | 5   | Cheaper screen-space settings                                           | conclusion 6           | SSAO off and painterly rewritten (-0.6 ms) 2026-10-05; MSAA and the other five effects open |
@@ -365,12 +365,16 @@ shadows from it instead of the full mesh.
     (0.16), exit_look_back 9.05 -> 7.98 (0.45), forest_dense 8.85 -> 7.92 (0.10), road_open
     9.39 -> 7.74 (0.50), cliff_face 7.56 -> 7.03 (0.15). Road walk GPU 9.24 -> 7.85 ms.
     Triangles -0.8 to -3.2 M per frame.
-  - **Frame time did not follow.** Road walk 10.13 ms with the full mesh, 10.32 / 10.51 ms
-    reduced; spawn_ahead 11.39 against 12.23 / 12.81. Frames got shorter only where the GPU is
-    the limit (road_mid 8.75 -> 8.09, forest_dense 9.36 -> 8.74, cliff_face 8.06 -> 7.50). The
-    heavy stations are CPU-limited, and CPU render time there reads 0.7-1.2 ms higher at
-    spawn_ahead with the reduced meshes (735 extra shadows-only nodes is the suspect; not
-    isolated, and exit_look_back / road_open swing both ways between runs).
+  - **The suspected CPU cost of the shadows-only nodes is not real** (checked 20:03-20:13, six
+    targeted runs alternating reduced / full mesh, reports `..._cpu_reduced_a1..a3` and
+    `..._cpu_full_b1..b3`). CPU render ms, mean of three, reduced vs full: spawn_ahead 8.62 /
+    8.55, exit_look_back 7.38 / 7.39, road_open 6.70 / 6.71, road_mid 4.55 / 4.81, forest_dense
+    5.60 / 5.83, spawn_ground 2.59 / 2.96. Single runs of the same setup differ by up to 1 ms
+    at spawn_ahead and road_open, which is what the three-run comparison above had shown.
+  - **Frame time, mean of three:** road walk 10.20 -> 9.75 ms, road_mid 8.73 -> 7.95,
+    forest_dense 9.41 -> 8.59, cliff_face 8.04 -> 7.53, road_open 9.99 -> 9.47; spawn_ahead
+    (11.73 / 11.80) and exit_look_back (10.45 / 10.29) unchanged: those two are CPU-limited.
+    GPU in the same runs: -0.5 to -1.4 ms, road walk 8.93 -> 7.88. Draws 0-312 lower.
   - An earlier pair of runs the same evening (18:51 / 18:56) is not usable: the machine was
     slower throughout (CPU render 11-13 ms at spawn_ahead against 9) and the control station
     without trees moved 12 %.

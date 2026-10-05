@@ -51,8 +51,8 @@ realistic too.
   - Gotcha: the tool must load the re-saved scene with CACHE_MODE_REPLACE. A cached two-LOD copy
     made Terrain3D clamp `last_lod` and `shadow_impostor` to 1 (shadows from the impostor).
   - Saplings (ids 64-68) still cast from the full mesh and their impostor.
-  - Measured: `docs/performance_findings.md` step 2 (GPU -0.5 to -1.9 ms; frame time unchanged
-    where the CPU is the limit).
+  - Measured: `docs/performance_findings.md` step 2 (GPU -0.5 to -1.4 ms, road walk frame
+    10.20 -> 9.75 ms, no CPU cost).
 - **Far impostors** (2026-09-25). Measured before: trees beyond 150 m cost ~10 M tris, ~3.3k
   draw calls, ~3.9 ms GPU + ~3 ms CPU of a 10.9 ms GPU frame. After, same kind of view:
   7.0 ms GPU, 10.9 M tris (was 21.4 M), 4.5k draws (was 7.2k), and the forest now reaches the
