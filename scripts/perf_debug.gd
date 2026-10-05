@@ -16,11 +16,18 @@ extends Node
 ##   F9 = full benchmark (scripts/debug/perf_bench.gd): stations, per-layer / per-effect cost,
 ##       road walk, mesh + texture audit -> res://perf_reports/. Also runs (then quits) when the
 ##       game is launched with the user argument --bench [--bench-label=<name>].
+##   F10 = station hold: freezes the player at the benchmark's ablation stations in turn
+##       (spawn_ahead, forest_dense, exit_look_back, then released) under the benchmark's window
+##       size with VSync and the FPS cap off -- for a profiler capture of the view the reports
+##       measure (editor: Debugger > Visual Profiler).
+##   F11 = sun shadows on / off (not saved).
 
 const TIMING_FRAMES := 120
 const PerfBench := preload("res://scripts/debug/perf_bench.gd")
 
 var _bench: Node
+var _holder: Node # a PerfBench used only for hold_station()
+var _held_station := -1 # index into PerfBench.ABLATION_STATIONS, -1 = not holding
 
 var _grass_panel: GrassTuningPanel
 var _layer_panel: LayerTogglePanel
@@ -76,6 +83,13 @@ func _input(event: InputEvent) -> void:
 			print("[Timing] measuring %d frames -- hold still..." % TIMING_FRAMES)
 	elif event.physical_keycode == KEY_F9:
 		_start_bench(false)
+	elif event.physical_keycode == KEY_F10:
+		_hold_next_station()
+	elif event.physical_keycode == KEY_F11:
+		var sun := get_tree().current_scene.get_node_or_null("DirectionalLight3D") as DirectionalLight3D
+		if sun:
+			sun.shadow_enabled = not sun.shadow_enabled
+			print("[PerfDebug] sun shadows %s" % ("on" if sun.shadow_enabled else "OFF"))
 	elif event.physical_keycode == KEY_Y:
 		if not is_instance_valid(_grass_panel):
 			_grass_panel = GrassTuningPanel.new()
@@ -98,6 +112,22 @@ func _input(event: InputEvent) -> void:
 		var player := get_tree().current_scene.get_node_or_null("Player") as Node3D
 		if player:
 			print(GrassScatter.debug_probe(player.global_position))
+
+func _hold_next_station() -> void:
+	if is_instance_valid(_bench):
+		return # the benchmark is moving the player
+	if not is_instance_valid(_holder):
+		_holder = PerfBench.new()
+		add_child(_holder)
+	_held_station += 1
+	var station: String = _holder.hold_station(_held_station) if _held_station < PerfBench.ABLATION_STATIONS.size() else ""
+	if station.is_empty():
+		_held_station = -1
+		_holder.release_station()
+		print("[PerfDebug] station hold released")
+	else:
+		print("[PerfDebug] holding station %s -- F10 = next, F11 = sun shadows, J = layers" % station)
+
 func _probe_tree_spot() -> void:
 	var scene := get_tree().current_scene
 	var player := scene.get_node_or_null("Player") as Node3D

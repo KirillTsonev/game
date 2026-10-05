@@ -64,9 +64,138 @@ Rocks, cliffs, outcrops, flowers, deadfall and cones are each under 0.4 ms. The 
 switching a layer off also removes its shadow draws, so "trees" and "sun shadows" share cost and
 must not be added together.
 
+### Per-pass profile (2026-10-05, editor Visual Profiler)
+
+Direct readings, not ablation. Taken with the game run from the editor and held at a benchmark
+station (PerfDebug F10; F11 = sun shadows, J = layers). One frame per capture, read from
+Kirill's screenshots of Debugger > Visual Profiler. CPU times are higher than the benchmark's
+(13.99 ms against 9.6 ms render CPU at this station): the game runs under the editor's debugger
+with profiling on. GPU total matches the benchmark (11.33 against 11.3 ms).
+
+spawn_ahead, normal -- "Render 3D Scene" 13.99 ms CPU / 11.33 ms GPU:
+
+| Pass                                   | CPU ms | CPU % | GPU ms | GPU % |
+| -------------------------------------- | ------ | ----- | ------ | ----- |
+| Sun shadow passes                      | 5.31   | 38    | 3.40   | 30    |
+| Opaque pass                            | 2.69   | 19    | 3.32   | 29    |
+| Depth pre-pass                         | 3.55   | 25    | 2.36   | 21    |
+| Post effects (compositor) + tonemap    | 0.27   | 2     | 1.78   | 16    |
+| Setup 3D scene                         | 1.29   | 9     | 0.00   | 0     |
+| Culling (all of it in shadow split 3)  | 0.58   | 4     | 0.00   | 0     |
+| Transparent pass                       | 0.15   | 1     | 0.16   | 1     |
+| SSAO (prepare + process)               | 0.03   | 0     | 0.08   | 1     |
+| Everything else (MSAA resolves, sky, cluster) | 0.12 | 1  | 0.23   | 2     |
+
+- Three passes each submit the scene's draws again: shadows, depth pre-pass, opaque. Together
+  they are 80 % of the GPU time and, in the three captures with shadows on, 79-83 % of the CPU
+  time.
+- The depth pre-pass was not in any earlier analysis. It costs more CPU than the opaque pass in
+  all four captures.
+- This capture was a slow frame on the CPU side (see "CPU: use the benchmark's averages" below):
+  its CPU column shows the order of the passes, not their usual size.
+- SSAO's own passes are 0.08 ms GPU, so the 1.3-1.9 ms that switching SSAO off saves is spent
+  in another pass. Which one needs a capture with SSAO off.
+
+spawn_ahead, sun shadows off -- "Render 3D Scene" 7.39 ms CPU / 8.49 ms GPU (the benchmark's
+shadows-off run read 8.54 ms GPU here):
+
+| Pass                                | CPU ms | vs normal | GPU ms | vs normal |
+| ----------------------------------- | ------ | --------- | ------ | --------- |
+| Sun shadow passes                   | 0.00   | -5.31     | 0.00   | -3.40     |
+| Opaque pass                         | 2.21   | -0.48     | 3.06   | -0.26     |
+| Depth pre-pass                      | 3.10   | -0.45     | 3.09   | +0.73     |
+| Post effects (compositor) + tonemap | 0.28   | +0.01     | 1.90   | +0.12     |
+| Setup 3D scene                      | 1.33   | +0.04     | 0.00   | 0         |
+| Culling                             | 0.21   | -0.37     | 0.00   | 0         |
+| Total                               | 7.39   | -6.60     | 8.49   | -2.84     |
+
+- Sun shadows cost 2.84 ms of GPU at this station. (The 6.6 ms CPU difference is against the
+  slow normal frame; the benchmark's average is 3.5-3.8 ms -- see "CPU: use the benchmark's
+  averages" below.)
+- The depth pre-pass read 0.73 ms higher on the GPU with shadows off. One frame each, so this
+  may be how the GPU timestamps fall and not a real change; not explained.
+
+spawn_ahead, trees hidden (J panel), sun shadows on -- "Render 3D Scene" 7.37 ms CPU / 7.50 ms GPU:
+
+| Pass                                | CPU ms | vs normal | GPU ms | vs normal |
+| ----------------------------------- | ------ | --------- | ------ | --------- |
+| Sun shadow passes                   | 2.70   | -2.61     | 1.26   | -2.14     |
+| Opaque pass                         | 1.21   | -1.48     | 2.09   | -1.23     |
+| Depth pre-pass                      | 1.91   | -1.64     | 1.52   | -0.84     |
+| Transparent pass                    | 0.01   | -0.14     | 0.01   | -0.15     |
+| Setup 3D scene                      | 0.75   | -0.54     | 0.00   | 0         |
+| Culling                             | 0.44   | -0.14     | 0.00   | 0         |
+| Sky                                 | 0.01   | 0         | 0.32   | +0.31     |
+| Post effects (compositor) + tonemap | 0.25   | -0.02     | 2.03   | +0.25     |
+| Total                               | 7.37   | -6.62     | 7.50   | -3.83     |
+
+- The trees are 4.4 ms of GPU in their own passes (shadows 2.14, opaque 1.23, depth pre-pass
+  0.84, transparent 0.15). The net GPU saving is 3.83 ms because the sky they hid now has to be
+  drawn and the post effects read 0.25 ms higher.
+- Shadow share of the trees' GPU cost: 2.14 of 4.36 ms, 49 %. The benchmark's split gave 2.07 ms
+  at this station.
+- The transparent pass empties when the trees are hidden, so its 0.15 ms is tree geometry.
+  Probably the trees inside the LOD cross-fade band, which Godot draws as transparent; not checked.
+- **Do not use the CPU "vs normal" columns of these tables.** See "CPU: use the benchmark's
+  averages" below. (A first reading of this capture said the trees were 47 % of the CPU time and
+  that a tree draw costs twice an average draw. Both were artefacts of the normal capture.)
+
+spawn_ahead, SSAO off (Options menu), everything else on -- "Render 3D Scene" 9.84 ms CPU /
+10.68 ms GPU:
+
+| Pass                                | CPU ms | GPU ms | GPU vs normal |
+| ----------------------------------- | ------ | ------ | ------------- |
+| Sun shadow passes                   | 3.46   | 3.57   | +0.17         |
+| Opaque pass                         | 1.76   | 3.53   | +0.21         |
+| Depth pre-pass (+ its MSAA resolve) | 2.57   | 1.40   | -1.03         |
+| Post effects (compositor) + tonemap | 0.29   | 1.87   | +0.09         |
+| SSAO (prepare + process)            | 0.00   | 0.00   | -0.08         |
+| Transparent pass                    | 0.10   | 0.17   | +0.01         |
+| Total                               | 9.84   | 10.68  | -0.65         |
+
+- **SSAO's cost sits in the depth pre-pass**: 1.03 ms of it there, 0.08 ms in SSAO's own
+  passes. With SSAO on, the pre-pass also writes normals and roughness for everything it draws.
+  That is why the quality level changes nothing (step 5): the level only affects the 0.08 ms.
+- The total saving reads 0.65 ms here against 1.3-1.9 ms in the benchmark. One frame; the
+  shadow and opaque passes each read about 0.2 ms higher in this capture.
+
+**CPU: use the benchmark's averages, not these captures.** The four captures had every layer and
+the sun shadows on in two of them (normal, SSAO off), yet their CPU totals are 13.99 and 9.84 ms
+and their shadow-pass CPU 5.31 and 3.46 ms. A single profiler frame is not repeatable on the CPU
+side (the frame graph shows spikes); the normal capture was a slow frame. The benchmark records
+render CPU averaged over 120+ frames for every toggle (`cpu_render_ms` in the json; not in the
+.txt). Render CPU ms saved, spawn_ahead / exit_look_back / forest_dense, first full report and
+`baseline2`:
+
+| Switched off      | Render CPU ms saved (uncapped) | (baseline2)        | Draws saved           |
+| ----------------- | ------------------------------ | ------------------ | --------------------- |
+| All scattered layers | 8.81 / 7.28 / 5.88          | 9.56 / 8.72 / 6.98 | 10,790 / 8,291 / 8,110 |
+| Understory        | 4.68 / 3.57 / 2.77             | 3.99 / 4.18 / 2.93 | 4,841 / 3,538 / 3,677 |
+| Sun shadows       | 3.80 / 1.92 / 2.86             | 3.56 / 3.04 / 3.40 | 6,731 / 4,594 / 5,624 |
+| Trees             | 2.85 / 2.43 / 1.61             | 2.45 / 3.13 / 2.22 | 3,115 / 2,605 / 2,094 |
+| Saplings          | 1.27 / 1.07 / 0.60             | 0.52 / 0.84 / 0.45 | 1,062 / 906 / 789     |
+| Rocks             | 1.03 / 0.62 / 0.72             | 0.45 / 0.34 / 0.96 | 581 / 296 / 530       |
+| Sun shadows at 100 m (later run) | 0.39 / 0.94 / 0.50 | -              | 1,845 / 1,424 / 1,445 |
+| SSAO, MSAA, half render scale | under 0.6 each (one outlier) | under 0.6 each | -            |
+
+Baseline render CPU: 9.2-10.0 / 7.6-9.1 / 6.2-7.4 ms.
+
+- **The scattered layers are 95 % of the render CPU time**, and it follows the draw count at
+  about 0.8-1.0 microseconds per draw for every layer (shadow draws about 0.5).
+- **The understory is the largest CPU item, 40-50 %**, ahead of the trees (25-35 %). On the GPU
+  it is only 0.9-1.6 ms. The trees are the largest GPU item.
+- The spread between the two reports for the same toggle is up to about 1 ms.
+- Not explained: at the heavy stations the frame is about 3 ms longer than the render CPU time
+  even when the GPU is far from the limit (spawn_ahead at half render scale: frame 12.62, render
+  CPU 9.14, GPU 7.81 ms). Something on the CPU outside the measured render time takes it.
+
 ### Conclusions
 
 1. **The game is GPU-bound.** Frame time is 0.3-1.6 ms above GPU time at every station.
+   **Corrected 2026-10-05 (step 1):** at the two heaviest ablation stations the CPU limits the
+   frame just as much. Halving render scale there saves 4.0-4.4 ms of GPU time but only
+   0.05-0.6 ms of frame time (both full reports; at forest_dense it saves 1.9-2.7 ms). GPU and
+   CPU are about level, so both have to come down.
 2. **Vegetation is most of the frame.** All scattered layers together are 7-8 ms of an 11 ms GPU
    frame; trees alone are 3.7-4.8 ms.
 3. **More than half of what is drawn is shadow passes.** Sun shadows account for 4,600-6,700 of
@@ -80,6 +209,8 @@ must not be added together.
 7. **Draw calls are the next limit.** At spawn_ahead the CPU spends 9.3 ms submitting 10,900
    draws against a 12.8 ms frame. Once GPU time drops below about 9 ms, the draw count caps the
    frame rate, so remedies that cut draws are worth more than their GPU saving alone.
+   **Corrected 2026-10-05 (step 1):** this is already the case at spawn_ahead, exit_look_back and
+   road_open, not only below 9 ms. See the correction to conclusion 1.
 8. **Startup is slow but separate.** First frame at 15.8 s; world generation takes 12.0 s.
    Largest steps: heightmap build 2.9 s, ground painting 1.5 s, cliff dressing 1.4 s, outcrop
    placement 1.3 s, understory scattering 1.3 s, deadfall scattering 1.0 s.
@@ -91,14 +222,14 @@ left blank where nothing supports an estimate yet.
 
 | #   | Remedy                                                                  | Addresses              | Status                                          |
 | --- | ----------------------------------------------------------------------- | ---------------------- | ----------------------------------------------- |
-| 1   | Split the tree cost: view vs shadow, and pixels vs triangles            | sizes steps 2, 4 and 7 | not started                                     |
+| 1   | Split the tree cost: view vs shadow, and pixels vs triangles            | sizes steps 2, 4 and 7 | done 2026-10-05, results below                  |
 | 2   | Mid LOD for trees, also used as the shadow mesh (`shadow_impostor`)     | conclusions 3, 4       | not started                                     |
-| 3   | Cheaper understory shadows: `shadow_impostor` first, then limit casting | conclusions 3, 5, 7    | not started                                     |
-| 4   | Shorter sun shadow distance                                             | conclusions 3, 4       | needs a decision                                |
-| 5   | Cheaper screen-space settings                                           | conclusion 6           | needs a decision                                |
+| 3   | Cheaper understory shadows: limit casting first, then `shadow_impostor` | conclusions 3, 5, 7    | not started                                     |
+| 4   | Shorter sun shadow distance                                             | conclusions 3, 4       | range alone measured: no gain; impostor part untested |
+| 5   | Cheaper screen-space settings                                           | conclusion 6           | needs a decision; SSAO quality level makes no difference |
 | 6   | Startup time                                                            | conclusion 8           | cheap wins done: 16.3 s -> 8.8 s to first frame |
-| 7   | Cheaper leaf shading                                                    | conclusions 2, 6       | only if step 1 shows the trees are pixel-bound  |
-| 8   | GPU-driven drawing for the understory view pass                         | conclusion 7           | deferred until draws are the limit              |
+| 7   | Cheaper leaf shading                                                    | conclusions 2, 6       | worth a trial (step 1: part of the view cost is per pixel) |
+| 8   | GPU-driven drawing for the understory view pass                         | conclusion 7           | deferred; reassess after step 3                 |
 
 Steps 1-3 were revised and steps 7-8 added on 2026-10-05, after the web research recorded under
 "Research" below.
@@ -115,6 +246,46 @@ Benchmark runs only, no change to the game. About two minutes per run.
   LOD in step 2 should then aim for fewer, larger cards, and step 7 is worth doing. If it does
   not fall, it is vertex cost and triangle reduction is the lever. The two have never been
   separated.
+
+**Results (2026-10-05, git `4a046554`).** Four tree-only runs, reports
+`perf_reports/20261005_13*_4a046554_trees_{base,noshadow,half,noshadow_half}`. The whole-run
+conditions are two new benchmark arguments, `--bench-no-shadows` and `--bench-scale=0.5`. One
+run per condition, so differences under about 0.5 ms are not reliable.
+
+What hiding the trees saves (spawn_ahead / exit_look_back / forest_dense):
+
+| Run condition                   | GPU ms saved       | Draws saved           | Tris saved (M)     |
+| ------------------------------- | ------------------ | --------------------- | ------------------ |
+| Normal                          | 4.66 / 3.85 / 3.54 | 3,111 / 2,604 / 2,094 | 8.21 / 6.12 / 5.71 |
+| Sun shadows off                 | 2.59 / 2.38 / 2.25 | 1,177 / 1,054 / 710   | 2.07 / 1.54 / 1.49 |
+| Half render scale               | 3.46 / 2.49 / 2.73 | as normal             | as normal          |
+| Shadows off + half render scale | 1.78 / 1.69 / 1.35 | as shadows off        | as shadows off     |
+
+- **Shadow share of the trees: 1.3-2.1 ms, 36-44 %** (normal minus shadows off). The shadow
+  passes are 1,400-1,900 draws and 4.2-6.1 M triangles, three times the triangles of the view.
+- **View share: 2.3-2.6 ms, 56-64 %**, for only 1.5-2.1 M triangles and 700-1,200 draws.
+- **Part of the view cost is per pixel.** At half render scale (a quarter of the pixels) the view
+  cost drops by 0.7-0.9 ms, about a third. The 1.35-1.8 ms that remains is not attributed:
+  vertex work, very small triangles and MSAA are the candidates.
+- **The frame is CPU-limited at the heavy stations.** Whole scene at half render scale:
+  spawn_ahead GPU 11.34 -> 7.81 ms but frame 13.29 -> 12.62 ms; exit_look_back and road_open the
+  same pattern. With sun shadows off (10,875 -> 4,157 draws) the frame goes 13.29 -> 9.24 ms.
+  Conclusions 1 and 7 are corrected above.
+
+What this means for the plan:
+
+- Cutting draw calls now matters as much as cutting GPU time. A change that only makes pixels or
+  triangles cheaper will not raise the frame rate at spawn_ahead, exit_look_back or road_open.
+- Step 2: both halves pay. The shadow mesh should be as few triangles as possible (4-6 M of
+  shadow triangles today); the visible mid LOD should use fewer, larger cards, since a third of
+  the view cost is per pixel. It does not cut draws.
+- Step 3: "limit casting" goes first, because it removes draws; the `shadow_impostor` trial only
+  removes triangles. In the full reports hiding the understory saves 2.0-2.7 ms of frame time at
+  spawn_ahead for 0.85-1.1 ms of GPU time.
+- Step 4 (shadow distance): measured later the same day, the range alone gains nothing. See step 4.
+- Step 8: its condition (draws are the limit) is met at the heavy stations. Reassess after step 3.
+- Stations that read exactly 6.06 ms frame time are on an external 165 FPS limit (it was 5.00 ms /
+  200 FPS in the morning runs). Read GPU ms there.
 
 ### 2. Mid LOD for trees, also used as the shadow mesh
 
@@ -134,17 +305,33 @@ shadows from it instead of the full mesh.
 
 ### 3. Cheaper understory shadows
 
-The understory is 3,500-4,800 draws and 1.0-1.8 ms. Two parts, in this order:
+The understory is 3,500-4,800 draws and 1.0-1.8 ms. Two parts, in this order (swapped
+2026-10-05 after step 1 showed the frame is draw-limited at the heavy stations):
 
+**View vs shadow, measured 2026-10-05** (reports `20261005_133241_..._understory_ssao_shadowdist`
+and `20261005_133435_..._understory_noshadow`; spawn_ahead / exit_look_back / forest_dense).
+Both runs were taken while something else loaded the CPU (station frame times about 2 ms above
+the runs before and after), so only their GPU, draw and triangle columns are used.
+
+| Hiding the understory saves | GPU ms             | Draws                 | Tris (M)           |
+| --------------------------- | ------------------ | --------------------- | ------------------ |
+| Normal                      | 0.89 / 1.57 / 1.17 | 4,844 / 3,541 / 3,701 | 4.48 / 6.53 / 3.32 |
+| Sun shadows off             | 0.68 / 0.59 / 0.67 | 1,891 / 1,786 / 1,099 | 1.17 / 1.13 / 0.84 |
+
+- **Shadows are 50-70 % of the understory's draws** (1,750-2,950) and 74-83 % of its triangles
+  (2.5-5.4 M). In GPU time the shadow share is 0.2-1.0 ms; the view share is steady at 0.6-0.7 ms.
+- That is the most "limit casting" can remove. What it does to frame time has to be measured
+  after the change: step 4's trial removed a similar number of draws for no gain.
+
+- **Limit casting.** Stop ferns and small bushes casting sun shadows beyond their nearest LOD, or
+  switch shadows off for the smallest ferns entirely. This is the part that cuts draw calls. An
+  earlier 35 m shadow cutoff faded plant shadows in and out (`docs/vegetation.md`), so it needs
+  a hard switch.
 - **`shadow_impostor` trial** (added 2026-10-05). Fern02, the lady ferns, the elderberry and the
   poppies already have a reduced mesh as LOD 1. Setting `shadow_impostor` to 1 in
   `build_understory_assets()` (it is 0 today) casts the near plants' shadows from that mesh. No
   new assets. It cuts shadow triangles, not draws. Needs an in-game check that fern shadows
   survive near the player, which was the reason for the 25 m first cascade.
-- **Limit casting.** Stop ferns and small bushes casting sun shadows beyond their nearest LOD, or
-  switch shadows off for the smallest ferns entirely. This is the part that cuts draw calls,
-  which also helps the CPU side. An earlier 35 m shadow cutoff faded plant shadows in and out
-  (`docs/vegetation.md`), so it needs a hard switch.
 
 ### 4. Shorter sun shadow distance (needs a decision)
 
@@ -153,12 +340,37 @@ let the tree impostor switch move in from 175 m to about 125 m, which also cuts 
 triangles. It is a visible change, and the current setup is recorded as final in
 `docs/vegetation.md`, so it is the user's call.
 
+**Measured 2026-10-05** (`sun_shadow_100m` toggle, report `20261005_133704_4a046554_ssao_shadowdist2`):
+the range alone, 150 -> 100 m, with every LOD range left as it is.
+
+| Station        | GPU ms saved | Frame ms saved | Draws saved | Tris saved (M) |
+| -------------- | ------------ | -------------- | ----------- | -------------- |
+| spawn_ahead    | -0.29        | -0.28          | 1,845       | 0.87           |
+| exit_look_back | 0.20         | 0.43           | 1,424       | 2.41           |
+| forest_dense   | -0.20        | -0.20          | 1,445       | 0.82           |
+
+- **No measurable gain from the range alone**, although 1,400-1,800 draws go. This does not fit
+  "frame time follows the draw count" (hiding the understory removes 3,500-4,800 draws and saves
+  2-2.7 ms of frame time at spawn_ahead). Not explained.
+- Not measured: the second half of this step, moving the tree impostor switch in from 175 m to
+  about 125 m. That needs the tree assets rebuilt, so it is a change to the game, not a toggle.
+- So this step is no longer "the largest lever". Whatever it gains would come from the impostor
+  switch, and that is not known yet.
+
 ### 5. Cheaper screen-space settings (needs a decision)
 
 Look-versus-speed choices, each independent:
 
 - SSAO: 1.3-1.6 ms at Low quality. The Options menu has a toggle and a quality dropdown
   (added 2026-10-05); try Very Low first.
+  **Measured 2026-10-05** (same report as step 4's table): switching SSAO off saves
+  1.91 / 1.43 / 1.31 ms GPU; switching the quality to Very Low, Low, Medium, High or Ultra changes
+  GPU time by -0.23 to +0.20 ms, which is the measuring noise. **The quality level makes no
+  measurable difference to cost; only on/off does.** Two explanations, not told apart: the cost
+  is in parts that do not depend on the level (with SSAO on, Godot's depth prepass also has to
+  write normals and roughness for every mesh, foliage included -- an inference, not checked), or
+  the runtime quality setter the dropdown uses has no effect. Nobody has compared the levels by
+  eye in-game.
 - 3D MSAA (2x): 0.8-1.2 ms.
 - Post effects: 1.5-1.8 ms in total, about half of it the painterly effect.
 
@@ -333,7 +545,10 @@ Candidates still open, none started:
 - A per-seed world cache on disk would skip most of generation while the seed is pinned, but
   does nothing for a fresh random seed.
 
-### 7. Cheaper leaf shading (only if step 1 shows the trees are pixel-bound)
+### 7. Cheaper leaf shading (worth a trial)
+
+Step 1 found that about a third of the trees' view cost (0.7-0.9 ms) falls with render scale, so
+there is per-pixel cost to cut. It saves GPU time only, not draws.
 
 The foliage shaders (`shaders/foliage/foliage_cutout_*.gdshader`) use Burley diffuse and GGX
 specular. The usual advice for leaves is a simpler lighting model, because stacked cards run the

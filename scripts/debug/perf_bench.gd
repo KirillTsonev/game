@@ -2,6 +2,10 @@
 ##   - F9 in a running game, or
 ##   - launch with the user argument --bench (runs, writes the report, quits):
 ##       Godot_v4.7.2-stable_win64_console.exe --path <project> -- --bench --bench-label=<name>
+##     More user arguments: --bench-only=<text>[,<text>...] (only the ablation toggles whose name
+##     contains one of the texts),
+##     --bench-no-shadows (sun shadows off for the whole run), --bench-scale=<x> (3D render scale
+##     multiplied by x for the whole run). The last two are recorded in the report's meta.
 ##
 ## What a run does (about 4 minutes; the player is frozen and moved by the benchmark):
 ##   1. Conditions: VSync off, FPS cap off, window WINDOW_SIZE. Needs MASTER_SEED pinned
@@ -12,7 +16,8 @@
 ##      frame time (avg / p50 / p95 / p99 / worst), GPU ms, render CPU ms, draw calls, triangles,
 ##      video memory.
 ##   4. Ablation at ABLATION_STATIONS: one thing switched off at a time (each scatter layer, each
-##      compositor effect, sun shadows, SSAO, MSAA, FXAA, half render scale). "delta" = what the
+##      compositor effect, sun shadows, sun shadows at 100 m, SSAO, SSAO at each
+##      quality level, MSAA, FXAA, half render scale). "delta" = what the
 ##      frame gains with it off = roughly its cost. Costs overlap, so deltas do not add up.
 ##   5. Walk: along the road at WALK_SPEED -- frame-time spikes while the world streams past.
 ##   6. Startup: WorldGenerator.startup_timings.
@@ -53,15 +58,10 @@ func run(quit_when_done: bool, label: String) -> void:
 	var wait_until := Time.get_ticks_msec() + 30000
 	while get_tree().current_scene == null or (get_tree().current_scene.get_node_or_null("WorldGenerator") == null and Time.get_ticks_msec() < wait_until):
 		await get_tree().process_frame
-	_scene = get_tree().current_scene
-	_gen = _scene.get_node_or_null("WorldGenerator")
-	_terrain = _scene.get_node_or_null("Terrain3D") as Terrain3D
-	_player = _scene.get_node_or_null("Player") as Node3D
-	if _gen == null or _terrain == null or _player == null:
+	if not _bind_scene():
 		push_error("[Bench] needs the main scene (WorldGenerator, Terrain3D, Player)")
 		queue_free()
 		return
-	_camera = _player.get_node("Camera3D") as Camera3D
 	while not _gen.startup_timings.has("settled_at_ms"):
 		await get_tree().process_frame
 
@@ -81,16 +81,18 @@ func run(quit_when_done: bool, label: String) -> void:
 	root.size = WINDOW_SIZE
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_player.process_mode = Node.PROCESS_MODE_DISABLED # no input, no gravity: the benchmark places it
+	# Whole-run conditions from user arguments, to split one layer's cost (with --bench-only=layer:<x>):
+	# --bench-no-shadows = sun shadows off, --bench-scale=<x> = 3D render scale multiplied by x.
+	var sun := _scene.get_node_or_null("DirectionalLight3D") as DirectionalLight3D
+	var saved_shadows := sun.shadow_enabled if sun else false
+	var saved_scale := root.scaling_3d_scale
+	for arg in OS.get_cmdline_user_args():
+		if arg == "--bench-no-shadows" and sun:
+			sun.shadow_enabled = false
+		elif arg.begins_with("--bench-scale="):
+			root.scaling_3d_scale = saved_scale * arg.trim_prefix("--bench-scale=").to_float()
 
-	# Same read-back as WorldGenerator._ready(): where Terrain3D really put the map.
-	var region_size: int = _terrain.get_region_size()
-	var min_x := 1 << 30
-	var min_z := 1 << 30
-	for loc in _terrain.get_data().get_region_locations():
-		min_x = mini(min_x, loc.x)
-		min_z = mini(min_z, loc.y)
-	_corner = Vector3(min_x * region_size, 0, min_z * region_size)
-
+	_read_corner()
 	var stations := _build_stations()
 	print("[Bench] started -- %d stations, about 4 minutes. Do not touch the window." % stations.size())
 	for st in stations: # warm-up: compile every pipeline these views need before measuring
@@ -112,6 +114,8 @@ func run(quit_when_done: bool, label: String) -> void:
 			"screen_space_aa": root.screen_space_aa,
 			"scaling_3d_scale": root.scaling_3d_scale,
 			"scaling_3d_mode": root.scaling_3d_mode,
+			"sun_shadows": sun != null and sun.shadow_enabled,
+			"ssao_quality": root.get_node("PauseMenu").ssao_quality_option.selected if root.has_node("PauseMenu") else -1,
 			"frame_capped": false,
 		},
 		"startup": _gen.startup_timings,
@@ -167,6 +171,9 @@ func run(quit_when_done: bool, label: String) -> void:
 	_player.process_mode = saved_process
 	_player.global_transform = saved_xform
 	_camera.rotation.x = saved_pitch
+	if sun:
+		sun.shadow_enabled = saved_shadows
+	root.scaling_3d_scale = saved_scale
 	root.size = saved_size
 	Engine.max_fps = saved_max_fps
 	DisplayServer.window_set_vsync_mode(saved_vsync)
@@ -189,6 +196,69 @@ func run(quit_when_done: bool, label: String) -> void:
 	if quit_when_done:
 		get_tree().quit()
 	queue_free()
+
+## Finds the main scene's nodes. False while the main scene (or one of them) is not there.
+func _bind_scene() -> bool:
+	_scene = get_tree().current_scene
+	if _scene == null:
+		return false
+	_gen = _scene.get_node_or_null("WorldGenerator")
+	_terrain = _scene.get_node_or_null("Terrain3D") as Terrain3D
+	_player = _scene.get_node_or_null("Player") as Node3D
+	if _gen == null or _terrain == null or _player == null:
+		return false
+	_camera = _player.get_node("Camera3D") as Camera3D
+	return true
+
+## Same read-back as WorldGenerator._ready(): where Terrain3D really put the map.
+func _read_corner() -> void:
+	var region_size: int = _terrain.get_region_size()
+	var min_x := 1 << 30
+	var min_z := 1 << 30
+	for loc in _terrain.get_data().get_region_locations():
+		min_x = mini(min_x, loc.x)
+		min_z = mini(min_z, loc.y)
+	_corner = Vector3(min_x * region_size, 0, min_z * region_size)
+
+# ---------------------------------------------------------------- station hold (PerfDebug F10)
+
+var _held := {} # what hold_station() changed, for release_station()
+
+## Puts the frozen player at ablation station `index` under the benchmark's conditions (window
+## size, VSync and FPS cap off) and leaves it there -- for a profiler capture (the editor's Visual
+## Profiler, RenderDoc) of the same view the reports measure. Returns the station name, or "" if
+## the world is not ready. Call release_station() to hand the player back.
+func hold_station(index: int) -> String:
+	if not _bind_scene() or not _gen.startup_timings.has("settled_at_ms"):
+		return ""
+	var root := get_tree().root
+	if _held.is_empty():
+		_held = {
+			"vsync": DisplayServer.window_get_vsync_mode(), "max_fps": Engine.max_fps, "size": root.size,
+			"xform": _player.global_transform, "pitch": _camera.rotation.x, "process": _player.process_mode,
+		}
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+		Engine.max_fps = 0
+		if root.mode == Window.MODE_WINDOWED:
+			root.size = WINDOW_SIZE
+		_player.process_mode = Node.PROCESS_MODE_DISABLED
+	_read_corner()
+	for st in _build_stations():
+		if st.name == ABLATION_STATIONS[index]:
+			_goto(st)
+			return "%s (viewport %dx%d, 3D scale %.2f)" % [st.name, root.size.x, root.size.y, root.scaling_3d_scale]
+	return ""
+
+func release_station() -> void:
+	if _held.is_empty():
+		return
+	_player.process_mode = _held.process
+	_player.global_transform = _held.xform
+	_camera.rotation.x = _held.pitch
+	get_tree().root.size = _held.size
+	Engine.max_fps = _held.max_fps
+	DisplayServer.window_set_vsync_mode(_held.vsync)
+	_held = {}
 
 # ---------------------------------------------------------------- stations
 
@@ -423,10 +493,27 @@ func _build_toggles() -> Array[Dictionary]:
 		for prop in ["ssao_enabled", "ssil_enabled", "sdfgi_enabled", "glow_enabled", "volumetric_fog_enabled", "fog_enabled", "ssr_enabled"]:
 			if env.get(prop) == true:
 				toggles.append({"name": "env:%s" % prop.trim_suffix("_enabled"), "apply":func(on: bool) -> void: env.set(prop, on)})
+		# SSAO at every quality level (a global renderer setting, applied through the pause
+		# menu's own setter). "saved" is against the current level, so a level's cost = the
+		# env:ssao row minus its row; the row of the current level shows the measuring noise.
+		var menu := root.get_node_or_null("PauseMenu")
+		if env.ssao_enabled and menu:
+			var option: OptionButton = menu.ssao_quality_option
+			var current := option.selected
+			for q: int in menu.SSAO_QUALITY_NAMES.size():
+				var set_quality := func(on: bool) -> void:
+					option.select(current if on else q)
+					menu._apply_ssao_quality()
+				toggles.append({"name": "ssao_quality:%s" % str(menu.SSAO_QUALITY_NAMES[q]).to_snake_case(), "apply": set_quality})
 
 	var sun := _scene.get_node_or_null("DirectionalLight3D") as DirectionalLight3D
 	if sun and sun.shadow_enabled:
 		toggles.append({"name": "sun_shadows", "apply":func(on: bool) -> void: sun.shadow_enabled = on})
+		# A shorter shadow range. The splits are fractions of it, so they move in with it. LOD
+		# ranges tied to the shadow range (the tree impostor switch) stay put: a lower bound.
+		var shadow_dist := sun.directional_shadow_max_distance
+		if shadow_dist > 100.0:
+			toggles.append({"name": "sun_shadow_100m", "apply":func(on: bool) -> void: sun.directional_shadow_max_distance = shadow_dist if on else 100.0})
 	var lantern := _player.get_node_or_null("Lantern") as Light3D
 	if lantern and lantern.visible:
 		toggles.append({"name": "lantern", "apply":func(on: bool) -> void: lantern.visible = on})
@@ -441,11 +528,16 @@ func _build_toggles() -> Array[Dictionary]:
 	# per-pixel work (shading, overdraw, post); a small one = by geometry / draw calls / CPU.
 	var scale := root.scaling_3d_scale
 	toggles.append({"name": "render_scale_50", "apply":func(on: bool) -> void: root.scaling_3d_scale = scale if on else scale * 0.5})
-	# --bench-only=<text>: keep only the toggles whose name contains <text> (a quick, targeted run).
+	# --bench-only=<text>[,<text>...]: keep only the toggles whose name contains one of the texts
+	# (a quick, targeted run).
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--bench-only="):
-			var only: String = arg.trim_prefix("--bench-only=")
-			toggles = toggles.filter(func(t: Dictionary) -> bool: return only in str(t.name))
+			var only := arg.trim_prefix("--bench-only=").split(",", false)
+			toggles = toggles.filter(func(t: Dictionary) -> bool:
+				for text in only:
+					if text in str(t.name):
+						return true
+				return false)
 	return toggles
 
 ## Rendering only: colliders stay (the player is frozen, so they cost nothing to measure here).
@@ -665,7 +757,7 @@ static func _summary(report: Dictionary) -> String:
 	var meta: Dictionary = report.meta
 	var out: Array[String] = []
 	out.append("==== PERF BENCH %s  git %s  %s ====" % [meta.label, meta.git, meta.time])
-	out.append("viewport %dx%d, 3D scale %.2f | %s | Godot %s | seed %d" % [meta.viewport[0], meta.viewport[1], meta.scaling_3d_scale, meta.adapter, meta.godot, meta.seed])
+	out.append("viewport %dx%d, 3D scale %.3f, sun shadows %s | %s | Godot %s | seed %d" % [meta.viewport[0], meta.viewport[1], meta.scaling_3d_scale, "on" if meta.sun_shadows else "OFF", meta.adapter, meta.godot, meta.seed])
 	if meta.frame_capped:
 		out.append("!! FRAME RATE CAPPED FROM OUTSIDE THE GAME (driver / overlay limiter): the frame columns show the cap -- read the GPU columns.")
 	out.append("")

@@ -805,15 +805,18 @@ automatically) -- a local copy also lives at
 optimisation; never judge by GPU utilisation %.
 - Run: F9 in a running game, or from a shell (the editor can stay open):
   `Godot_v4.7.2-stable_win64_console.exe --path herald-of-oblivion --disable-vsync --max-fps 0 -- --bench --bench-label=<name>`
-  (~5 min, quits when done). `--bench-only=<text>` keeps only the ablation toggles whose name
-  contains `<text>` (e.g. `layer:trees`, `post:`) for a ~2 min targeted run.
+  (~5 min, quits when done). `--bench-only=<text>[,<text>...]` keeps only the ablation toggles whose name
+  contains one of the texts (e.g. `layer:trees`, `post:`) for a ~2 min targeted run. `--bench-no-shadows`
+  and `--bench-scale=<x>` switch sun shadows off / multiply the 3D render scale for the whole run
+  (to split a layer's cost into view vs shadow and pixels vs triangles).
 - Output: `perf_reports/<time>_<git>_<label>.json` + `.txt`. Diff two runs:
   `powershell -File tools\perf_compare.ps1` (two newest) or `-A <a.json> -B <b.json>`.
 - Stations are picked from the map data, so `MASTER_SEED` must stay pinned between compared runs.
 - Frame cap: on 2026-10-04 frames stayed locked at 16.67 ms even with VSync off and `max_fps` 0.
   The cause was a RivaTuner (RTSS) frame limiter; the user raised it to 200 FPS on 2026-10-05 and
   frame ms is now real. A station sitting at exactly 5.00 ms is on that 200 FPS limit (only
-  `spawn_sky` so far) -- read its GPU ms instead. The report flags a capped run (`frame_capped`).
+  `spawn_sky` so far) -- read its GPU ms instead. In the afternoon runs of 2026-10-05 the limit read
+  6.06 ms (165 FPS) instead. The report flags a capped run (`frame_capped`).
 - Baseline to compare against: `20261005_105951_ea72f831_baseline2.json` (taken after the
   understory + flower placement changed, see `docs/performance_findings.md` step 6). The earlier
   `..._uncapped.json` has the old plant placement (GPU ms within 4 % of baseline2); the capped
