@@ -224,34 +224,6 @@ static func scatter_trees(parent_node: Node, terrain: Terrain3D, heights: Packed
 	print("TERRAIN_GEN: scattered %d tree(s) across %d stand(s) + %d lone (%d with trunk colliders, %d variant id(s) active)" % [tree_total, stand_count, lone_count, collider_container.get_child_count(), active_ids.size()])
 	print("TERRAIN_GEN: closest trunk-to-trunk distance %.2f m (TREE_MIN_SPACING_RADIUS=%.2f -> floor %.2f m at smallest scale)" % [_closest_tree_pair(spacing_grid), TREE_MIN_SPACING_RADIUS, TREE_MIN_SPACING_RADIUS * TREE_SCALE_MIN * 2.0])
 
-## Tree shadows (2026-10-05, docs/performance_findings.md step 2): the trees cast their sun shadow
-## from a reduced mesh, which Terrain3D draws as separate shadows-only nodes (shadow_impostor in
-## tools/setup_tree_assets.gd). Terrain3D gives those nodes no distance limit, so trees far beyond
-## the shadow range were drawn into the cascades as well (600-1,600 more draws at most stations).
-## This ends them at the distance where the full trees used to stop casting. Same rule as
-## TREE_IMPOSTOR_RANGE: >= sun shadow max distance + ~23 m (ranges are per 32 m cell centre).
-## Call once the instancer's nodes exist. Returns the number of nodes changed.
-const TREE_SHADOW_RANGE := 175.0
-
-static func limit_shadow_copy_range(terrain: Terrain3D) -> int:
-	var count := 0
-	var stack: Array[Node] = [terrain]
-	while not stack.is_empty():
-		var node: Node = stack.pop_back()
-		stack.append_array(node.get_children(true))
-		var mmi := node as MultiMeshInstance3D
-		if mmi == null or mmi.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY:
-			continue
-		# Instancer node names: "MMI3D_C<cell x>_<cell z>_M<mesh id>_L<lod>"
-		var parts := mmi.name.split("_")
-		if parts.size() < 4 or parts[0] != "MMI3D" or not (parts[3].substr(1).to_int() in TREE_MESH_IDS):
-			continue
-		mmi.visibility_range_end = TREE_SHADOW_RANGE
-		mmi.visibility_range_end_margin = 0.0
-		mmi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_DISABLED
-		count += 1
-	return count
-
 ## Places one upright tree at (or near) `target` pixel spot: retries a few times
 ## on steep / on-road / keep-out-blocked ground, and on success appends an
 ## upright (yaw + tiny lean, never normal-aligned) transform to the per-mesh

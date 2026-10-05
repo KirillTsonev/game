@@ -831,9 +831,10 @@ optimisation; never judge by GPU utilisation %.
   frame ms is now real. A station sitting at exactly 5.00 ms is on that 200 FPS limit (only
   `spawn_sky` so far) -- read its GPU ms instead. In the afternoon runs of 2026-10-05 the limit read
   6.06 ms (165 FPS) instead. The report flags a capped run (`frame_capped`).
-- Newest full runs (2026-10-05 evening: trees cast shadows from reduced meshes, sun angular
-  distance 0): `20261005_191142_08efe006_clean_reduced_1.json` and `..._192140_..._clean_reduced_3.json`
-  (two runs of the same setup; their difference is the run-to-run noise). Before that:
+- Newest runs (2026-10-05, 22:21-22:30: duplicate leaf cards dropped from the trees, sun angular
+  distance 0): `..._dd_dedup_1..3.json`, three TARGETED runs (`--bench-only=layer:trees`; all
+  stations and the walk are in them, the other ablations are not). No full run of this state yet.
+  Before that:
 - Baseline to compare against: `20261005_152817_ba7cfd15_baseline4.json` (SSAO off, understory
   shadows from the nearest LOD only, short grass to 100 m, painterly sum passes rewritten -- see
   `docs/performance_findings.md`). Before the first three of those changes: `20261005_105951_ea72f831_baseline2.json` (taken after the

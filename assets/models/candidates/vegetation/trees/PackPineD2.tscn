@@ -2,15 +2,11 @@
 
 [ext_resource type="ArrayMesh" uid="uid://dkywqywoiw5y1" path="res://assets/models/candidates/vegetation/trees/PackPineD2.res" id="1_iqr6b"]
 [ext_resource type="ArrayMesh" uid="uid://c5c8ji4ri1vw8" path="res://assets/models/candidates/vegetation/trees/PackPineD2_impostor.res" id="2_ewll2"]
-[ext_resource type="ArrayMesh" uid="uid://bv5noe0qb48u7" path="res://assets/models/candidates/vegetation/trees/PackPineD2_shadow.res" id="3_752lk"]
 
-[node name="PackPineD2" type="Node3D" unique_id=255621935]
+[node name="PackPineD2" type="Node3D" unique_id=168549289]
 
-[node name="LOD0" type="MeshInstance3D" parent="." unique_id=12137394]
+[node name="LOD0" type="MeshInstance3D" parent="." unique_id=1830647513]
 mesh = ExtResource("1_iqr6b")
 
-[node name="LOD1" type="MeshInstance3D" parent="." unique_id=661875697]
+[node name="LOD1" type="MeshInstance3D" parent="." unique_id=520421311]
 mesh = ExtResource("2_ewll2")
-
-[node name="LOD2" type="MeshInstance3D" parent="." unique_id=409989705]
-mesh = ExtResource("3_752lk")

@@ -26,33 +26,24 @@ realistic too.
   standalone mesh (base at y=0), fixes materials, saves `trees/<name>.res` + `<name>.tscn`
   and registers the Terrain3D mesh asset. With a baked impostor (always, since 2026-09-25):
   LOD0 = full tree to **175 m** (`TREE_IMPOSTOR_RANGE`; was 150 until 2026-09-29), LOD1 =
-  impostor to 100 km (never culled), 10 m cross-fade, LOD2 = shadow mesh (below). Without one it
+  impostor to 100 km (never culled), 10 m cross-fade, `last_shadow_lod = 0`. Without one it
   falls back to a single LOD visible to `PACK_LOD0_RANGE` = 600 m.
-- **Shadow meshes** (2026-10-05). Each tree casts its sun shadow from `trees/<name>_shadow.res`,
-  a reduced copy (1,158-6,612 tris, 55-60 % of the tree) that only the shadow passes draw. The
-  visible LODs are unchanged.
-  - Built by `_tree_shadow_mesh()` inside `build_pack_trees()`. The pack stores every leaf card
-    twice, back to back, and the leaf material is double-sided, so one copy of each is dropped.
-    Nothing else changes: same cards, same sizes, all bark. `debug_print_shadow_coverage()`
-    checks it (leaf layers exactly halved, footprint 100 %).
-  - Rejected in-game the same day: keeping one card in four enlarged x2 and one bark branch in
-    three (27 % of the triangles). The shadows read as blobs floating beside the trunk. Godot's
-    mesh simplifier was measured too: it shrinks the cards (51-76 % of the leaf area left at its
-    first step). Do not thin or enlarge cards for the shadow mesh.
-  - Wiring: the scene's `LOD2`. Asset ranges 175 / 100 km / 100 km, `last_lod` =
-    `last_shadow_lod` = `shadow_impostor` = 2. LOD2's own range starts at 100 km, so it is never a
-    visible LOD; Terrain3D draws it as shadows-only nodes in place of LOD0 and LOD1.
-  - Terrain3D gives those shadow nodes no distance limit (they run to where the shadow LOD's own
-    range begins), and far trees were then drawn into the cascades: 600-1,600 more draws.
-    `TreeScatter.limit_shadow_copy_range()` ends them at `TREE_SHADOW_RANGE` (175 m), called by
-    WorldGenerator after the first frames. Why not LOD order full / shadow / impostor, which
-    would limit the range by itself: the shadow mesh would be visible between its two ranges, or
-    with equal ranges the 10 m impostor cross-fade is clamped to 0.
-  - Gotcha: the tool must load the re-saved scene with CACHE_MODE_REPLACE. A cached two-LOD copy
-    made Terrain3D clamp `last_lod` and `shadow_impostor` to 1 (shadows from the impostor).
-  - Saplings (ids 64-68) still cast from the full mesh and their impostor.
-  - Measured: `docs/performance_findings.md` step 2 (GPU -0.5 to -1.4 ms, road walk frame
-    10.20 -> 9.75 ms, no CPU cost).
+- **Duplicate leaf cards dropped** (2026-10-05). The pack stores every leaf card twice, back
+  to back, and the bake makes the leaf material double-sided, so the second copy only doubled
+  the leaf triangles and overdraw, in the view and in every shadow cascade.
+  `build_pack_trees()` now drops it (`PACK_DROP_DUPLICATE_CARDS`,
+  `_without_duplicate_triangles()`): trees are 1,158-6,612 tris (were 1,922-11,296), same
+  shape; look checked in-game by Kirill. Saplings share the meshes. Impostors were not rebaked.
+  - Measured (three alternating pairs): GPU -1.2 to -2.7 ms at the stations with trees, road
+    walk GPU 9.19 -> 7.04 ms and frame 10.30 -> 9.49 ms. `docs/performance_findings.md` step 2.
+  - Found by way of a separate reduced shadow mesh (Terrain3D `shadow_impostor`), built first
+    and removed the same day once the visible mesh had the same triangles. Lessons from it:
+    thinning or enlarging cards makes crown shadows read as blobs floating beside the trunk;
+    Godot's mesh simplifier shrinks the cards (51-76 % of the leaf area left at its first step);
+    Terrain3D draws a shadow-impostor LOD as extra shadows-only nodes (`..._LS`) with no distance
+    limit of their own (they run to where that LOD's own range begins); and the tool must load a
+    re-saved tree scene with CACHE_MODE_REPLACE, or Terrain3D clamps `last_lod` to the cached
+    scene's LOD count.
 - **Far impostors** (2026-09-25). Measured before: trees beyond 150 m cost ~10 M tris, ~3.3k
   draw calls, ~3.9 ms GPU + ~3 ms CPU of a 10.9 ms GPU frame. After, same kind of view:
   7.0 ms GPU, 10.9 M tris (was 21.4 M), 4.5k draws (was 7.2k), and the forest now reaches the

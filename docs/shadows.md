@@ -29,10 +29,6 @@ impostor at **175 m** (`TREE_IMPOSTOR_RANGE` in `tools/setup_tree_assets.gd`); t
 casts nothing (`last_shadow_lod = 0`). After (at the original 150 m): ~7.0 ms GPU / 10.9 M tris /
 4.5k draws (was 10.9 ms / 21.4 M / 7.2k). See `docs/vegetation.md`.
 
-**Since 2026-10-05 the trees cast from a reduced shadow mesh** (LOD2, `shadow_impostor` = 2),
-drawn as shadows-only nodes that end at `TreeScatter.TREE_SHADOW_RANGE` = 175 m. The rule below
-now applies to that constant as well. See `docs/vegetation.md`, "Shadow meshes".
-
 *Why 175 and not 150 (= shadow max distance):* Terrain3D switches LODs per **32 m cell**, by the
 distance to the **cell centre**, not per tree -- a tree can be up to ~23 m (half the cell
 diagonal) nearer than its cell centre. With the switch at 150, whole cells of trees 127-150 m

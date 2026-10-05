@@ -161,7 +161,69 @@ func debug_print_leaf_materials() -> String:
 		out.append("%s\n    used by: %s" % [k, ", ".join(seen[k])])
 	return "\n".join(out)
 
-func build_pack_trees() -> String:
+## Leaf / branch card textures of the pack (alpha-cut, double-sided), as opposed to bark.
+func _is_leaf_texture(tex_file: String) -> bool:
+	return tex_file.contains("Branch") or tex_file.contains("Tree_B") or tex_file.contains("Grass")
+
+## The pack stores every leaf card twice, back to back, and the leaf material draws both sides, so
+## the second copy only doubled the leaf triangles and overdraw, in the view and in every shadow
+## cascade. The bake drops it (2026-10-05; look checked in-game by Kirill): trees are 55-60 % of
+## their triangles, same shape. false = the pack's mesh as it is. After changing: "Rebuild trees +
+## saplings". The impostors need no rebake.
+## (Found via a separate reduced shadow mesh, tried first and removed the same day: thinning or
+## enlarging cards made shadows read as blobs floating beside the trunk, and Godot's mesh
+## simplifier shrinks the cards -- 51-76 % of the leaf area left at its first step.)
+const PACK_DROP_DUPLICATE_CARDS := true
+
+## `idx` without the triangles whose three corners (1 mm, any order, either winding) repeat an
+## earlier triangle. The vertex arrays stay as they are; the dropped copies' vertices go unused.
+func _without_duplicate_triangles(verts: PackedVector3Array, idx_in: Variant) -> PackedInt32Array:
+	var idx: PackedInt32Array = idx_in if idx_in != null else PackedInt32Array(range(verts.size()))
+	var seen := {}
+	var out := PackedInt32Array()
+	for t in range(0, idx.size(), 3):
+		var corners: Array[Vector3i] = []
+		for k in 3:
+			corners.append(Vector3i((verts[idx[t + k]] * 1000.0).round()))
+		corners.sort()
+		if seen.has(corners):
+			continue
+		seen[corners] = true
+		out.append(idx[t])
+		out.append(idx[t + 1])
+		out.append(idx[t + 2])
+	return out
+
+## Diagnostic: every surface of the baked trees -- triangles, material kind, texture and where
+## in the tree it sits (height range, widest horizontal extent).
+func debug_print_tree_surfaces() -> String:
+	var out: Array[String] = []
+	for entry: Dictionary in PACK_TREES:
+		var mesh: ArrayMesh = ResourceLoader.load(PACK_OUT_DIR + "%s.res" % entry.name, "", ResourceLoader.CACHE_MODE_IGNORE)
+		if mesh == null:
+			continue
+		for si in mesh.get_surface_count():
+			var arr := mesh.surface_get_arrays(si)
+			var verts: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+			var idx: PackedInt32Array = arr[Mesh.ARRAY_INDEX]
+			var lo := Vector3(INF, INF, INF)
+			var hi := -lo
+			for vi in idx:
+				lo = lo.min(verts[vi])
+				hi = hi.max(verts[vi])
+			var m := mesh.surface_get_material(si)
+			var tex := ""
+			if m is ShaderMaterial:
+				var t := (m as ShaderMaterial).get_shader_parameter("albedo_tex") as Texture2D
+				tex = "leaf %s" % (t.resource_path.get_file() if t else "?")
+			elif m is BaseMaterial3D:
+				var t := (m as BaseMaterial3D).albedo_texture
+				tex = "bark %s" % (t.resource_path.get_file() if t else "?")
+			out.append("%s s%d: %d tris, %s, height %.1f-%.1f m of %.1f, width %.1f m" % [entry.name, si, idx.size() / 3, tex, lo.y, hi.y, mesh.get_aabb().size.y, maxf(hi.x - lo.x, hi.z - lo.z)])
+	return "\n".join(out)
+
+## `drop_duplicates` = false bakes the pack's meshes as they are (for a before / after benchmark).
+func build_pack_trees(drop_duplicates: bool = PACK_DROP_DUPLICATE_CARDS) -> String:
 	# REPLACE: the editor's stale copy of an edited shader silently drops parameters for new uniforms.
 	ResourceLoader.load("res://shaders/foliage/foliage_cutout.gdshaderinc", "", ResourceLoader.CACHE_MODE_REPLACE)
 	ResourceLoader.load(UNDERSTORY_TOOL.FOLIAGE_SHADER_DOUBLE, "", ResourceLoader.CACHE_MODE_REPLACE)
@@ -209,8 +271,11 @@ func build_pack_trees() -> String:
 					if flip:
 						tg[i + 3] = -tg[i + 3]
 				arr[Mesh.ARRAY_TANGENT] = tg
-			tris += ((arr[Mesh.ARRAY_INDEX] as PackedInt32Array).size() if arr[Mesh.ARRAY_INDEX] != null else verts.size()) / 3
 			var src_mat := mi.get_active_material(si)
+			var is_leaf := src_mat is BaseMaterial3D and (src_mat as BaseMaterial3D).albedo_texture and _is_leaf_texture((src_mat as BaseMaterial3D).albedo_texture.resource_path.get_file())
+			if drop_duplicates and is_leaf:
+				arr[Mesh.ARRAY_INDEX] = _without_duplicate_triangles(verts, arr[Mesh.ARRAY_INDEX])
+			tris += ((arr[Mesh.ARRAY_INDEX] as PackedInt32Array).size() if arr[Mesh.ARRAY_INDEX] != null else verts.size()) / 3
 			var bark_key := ""
 			if src_mat is BaseMaterial3D and (src_mat as BaseMaterial3D).albedo_texture:
 				bark_key = _pack_bark_key((src_mat as BaseMaterial3D).albedo_texture.resource_path.get_file())
@@ -220,7 +285,7 @@ func build_pack_trees() -> String:
 				var bm := (mat as BaseMaterial3D).duplicate() as BaseMaterial3D
 				var tex := bm.albedo_texture.resource_path.get_file() if bm.albedo_texture else ""
 				var leaf_mat: Material = null
-				if tex.contains("Branch") or tex.contains("Tree_B") or tex.contains("Grass"):
+				if _is_leaf_texture(tex):
 					bm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
 					bm.alpha_scissor_threshold = 0.5
 					bm.cull_mode = BaseMaterial3D.CULL_DISABLED
@@ -245,7 +310,6 @@ func build_pack_trees() -> String:
 		# Far impostor as LOD1, if bake_tree_impostors() has made one (2026-09-25).
 		var imp_base := PACK_OUT_DIR + "%s_impostor" % entry.name
 		var has_impostor := ResourceLoader.exists(imp_base + ".res") and ResourceLoader.exists(imp_base + "_material.tres")
-		var shadow_tris := 0
 		if has_impostor:
 			var imesh: ArrayMesh = ResourceLoader.load(imp_base + ".res", "", ResourceLoader.CACHE_MODE_REPLACE)
 			imesh.surface_set_material(0, load(imp_base + "_material.tres"))
@@ -255,15 +319,6 @@ func build_pack_trees() -> String:
 			lod1.mesh = imesh
 			root.add_child(lod1)
 			lod1.owner = root
-			# Reduced shadow-only mesh as LOD2 (2026-10-05, see _tree_shadow_mesh).
-			var shadow_path := PACK_OUT_DIR + "%s_shadow.res" % entry.name
-			ResourceSaver.save(_tree_shadow_mesh(am), shadow_path)
-			var lod2 := MeshInstance3D.new()
-			lod2.name = "LOD2"
-			lod2.mesh = ResourceLoader.load(shadow_path, "", ResourceLoader.CACHE_MODE_REPLACE)
-			shadow_tris = _mesh_tris(lod2.mesh)
-			root.add_child(lod2)
-			lod2.owner = root
 		var ps := PackedScene.new()
 		ps.pack(root)
 		var scene_path := PACK_OUT_DIR + "%s.tscn" % entry.name
@@ -287,22 +342,20 @@ func build_pack_trees() -> String:
 			# Full tree to TREE_IMPOSTOR_RANGE, then the 8-tri impostor out to 100 km (= never culled).
 			# Not range 0 ('unlimited'): Terrain3D clamps fade_margin to half the gap to the next range,
 			# and with 0 there is no gap -> fade forced to 0 -> hard swap at the range.
-			# Shadows (2026-10-05): LOD2 is the reduced shadow mesh. Its own range starts where the
-			# impostor's ends (100 km), so it is never drawn as a visible LOD; shadow_impostor = 2 makes
-			# Terrain3D draw it shadows-only in place of LOD0 and LOD1, which then cast nothing.
+			# Impostor casts no shadow -- which is why TREE_IMPOSTOR_RANGE must sit >= ~23 m past the
+			# sun shadow max distance (per-cell LOD switching, see the constant and docs/shadows.md).
+			a.set_shadow_impostor(0)
 			a.set_lod_range(0, TREE_IMPOSTOR_RANGE)
 			a.set_lod_range(1, TREE_IMPOSTOR_FAR)
-			a.set_lod_range(2, TREE_IMPOSTOR_FAR)
-			a.set_last_lod(2)
-			a.set_last_shadow_lod(2)
+			a.set_last_lod(1)
+			a.set_last_shadow_lod(0)
 			a.set_fade_margin(TREE_IMPOSTOR_FADE)
-			a.set_shadow_impostor(2)
 		else:
 			a.set_lod0_range(PACK_LOD0_RANGE)
 			a.set_fade_margin(TREE_FADE_MARGIN)
 			a.set_shadow_impostor(0)
-		out.append("id=%d %s <- %s: %d tris (shadow mesh %d), %.1f m tall, last_lod=%d last_shadow_lod=%d shadow_impostor=%d fade=%.0f ranges %.0f/%.0f/%.0f" % [
-			entry.id, entry.name, entry.node, tris, shadow_tris, am.get_aabb().size.y, a.get_last_lod(), a.get_last_shadow_lod(), a.get_shadow_impostor(), a.get_fade_margin(), a.get_lod_range(0), a.get_lod_range(1), a.get_lod_range(2)])
+		out.append("id=%d %s <- %s: %d tris, %.1f m tall, last_lod=%d last_shadow_lod=%d shadow_impostor=%d fade=%.0f ranges %.0f/%.0f" % [
+			entry.id, entry.name, entry.node, tris, am.get_aabb().size.y, a.get_last_lod(), a.get_last_shadow_lod(), a.get_shadow_impostor(), a.get_fade_margin(), a.get_lod_range(0), a.get_lod_range(1)])
 	src.free()
 	assets.update_mesh_list()
 	out.append("saved %s (err=%d)" % [ASSETS_PATH, assets.save(ASSETS_PATH)])
@@ -310,7 +363,7 @@ func build_pack_trees() -> String:
 
 ## Writes only shadow_impostor / last_shadow_lod to the pack trees' mesh assets -- nothing is
 ## re-baked. For shadow-cost trials (docs/performance_findings.md step 2); build_pack_trees()
-## sets the project's values (2 / 2 = shadows from the reduced mesh; 0 / 0 = from the full mesh).
+## sets the project's values (0 / 0: shadows from the visible tree mesh, none from the impostor).
 ## Run in the EDITOR process. Returns what it changed.
 func set_tree_shadow_lods(shadow_impostor: int, last_shadow_lod: int) -> String:
 	var assets: Terrain3DAssets = load(ASSETS_PATH)
@@ -325,122 +378,6 @@ func set_tree_shadow_lods(shadow_impostor: int, last_shadow_lod: int) -> String:
 		out.append("id=%d %s: shadow_impostor / last_shadow_lod %s -> %d / %d" % [entry.id, entry.name, before, a.get_shadow_impostor(), a.get_last_shadow_lod()])
 	out.append("saved %s (err=%d)" % [ASSETS_PATH, assets.save(ASSETS_PATH)])
 	return "\n".join(out)
-
-## -- Shadow meshes (2026-10-05, docs/performance_findings.md step 2) --
-## Every tree cast its sun shadow from the full mesh in each cascade: 4-6 M triangles a frame,
-## 1.3-2.1 ms of GPU. build_pack_trees() also saves <name>_shadow.res, a reduced copy that only
-## the shadow passes draw (LOD2 + Terrain3D's shadow_impostor; the visible LODs are unchanged).
-## What is removed: the pack stores every leaf card twice, back to back, and the leaf material is
-## double-sided, so the second copy casts exactly the same shadow. One copy of each is dropped.
-## Nothing else changes: every card and branch stays in place at its own size, so the shadow has
-## the tree's shape. (First version, rejected in-game the same day: one card in four kept and
-## enlarged x2, two bark branches in three dropped -- the shadows read as blobs floating beside
-## the trunk. Godot's mesh simplifier was measured too: it shrinks the cards, 51-76 % of the leaf
-## area left at its first step.)
-func _tree_shadow_mesh(src: ArrayMesh) -> ArrayMesh:
-	var out := ArrayMesh.new()
-	for si in src.get_surface_count():
-		var arr := src.surface_get_arrays(si)
-		var verts: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
-		var idx: PackedInt32Array = arr[Mesh.ARRAY_INDEX] if arr[Mesh.ARRAY_INDEX] != null else PackedInt32Array(range(verts.size()))
-		var normals: PackedVector3Array = arr[Mesh.ARRAY_NORMAL] if arr[Mesh.ARRAY_NORMAL] != null else PackedVector3Array()
-		var uvs: PackedVector2Array = arr[Mesh.ARRAY_TEX_UV] if arr[Mesh.ARRAY_TEX_UV] != null else PackedVector2Array()
-		var is_leaf := src.surface_get_material(si) is ShaderMaterial
-		var seen := {} # leaf triangles by their three corner positions (1 mm), in any order
-		var remap := {}
-		var new_verts := PackedVector3Array()
-		var new_normals := PackedVector3Array()
-		var new_uvs := PackedVector2Array()
-		var new_idx := PackedInt32Array()
-		for t in range(0, idx.size(), 3):
-			if is_leaf:
-				var corners: Array[Vector3i] = []
-				for k in 3:
-					corners.append(Vector3i((verts[idx[t + k]] * 1000.0).round()))
-				corners.sort()
-				if seen.has(corners):
-					continue
-				seen[corners] = true
-			for k in 3:
-				var vi := idx[t + k]
-				if not remap.has(vi):
-					remap[vi] = new_verts.size()
-					new_verts.append(verts[vi])
-					if not normals.is_empty():
-						new_normals.append(normals[vi])
-					if not uvs.is_empty():
-						new_uvs.append(uvs[vi])
-				new_idx.append(remap[vi])
-		# Positions, normals (shadow normal bias) and UVs (leaf cutout) only: no tangents.
-		var new_arr := []
-		new_arr.resize(Mesh.ARRAY_MAX)
-		new_arr[Mesh.ARRAY_VERTEX] = new_verts
-		if not new_normals.is_empty():
-			new_arr[Mesh.ARRAY_NORMAL] = new_normals
-		if not new_uvs.is_empty():
-			new_arr[Mesh.ARRAY_TEX_UV] = new_uvs
-		new_arr[Mesh.ARRAY_INDEX] = new_idx
-		out.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, new_arr)
-		out.surface_set_material(out.get_surface_count() - 1, src.surface_get_material(si))
-	return out
-
-## Diagnostic: the saved shadow meshes against the full trees, seen from straight above in 10 cm
-## cells. Per tree: triangles, leaf-card layers (the full mesh counts both copies of a card, so
-## half is expected), share of the crown's footprint the shadow mesh still covers, and the area
-## it covers outside that footprint.
-func debug_print_shadow_coverage() -> String:
-	var out: Array[String] = []
-	for entry: Dictionary in PACK_TREES:
-		var full: ArrayMesh = ResourceLoader.load(PACK_OUT_DIR + "%s.res" % entry.name, "", ResourceLoader.CACHE_MODE_IGNORE)
-		var shadow: ArrayMesh = ResourceLoader.load(PACK_OUT_DIR + "%s_shadow.res" % entry.name, "", ResourceLoader.CACHE_MODE_IGNORE)
-		if full == null or shadow == null:
-			continue
-		var a := _leaf_layers(full)
-		var b := _leaf_layers(shadow)
-		var layers_a := 0.0
-		var layers_b := 0.0
-		var kept := 0
-		var outside := 0
-		for key: Vector2i in a:
-			layers_a += a[key]
-			if b.has(key):
-				kept += 1
-		for key: Vector2i in b:
-			layers_b += b[key]
-			if not a.has(key):
-				outside += 1
-		out.append("%s: %d -> %d tris, leaf layers %.2f -> %.2f, footprint kept %.1f %%, outside it %.2f m2" % [
-			entry.name, _mesh_tris(full), _mesh_tris(shadow), layers_a / a.size(), layers_b / a.size(), 100.0 * kept / a.size(), outside * 0.01])
-	return "\n".join(out)
-
-## Leaf-card layers over each 10 cm ground cell (seen from straight above): cell -> count.
-func _leaf_layers(mesh: ArrayMesh) -> Dictionary:
-	var layers := {}
-	for si in mesh.get_surface_count():
-		if not (mesh.surface_get_material(si) is ShaderMaterial):
-			continue
-		var arr := mesh.surface_get_arrays(si)
-		var verts: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
-		var idx: PackedInt32Array = arr[Mesh.ARRAY_INDEX]
-		for t in range(0, idx.size(), 3):
-			var p0 := Vector2(verts[idx[t]].x, verts[idx[t]].z) * 10.0
-			var p1 := Vector2(verts[idx[t + 1]].x, verts[idx[t + 1]].z) * 10.0
-			var p2 := Vector2(verts[idx[t + 2]].x, verts[idx[t + 2]].z) * 10.0
-			var lo := p0.min(p1).min(p2).floor()
-			var hi := p0.max(p1).max(p2).ceil()
-			for cz in range(int(lo.y), int(hi.y)):
-				for cx in range(int(lo.x), int(hi.x)):
-					if Geometry2D.point_is_inside_triangle(Vector2(cx + 0.5, cz + 0.5), p0, p1, p2):
-						var key := Vector2i(cx, cz)
-						layers[key] = layers.get(key, 0) + 1
-	return layers
-
-func _mesh_tris(mesh: Mesh) -> int:
-	var n := 0
-	for si in mesh.get_surface_count():
-		var arr := mesh.surface_get_arrays(si)
-		n += ((arr[Mesh.ARRAY_INDEX] as PackedInt32Array).size() if arr[Mesh.ARRAY_INDEX] != null else (arr[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()) / 3
-	return n
 
 ## Dithered cross-fade (metres) at the pack trees' cull distance -- used by build_pack_trees().
 ## (Without an impostor the asset is single-LOD, and Terrain3D clamps the fade to 0 anyway.)

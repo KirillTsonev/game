@@ -250,7 +250,7 @@ left blank where nothing supports an estimate yet.
 | #   | Remedy                                                                  | Addresses              | Status                                          |
 | --- | ----------------------------------------------------------------------- | ---------------------- | ----------------------------------------------- |
 | 1   | Split the tree cost: view vs shadow, and pixels vs triangles            | sizes steps 2, 4 and 7 | done 2026-10-05, results below                  |
-| 2   | Mid LOD for trees, also used as the shadow mesh (`shadow_impostor`)     | conclusions 3, 4       | shadow mesh done 2026-10-05 (GPU -0.5 to -1.4 ms, road walk frame 10.20 -> 9.75 ms, no CPU cost); visible mid LOD not started |
+| 2   | Mid LOD for trees, also used as the shadow mesh (`shadow_impostor`)     | conclusions 3, 4       | duplicate leaf cards dropped 2026-10-05 (GPU -1.2 to -2.7 ms, road walk frame 10.30 -> 9.49 ms); mid LOD not started |
 | 3   | Cheaper understory shadows: limit casting first, then `shadow_impostor` | conclusions 3, 5, 7    | limit casting done 2026-10-05 (draws -15 to -42 %); `shadow_impostor` not tried |
 | 4   | Shorter sun shadow distance                                             | conclusions 3, 4       | range alone measured: no gain; impostor part untested |
 | 5   | Cheaper screen-space settings                                           | conclusion 6           | SSAO off and painterly rewritten (-0.6 ms) 2026-10-05; MSAA and the other five effects open |
@@ -378,7 +378,41 @@ shadows from it instead of the full mesh.
   - An earlier pair of runs the same evening (18:51 / 18:56) is not usable: the machine was
     slower throughout (CPU render 11-13 ms at spawn_ahead against 9) and the control station
     without trees moved 12 %.
-  - The visible mid LOD is still open.
+  - **End state, 22:21-22:30:** the duplicate cards are dropped from the visible tree mesh too,
+    and the separate shadow mesh is removed (it held the same triangles; trees cast from the
+    visible mesh again). Six targeted runs alternating with / without duplicates, reports
+    `..._dd_dupes_1..3` and `..._dd_dedup_1..3`, means of three:
+
+    | Station        | GPU ms       | Frame ms       | CPU render ms | Tris (M)       |
+    | -------------- | ------------ | -------------- | ------------- | -------------- |
+    | spawn_ahead    | 9.60 -> 6.92 | 12.15 -> 11.85 | 8.86 -> 8.62  | 20.90 -> 16.92 |
+    | spawn_ground   | 5.61 -> 4.12 | capped         | 3.05 -> 2.73  | 15.45 -> 12.75 |
+    | road_mid       | 8.37 -> 6.78 | 8.97 -> 7.61   | 4.79 -> 4.60  | 16.31 -> 13.68 |
+    | exit_look_back | 9.52 -> 7.34 | 10.59 -> 10.34 | 7.48 -> 7.41  | 21.44 -> 18.28 |
+    | forest_dense   | 8.98 -> 7.29 | 9.72 -> 8.21   | 6.08 -> 5.48  | 17.11 -> 14.40 |
+    | road_open      | 9.44 -> 7.50 | 10.47 -> 8.90  | 7.16 -> 6.27  | 19.82 -> 16.38 |
+    | cliff_face     | 7.62 -> 6.43 | 8.31 -> 7.19   | 2.81 -> 2.69  | 14.49 -> 13.17 |
+    | Road walk      | 9.19 -> 7.04 | 10.30 -> 9.49  | -             | -              |
+
+    The saving held in all three pairs at every station (GPU spread within a setup 0.1-0.9 ms).
+    spawn_ahead and exit_look_back stay CPU-limited. Look checked in-game by Kirill.
+  - **Tree cost re-measured after the fix, 22:33-22:36** (what hiding the trees saves, at
+    spawn_ahead / exit_look_back / forest_dense; reports `..._dd_dedup_1..3`,
+    `..._vis_noshadow_1..2`, `..._vis_noshadow_half`):
+
+    | Condition                       | GPU ms saved       | Was (step 1)       | Draws saved           | Tris saved (M)     |
+    | ------------------------------- | ------------------ | ------------------ | --------------------- | ------------------ |
+    | Normal                          | 1.84 / 1.49 / 1.71 | 4.66 / 3.85 / 3.54 | 3,111 / 2,604 / 2,094 | 4.73 / 3.54 / 3.29 |
+    | Sun shadows off (= view share)  | 1.02 / 1.16 / 1.15 | 2.59 / 2.38 / 2.25 | 1,177 / 1,054 / 710   | 1.19 / 0.89 / 0.86 |
+    | Shadows off + half render scale | 0.75 / 0.59 / 0.47 | 1.78 / 1.69 / 1.35 | as shadows off        | as shadows off     |
+
+    The trees are now 1.5-1.8 ms of GPU in all, 1.0-1.2 ms of it in the view (0.3-0.7 ms of that
+    per pixel) and 0.3-0.8 ms in the shadow passes. But hiding them still shortens the FRAME by
+    3.4-3.6 ms at spawn_ahead and exit_look_back: there the trees' 2,600-3,100 draws are the
+    cost, not their triangles. (The half-scale row is one run.)
+  - **Mid LOD: not worth it now.** Its ceiling is the 1.0-1.2 ms view share, a realistic mid LOD
+    recovers a part of that, and it carries the highest visual risk on the list. The tree lever
+    that remains is draw calls (surfaces per tree x cells x cascades).
 - Upper bound on the saving: the whole tree cost, 3.7-4.8 ms. The real figure depends on step 1.
 - Risk: the crowns are leaf cards, which simplify badly. Each tree needs a visual check, both for
   the crown silhouette and for the shadow it casts.

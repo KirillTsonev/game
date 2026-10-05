@@ -317,7 +317,6 @@ func _ready() -> void:
 	print("TERRAIN_GEN_STARTUP: first frame drawn at t=%.2fs since process start (+%.2fs after _ready) | pipelines so far: %s | physics step time %.1f ms" % [t_first_draw / 1000.0, (t_first_draw - t_ready_end) / 1000.0, _pipeline_counts_str(), Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0])
 	for i in 3:
 		await RenderingServer.frame_post_draw
-	print("TERRAIN_GEN: tree shadow nodes limited to %.0f m: %d" % [TreeScatter.TREE_SHADOW_RANGE, TreeScatter.limit_shadow_copy_range(terrain)])
 	var t_settled := Time.get_ticks_msec()
 	startup_timings["first_frame_at_ms"] = t_first_draw
 	startup_timings["pipelines_at_settle"] = _pipeline_counts_str()
