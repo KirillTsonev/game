@@ -7,7 +7,8 @@
 ##   saplings: their soft stem push is switched off),
 ##   so a hidden tree or boulder can be walked through.
 ## - Cliff meshes: the CliffDressing node (fault-line, knot and landmark cliffs; hidden + colliders
-##   off). The terrain shaped around them stays. Outcrops are not included.
+##   off). The terrain shaped around them stays.
+## - Outcrop meshes (2026-10-05): the same for the outcrop container node.
 ## Mouse: same as the grass tuning panel -- J opens it with the cursor; click outside to look
 ## around again; J = cursor back, J again to close.
 class_name LayerTogglePanel
@@ -23,6 +24,7 @@ const LAYERS := [
 	[&"flowers", "Flowers"],
 	[&"deadfall", "Logs / stumps / branches"],
 	[&"cliffs", "Cliff meshes"],
+	[&"outcrops", "Outcrop meshes"],
 ]
 
 var _shown: Dictionary = {} # layer key -> bool
@@ -80,12 +82,13 @@ func _on_layer_toggled(on: bool, key: StringName) -> void:
 		if field:
 			field.visible = on
 			field.process_mode = Node.PROCESS_MODE_INHERIT if on else Node.PROCESS_MODE_DISABLED
-	elif key == &"cliffs":
+	elif key == &"cliffs" or key == &"outcrops":
 		# Their colliders are children of the meshes, so disabling the container removes those too.
-		var cliffs := get_tree().current_scene.get_node_or_null(CliffInstancer.CLIFF_DRESSING_NODE_NAME) as Node3D
-		if cliffs:
-			cliffs.visible = on
-			cliffs.process_mode = Node.PROCESS_MODE_INHERIT if on else Node.PROCESS_MODE_DISABLED
+		var container_name: String = CliffInstancer.CLIFF_DRESSING_NODE_NAME if key == &"cliffs" else TerrainOutcrops.OUTCROP_NODE_NAME
+		var container := get_tree().current_scene.get_node_or_null(container_name) as Node3D
+		if container:
+			container.visible = on
+			container.process_mode = Node.PROCESS_MODE_INHERIT if on else Node.PROCESS_MODE_DISABLED
 	else:
 		_set_meshes_shown(mesh_ids(key), on)
 		_set_colliders_enabled(key, on)

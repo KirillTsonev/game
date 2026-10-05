@@ -57,10 +57,11 @@ at grove edges). What is missing is the materials that make thin ground read as 
   1.5; moon energy 3.0 -> 2.0. (Source = Sky did nothing: the sky top is near black.) User-tuned
   in the Inspector; edit the Local scene and re-run -- editing the Environment via the Remote tree
   changed the local resource, not the running game.
-- **SSAO ON at quality Low** (`environment/ssao/quality=1` in `project.godot`; radius 2,
-  intensity 3, light affect 0.3). At the default quality (Medium) it cost 15-20 points of GPU
-  utilisation. Baked grounding (step 5) is still wanted: it survives the painterly pass and
-  distance.
+- **SSAO: OFF since 2026-10-05** (Kirill: "not worth"), and its Options menu entries removed.
+  Measured 1.3-2.0 ms of GPU at every quality level (`docs/performance_findings.md` step 5).
+  Before that it was on at quality Low (`environment/ssao/quality=1` in `project.godot`; radius 2,
+  intensity 3, light affect 0.3 -- those three are still in `main.tscn`). Baked grounding
+  (step 5) is the replacement: it survives the painterly pass and distance.
 - **Shadow handoff:** `light_angular_distance` 0.05. Details and rejected shader attempts:
   `docs/shadows.md`.
 - **No texture parallax** for ground depth (both road attempts failed -- see `CLAUDE.md`).

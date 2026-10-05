@@ -281,6 +281,23 @@ func build_pack_trees() -> String:
 	out.append("saved %s (err=%d)" % [ASSETS_PATH, assets.save(ASSETS_PATH)])
 	return "\n".join(out)
 
+## Writes only shadow_impostor / last_shadow_lod to the pack trees' mesh assets -- nothing is
+## re-baked. For shadow-cost trials (docs/performance_findings.md step 2); build_pack_trees()
+## sets the project's values (0 / 0). Run in the EDITOR process. Returns what it changed.
+func set_tree_shadow_lods(shadow_impostor: int, last_shadow_lod: int) -> String:
+	var assets: Terrain3DAssets = load(ASSETS_PATH)
+	var out: Array[String] = []
+	for entry: Dictionary in PACK_TREES:
+		var a: Terrain3DMeshAsset = assets.get_mesh_asset(entry.id)
+		if a == null:
+			continue
+		var before := "%d / %d" % [a.get_shadow_impostor(), a.get_last_shadow_lod()]
+		a.set_last_shadow_lod(int(last_shadow_lod))
+		a.set_shadow_impostor(int(shadow_impostor))
+		out.append("id=%d %s: shadow_impostor / last_shadow_lod %s -> %d / %d" % [entry.id, entry.name, before, a.get_shadow_impostor(), a.get_last_shadow_lod()])
+	out.append("saved %s (err=%d)" % [ASSETS_PATH, assets.save(ASSETS_PATH)])
+	return "\n".join(out)
+
 ## Dithered cross-fade (metres) at the pack trees' cull distance -- used by build_pack_trees().
 ## (Without an impostor the asset is single-LOD, and Terrain3D clamps the fade to 0 anyway.)
 const TREE_FADE_MARGIN := 24.0

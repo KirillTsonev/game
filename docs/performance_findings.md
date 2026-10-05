@@ -11,7 +11,27 @@ How to run and compare benchmarks: the "Performance benchmark" section of `CLAUD
   This is the baseline for every later comparison.
 - Setup: 1906x942 window, 3D render scale 0.85, RTX 3070 Laptop GPU, Godot 4.7.2, seed 858829582.
   Fullscreen at a higher resolution will be slower than these figures.
-- **Baseline for later comparisons: `20261005_105951_ea72f831_baseline2.json`**, taken after the
+- **Baseline for later comparisons, since 2026-10-05 afternoon:
+  `20261005_143830_40598523_baseline3.json`.** Three things changed against `baseline2`: SSAO
+  off (step 5), understory shadows from the nearest LOD only (step 3), and Kirill's short-grass
+  range, 25 / 60 m -> 50 / 100 m (`SHORT_LAYERS`; grass now costs 1.3-1.6 ms of GPU where it
+  cost 0.9-1.0, instance buffers 64 -> 111 MB). baseline2 -> baseline3:
+
+  | Station        | GPU ms         | Frame ms       | Render CPU ms | Draws           |
+  | -------------- | -------------- | -------------- | ------------- | --------------- |
+  | spawn_ahead    | 11.37 -> 10.59 | 13.12 -> 15.92 (disturbed) | 9.58 -> 11.89 (disturbed) | 10,875 -> 8,137 |
+  | road_open      | 10.91 -> 10.31 | 12.90 -> 11.33 | 9.25 -> 7.62  | 9,593 -> 6,995  |
+  | exit_look_back | 10.94 -> 10.05 | 11.98 -> 11.24 | 8.57 -> 7.57  | 8,391 -> 7,117  |
+  | forest_dense   | 10.48 -> 9.55  | 11.57 -> 10.46 | 7.73 -> 5.90  | 8,202 -> 5,797  |
+  | road_mid       | 10.06 -> 9.12  | 10.51 -> 9.69  | 5.87 -> 4.66  | 6,970 -> 4,973  |
+  | cliff_face     | 9.23 -> 8.31   | 9.57 -> 8.96   | 3.19 -> 2.73  | 2,967 -> 2,374  |
+  | spawn_ground   | 6.79 -> 5.94   | 7.45 -> 6.61   | 5.02 -> 3.29  | 6,165 -> 3,568  |
+
+  Road walk: 12.25 -> 10.94 ms (82 -> 91 FPS), p99 16.09 -> 13.16 ms, frames over 16.7 ms
+  10 -> 0. spawn_ahead's station reading had frame spikes (p95 26 ms; it is the first station
+  measured) -- its GPU figure is usable, its frame and CPU figures are not. The tables under
+  "Findings" still describe the first report.
+- Baseline before that: `20261005_105951_ea72f831_baseline2.json`, taken after the
   startup work in step 6 changed understory and flower placement. Against the report above its
   GPU ms are within 4 % at every station and its frame ms 1-7 % higher (apart from `spawn_sky`),
   with 10 frames over 16.7 ms in the walk where there were none. GPU time did not move, so that
@@ -224,9 +244,9 @@ left blank where nothing supports an estimate yet.
 | --- | ----------------------------------------------------------------------- | ---------------------- | ----------------------------------------------- |
 | 1   | Split the tree cost: view vs shadow, and pixels vs triangles            | sizes steps 2, 4 and 7 | done 2026-10-05, results below                  |
 | 2   | Mid LOD for trees, also used as the shadow mesh (`shadow_impostor`)     | conclusions 3, 4       | not started                                     |
-| 3   | Cheaper understory shadows: limit casting first, then `shadow_impostor` | conclusions 3, 5, 7    | not started                                     |
+| 3   | Cheaper understory shadows: limit casting first, then `shadow_impostor` | conclusions 3, 5, 7    | limit casting done 2026-10-05 (draws -15 to -42 %); `shadow_impostor` not tried |
 | 4   | Shorter sun shadow distance                                             | conclusions 3, 4       | range alone measured: no gain; impostor part untested |
-| 5   | Cheaper screen-space settings                                           | conclusion 6           | needs a decision; SSAO quality level makes no difference |
+| 5   | Cheaper screen-space settings                                           | conclusion 6           | SSAO switched off 2026-10-05; MSAA and post effects undecided |
 | 6   | Startup time                                                            | conclusion 8           | cheap wins done: 16.3 s -> 8.8 s to first frame |
 | 7   | Cheaper leaf shading                                                    | conclusions 2, 6       | worth a trial (step 1: part of the view cost is per pixel) |
 | 8   | GPU-driven drawing for the understory view pass                         | conclusion 7           | deferred; reassess after step 3                 |
@@ -296,6 +316,17 @@ shadows from it instead of the full mesh.
   nearer than N are drawn without shadows and LOD N is drawn shadows-only in their place.
   `build_pack_trees()` sets it to 0 (off) today. The trees have only the full mesh and the
   8-triangle impostor, so this needs the mid LOD first.
+- **Ceiling for the shadow half, measured 2026-10-05** (run
+  `20261005_144958_40598523_trial_tree_shadow_from_impostor` against `baseline3`): for one run
+  the trees cast their shadows from the 8-triangle impostor (`shadow_impostor` 1,
+  `last_shadow_lod` 1, set and restored with `set_tree_shadow_lods()` in
+  `tools/setup_tree_assets.gd`). The setting works as documented: 4-6 M fewer triangles per
+  frame. GPU 0.6-1.3 ms lower at every station with trees (spawn_ahead 10.59 -> 9.28,
+  road_open 10.31 -> 9.19, exit_look_back 10.05 -> 9.18, forest_dense 9.55 -> 8.94); road walk
+  10.94 -> 9.99 ms frame (91 -> 100 FPS), GPU 10.28 -> 8.98 ms. Draws barely change (the shadow
+  draws remain, with a smaller mesh). So of the trees' ~2.1 ms shadow cost about half depends on
+  triangle count; a real reduced shadow mesh can recover at most this much, and less the more
+  triangles it keeps. How the impostor's own shadow looks was not checked.
 - Upper bound on the saving: the whole tree cost, 3.7-4.8 ms. The real figure depends on step 1.
 - Risk: the crowns are leaf cards, which simplify badly. Each tree needs a visual check, both for
   the crown silhouette and for the shadow it casts.
@@ -322,6 +353,40 @@ the runs before and after), so only their GPU, draw and triangle columns are use
   (2.5-5.4 M). In GPU time the shadow share is 0.2-1.0 ms; the view share is steady at 0.6-0.7 ms.
 - That is the most "limit casting" can remove. What it does to frame time has to be measured
   after the change: step 4's trial removed a similar number of draws for no gain.
+
+**"Limit casting" done 2026-10-05. Kirill checked it in-game the same day: "looks fine". Kept.**
+`last_shadow_lod` 0 for Fern02, the four bushes, the nine lady ferns and the two elderberries
+(was 2, bushes 1): only the nearest LOD casts, to 50 m (bushes 80 m), measured per 32 m cell.
+Later the same day Kirill asked for 60 m instead of 50: the shadow limit is the near LOD's
+range, so the ferns' and elderberries' near-to-far mesh switch moved from 50 to 60 m with it
+(`ranges` in `UNDERSTORY_ASSETS`). Not benchmarked; `baseline3` was taken at 50 m.
+Poppies unchanged. Set by `apply_shadow_lods()` in `tools/setup_understory_assets.gd`, which
+writes only that field; to undo, restore 2 / 1 in `UNDERSTORY_ASSETS` and run it again.
+Full run `20261005_141550_40598523_understory_shadow_lod0_rerun` against `baseline2`:
+
+| Station        | Draws           | Tris (M)       | Render CPU ms | GPU ms         | Frame ms       |
+| -------------- | --------------- | -------------- | ------------- | -------------- | -------------- |
+| spawn_ahead    | 10,875 -> 8,137 | 21.21 -> 19.79 | 9.58 -> 8.52  | 11.37 -> 11.63 | 13.12 -> 12.38 |
+| road_open      | 9,593 -> 6,995  | 19.88 -> 18.47 | 9.25 -> 7.60  | 10.91 -> 11.27 | 12.90 -> 11.76 |
+| exit_look_back | 8,391 -> 7,117  | 21.45 -> 20.08 | 8.57 -> 8.54  | 10.94 -> 11.27 | 11.98 -> 12.31 |
+| forest_dense   | 8,202 -> 5,797  | 17.40 -> 16.29 | 7.73 -> 7.34  | 10.48 -> 11.05 | 11.57 -> 12.21 |
+| road_mid       | 6,970 -> 4,973  | 17.03 -> 15.90 | 5.87 -> 5.87  | 10.06 -> 10.46 | 10.51 -> 11.83 |
+| spawn_ground   | 6,165 -> 3,568  | 15.89 -> 14.69 | 5.02 -> 3.33  | 6.79 -> 6.91   | 7.45 -> 7.78   |
+| cliff_face     | 2,967 -> 2,374  | 14.10 -> 13.29 | 3.19 -> 2.76  | 9.23 -> 9.20   | 9.57 -> 9.65   |
+| spawn_sky      | 265 -> 265      | 6.56 -> 6.56   | 0.79 -> 0.78  | 2.65 -> 3.08   | 6.06 -> 6.06   |
+
+- **Draws down 15-42 %** (1,270-2,740 fewer), triangles down 1.1-1.4 M, render CPU down by
+  0-1.7 ms.
+- **No GPU gain and no reliable frame-time gain.** GPU reads 0.1-0.6 ms higher at every station
+  that has plants, but also 0.43 ms higher at spawn_sky, which draws none, so that is drift
+  between the two runs (four hours apart), not the change. Frame time is better at two stations
+  and worse at three; the walk is 12.25 -> 12.78 ms with 25 frames over 16.7 ms (was 10).
+- **The frame is now GPU-limited at the heavy stations.** Before, switching SSAO or the post
+  effects off at spawn_ahead saved 0.5-0.6 ms of frame time for 1.7-1.8 ms of GPU time; now it
+  saves 2.3 ms for 1.9 ms. So the CPU limit is lifted there, and the next frame-time gains have
+  to come from the GPU side (trees, SSAO, post effects).
+- A first run of this had sun shadows, SSAO and the post effects off in the saved Options
+  settings and was discarded. The benchmark now records those three and warns if one is off.
 
 - **Limit casting.** Stop ferns and small bushes casting sun shadows beyond their nearest LOD, or
   switch shadows off for the smallest ferns entirely. This is the part that cuts draw calls. An
@@ -371,6 +436,10 @@ Look-versus-speed choices, each independent:
   write normals and roughness for every mesh, foliage included -- an inference, not checked), or
   the runtime quality setter the dropdown uses has no effect. Nobody has compared the levels by
   eye in-game.
+  **Switched off 2026-10-05** (Kirill: "not worth"): `ssao_enabled` removed from `main.tscn`'s
+  Environment, the Ambient Occlusion toggle and quality dropdown removed from the Options menu
+  (`scenes/pause_menu.tscn`, `scripts/pause_menu.gd`), the benchmark's quality toggles removed.
+  New baseline with it off: see "The run these numbers come from".
 - 3D MSAA (2x): 0.8-1.2 ms.
 - Post effects: 1.5-1.8 ms in total, about half of it the painterly effect.
 

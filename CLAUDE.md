@@ -817,13 +817,20 @@ optimisation; never judge by GPU utilisation %.
   frame ms is now real. A station sitting at exactly 5.00 ms is on that 200 FPS limit (only
   `spawn_sky` so far) -- read its GPU ms instead. In the afternoon runs of 2026-10-05 the limit read
   6.06 ms (165 FPS) instead. The report flags a capped run (`frame_capped`).
-- Baseline to compare against: `20261005_105951_ea72f831_baseline2.json` (taken after the
+- Baseline to compare against: `20261005_143830_40598523_baseline3.json` (SSAO off, understory
+  shadows from the nearest LOD only, short grass to 100 m -- see `docs/performance_findings.md`).
+  Before those three changes: `20261005_105951_ea72f831_baseline2.json` (taken after the
   understory + flower placement changed, see `docs/performance_findings.md` step 6). The earlier
   `..._uncapped.json` has the old plant placement (GPU ms within 4 % of baseline2); the capped
   `..._baseline.json` must not be used at all: for the same scene its GPU ms read 2-19 % lower
   at seven of the eight stations (cause unknown), so a diff against it shows a false regression.
 - Startup only: a 20-frame launch is enough (`... --path herald-of-oblivion --quit-after 20`,
   ~15 s) -- read the `TERRAIN_GEN` timing and checksum lines it prints.
+- A benchmark launch uses the Options menu's saved video settings (`user://settings.cfg`): a run
+  with sun shadows or the post effects switched off there is not comparable (happened
+  2026-10-05). The report's first line shows them and the bench warns at the start.
+- CPU cost: read `cpu_render_ms` in the report's json (averaged over 120+ frames; not in the
+  .txt). A single frame of the editor's Visual Profiler is not repeatable on the CPU side.
 - The bench lifts VSync and `max_fps` itself. A normal play session is separately capped by
   `run/max_fps=60` in `project.godot` (and by VSync, which is on by default).
 - **Never set `Terrain3DMeshAsset.enabled = false` at runtime**: the game closes one frame later

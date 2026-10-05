@@ -441,8 +441,8 @@ id = 28
 scene_file = ExtResource("35_6bfbq")
 density = 0.1
 last_lod = 2
-last_shadow_lod = 2
-lod0_range = 50.0
+last_shadow_lod = 0
+lod0_range = 60.0
 lod1_range = 150.0
 lod2_range = 0.0
 
@@ -452,7 +452,7 @@ id = 29
 scene_file = ExtResource("37_gv63u")
 density = 0.1
 last_lod = 1
-last_shadow_lod = 1
+last_shadow_lod = 0
 lod0_range = 80.0
 lod1_range = 0.0
 
@@ -462,7 +462,7 @@ id = 30
 scene_file = ExtResource("39_e33tj")
 density = 0.1
 last_lod = 1
-last_shadow_lod = 1
+last_shadow_lod = 0
 lod0_range = 80.0
 lod1_range = 0.0
 
@@ -472,7 +472,7 @@ id = 31
 scene_file = ExtResource("41_gdy8x")
 density = 0.1
 last_lod = 1
-last_shadow_lod = 1
+last_shadow_lod = 0
 lod0_range = 80.0
 lod1_range = 0.0
 
@@ -482,7 +482,7 @@ id = 32
 scene_file = ExtResource("43_r3kdc")
 density = 0.1
 last_lod = 1
-last_shadow_lod = 1
+last_shadow_lod = 0
 lod0_range = 80.0
 lod1_range = 0.0
 
@@ -759,8 +759,8 @@ id = 55
 scene_file = ExtResource("78_xrnjs")
 density = 0.1
 last_lod = 2
-last_shadow_lod = 2
-lod0_range = 50.0
+last_shadow_lod = 0
+lod0_range = 60.0
 lod1_range = 150.0
 lod2_range = 0.0
 
@@ -770,8 +770,8 @@ id = 56
 scene_file = ExtResource("79_wakti")
 density = 0.1
 last_lod = 2
-last_shadow_lod = 2
-lod0_range = 50.0
+last_shadow_lod = 0
+lod0_range = 60.0
 lod1_range = 150.0
 lod2_range = 0.0
 
@@ -781,8 +781,8 @@ id = 57
 scene_file = ExtResource("80_aiiri")
 density = 0.1
 last_lod = 2
-last_shadow_lod = 2
-lod0_range = 50.0
+last_shadow_lod = 0
+lod0_range = 60.0
 lod1_range = 150.0
 lod2_range = 0.0
 
@@ -792,8 +792,8 @@ id = 58
 scene_file = ExtResource("81_0aw0g")
 density = 0.1
 last_lod = 2
-last_shadow_lod = 2
-lod0_range = 50.0
+last_shadow_lod = 0
+lod0_range = 60.0
 lod1_range = 150.0
 lod2_range = 0.0
 
@@ -803,8 +803,8 @@ id = 59
 scene_file = ExtResource("82_qtfnw")
 density = 0.1
 last_lod = 2
-last_shadow_lod = 2
-lod0_range = 50.0
+last_shadow_lod = 0
+lod0_range = 60.0
 lod1_range = 150.0
 lod2_range = 0.0
 
@@ -814,8 +814,8 @@ id = 60
 scene_file = ExtResource("83_winaf")
 density = 0.1
 last_lod = 2
-last_shadow_lod = 2
-lod0_range = 50.0
+last_shadow_lod = 0
+lod0_range = 60.0
 lod1_range = 150.0
 lod2_range = 0.0
 
@@ -825,8 +825,8 @@ id = 61
 scene_file = ExtResource("84_uc302")
 density = 0.1
 last_lod = 2
-last_shadow_lod = 2
-lod0_range = 50.0
+last_shadow_lod = 0
+lod0_range = 60.0
 lod1_range = 150.0
 lod2_range = 0.0
 
@@ -836,8 +836,8 @@ id = 62
 scene_file = ExtResource("85_5s1lv")
 density = 0.1
 last_lod = 2
-last_shadow_lod = 2
-lod0_range = 50.0
+last_shadow_lod = 0
+lod0_range = 60.0
 lod1_range = 150.0
 lod2_range = 0.0
 
@@ -847,8 +847,8 @@ id = 63
 scene_file = ExtResource("86_e6ofu")
 density = 0.1
 last_lod = 2
-last_shadow_lod = 2
-lod0_range = 50.0
+last_shadow_lod = 0
+lod0_range = 60.0
 lod1_range = 150.0
 lod2_range = 0.0
 
@@ -908,8 +908,8 @@ id = 69
 scene_file = ExtResource("92_5s1lv")
 density = 0.1
 last_lod = 2
-last_shadow_lod = 2
-lod0_range = 50.0
+last_shadow_lod = 0
+lod0_range = 60.0
 lod1_range = 150.0
 lod2_range = 0.0
 
@@ -919,8 +919,8 @@ id = 70
 scene_file = ExtResource("93_e6ofu")
 density = 0.1
 last_lod = 2
-last_shadow_lod = 2
-lod0_range = 50.0
+last_shadow_lod = 0
+lod0_range = 60.0
 lod1_range = 150.0
 lod2_range = 0.0
 

@@ -16,8 +16,7 @@
 ##      frame time (avg / p50 / p95 / p99 / worst), GPU ms, render CPU ms, draw calls, triangles,
 ##      video memory.
 ##   4. Ablation at ABLATION_STATIONS: one thing switched off at a time (each scatter layer, each
-##      compositor effect, sun shadows, sun shadows at 100 m, SSAO, SSAO at each
-##      quality level, MSAA, FXAA, half render scale). "delta" = what the
+##      compositor effect, sun shadows, sun shadows at 100 m, SSAO (if on), MSAA, FXAA, half render scale). "delta" = what the
 ##      frame gains with it off = roughly its cost. Costs overlap, so deltas do not add up.
 ##   5. Walk: along the road at WALK_SPEED -- frame-time spikes while the world streams past.
 ##   6. Startup: WorldGenerator.startup_timings.
@@ -100,6 +99,19 @@ func run(quit_when_done: bool, label: String) -> void:
 		await _settle()
 	if root.size != WINDOW_SIZE:
 		push_warning("[Bench] viewport is %s, wanted %s -- results are not comparable with a %s run" % [root.size, WINDOW_SIZE, WINDOW_SIZE])
+	# The Options menu's saved video settings apply to a benchmark launch too. A run with one of
+	# these off is not comparable with the baseline (happened 2026-10-05) -- record and warn.
+	var world_env := _scene.get_node_or_null("WorldEnvironment") as WorldEnvironment
+	var ssao_on := world_env != null and world_env.environment != null and world_env.environment.ssao_enabled
+	var post_effects_on := 0
+	if world_env and world_env.compositor:
+		for effect in world_env.compositor.compositor_effects:
+			if effect and effect.enabled:
+				post_effects_on += 1
+	var shadows_arg_off := "--bench-no-shadows" in OS.get_cmdline_user_args()
+	# (SSAO is off in the project since 2026-10-05 and has no menu entry; it is only recorded.)
+	if post_effects_on == 0 or (sun and not sun.shadow_enabled and not shadows_arg_off):
+		push_warning("[Bench] video settings differ from the baseline: sun shadows %s, %d post effects on -- check the Options menu" % ["on" if sun and sun.shadow_enabled else "OFF", post_effects_on])
 
 	var report := {
 		"meta": {
@@ -115,7 +127,8 @@ func run(quit_when_done: bool, label: String) -> void:
 			"scaling_3d_scale": root.scaling_3d_scale,
 			"scaling_3d_mode": root.scaling_3d_mode,
 			"sun_shadows": sun != null and sun.shadow_enabled,
-			"ssao_quality": root.get_node("PauseMenu").ssao_quality_option.selected if root.has_node("PauseMenu") else -1,
+			"ssao": ssao_on,
+			"post_effects_on": post_effects_on,
 			"frame_capped": false,
 		},
 		"startup": _gen.startup_timings,
@@ -493,18 +506,8 @@ func _build_toggles() -> Array[Dictionary]:
 		for prop in ["ssao_enabled", "ssil_enabled", "sdfgi_enabled", "glow_enabled", "volumetric_fog_enabled", "fog_enabled", "ssr_enabled"]:
 			if env.get(prop) == true:
 				toggles.append({"name": "env:%s" % prop.trim_suffix("_enabled"), "apply":func(on: bool) -> void: env.set(prop, on)})
-		# SSAO at every quality level (a global renderer setting, applied through the pause
-		# menu's own setter). "saved" is against the current level, so a level's cost = the
-		# env:ssao row minus its row; the row of the current level shows the measuring noise.
-		var menu := root.get_node_or_null("PauseMenu")
-		if env.ssao_enabled and menu:
-			var option: OptionButton = menu.ssao_quality_option
-			var current := option.selected
-			for q: int in menu.SSAO_QUALITY_NAMES.size():
-				var set_quality := func(on: bool) -> void:
-					option.select(current if on else q)
-					menu._apply_ssao_quality()
-				toggles.append({"name": "ssao_quality:%s" % str(menu.SSAO_QUALITY_NAMES[q]).to_snake_case(), "apply": set_quality})
+		# (2026-10-05: toggles for SSAO at each quality level were here. Every level cost the same
+		# -- docs/performance_findings.md step 5 -- and SSAO is off in the project since.)
 
 	var sun := _scene.get_node_or_null("DirectionalLight3D") as DirectionalLight3D
 	if sun and sun.shadow_enabled:
@@ -757,7 +760,7 @@ static func _summary(report: Dictionary) -> String:
 	var meta: Dictionary = report.meta
 	var out: Array[String] = []
 	out.append("==== PERF BENCH %s  git %s  %s ====" % [meta.label, meta.git, meta.time])
-	out.append("viewport %dx%d, 3D scale %.3f, sun shadows %s | %s | Godot %s | seed %d" % [meta.viewport[0], meta.viewport[1], meta.scaling_3d_scale, "on" if meta.sun_shadows else "OFF", meta.adapter, meta.godot, meta.seed])
+	out.append("viewport %dx%d, 3D scale %.3f, sun shadows %s, SSAO %s, %d post effects | %s | Godot %s | seed %d" % [meta.viewport[0], meta.viewport[1], meta.scaling_3d_scale, "on" if meta.sun_shadows else "OFF", "on" if meta.ssao else "OFF", meta.post_effects_on, meta.adapter, meta.godot, meta.seed])
 	if meta.frame_capped:
 		out.append("!! FRAME RATE CAPPED FROM OUTSIDE THE GAME (driver / overlay limiter): the frame columns show the cap -- read the GPU columns.")
 	out.append("")

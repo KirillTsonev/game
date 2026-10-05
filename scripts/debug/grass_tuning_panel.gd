@@ -3,6 +3,8 @@
 ##
 ## - Band sliders edit a working copy; "Apply bands" rebuilds the grass field with them
 ##   (GrassField.blade_bands + GrassField.spawn) -- takes a moment.
+## - Short grass (2026-10-05): per short layer its end, fade-out width (the metres before the end
+##   over which it thins to nothing) and blade spacing; applied by the same "Apply bands".
 ## - Widening sliders (blade width x 1 + min(pow(scale * dist, power), max)) apply LIVE.
 ## - Readout per band: blades per m^2, grid cells the GPU cull pass walks EVERY FRAME (the real cost:
 ##   (2 x end / spacing)^2), and blade widening at the band's far edge.
@@ -18,7 +20,19 @@ extends CanvasLayer
 const BAND_END_RANGE := [5.0, 250.0]
 const SPACING_RANGE := [0.05, 8.0]
 
+const SHORT_END_RANGE := [5.0, 150.0]
+const SHORT_FADE_RANGE := [0.5, 60.0]
+const SHORT_SPACING_RANGE := [0.05, 1.0]
+## Short-layer sliders: [dictionary key, row title, range, step, label format].
+const SHORT_ROWS := [
+	["outer", "end", SHORT_END_RANGE, 1.0, "%.1f m"], ["band", "fade-out width", SHORT_FADE_RANGE, 1.0, "%.1f m"],
+	["spacing", "blade spacing", SHORT_SPACING_RANGE, 0.01, "%.3f m"],
+]
+
 var _bands: Array = [] # working copy of GrassField.blade_bands
+var _short: Array = [] # working copy of GrassField.short_layers
+var _short_sliders: Array[Dictionary] = [] # per layer: key -> HSlider
+var _short_labels: Array[Dictionary] = [] # per layer: key -> Label
 var _end_sliders: Array[HSlider] = []
 var _spacing_sliders: Array[HSlider] = []
 var _end_labels: Array[Label] = []
@@ -50,6 +64,7 @@ var _tint_mult_label: Label
 func _ready() -> void:
 	layer = 50
 	_bands = GrassField.blade_bands.duplicate(true)
+	_short = GrassField.short_layers.duplicate(true)
 
 	var panel := PanelContainer.new()
 	panel.anchor_left = 1.0
@@ -79,6 +94,18 @@ func _ready() -> void:
 		_spacing_sliders.append(sr[0])
 		_spacing_labels.append(sr[1])
 		sr[0].value_changed.connect(_on_band_changed.bind(k, "spacing"))
+
+	box.add_child(HSeparator.new())
+	_add_label(box, "Short grass in the gaps -- change, then Apply bands", true)
+	for k in _short.size():
+		var title := "Short %s" % ("far" if k == _short.size() - 1 else "near" if k == 0 else str(k))
+		_short_sliders.append({})
+		_short_labels.append({})
+		for spec in SHORT_ROWS:
+			var row := _add_slider_row(box, "%s %s" % [title, spec[1]], spec[2][0], spec[2][1], spec[3], float(_short[k][spec[0]]))
+			_short_sliders[k][spec[0]] = row[0]
+			_short_labels[k][spec[0]] = row[1]
+			row[0].value_changed.connect(_on_short_changed.bind(k, spec[0]))
 
 	box.add_child(HSeparator.new())
 	_add_label(box, "Distance widening (live): width x 1 + min((scale x d)^power, max)", true)
@@ -269,6 +296,11 @@ func _on_band_changed(value: float, k: int, key: String) -> void:
 	_status.text = "Bands edited -- press Apply bands to rebuild the grass."
 	_refresh_labels()
 
+func _on_short_changed(value: float, k: int, key: String) -> void:
+	_short[k][key] = value
+	_status.text = "Short grass edited -- press Apply bands to rebuild the grass."
+	_refresh_labels()
+
 func _on_widen_changed(value: float, key: String) -> void:
 	match key:
 		"scale":
@@ -295,14 +327,17 @@ func _on_wind_changed(value: float, key: String) -> void:
 func _on_apply() -> void:
 	GrassField.blade_bands = _sanitized(_bands)
 	_bands = GrassField.blade_bands.duplicate(true)
+	GrassField.short_layers = _sanitized_short(_short)
+	_short = GrassField.short_layers.duplicate(true)
 	_sync_sliders()
 	GrassField.spawn(get_tree().current_scene)
 	_status.text = "Rebuilt grass field with the new bands."
-	print("[GrassTuning] applied bands: %s" % _bands_str(_bands))
+	print("[GrassTuning] applied bands: %s | short: %s" % [_bands_str(_bands), _bands_str(_short)])
 
 func _on_reset() -> void:
 	GrassField.reset_tuning()
 	_bands = GrassField.blade_bands.duplicate(true)
+	_short = GrassField.short_layers.duplicate(true)
 	_sync_sliders()
 	for key in _widen_sliders:
 		_widen_sliders[key].set_value_no_signal({"scale": GrassField.widen_scale, "power": GrassField.widen_power, "max": GrassField.widen_max}[key])
@@ -329,6 +364,10 @@ func _on_print() -> void:
 		lines.append("\t{\"name\": \"%s\", \"inner\": %.1f, \"outer\": %s, \"band\": %.1f, \"spacing\": %.2f, \"mesh\": \"%s\"}," % [b.name, float(b.inner), outer, float(b.band), float(b.spacing), b.mesh])
 	lines.append("]")
 	lines.append("const RADIUS := %.1f" % float(_bands[-1].outer))
+	lines.append("const SHORT_LAYERS: Array[Dictionary] = [")
+	for s: Dictionary in _short:
+		lines.append("\t{\"name\": \"%s\", \"kind\": %d, \"inner\": %.1f, \"outer\": %.1f, \"band\": %.1f, \"spacing\": %.2f}," % [s.name, int(s.kind), float(s.inner), float(s.outer), float(s.band), float(s.spacing)])
+	lines.append("]")
 	lines.append("const WIDEN_SCALE := %.3f" % GrassField.widen_scale)
 	lines.append("const WIDEN_POWER := %.2f" % GrassField.widen_power)
 	lines.append("const WIDEN_MAX := %.1f" % GrassField.widen_max)
@@ -360,10 +399,25 @@ func _sanitized(bands: Array) -> Array:
 		prev = float(b.outer)
 	return out
 
+## Short layers: each starts where the previous ends, is at least 2 m deep, and thins out over at
+## most its own depth.
+func _sanitized_short(layers: Array) -> Array:
+	var out: Array = layers.duplicate(true)
+	var prev := 0.0
+	for s: Dictionary in out:
+		s.inner = prev
+		s.outer = maxf(float(s.outer), prev + 2.0)
+		s.band = clampf(float(s.band), SHORT_FADE_RANGE[0], float(s.outer) - prev)
+		prev = float(s.outer)
+	return out
+
 func _sync_sliders() -> void:
 	for k in _bands.size():
 		_end_sliders[k].set_value_no_signal(float(_bands[k].outer))
 		_spacing_sliders[k].set_value_no_signal(float(_bands[k].spacing))
+	for k in _short.size():
+		for key: String in _short_sliders[k]:
+			_short_sliders[k][key].set_value_no_signal(float(_short[k][key]))
 	_refresh_labels()
 
 func _refresh_labels() -> void:
@@ -378,7 +432,14 @@ func _refresh_labels() -> void:
 		var cells := int(pow(2.0 * outer / spacing, 2.0))
 		total_cells += cells
 		lines.append("band %d  %3.0f-%3.0f m   %6.2f blades/m2   cells %s   widen x%.1f" % [k, float(b.inner), outer, 1.0 / (spacing * spacing), _k(cells), GrassField.widen_at(outer)])
-	lines.append("GPU cull cells per frame (all bands): %s" % _k(total_cells))
+	for k in _short.size():
+		var s: Dictionary = _short[k]
+		for spec in SHORT_ROWS:
+			_short_labels[k][spec[0]].text = spec[4] % float(s[spec[0]])
+		var short_cells := int(pow(2.0 * float(s.outer) / float(s.spacing), 2.0))
+		total_cells += short_cells
+		lines.append("short %d %3.0f-%3.0f m   %6.2f blades/m2   cells %s   fades out over the last %.0f m" % [k, float(s.inner), float(s.outer), 1.0 / (float(s.spacing) * float(s.spacing)), _k(short_cells), float(s.band)])
+	lines.append("GPU cull cells per frame (all bands + short): %s" % _k(total_cells))
 	_readout.text = "\n".join(lines)
 	_widen_labels["scale"].text = "%.4f" % GrassField.widen_scale
 	_widen_labels["power"].text = "%.2f" % GrassField.widen_power

@@ -52,13 +52,14 @@ const BLADE_BANDS: Array[Dictionary] = [
 ]
 ## SHORT layer (2026-10-02, docs/forest_floor_plan.md step 4): low blades in the gaps BETWEEN the
 ## patches (grass_cull.glsl, pc.kind 1 near / 2 far), so a gap has a silhouette instead of a flat
-## texture. One triangle per blade; not in the tuning panel. Cost not measured yet -- K prints the
-## drawn counts. Set SHORT_LAYER_ENABLED false to compare. (First try, one layer 0-40 m @ 0.1 m:
+## texture. One triangle per blade. `band` = the metres just inside `outer` over which the layer
+## thins to nothing (and the next layer thins in). In the tuning panel since 2026-10-05 (the field
+## builds from `short_layers`). Cost not measured yet -- K prints the drawn counts. Set SHORT_LAYER_ENABLED false to compare. (First try, one layer 0-40 m @ 0.1 m:
 ## too sparse, invisible from a distance -- see SHORT_* in grass_cull.glsl.)
 const SHORT_LAYER_ENABLED := true
 const SHORT_LAYERS: Array[Dictionary] = [
-	{"name": "short_0", "kind": 1, "inner": 0.0, "outer": 25.0, "band": 5.0, "spacing": 0.07},
-	{"name": "short_1", "kind": 2, "inner": 25.0, "outer": 60.0, "band": 15.0, "spacing": 0.2},
+	{"name": "short_0", "kind": 1, "inner": 0.0, "outer": 37.5, "band": 5.0, "spacing": 0.07},
+	{"name": "short_1", "kind": 2, "inner": 37.5, "outer": 75.0, "band": 15.0, "spacing": 0.2},
 ]
 const SHORT_MAX_HEIGHT := 0.5 ## m -- for the cull sphere (1.01 m tallest blade x 0.45 + margin)
 const SHORT_FAR_HALF_WIDTH := 1.0 ## m -- grass_cull.glsl SHORT_FAR_MAX x the 0.05 m blade half-width
@@ -76,6 +77,7 @@ const WIND_FADE_END := 80.0
 static var wind_fade_start := WIND_FADE_START
 static var wind_fade_end := WIND_FADE_END
 static var blade_bands: Array = BLADE_BANDS.duplicate(true)
+static var short_layers: Array = SHORT_LAYERS.duplicate(true) ## live copy, in the panel since 2026-10-05
 static var widen_scale := WIDEN_SCALE
 static var widen_power := WIDEN_POWER
 static var widen_max := WIDEN_MAX
@@ -89,6 +91,7 @@ static func blade_param(param: StringName) -> Variant:
 static func reset_tuning() -> void:
 	shader_overrides = {}
 	blade_bands = BLADE_BANDS.duplicate(true)
+	short_layers = SHORT_LAYERS.duplicate(true)
 	widen_scale = WIDEN_SCALE
 	widen_power = WIDEN_POWER
 	widen_max = WIDEN_MAX
@@ -178,7 +181,7 @@ func _ready() -> void:
 		prev_band = b.band
 	if SHORT_LAYER_ENABLED:
 		prev_band = 0.0
-		for s: Dictionary in SHORT_LAYERS:
+		for s: Dictionary in short_layers:
 			_add_layer({
 				"name": s.name, "spacing": float(s.spacing), "mesh": blade_meshes["low"],
 				"inner": float(s.inner), "inner_band": prev_band, "outer": float(s.outer), "band": float(s.band),

@@ -68,10 +68,13 @@ func _wanted(only: Array, dir: String) -> bool:
 ## is already in its vertices) goes into the vertices, because Terrain3D only takes the mesh of
 ## each LOD node, not its transform -- an unbaked plant lies on its side (seen 2026-09-25).
 ## "lods": FBX node per Terrain3D LOD; "ranges": where each LOD ends (the last = draw distance).
-## Shadows are cast by EVERY LOD, out to the full draw distance. (First version stopped them at
-## 35 m via a duplicate LOD1 -- the Terrain3D fade margin then visibly faded plant shadows in/out
-## as the player walked, 2026-09-25. Measured cost of the whole understory incl. shadows: only
-## ~0.37 M of ~11 M tris per frame, so the cutoff wasn't worth it.)
+## "last_shadow_lod": the last LOD that casts sun shadows. Since 2026-10-05 (performance_findings.md
+## step 3; Kirill checked it in-game: fine): 0 for the ferns, bushes and elderberry -- only the nearest LOD casts (to 60 m, bushes
+## 80 m; the ferns' near LOD ended at 50 m until Kirill asked for 60 the same day, measured to each 32 m cell's centre), the far mesh and the impostor cast nothing. Was
+## every LOD (2 / bushes 1): shadows were 50-70 % of the understory's draws. Apply a changed value
+## with apply_shadow_lods(); to go back, restore 2 / 1 and run it again. Poppies still cast on
+## every LOD. (History: the first version stopped shadows at 35 m via a duplicate LOD1 -- the
+## Terrain3D fade margin then visibly faded plant shadows in/out as the player walked, 2026-09-25.)
 const ASSETS_PATH := "res://terrain_assets.tres"
 ## 0 = NO LOD cross-fade. With a margin, Terrain3D sets each LOD MultiMesh to Godot's visibility-range
 ## "fade self" with overlapping ranges (fern: L0 0-23 m fading 15-23, L1 7-43 fading in 7-15 ...,
@@ -91,32 +94,32 @@ const UNDERSTORY_ASSETS := [
 	# 2026-09-25). No fade (fading kills shadows); shadows on both LODs so none cut off at the switch.
 	# History: 440/264/88 at 15/35/70-100 m popped visibly both at the switches and the far edge.
 	# + far IMPOSTOR (4 tris) with range 0 = never culled (user: visible even beyond 600 m).
-	{"id": 28, "name": "Fern02", "dir": "fern_02", "mat": "fern_02", "lods": ["FernPlantV2_LOD2", "FernPlantV2_LOD4", "IMPOSTOR"], "ranges": [50.0, 150.0, 0.0], "last_shadow_lod": 2},
+	{"id": 28, "name": "Fern02", "dir": "fern_02", "mat": "fern_02", "lods": ["FernPlantV2_LOD2", "FernPlantV2_LOD4", "IMPOSTOR"], "ranges": [60.0, 150.0, 0.0], "last_shadow_lod": 0},
 	# Bushes: the SAME mesh twice. Terrain3D clamps fade_margin to half the LOD0->LOD1 gap, so a
 	# single-LOD asset silently gets NO fade (verified at runtime 2026-09-25). LOD1 (100-124 m)
 	# exists only to allow the far fade-out (~112-136 m); the 100 m hand-over is the identical mesh.
 	# Bushes: full mesh to 80 m, then the far IMPOSTOR (4 tris), range 0 = never culled. Replaces the
 	# 100/124 m same-mesh fade-out (bushes vanished far away; user wants them visible at any range).
-	{"id": 29, "name": "Bush01", "dir": "bush_01", "mat": "bush_01", "lods": ["bush_01", "IMPOSTOR"], "ranges": [80.0, 0.0], "last_shadow_lod": 1},
-	{"id": 30, "name": "Bush02Green", "dir": "bush_02", "mat": "bush_02_green", "lods": ["bush_02", "IMPOSTOR"], "ranges": [80.0, 0.0], "last_shadow_lod": 1},
-	{"id": 31, "name": "Bush04", "dir": "bush_04", "mat": "bush_04", "lods": ["bush_04", "IMPOSTOR"], "ranges": [80.0, 0.0], "last_shadow_lod": 1},
-	{"id": 32, "name": "Bush05", "dir": "bush_05", "mat": "bush_05", "lods": ["bush_05", "IMPOSTOR"], "ranges": [80.0, 0.0], "last_shadow_lod": 1},
+	{"id": 29, "name": "Bush01", "dir": "bush_01", "mat": "bush_01", "lods": ["bush_01", "IMPOSTOR"], "ranges": [80.0, 0.0], "last_shadow_lod": 0},
+	{"id": 30, "name": "Bush02Green", "dir": "bush_02", "mat": "bush_02_green", "lods": ["bush_02", "IMPOSTOR"], "ranges": [80.0, 0.0], "last_shadow_lod": 0},
+	{"id": 31, "name": "Bush04", "dir": "bush_04", "mat": "bush_04", "lods": ["bush_04", "IMPOSTOR"], "ranges": [80.0, 0.0], "last_shadow_lod": 0},
+	{"id": 32, "name": "Bush05", "dir": "bush_05", "mat": "bush_05", "lods": ["bush_05", "IMPOSTOR"], "ranges": [80.0, 0.0], "last_shadow_lod": 0},
 	# Lady fern variants (2026-10-02), same scheme as Fern02: Near (source LOD1) to 50 m, Far to 150 m,
 	# then the impostor. A/E/F/G/H = full clumps (1.3-1.9 m wide, 446-1129 tris), B/I = small plants
 	# (196 / 254 tris), C/D = single-frond sprigs (124 / 74 tris). Ids 33-54 are rocks / deadfall.
-	{"id": 55, "name": "LadyFernA", "dir": "lady_fern", "mat": "lady_fern", "lods": ["VarA_Near", "VarA_Far", "IMPOSTOR"], "ranges": [50.0, 150.0, 0.0], "last_shadow_lod": 2},
-	{"id": 56, "name": "LadyFernB", "dir": "lady_fern", "mat": "lady_fern", "lods": ["VarB_Near", "VarB_Far", "IMPOSTOR"], "ranges": [50.0, 150.0, 0.0], "last_shadow_lod": 2},
-	{"id": 57, "name": "LadyFernC", "dir": "lady_fern", "mat": "lady_fern", "lods": ["VarC_Near", "VarC_Far", "IMPOSTOR"], "ranges": [50.0, 150.0, 0.0], "last_shadow_lod": 2},
-	{"id": 58, "name": "LadyFernD", "dir": "lady_fern", "mat": "lady_fern", "lods": ["VarD_Near", "VarD_Far", "IMPOSTOR"], "ranges": [50.0, 150.0, 0.0], "last_shadow_lod": 2},
-	{"id": 59, "name": "LadyFernE", "dir": "lady_fern", "mat": "lady_fern", "lods": ["VarE_Near", "VarE_Far", "IMPOSTOR"], "ranges": [50.0, 150.0, 0.0], "last_shadow_lod": 2},
-	{"id": 60, "name": "LadyFernF", "dir": "lady_fern", "mat": "lady_fern", "lods": ["VarF_Near", "VarF_Far", "IMPOSTOR"], "ranges": [50.0, 150.0, 0.0], "last_shadow_lod": 2},
-	{"id": 61, "name": "LadyFernG", "dir": "lady_fern", "mat": "lady_fern", "lods": ["VarG_Near", "VarG_Far", "IMPOSTOR"], "ranges": [50.0, 150.0, 0.0], "last_shadow_lod": 2},
-	{"id": 62, "name": "LadyFernH", "dir": "lady_fern", "mat": "lady_fern", "lods": ["VarH_Near", "VarH_Far", "IMPOSTOR"], "ranges": [50.0, 150.0, 0.0], "last_shadow_lod": 2},
-	{"id": 63, "name": "LadyFernI", "dir": "lady_fern", "mat": "lady_fern", "lods": ["VarI_Near", "VarI_Far", "IMPOSTOR"], "ranges": [50.0, 150.0, 0.0], "last_shadow_lod": 2},
+	{"id": 55, "name": "LadyFernA", "dir": "lady_fern", "mat": "lady_fern", "lods": ["VarA_Near", "VarA_Far", "IMPOSTOR"], "ranges": [60.0, 150.0, 0.0], "last_shadow_lod": 0},
+	{"id": 56, "name": "LadyFernB", "dir": "lady_fern", "mat": "lady_fern", "lods": ["VarB_Near", "VarB_Far", "IMPOSTOR"], "ranges": [60.0, 150.0, 0.0], "last_shadow_lod": 0},
+	{"id": 57, "name": "LadyFernC", "dir": "lady_fern", "mat": "lady_fern", "lods": ["VarC_Near", "VarC_Far", "IMPOSTOR"], "ranges": [60.0, 150.0, 0.0], "last_shadow_lod": 0},
+	{"id": 58, "name": "LadyFernD", "dir": "lady_fern", "mat": "lady_fern", "lods": ["VarD_Near", "VarD_Far", "IMPOSTOR"], "ranges": [60.0, 150.0, 0.0], "last_shadow_lod": 0},
+	{"id": 59, "name": "LadyFernE", "dir": "lady_fern", "mat": "lady_fern", "lods": ["VarE_Near", "VarE_Far", "IMPOSTOR"], "ranges": [60.0, 150.0, 0.0], "last_shadow_lod": 0},
+	{"id": 60, "name": "LadyFernF", "dir": "lady_fern", "mat": "lady_fern", "lods": ["VarF_Near", "VarF_Far", "IMPOSTOR"], "ranges": [60.0, 150.0, 0.0], "last_shadow_lod": 0},
+	{"id": 61, "name": "LadyFernG", "dir": "lady_fern", "mat": "lady_fern", "lods": ["VarG_Near", "VarG_Far", "IMPOSTOR"], "ranges": [60.0, 150.0, 0.0], "last_shadow_lod": 0},
+	{"id": 62, "name": "LadyFernH", "dir": "lady_fern", "mat": "lady_fern", "lods": ["VarH_Near", "VarH_Far", "IMPOSTOR"], "ranges": [60.0, 150.0, 0.0], "last_shadow_lod": 0},
+	{"id": 63, "name": "LadyFernI", "dir": "lady_fern", "mat": "lady_fern", "lods": ["VarI_Near", "VarI_Far", "IMPOSTOR"], "ranges": [60.0, 150.0, 0.0], "last_shadow_lod": 0},
 	# Elderberry, the tall bush (2026-10-04): Near 3150 / 3968 tris to 50 m, Far (25 %) to 150 m, then
 	# the impostor. Ids 64-68 are the saplings (tools/setup_tree_assets.gd).
-	{"id": 69, "name": "ElderberryA", "dir": "elderberry", "mat": "elderberry", "lods": ["VarA_Near", "VarA_Far", "IMPOSTOR"], "ranges": [50.0, 150.0, 0.0], "last_shadow_lod": 2},
-	{"id": 70, "name": "ElderberryB", "dir": "elderberry", "mat": "elderberry", "lods": ["VarB_Near", "VarB_Far", "IMPOSTOR"], "ranges": [50.0, 150.0, 0.0], "last_shadow_lod": 2},
+	{"id": 69, "name": "ElderberryA", "dir": "elderberry", "mat": "elderberry", "lods": ["VarA_Near", "VarA_Far", "IMPOSTOR"], "ranges": [60.0, 150.0, 0.0], "last_shadow_lod": 0},
+	{"id": 70, "name": "ElderberryB", "dir": "elderberry", "mat": "elderberry", "lods": ["VarB_Near", "VarB_Far", "IMPOSTOR"], "ranges": [60.0, 150.0, 0.0], "last_shadow_lod": 0},
 	# Flowers (2026-10-04) -- keep in sync with FlowerScatter's ids. "shadows": false = casts none
 	# (plants a few cm tall). Unlike the ferns and bushes, the small ones are CULLED at their last range
 	# (no impostor): a 10 cm plant is under a pixel long before that. Poppies keep the fern scheme
@@ -219,6 +222,27 @@ func build_understory_assets(only: Array = []) -> String:
 		out.append("id=%d %s (%s): lod_count=%d last_lod=%d last_shadow_lod=%d | %s" % [
 			e.id, e.name, "created" if is_new else "updated", a.get_lod_count(), a.get_last_lod(), a.get_last_shadow_lod(), "; ".join(lod_info)])
 	assets.update_mesh_list()
+	out.append("saved %s (err=%d)" % [ASSETS_PATH, assets.save(ASSETS_PATH)])
+	return "\n".join(out)
+
+## Writes only each entry's "ranges" and "last_shadow_lod" to its Terrain3D mesh asset -- no mesh
+## is re-baked. Run in the EDITOR process like build_understory_assets().
+func apply_shadow_lods(only: Array = []) -> String:
+	var assets: Terrain3DAssets = load(ASSETS_PATH)
+	var out: Array[String] = []
+	for e: Dictionary in UNDERSTORY_ASSETS:
+		if not _wanted(only, e.dir):
+			continue
+		var a: Terrain3DMeshAsset = assets.get_mesh_asset(e.id)
+		if a == null:
+			out.append("id=%d %s: no mesh asset -- run build_understory_assets()" % [e.id, e.name])
+			continue
+		var before := a.get_last_shadow_lod()
+		var range_before := a.get_lod_range(0)
+		for i in (e.ranges as Array).size():
+			a.set_lod_range(i, e.ranges[i])
+		a.set_last_shadow_lod(e.last_shadow_lod)
+		out.append("id=%d %s: lod0 range %.0f -> %.0f m, last_shadow_lod %d -> %d" % [e.id, e.name, range_before, a.get_lod_range(0), before, a.get_last_shadow_lod()])
 	out.append("saved %s (err=%d)" % [ASSETS_PATH, assets.save(ASSETS_PATH)])
 	return "\n".join(out)
 
