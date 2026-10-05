@@ -23,6 +23,10 @@ automatically) -- a local copy also lives at
 - `docs/performance_findings.md` -- (2026-10-05) what the first uncapped benchmark showed (where
   the frame goes, per layer and per effect) and the ordered remedy plan with a status column.
   Update it with the measured saving after each optimisation step.
+- `docs/startup_optimisation.md` -- (2026-10-05) how to keep startup fast when adding a
+  generation stage, scatter layer or model: the measure / checksum / fix / verify procedure, which
+  reusable piece fits which cost (preload, disk caches, worker-thread bands, lookup grids), the
+  rules for each, and how to hook a stage into the loading screen. Read before adding a layer.
 - This file stays the reference for pitfalls and *why* things are done the way they are.
 
 ## Local tooling paths (this machine)

@@ -25,16 +25,16 @@ How to run and compare benchmarks: the "Performance benchmark" section of `CLAUD
 
 ### Frame times
 
-| Station | Frame ms | GPU ms | CPU render ms | Draws | Tris (M) | FPS |
-|---|---|---|---|---|---|---|
-| spawn_ahead | 12.84 | 11.27 | 9.29 | 10,902 | 21.03 | 78 |
-| road_open | 12.00 | 11.30 | 8.46 | 9,629 | 19.96 | 83 |
-| exit_look_back | 11.49 | 11.06 | 7.75 | 8,393 | 21.34 | 87 |
-| forest_dense | 10.97 | 10.62 | 6.91 | 8,204 | 17.16 | 91 |
-| road_mid | 10.40 | 10.05 | 5.57 | 6,976 | 17.00 | 96 |
-| cliff_face | 9.40 | 9.08 | 3.13 | 2,978 | 13.79 | 106 |
-| spawn_ground | 7.23 | 6.80 | 4.60 | 6,178 | 15.87 | 138 |
-| spawn_sky | 5.00 | 2.77 | 0.72 | 265 | 6.56 | 200 (on the RivaTuner limit) |
+| Station        | Frame ms | GPU ms | CPU render ms | Draws  | Tris (M) | FPS                          |
+| -------------- | -------- | ------ | ------------- | ------ | -------- | ---------------------------- |
+| spawn_ahead    | 12.84    | 11.27  | 9.29          | 10,902 | 21.03    | 78                           |
+| road_open      | 12.00    | 11.30  | 8.46          | 9,629  | 19.96    | 83                           |
+| exit_look_back | 11.49    | 11.06  | 7.75          | 8,393  | 21.34    | 87                           |
+| forest_dense   | 10.97    | 10.62  | 6.91          | 8,204  | 17.16    | 91                           |
+| road_mid       | 10.40    | 10.05  | 5.57          | 6,976  | 17.00    | 96                           |
+| cliff_face     | 9.40     | 9.08   | 3.13          | 2,978  | 13.79    | 106                          |
+| spawn_ground   | 7.23     | 6.80   | 4.60          | 6,178  | 15.87    | 138                          |
+| spawn_sky      | 5.00     | 2.77   | 0.72          | 265    | 6.56     | 200 (on the RivaTuner limit) |
 
 - 200 m walk: 11.90 ms average (84 FPS), p99 14.96 ms, worst 16.26 ms, no frame over 16.7 ms and
   none over twice the median. There is no stutter problem.
@@ -45,20 +45,20 @@ How to run and compare benchmarks: the "Performance benchmark" section of `CLAUD
 GPU ms saved by switching each thing off, at the three ablation stations
 (spawn_ahead / exit_look_back / forest_dense):
 
-| Switched off | GPU ms saved | Draws saved | Tris saved (M) |
-|---|---|---|---|
-| All scattered layers | 7.95 / 7.88 / 7.09 | 10,790 / 8,291 / 8,110 | 20.5 / 20.7 / 16.7 |
-| Trees | 4.79 / 3.94 / 3.65 | 3,115 / 2,605 / 2,094 | 8.3 / 6.1 / 5.7 |
-| Sun shadows | 3.15 / 3.31 / 2.82 | 6,731 / 4,594 / 5,624 | 11.2 / 12.2 / 8.3 |
-| Understory | 1.09 / 1.78 / 1.01 | 4,841 / 3,538 / 3,677 | 4.3 / 6.4 / 3.1 |
-| Grass | 0.97 / 0.88 / 0.91 | 11 / 8 / 7 | 5.7 / 5.7 / 5.7 |
-| Saplings | 0.20 / 0.43 / 0.28 | 1,062 / 906 / 789 | 1.2 / 1.4 / 0.7 |
-| Half render scale | 4.13 / 4.36 / 3.67 | - | - |
-| SSAO | 1.63 / 1.48 / 1.28 | - | - |
-| All post effects | 1.79 / 1.61 / 1.51 | - | - |
-| - of which painterly_sat | 0.88 / 0.94 / 0.74 | - | - |
-| 3D MSAA | 1.19 / 1.03 / 0.81 | - | - |
-| Lantern | 0.33 / 0.49 / 0.50 | - | - |
+| Switched off             | GPU ms saved       | Draws saved            | Tris saved (M)     |
+| ------------------------ | ------------------ | ---------------------- | ------------------ |
+| All scattered layers     | 7.95 / 7.88 / 7.09 | 10,790 / 8,291 / 8,110 | 20.5 / 20.7 / 16.7 |
+| Trees                    | 4.79 / 3.94 / 3.65 | 3,115 / 2,605 / 2,094  | 8.3 / 6.1 / 5.7    |
+| Sun shadows              | 3.15 / 3.31 / 2.82 | 6,731 / 4,594 / 5,624  | 11.2 / 12.2 / 8.3  |
+| Understory               | 1.09 / 1.78 / 1.01 | 4,841 / 3,538 / 3,677  | 4.3 / 6.4 / 3.1    |
+| Grass                    | 0.97 / 0.88 / 0.91 | 11 / 8 / 7             | 5.7 / 5.7 / 5.7    |
+| Saplings                 | 0.20 / 0.43 / 0.28 | 1,062 / 906 / 789      | 1.2 / 1.4 / 0.7    |
+| Half render scale        | 4.13 / 4.36 / 3.67 | -                      | -                  |
+| SSAO                     | 1.63 / 1.48 / 1.28 | -                      | -                  |
+| All post effects         | 1.79 / 1.61 / 1.51 | -                      | -                  |
+| - of which painterly_sat | 0.88 / 0.94 / 0.74 | -                      | -                  |
+| 3D MSAA                  | 1.19 / 1.03 / 0.81 | -                      | -                  |
+| Lantern                  | 0.33 / 0.49 / 0.50 | -                      | -                  |
 
 Rocks, cliffs, outcrops, flowers, deadfall and cones are each under 0.4 ms. The rows overlap:
 switching a layer off also removes its shadow draws, so "trees" and "sun shadows" share cost and
@@ -89,26 +89,42 @@ must not be added together.
 Run the benchmark before and after each step and record the saving here. Expected savings are
 left blank where nothing supports an estimate yet.
 
-| # | Remedy | Addresses | Status |
-|---|---|---|---|
-| 1 | Split the tree cost into view and shadow | sizes steps 2 and 4 | not started |
-| 2 | Mid LOD for trees, also used as the shadow mesh | conclusions 3, 4 | not started |
-| 3 | Limit understory shadow casting | conclusions 3, 5, 7 | not started |
-| 4 | Shorter sun shadow distance | conclusions 3, 4 | needs a decision |
-| 5 | Cheaper screen-space settings | conclusion 6 | needs a decision |
-| 6 | Startup time | conclusion 8 | cheap wins done: 16.3 s -> 8.8 s to first frame |
+| #   | Remedy                                                                  | Addresses              | Status                                          |
+| --- | ----------------------------------------------------------------------- | ---------------------- | ----------------------------------------------- |
+| 1   | Split the tree cost: view vs shadow, and pixels vs triangles            | sizes steps 2, 4 and 7 | not started                                     |
+| 2   | Mid LOD for trees, also used as the shadow mesh (`shadow_impostor`)     | conclusions 3, 4       | not started                                     |
+| 3   | Cheaper understory shadows: `shadow_impostor` first, then limit casting | conclusions 3, 5, 7    | not started                                     |
+| 4   | Shorter sun shadow distance                                             | conclusions 3, 4       | needs a decision                                |
+| 5   | Cheaper screen-space settings                                           | conclusion 6           | needs a decision                                |
+| 6   | Startup time                                                            | conclusion 8           | cheap wins done: 16.3 s -> 8.8 s to first frame |
+| 7   | Cheaper leaf shading                                                    | conclusions 2, 6       | only if step 1 shows the trees are pixel-bound  |
+| 8   | GPU-driven drawing for the understory view pass                         | conclusion 7           | deferred until draws are the limit              |
 
-### 1. Split the tree cost into view and shadow
+Steps 1-3 were revised and steps 7-8 added on 2026-10-05, after the web research recorded under
+"Research" below.
 
-Run the targeted tree ablation (`--bench-only=layer:trees`) once with sun shadows on and once
-with them off. The difference between the two "trees" figures is the shadow share. About two
-minutes per run. No change to the game; this only decides how much steps 2 and 4 can save.
+### 1. Split the tree cost: view vs shadow, and pixels vs triangles
+
+Benchmark runs only, no change to the game. About two minutes per run.
+
+- **View vs shadow.** Run the targeted tree ablation (`--bench-only=layer:trees`) once with sun
+  shadows on and once with them off. The difference between the two "trees" figures is the
+  shadow share. Decides how much steps 2 and 4 can save.
+- **Pixels vs triangles** (added 2026-10-05). Run the same ablation at half render scale. If the
+  tree cost falls with resolution it is pixel cost (leaf cards overdrawing each other): the mid
+  LOD in step 2 should then aim for fewer, larger cards, and step 7 is worth doing. If it does
+  not fall, it is vertex cost and triangle reduction is the lever. The two have never been
+  separated.
 
 ### 2. Mid LOD for trees, also used as the shadow mesh
 
 Add a reduced mesh between the full tree and the impostor (roughly 40-60 m to 175 m) and render
 shadows from it instead of the full mesh.
 
+- How the shadow part is done: Terrain3D's `shadow_impostor` on the mesh asset. Set to N, LODs
+  nearer than N are drawn without shadows and LOD N is drawn shadows-only in their place.
+  `build_pack_trees()` sets it to 0 (off) today. The trees have only the full mesh and the
+  8-triangle impostor, so this needs the mid LOD first.
 - Upper bound on the saving: the whole tree cost, 3.7-4.8 ms. The real figure depends on step 1.
 - Risk: the crowns are leaf cards, which simplify badly. Each tree needs a visual check, both for
   the crown silhouette and for the shadow it casts.
@@ -116,11 +132,19 @@ shadows from it instead of the full mesh.
   (`docs/vegetation.md`), and thin foliage shadows are fragile (`docs/shadows.md`). Read both
   before changing tree LODs.
 
-### 3. Limit understory shadow casting
+### 3. Cheaper understory shadows
 
-Stop ferns and small bushes casting sun shadows beyond their nearest LOD, or switch shadows off
-for the smallest ferns entirely. The understory is 3,500-4,800 draws and 1.0-1.8 ms; this removes
-the shadow part of it and cuts draw calls, which also helps the CPU side.
+The understory is 3,500-4,800 draws and 1.0-1.8 ms. Two parts, in this order:
+
+- **`shadow_impostor` trial** (added 2026-10-05). Fern02, the lady ferns, the elderberry and the
+  poppies already have a reduced mesh as LOD 1. Setting `shadow_impostor` to 1 in
+  `build_understory_assets()` (it is 0 today) casts the near plants' shadows from that mesh. No
+  new assets. It cuts shadow triangles, not draws. Needs an in-game check that fern shadows
+  survive near the player, which was the reason for the 25 m first cascade.
+- **Limit casting.** Stop ferns and small bushes casting sun shadows beyond their nearest LOD, or
+  switch shadows off for the smallest ferns entirely. This is the part that cuts draw calls,
+  which also helps the CPU side. An earlier 35 m shadow cutoff faded plant shadows in and out
+  (`docs/vegetation.md`), so it needs a hard switch.
 
 ### 4. Shorter sun shadow distance (needs a decision)
 
@@ -147,21 +171,21 @@ Does not affect frame rate. Measured with a 20-frame launch
 Done 2026-10-05 -- world generation 12.11 s -> 8.61 s, first frame 16.26 s -> 12.83 s, generated
 world unchanged (identical log output for the pinned seed):
 
-| Change | Stage | Before | After |
-|---|---|---|---|
+| Change                                                                                                       | Stage               | Before | After  |
+| ------------------------------------------------------------------------------------------------------------ | ------------------- | ------ | ------ |
 | Cliff / outcrop models and textures load on background threads during the heightmap build (`TerrainPreload`) | cliff face dressing | 1.37 s | 0.06 s |
-| same | outcrop placement | 1.35 s | 0.04 s |
-| Rock collision hulls cached on disk (`TerrainUtil.cached_shape`) | boulder scattering | 0.82 s | 0.12 s |
-| Deadfall collision shapes cached on disk (same helper) | deadfall scattering | 1.04 s | 0.92 s |
+| same                                                                                                         | outcrop placement   | 1.35 s | 0.04 s |
+| Rock collision hulls cached on disk (`TerrainUtil.cached_shape`)                                             | boulder scattering  | 0.82 s | 0.12 s |
+| Deadfall collision shapes cached on disk (same helper)                                                       | deadfall scattering | 1.04 s | 0.92 s |
 
 Second pass, same day -- hot loops moved onto the engine's worker threads (12 logical cores on
 this machine). World generation 8.61 s -> 6.3 s, first frame 12.83 s -> 10.5 s:
 
-| Change | Stage | Before | After | Output |
-|---|---|---|---|---|
-| Main per-vertex loop and rock-type majority filter in row bands (`_paint_band`, `_mode_band`) | ground painting | 1.49 s | 0.60 s | identical (control-map checksum 2130175883 before and after) |
-| Candidate rows in bands, one random stream per row (`_scatter_band`) | understory scattering | 1.30 s | 0.40 s | changed once: 22,132 -> 22,442 plants; repeatable per seed (placement checksum printed) |
-| same | flower scattering | 0.84 s | 0.27 s | changed once: 13,701 -> 13,484 pieces; repeatable per seed |
+| Change                                                                                        | Stage                 | Before | After  | Output                                                                                  |
+| --------------------------------------------------------------------------------------------- | --------------------- | ------ | ------ | --------------------------------------------------------------------------------------- |
+| Main per-vertex loop and rock-type majority filter in row bands (`_paint_band`, `_mode_band`) | ground painting       | 1.49 s | 0.60 s | identical (control-map checksum 2130175883 before and after)                            |
+| Candidate rows in bands, one random stream per row (`_scatter_band`)                          | understory scattering | 1.30 s | 0.40 s | changed once: 22,132 -> 22,442 plants; repeatable per seed (placement checksum printed) |
+| same                                                                                          | flower scattering     | 0.84 s | 0.27 s | changed once: 13,701 -> 13,484 pieces; repeatable per seed                              |
 
 Kirill agreed on 2026-10-05 that plant placement for a given seed may change once for this. The
 terrain, cliffs, road, rocks, trees, deadfall, saplings and grass are as before. Because the
@@ -185,43 +209,43 @@ How the threading is done, for the next stage that gets it:
 
 What is left of the ~10.5 s:
 
-| Part | Time |
-|---|---|
-| Before world generation starts (engine boot, loading `main.tscn` and what it references) | 3.2 s |
-| Heightmap build: knots 0.73, erosion 0.62, road 0.51, outcrop planning 0.28, about 0.45 untimed | 2.9 s |
-| Deadfall scattering | 0.93 s |
-| Ground painting (0.26 setup, 0.23 threaded passes, 0.10 region write) | 0.60 s |
-| Grass density bake | 0.48 s |
-| Understory scattering | 0.40 s |
-| Flower scattering | 0.27 s |
-| Everything else | 0.7 s |
-| After generation, to the first drawn frame (shader pipelines) | 1.0 s |
+| Part                                                                                            | Time   |
+| ----------------------------------------------------------------------------------------------- | ------ |
+| Before world generation starts (engine boot, loading `main.tscn` and what it references)        | 3.2 s  |
+| Heightmap build: knots 0.73, erosion 0.62, road 0.51, outcrop planning 0.28, about 0.45 untimed | 2.9 s  |
+| Deadfall scattering                                                                             | 0.93 s |
+| Ground painting (0.26 setup, 0.23 threaded passes, 0.10 region write)                           | 0.60 s |
+| Grass density bake                                                                              | 0.48 s |
+| Understory scattering                                                                           | 0.40 s |
+| Flower scattering                                                                               | 0.27 s |
+| Everything else                                                                                 | 0.7 s  |
+| After generation, to the first drawn frame (shader pipelines)                                   | 1.0 s  |
 
 Investigation of the two largest remaining parts (2026-10-05, measurements only, no changes
 beyond three extra timing prints in `heightmap.gd`):
 
 Heightmap build, 2.92 s:
 
-| Part | Time | Note |
-|---|---|---|
-| Knots | 0.75 s | reach + ramps 0.41, rows 0.21 (its own `KNOT_PROFILE` line) |
-| Erosion (main + post-feature) | 0.61 s | ~300k droplet steps, already a tight loop; sequential |
-| Road | 0.51 s | grading 0.23, pathfinding 0.11, blur 0.11, rasterising 0.06 |
-| Cliff top profiles | 0.27 s | was the untimed part. Per model, no terrain input -> can be cached on disk |
-| Outcrop planning + fitting | 0.23 s | includes analysing each outcrop model, which is also per model |
-| Cliff dressing plan | 0.13 s | |
-| Base noise | 0.12 s | |
-| Knot restore + landmark stamp | 0.09 s | |
-| Smoothing, colour map, stats, images | 0.17 s | |
+| Part                                 | Time   | Note                                                                       |
+| ------------------------------------ | ------ | -------------------------------------------------------------------------- |
+| Knots                                | 0.75 s | reach + ramps 0.41, rows 0.21 (its own `KNOT_PROFILE` line)                |
+| Erosion (main + post-feature)        | 0.61 s | ~300k droplet steps, already a tight loop; sequential                      |
+| Road                                 | 0.51 s | grading 0.23, pathfinding 0.11, blur 0.11, rasterising 0.06                |
+| Cliff top profiles                   | 0.27 s | was the untimed part. Per model, no terrain input -> can be cached on disk |
+| Outcrop planning + fitting           | 0.23 s | includes analysing each outcrop model, which is also per model             |
+| Cliff dressing plan                  | 0.13 s |                                                                            |
+| Base noise                           | 0.12 s |                                                                            |
+| Knot restore + landmark stamp        | 0.09 s |                                                                            |
+| Smoothing, colour map, stats, images | 0.17 s |                                                                            |
 
 Before generation starts, 3.2 s (probe scripts that load `main.tscn`'s dependencies one by one):
 
-| Part | Time | Note |
-|---|---|---|
-| Engine boot until the first script runs | 1.1 s | fixed cost |
-| `terrain_assets.tres` | 1.1 s | still 1.1 s with all 129 of its dependencies already loaded, so it is Terrain3D's own setup of the 85 mesh assets and texture arrays, not file loading |
-| Compiling the terrain scripts (`terrain_gen.gd` and its modules) | 0.3-0.5 s | paid by whichever resource touches them first |
-| `main.tscn` itself | 0.5 s | 28 KB; holds a 548-line embedded shader |
+| Part                                                             | Time      | Note                                                                                                                                                   |
+| ---------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Engine boot until the first script runs                          | 1.1 s     | fixed cost                                                                                                                                             |
+| `terrain_assets.tres`                                            | 1.1 s     | still 1.1 s with all 129 of its dependencies already loaded, so it is Terrain3D's own setup of the 85 mesh assets and texture arrays, not file loading |
+| Compiling the terrain scripts (`terrain_gen.gd` and its modules) | 0.3-0.5 s | paid by whichever resource touches them first                                                                                                          |
+| `main.tscn` itself                                               | 0.5 s     | 28 KB; holds a 548-line embedded shader                                                                                                                |
 
 - The church model is no longer referenced by `main.tscn`, so the "oversized church textures"
   suspect in `CLAUDE.md` does not apply to startup any more.
@@ -236,10 +260,10 @@ Before generation starts, 3.2 s (probe scripts that load `main.tscn`'s dependenc
 Overlap probe (2026-10-05; a throwaway script outside the project, run with `-s`, that builds
 the heightmap for the pinned seed either after loading `main.tscn` or on a `Thread` during it):
 
-| | Runs | Scene loaded at | Heightmap ready at | Build time |
-|---|---|---|---|---|
-| Sequential (today's order) | 3 | 2.88 s | 5.84 s | 2.96 s |
-| Overlapped | 25 | 2.86 s | 4.40 s | 3.06 s |
+|                            | Runs | Scene loaded at | Heightmap ready at | Build time |
+| -------------------------- | ---- | --------------- | ------------------ | ---------- |
+| Sequential (today's order) | 3    | 2.88 s          | 5.84 s             | 2.96 s     |
+| Overlapped                 | 25   | 2.86 s          | 4.40 s             | 3.06 s     |
 
 - Saving: 1.43 s on average (1.3-1.5 s), not the ~2 s first guessed. The build runs 3.5 %
   slower while it shares the machine with scene loading.
@@ -265,22 +289,22 @@ frame 10.3 s -> 9.98 s. Output identical: the probe's full checksum line matches
 cache-filling run and on cache hits, and the in-game understory / flower / ground-paint
 checksums are unchanged.
 
-| Change | Part | Before | After |
-|---|---|---|---|
-| Cliff top-profile scan cached (`_scan_cliff_dressing_top_profile`) | cliff top profiles | 0.27 s | 0.00 s |
-| Outcrop model scan cached (`_scan_outcrop_model`) | outcrop planning + fitting | 0.23 s | 0.03 s |
+| Change                                                             | Part                       | Before | After  |
+| ------------------------------------------------------------------ | -------------------------- | ------ | ------ |
+| Cliff top-profile scan cached (`_scan_cliff_dressing_top_profile`) | cliff top profiles         | 0.27 s | 0.00 s |
+| Outcrop model scan cached (`_scan_outcrop_model`)                  | outcrop planning + fitting | 0.23 s | 0.03 s |
 
 Fourth pass, same day -- profiled deadfall, the grass bake, ground-paint setup and the gap to
 the first frame, then fixed what was exact and cheap. World generation 5.87 s -> 4.72 s, first
 frame 9.98 s -> 8.81 s. Output identical: deadfall, understory, flower, grass (density / worn /
 patch) and ground-paint checksums, plus the mound and cone counts, all match the run before.
 
-| Change | Stage | Before | After |
-|---|---|---|---|
-| `_capsule_blocked` looks up circles and placed pieces through grids (`circle_grid`, `placed_grid`) instead of scanning every one; the scan was 0.67 s | deadfall scattering | 0.93 s | 0.41 s |
-| Per-pixel combine in row bands (`_bake_band`); its 6 noise images rendered together (`noise_images_parallel`) | grass density bake | 0.48 s | 0.16 s |
-| Its 7 noise images rendered together | ground painting | 0.60 s | 0.47 s |
-| Canopy grid built once per run and reused (`UnderstoryScatter._build_canopy_grid` cache); it was rebuilt 5 times at ~50 ms | understory / flowers / the above | 0.40 / 0.27 s | 0.34 / 0.22 s |
+| Change                                                                                                                                                | Stage                            | Before        | After         |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- | ------------- | ------------- |
+| `_capsule_blocked` looks up circles and placed pieces through grids (`circle_grid`, `placed_grid`) instead of scanning every one; the scan was 0.67 s | deadfall scattering              | 0.93 s        | 0.41 s        |
+| Per-pixel combine in row bands (`_bake_band`); its 6 noise images rendered together (`noise_images_parallel`)                                         | grass density bake               | 0.48 s        | 0.16 s        |
+| Its 7 noise images rendered together                                                                                                                  | ground painting                  | 0.60 s        | 0.47 s        |
+| Canopy grid built once per run and reused (`UnderstoryScatter._build_canopy_grid` cache); it was rebuilt 5 times at ~50 ms                            | understory / flowers / the above | 0.40 / 0.27 s | 0.34 / 0.22 s |
 
 Things learned while profiling:
 
@@ -304,10 +328,87 @@ Candidates still open, none started:
   generated at process launch (a later in-game regeneration has no scene load to overlap with),
   and with the wait rule above. Kirill chose the disk caches first; the overlap is undecided.
 
-- Heightmap build, the rest: sequential by nature (droplets, A*, knot placement), so only loop
+- Heightmap build, the rest: sequential by nature (droplets, A\*, knot placement), so only loop
   tightening applies; knots (0.75 s) is the largest piece.
 - A per-seed world cache on disk would skip most of generation while the seed is pinned, but
   does nothing for a fresh random seed.
+
+### 7. Cheaper leaf shading (only if step 1 shows the trees are pixel-bound)
+
+The foliage shaders (`shaders/foliage/foliage_cutout_*.gdshader`) use Burley diffuse and GGX
+specular. The usual advice for leaves is a simpler lighting model, because stacked cards run the
+shader several times per pixel. Try Lambert diffuse and specular off, and measure. It is a visible
+change, so it needs an in-game check.
+
+### 8. GPU-driven drawing for the understory view pass (deferred)
+
+Assessed 2026-10-05: could trees and ferns be culled on the GPU the way the grass is?
+
+- Possible, but it does not address their measured cost. They are already frustum-culled per
+  32 m cell by Godot; their cost is the triangles and shadow passes of plants that are in view.
+- Shadows break the grass approach. Grass casts none, so one camera-culled buffer is enough. A
+  tree outside the view must still cast into it, so shadows need a second buffer, and with one
+  bounding box for the whole buffer every cascade would draw every tree in range. Today the cells
+  are culled per cascade.
+- What it would gain: draw calls. The understory is 22,132 plants in 5,414 nodes, about 4 per
+  draw; one indirect MultiMesh per mesh and LOD would make the view pass about a hundred draws.
+  Also per-plant LOD switching, which would remove the 23 m margin rule for the tree impostor.
+- What it would cost: a cull shader reading a plant list, a separate shadow path (probably
+  Terrain3D drawing shadows only -- not checked), LOD selection and the tree cross-fade in the
+  foliage shaders, and rewiring the layer panel and the benchmark toggles.
+- When: after steps 1-3, for the understory view pass only, and only if the draw count has become
+  the limit (conclusion 7). Not for trees.
+
+## Research (2026-10-05)
+
+A web search for optimisation guidance, read against the findings above.
+
+What the sources agree on:
+
+- Measure first, then work on the side that limits the frame: overdraw, shader cost, resolution
+  and post effects when GPU-bound, draw calls when CPU-bound.
+- Shadow max distance is the most effective single shadow setting. Every shadow-casting light
+  redraws its casters, so shadows multiply both draws and triangles.
+- Vegetation shadows are cast from a cheaper mesh than the visible one (Unreal's proxy geometry
+  shadows, Terrain3D's `shadow_impostor`).
+- Leaf cards cost per pixel as well as per triangle: stacked alpha-tested cards run the leaf
+  shader many times per pixel (one blog claims 8-15x in dense forest; not measured here). The
+  usual fixes are a depth prepass for cutout geometry, merged larger cards at mid distance and a
+  cheaper leaf shader.
+- MultiMesh chunk size trades culling against draw calls. Terrain3D's cells are fixed at 32 m.
+- GPU-driven culling with occlusion tests is what large engines use (claimed 20-40 % of triangles
+  culled), on cluster and depth-pyramid systems Godot does not have.
+
+What does not apply here:
+
+- Cached or less often updated far cascades: not in Godot. Proposal #2745 has been open since
+  2021 and its pull request (#76291) is unmerged; only forks have it.
+- Occlusion culling: marginal in open terrain, and foliage cannot be an occluder. Only the cliffs
+  could hide anything.
+- Alpha-to-coverage, hashed alpha and dithered LOD fades: quality techniques that mostly rely on
+  temporal anti-aliasing, which the project does not use. LOD fading also drops shadows here
+  (`docs/shadows.md`).
+
+Not confirmed: whether Godot's depth prepass stops the colour pass shading hidden leaf pixels for
+our cutout shaders. A 2023 fix (PR #79865) removed an unneeded `discard` from opaque shaders, but
+foliage still needs its own. The pixels-vs-triangles run in step 1 answers it indirectly.
+
+Not read: the Cyberpunk 2077 shadow talk (SIGGRAPH 2021) and Godot proposal #6948 failed to load.
+
+Sources:
+
+- Godot docs, optimizing 3D performance: https://docs.godotengine.org/en/stable/tutorials/performance/optimizing_3d_performance.html
+- Terrain3D instancer: https://terrain3d.readthedocs.io/en/latest/docs/instancer.html
+- Foliage overdraw (Cinevva blog): https://app.cinevva.com/blog/2026-05-11-foliage-overdraw
+- Godot 3D optimization guide 2026 (StraySpark): https://www.strayspark.studio/blog/godot-3d-optimization-guide-2026
+- Shadow proxy mesh for vegetation: https://winter-crown-works.com/en/tech/004
+- Unreal proxy geometry shadows: https://dev.epicgames.com/documentation/unreal-engine/proxy-geometry-shadows-in-unreal-engine
+- CRYENGINE cached shadows: https://www.cryengine.com/docs/static/engines/cryengine-3/categories/1114113/pages/21267738
+- Godot proposal #2745, distant shadow update rate: https://github.com/godotengine/godot-proposals/issues/2745
+- Godot proposal #7366, renderer performance problems: https://github.com/godotengine/godot-proposals/issues/7366
+- CPU-bound or GPU-bound (Bugnet): https://bugnet.io/blog/how-to-find-whether-your-game-is-cpu-or-gpu-bound
+- GodotFest 2025, large-scale vegetation rendering: https://api.media.ccc.de/v/godotfest2025-plants-polygons-and-pixels-large-scale-vegetation-rendering-in-godot
+- GDQuest, optimizing a 3D scene: https://www.gdquest.com/library/optimization_3d_rendering
 
 ## Not worth touching yet
 
