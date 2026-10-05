@@ -250,7 +250,7 @@ left blank where nothing supports an estimate yet.
 | #   | Remedy                                                                  | Addresses              | Status                                          |
 | --- | ----------------------------------------------------------------------- | ---------------------- | ----------------------------------------------- |
 | 1   | Split the tree cost: view vs shadow, and pixels vs triangles            | sizes steps 2, 4 and 7 | done 2026-10-05, results below                  |
-| 2   | Mid LOD for trees, also used as the shadow mesh (`shadow_impostor`)     | conclusions 3, 4       | not started                                     |
+| 2   | Mid LOD for trees, also used as the shadow mesh (`shadow_impostor`)     | conclusions 3, 4       | shadow mesh done 2026-10-05 (GPU -0.5 to -1.9 ms, frame time unchanged at CPU-limited stations); visible mid LOD not started |
 | 3   | Cheaper understory shadows: limit casting first, then `shadow_impostor` | conclusions 3, 5, 7    | limit casting done 2026-10-05 (draws -15 to -42 %); `shadow_impostor` not tried |
 | 4   | Shorter sun shadow distance                                             | conclusions 3, 4       | range alone measured: no gain; impostor part untested |
 | 5   | Cheaper screen-space settings                                           | conclusion 6           | SSAO off and painterly rewritten (-0.6 ms) 2026-10-05; MSAA and the other five effects open |
@@ -334,6 +334,47 @@ shadows from it instead of the full mesh.
   draws remain, with a smaller mesh). So of the trees' ~2.1 ms shadow cost about half depends on
   triangle count; a real reduced shadow mesh can recover at most this much, and less the more
   triangles it keeps. How the impostor's own shadow looks was not checked.
+- **Shadow half done 2026-10-05.** Reduced shadow meshes (about 27 % of each tree's triangles,
+  built in `build_pack_trees()`; setup and knobs in `docs/vegetation.md`, "Shadow meshes"). Run
+  `20261005_172024_08efe006_tree_shadow_mesh_ranged` against
+  `20261005_171508_08efe006_tree_shadow_full_before` (same build, shadows from the full mesh):
+
+  | Station        | GPU ms        | Frame ms       | Draws          | Tris (M)       |
+  | -------------- | ------------- | -------------- | -------------- | -------------- |
+  | spawn_ahead    | 9.57 -> 8.46  | 12.27 -> 11.95 | 8,213 -> 7,937 | 20.90 -> 16.20 |
+  | spawn_ground   | 5.60 -> 4.57  | capped         | 3,624 -> 3,363 | 15.45 -> 11.14 |
+  | road_mid       | 8.44 -> 7.87  | 9.03 -> 8.49   | 4,992 -> 4,824 | 16.31 -> 13.10 |
+  | exit_look_back | 9.48 -> 8.69  | 10.98 -> 10.79 | 7,248 -> 7,235 | 21.44 -> 18.09 |
+  | forest_dense   | 9.06 -> 8.43  | 9.78 -> 9.11   | 5,864 -> 5,726 | 17.11 -> 13.93 |
+  | road_open      | 9.49 -> 8.91  | 10.69 -> 9.72  | 7,082 -> 6,913 | 19.82 -> 15.70 |
+  | cliff_face     | 7.88 -> 7.59  | 8.33 -> 8.07   | 2,458 -> 2,486 | 14.49 -> 13.08 |
+
+  Road walk: GPU 9.46 -> 8.65 ms, frame 10.33 -> 10.20 ms (p99 14.55 -> 15.29). So 0.3-1.1 ms of
+  GPU, against the 0.6-1.3 ms ceiling; frame time gains less where the CPU limits it.
+  - A first version without the 175 m limit on the shadow nodes
+    (`20261005_171058_..._tree_shadow_mesh`) saved 0.4-0.9 ms of GPU but added 600-1,600 draws at
+    five stations and made spawn_ahead and the walk slower (frame 12.27 -> 13.06, 10.33 -> 11.00).
+  - **That version was rejected in-game the same day** (shadows read as blobs floating beside the
+    trunk). The shadow mesh now only drops the duplicated back-to-back leaf cards: 55-60 % of each
+    tree's triangles instead of 27 %, identical shadow shape.
+  - **Final version measured 2026-10-05, 19:11-19:21** (sun angular distance now 0): three full
+    runs in the order reduced / full mesh / reduced, reports `..._clean_reduced_1`,
+    `..._clean_full_2`, `..._clean_reduced_3`. GPU ms, full -> mean of the two reduced runs
+    (difference between the two reduced runs in brackets = the noise):
+    spawn_ahead 9.49 -> 7.56 (0.03), spawn_ground 5.32 -> 3.99 (0.31), road_mid 8.21 -> 7.40
+    (0.16), exit_look_back 9.05 -> 7.98 (0.45), forest_dense 8.85 -> 7.92 (0.10), road_open
+    9.39 -> 7.74 (0.50), cliff_face 7.56 -> 7.03 (0.15). Road walk GPU 9.24 -> 7.85 ms.
+    Triangles -0.8 to -3.2 M per frame.
+  - **Frame time did not follow.** Road walk 10.13 ms with the full mesh, 10.32 / 10.51 ms
+    reduced; spawn_ahead 11.39 against 12.23 / 12.81. Frames got shorter only where the GPU is
+    the limit (road_mid 8.75 -> 8.09, forest_dense 9.36 -> 8.74, cliff_face 8.06 -> 7.50). The
+    heavy stations are CPU-limited, and CPU render time there reads 0.7-1.2 ms higher at
+    spawn_ahead with the reduced meshes (735 extra shadows-only nodes is the suspect; not
+    isolated, and exit_look_back / road_open swing both ways between runs).
+  - An earlier pair of runs the same evening (18:51 / 18:56) is not usable: the machine was
+    slower throughout (CPU render 11-13 ms at spawn_ahead against 9) and the control station
+    without trees moved 12 %.
+  - The visible mid LOD is still open.
 - Upper bound on the saving: the whole tree cost, 3.7-4.8 ms. The real figure depends on step 1.
 - Risk: the crowns are leaf cards, which simplify badly. Each tree needs a visual check, both for
   the crown silhouette and for the shadow it casts.

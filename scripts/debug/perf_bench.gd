@@ -607,6 +607,10 @@ func _build_toggles() -> Array[Dictionary]:
 		var shadow_dist := sun.directional_shadow_max_distance
 		if shadow_dist > 100.0:
 			toggles.append({"name": "sun_shadow_100m", "apply":func(on: bool) -> void: sun.directional_shadow_max_distance = shadow_dist if on else 100.0})
+		# Soft sun shadows (blocker search + wide filter on every lit pixel, 2026-10-05).
+		var angular := sun.light_angular_distance
+		if angular > 0.0:
+			toggles.append({"name": "sun_angular_distance", "apply":func(on: bool) -> void: sun.light_angular_distance = angular if on else 0.0})
 	var lantern := _player.get_node_or_null("Lantern") as Light3D
 	if lantern and lantern.visible:
 		toggles.append({"name": "lantern", "apply":func(on: bool) -> void: lantern.visible = on})

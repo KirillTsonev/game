@@ -29,6 +29,10 @@ impostor at **175 m** (`TREE_IMPOSTOR_RANGE` in `tools/setup_tree_assets.gd`); t
 casts nothing (`last_shadow_lod = 0`). After (at the original 150 m): ~7.0 ms GPU / 10.9 M tris /
 4.5k draws (was 10.9 ms / 21.4 M / 7.2k). See `docs/vegetation.md`.
 
+**Since 2026-10-05 the trees cast from a reduced shadow mesh** (LOD2, `shadow_impostor` = 2),
+drawn as shadows-only nodes that end at `TreeScatter.TREE_SHADOW_RANGE` = 175 m. The rule below
+now applies to that constant as well. See `docs/vegetation.md`, "Shadow meshes".
+
 *Why 175 and not 150 (= shadow max distance):* Terrain3D switches LODs per **32 m cell**, by the
 distance to the **cell centre**, not per tree -- a tree can be up to ~23 m (half the cell
 diagonal) nearer than its cell centre. With the switch at 150, whole cells of trees 127-150 m
@@ -105,6 +109,14 @@ Alpha-scissor leaf cards are solid only where texture alpha >= the cutoff (0.5).
 - a separate, lower cutoff + stronger mip boost **in the shadow pass only** (`IN_SHADOW_PASS`,
   true while rendering shadow maps): near shadows stay dappled, coarse-cascade shadows become soft
   solid-ish blobs instead of fading. Visible look unaffected.
+- **UPDATE 2026-10-05: `light_angular_distance` is back to 0.** At every value above 0 a few
+  tree shadows turned grey and see-through at some viewing angles (Kirill, in-game). Likely
+  cause, not confirmed: Godot's blur width is `(blocker - z) / (1 - blocker)` in the cascade's
+  depth range, which blows up for the tallest casters in a cascade (engine issues #91142,
+  #86536). Measured cost of 0.05: 0.14-0.24 ms GPU. The handoff below is accepted for now;
+  untried: an invisible tall shadow caster to stretch the depth range. Tried and removed the
+  same day: coarsening the tree leaf cutout in the shadow pass, by a fixed size (too blobby)
+  and by distance to where the shadow lands (never judged in-game).
 - **The blob-to-leaves handoff at ~25 m is fixed with `light_angular_distance` = 0.05, not in
   the shader (2026-10-01).** The solid-ish far blobs were obvious on the cliff meshes: one dark
   mass from ~20 m that switched to leaf detail on approach (user report). Shadow range, atlas
