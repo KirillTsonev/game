@@ -486,8 +486,25 @@ Look-versus-speed choices, each independent:
     result into a texture of your own.
   - Rescanning the editor right after rewriting `post_process_painterly_sat.gd` (an `@tool`
     effect that also runs in the editor viewport) crashed the editor once.
-  - Not done: the other five effects (0.07-0.16 ms each, 0.65 ms together). Radial blur,
-    Gaussian blur and glare each copy the frame first; merging passes is the remaining option.
+  - **The other five effects, read 2026-10-05** (0.07-0.16 ms each, 0.65 ms together). None has
+    a hidden cost like the painterly's. A full-resolution pass costs about 0.05 ms whatever it
+    does (the plain copy is 0.05, the noise pass 0.07), so each effect is mostly its pass count:
+    - Gaussian blur: copy + horizontal + vertical. **The copy was removed** (the horizontal
+      pass reads the frame directly; output identical): 0.14 -> 0.10 ms (`..._gaussian_nocopy`).
+      Side finding, left as is: the horizontal pass blurs at full strength and only the
+      vertical pass applies `strength` (0.2), so the blur is stronger sideways than up and down.
+    - Radial blur: copy + one pass of `sample_count` reads (16, the default; not set in
+      `compositor.tres`). The copy is needed (the pass reads other pixels than it writes).
+      Halving the sample count would save about 0.05 ms and is a look decision.
+    - Noise: one in-place pass, 0.07 ms.
+    - Bloom: extract at half resolution, 4 down + 4 up passes on small mips, one full-size apply.
+    - Glare: already the reduced-resolution path (2 passes at quarter size + one full-size
+      composite), no copy.
+    - What is left to gain is structural and small: sharing one hand-over texture between
+      radial blur and Gaussian blur would drop one more copy (about 0.05 ms); folding the three
+      full-size in-place passes (noise, bloom apply, glare composite) into one would save up to
+      about 0.1 ms. Both couple effects that are separate, separately switchable resources
+      today. Not done.
 - **Colour bleed and chromatic aberration: tried and removed, 2026-10-05.** They are the two
   effects the reference's author names that the project did not run
   (`godot_notes/dfantasy_reference_breakdown.md`). Added at subtle values (colour bleed after

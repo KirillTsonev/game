@@ -1,53 +1,23 @@
-# Handoff: mid-storey saplings (2026-10-04)
+These are the open items from the list I gave after the painterly rewrite, largest first, with what has changed since:
 
-## Goal
+1. **The visible trees: 2.3–2.6 ms of GPU.** This is the largest remaining item. The trees draw their full mesh (5,800–11,300 triangles) out to 175 m, then switch to an 8-triangle impostor. The fix is a mid-distance LOD in between. It has the biggest visual risk, because the crowns are leaf cards and those simplify badly, so each tree needs your eye. About a third of this cost is per pixel (leaf cards overdrawing each other), so the mid LOD should use fewer, larger cards.
 
-Step 7 of `docs/forest_floor_plan.md`: a 2-4 m mid-storey at grove edges, between the shrubs and
-the canopy.
+2. **Tree shadows from a cheaper mesh: ceiling about 1 ms, measured.** Every tree casts its shadow from the full mesh in each cascade. I tested the extreme case (casting from the impostor) and it saved 0.6–1.3 ms, so that is the most this can give. Two ways to get there:
+   - Build reduced shadow meshes for the 14 trees in Blender; my guess is 0.5–0.9 ms recovered.
+   - Look at whether the impostor's own shadows are acceptable as they are. That would be the full 1 ms for no work, but I expect them to look wrong near the player.
 
-## State
+3. **MSAA: 0.6–1.0 ms.** This is a look decision, like SSAO was: it smooths geometry edges, and the grass shader notes say thin blades depend on it. I can add a toggle to the Options pane so you can judge it against the live scene.
 
-Built and run once; waiting for Kirill to judge it in-game. Nothing is committed.
+4. **The other five post effects: done as far as is worthwhile.** The Gaussian blur's wasted copy is removed (0.04 ms). What remains is 0.1–0.2 ms and would tie the effects together, which I advised against in my last two answers.
 
-- **Decision:** saplings are the canopy trees scaled down per instance. Kirill compared them
-  in-game against cut pine tops (4.5 m at true size, 7 m at x0.6) and picked the scaled-down
-  whole trees. Each has a stem cylinder collider (`SaplingColliders`, 5 cm minimum radius, 1.6 m
-  tall) -- added at Kirill's request after a first version without.
-- **Mesh assets 64-68** in `terrain_assets.tres`, built by `build_sapling_assets()` in
-  `tools/setup_tree_assets.gd`: PackPineB, PackPineA2, PackPineC2, PackDecidC2, PackDecidA2.
-  Full mesh to 80 m, then an impostor copy, never culled; shadows on both.
-- **Placement:** `scripts/terrain/sapling_scatter.gd` (`SaplingScatter`), called from
-  `WorldGenerator._ready()` after the understory.
-- **J layer panel** has a "Saplings" checkbox.
-- **Docs:** `docs/vegetation.md` has a "Saplings" section with the ids, scales, LODs and
-  placement rules.
+Two smaller ones I mentioned earlier and you asked about:
 
-Last run (seed 858829582): no errors, 735 saplings (423 pine, 312 deciduous), 0.13 s.
+5. **Saplings casting shadows from their impostors.** The whole sapling layer is 0.16–0.29 ms of GPU and 0.33–0.92 ms of CPU, so the gain is a fraction of that. Their shadows would stop at 80 m instead of 150 m.
 
-## Not checked yet
+6. **Radial blur's sample count, 16 to 8:** about 0.05 ms, a slight look change toward the screen corners.
 
-- **Density and look in the forest** -- 735 is a first guess. Knobs at the top of
-  `sapling_scatter.gd`: `MAX_P`, `PATCH_LO` / `PATCH_HI`, `OPEN_P`, `SIZE_MIN` / `SIZE_MAX`.
-- **Render cost** -- not measured. Compare with the "Saplings" checkbox in the same view.
-- **The 80 m switch to the impostor** -- hard switch per 32 m cell; the impostor uses the tree
-  impostor's far fullness (2.2). May pop or look too thin / too full.
-- **Sapling shadows** -- leaf cards are 3-8 times smaller than on the trees and may drop out of
-  the shadow pass (`docs/shadows.md`).
+And one that is parked, not open:
 
-## Things to know
+7. **GPU-driven drawing for the ferns and bushes.** This is a CPU-side fix, and the frame is GPU-limited since the understory shadow change, so it would not raise the frame rate now.
 
-- The per-tree scales live in `PINE_MIX` / `DECID_MIX` in the scatter module, not in the mesh
-  assets (the assets share the canopy trees' mesh files).
-- Rerun `build_sapling_assets()` after `build_pack_trees()`, `bake_tree_impostors()` or
-  `tree_impostor_import()`.
-- Changing the sapling layer does not change the rest of the map for a pinned seed (own rng
-  stream, runs after everything it reads).
-- Left out as too heavy: PackPineD2 (11.3k tris), PackDecidB2 (8.6k). The dry colour variants
-  are bare twigs and were not considered.
-
-## Dropped options
-
-- `raw-assets/models/saplings/` (4 glbs): 19k-414k tris, wrong scale, two without textures.
-  `quick_treeit_tree.glb` is the only salvageable one (decimate, cut cards, cutout shader).
-- Pack `Tree_05` (26.6 m tree) and `Tree_B` (6.1 m, needs texture upscaling); `Branch_C` not wanted.
-- Cut pine tops: PackPineB / PackPineA2 tops are nearly bare (60 / 72 tris at 4.5 m).
+My recommendation is unchanged: item 2 first, because its ceiling is measured and the visible trees stay exactly as they are, then item 1. Item 3 is the cheapest to try if you want a quick look-versus-speed decision in between.
