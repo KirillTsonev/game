@@ -123,6 +123,33 @@ layout_mode = 2
 button_pressed = true
 text = "Enabled"
 
+[node name="SSAORow" type="HBoxContainer" parent="Root/Center/OptionsPanel" unique_id=1552730846]
+layout_mode = 2
+
+[node name="SSAOLabel" type="Label" parent="Root/Center/OptionsPanel/SSAORow" unique_id=613904472]
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+text = "Ambient Occlusion"
+
+[node name="SSAOToggle" type="CheckBox" parent="Root/Center/OptionsPanel/SSAORow" unique_id=1876240915]
+modulate = Color(0.1, 3.2, 0.1, 1)
+layout_mode = 2
+button_pressed = true
+text = "Enabled"
+
+[node name="SSAOQualityRow" type="HBoxContainer" parent="Root/Center/OptionsPanel" unique_id=341187562]
+layout_mode = 2
+
+[node name="SSAOQualityLabel" type="Label" parent="Root/Center/OptionsPanel/SSAOQualityRow" unique_id=2047713308]
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+text = "AO Quality"
+
+[node name="SSAOQualityOption" type="OptionButton" parent="Root/Center/OptionsPanel/SSAOQualityRow" unique_id=928465031]
+modulate = Color(0.1, 3.2, 0.1, 1)
+custom_minimum_size = Vector2(160, 0)
+layout_mode = 2
+
 [node name="BackButton" type="Button" parent="Root/Center/OptionsPanel" unique_id=700137294]
 modulate = Color(0.1, 3.2, 0.1, 1)
 custom_minimum_size = Vector2(220, 0)

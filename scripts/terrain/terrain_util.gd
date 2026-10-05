@@ -13,6 +13,50 @@ const VERTEX_SPACING := 1.0
 ## placement purposes only (a separate concern from the macro shape itself).
 const ZONE_TRANSITION_WALL_T := 0.7
 
+const SHAPE_CACHE_DIR := "user://collision_shape_cache"
+
+## A collision shape built from a glb, kept on disk between runs (2026-10-05: hulling the 9 rock
+## glbs cost 0.7 s every start). `bake` is a Callable returning the Shape3D; it only runs on a
+## cache miss. The file is keyed by the glb's path + mtime, so a re-exported glb rebakes by
+## itself -- bump `version` after changing HOW the shape is built, or the old one is reused.
+static func cached_shape(glb_path: String, tag: String, version: int, bake: Callable) -> Shape3D:
+	var cache_file := "%s/%s_%s_%d_v%d.res" % [SHAPE_CACHE_DIR, tag, glb_path.md5_text(), FileAccess.get_modified_time(glb_path), version]
+	if ResourceLoader.exists(cache_file):
+		var cached := ResourceLoader.load(cache_file, "", ResourceLoader.CACHE_MODE_IGNORE) as Shape3D
+		if cached:
+			return cached
+	var shape: Shape3D = bake.call()
+	if shape:
+		DirAccess.make_dir_recursive_absolute(SHAPE_CACHE_DIR)
+		var err := ResourceSaver.save(shape, cache_file)
+		if err != OK:
+			push_warning("TERRAIN_GEN: could not save collision shape to %s (error %d) -- will rebuild next run" % [cache_file, err])
+	return shape
+
+const VALUE_CACHE_DIR := "user://model_analysis_cache"
+
+## Same idea as cached_shape for plain data worked out from a glb (a Dictionary of numbers,
+## vectors, packed arrays -- no objects): kept in a file keyed by the glb's path + mtime, by
+## `key` (every other input of the computation, as text) and by `version`. `compute` returns the
+## value and only runs on a miss; an empty Dictionary from it means "failed" and is not stored.
+static func cached_value(glb_path: String, tag: String, key: String, version: int, compute: Callable) -> Dictionary:
+	var cache_file := "%s/%s_%s_%d_v%d.var" % [VALUE_CACHE_DIR, tag, (glb_path + "|" + key).md5_text(), FileAccess.get_modified_time(glb_path), version]
+	if FileAccess.file_exists(cache_file):
+		var f := FileAccess.open(cache_file, FileAccess.READ)
+		if f:
+			var stored: Variant = f.get_var()
+			if stored is Dictionary and not (stored as Dictionary).is_empty():
+				return stored
+	var value: Dictionary = compute.call()
+	if not value.is_empty():
+		DirAccess.make_dir_recursive_absolute(VALUE_CACHE_DIR)
+		var out := FileAccess.open(cache_file, FileAccess.WRITE)
+		if out:
+			out.store_var(value)
+		else:
+			push_warning("TERRAIN_GEN: could not write %s -- will recompute next run" % cache_file)
+	return value
+
 ## Recursively gathers every MeshInstance3D's vertices under `node`, transformed into `node`'s
 ## own root local space (2026-09-17, "match the elevation line"): each node's own `transform`
 ## (local to ITS parent) is folded into `parent_transform` on the way down, so a multi-part

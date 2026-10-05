@@ -177,45 +177,65 @@ static func load_outcrop_models() -> Array[Dictionary]:
 		if scene == null:
 			push_warning("TERRAIN_GEN: could not load outcrop mesh %s -- skipping it" % def.glb)
 			continue
-		var sample := scene.instantiate()
-		var verts := PackedVector3Array()
-		TerrainUtil.collect_mesh_vertices_recursive(sample, Transform3D.IDENTITY, verts)
-		var face_dir := TerrainUtil.sum_mesh_normals_recursive(sample, Transform3D.IDENTITY)
-		sample.free()
-		if verts.is_empty():
+		# 2026-10-05: the geometry scan is kept on disk between runs (TerrainUtil.cached_value) -- it
+		# depends only on the glb, the def and OUTCROP_UNDERSIDE_CELL.
+		var key := "%s|%s" % [str(def), OUTCROP_UNDERSIDE_CELL]
+		var a: Dictionary = TerrainUtil.cached_value(def.glb, "outcrop_model", key, OUTCROP_SCAN_VERSION, _scan_outcrop_model.bind(def))
+		if a.is_empty():
 			continue
-		face_dir = face_dir.normalized() if face_dir.length_squared() > 0.000001 else Vector3.BACK
-		# "lay_flat": false -- the model already stands the right way up on a flat base; turning its
-		# mean surface normal to UP would lean that base (beach_rock_formation: 5.4 deg, ~1 m over
-		# its 12 m length -- that end floated).
-		var lay_flat := Basis(Quaternion(face_dir, Vector3.UP)) if bool(def.get("lay_flat", true)) else Basis.IDENTITY
-		var lo := Vector3(INF, INF, INF)
-		var hi := Vector3(-INF, -INF, -INF)
-		var flat_verts := PackedVector3Array()
-		flat_verts.resize(verts.size())
-		for vi in verts.size():
-			var tv := lay_flat * verts[vi]
-			flat_verts[vi] = tv
-			lo = lo.min(tv)
-			hi = hi.max(tv)
-		var nx := maxi(1, int(ceil((hi.x - lo.x) / OUTCROP_UNDERSIDE_CELL)))
-		var nz := maxi(1, int(ceil((hi.z - lo.z) / OUTCROP_UNDERSIDE_CELL)))
-		var under := PackedFloat32Array()
-		under.resize(nx * nz)
-		under.fill(INF)
-		for tv in flat_verts:
-			var cx := clampi(int((tv.x - lo.x) / OUTCROP_UNDERSIDE_CELL), 0, nx - 1)
-			var cz := clampi(int((tv.z - lo.z) / OUTCROP_UNDERSIDE_CELL), 0, nz - 1)
-			var ci := cz * nx + cx
-			if tv.y < under[ci]:
-				under[ci] = tv.y
-		var filled := 0
-		for u in under:
-			if u < INF:
-				filled += 1
-		models.append({"def": def, "scene": scene, "lay_flat": lay_flat, "lo": lo, "hi": hi, "under": under, "nx": nx, "nz": nz})
-		print("TERRAIN_GEN_DEBUG outcrop %s: face_dir=%s laid-flat size=%s underside grid %dx%d (%d%% filled)" % [def.name, face_dir, hi - lo, nx, nz, int(100.0 * filled / float(nx * nz))])
+		var lo: Vector3 = a.lo
+		var hi: Vector3 = a.hi
+		var nx: int = a.nx
+		var nz: int = a.nz
+		models.append({"def": def, "scene": scene, "lay_flat": a.lay_flat, "lo": lo, "hi": hi, "under": a.under, "nx": nx, "nz": nz})
+		print("TERRAIN_GEN_DEBUG outcrop %s: face_dir=%s laid-flat size=%s underside grid %dx%d (%d%% filled)" % [def.name, a.face_dir, hi - lo, nx, nz, int(100.0 * int(a.filled) / float(nx * nz))])
 	return models
+
+const OUTCROP_SCAN_VERSION := 1 ## bump after changing _scan_outcrop_model
+
+## One model's laid-flat rotation, bounds and underside grid, from its glb's vertices; {} when it
+## has no geometry (never cached).
+static func _scan_outcrop_model(def: Dictionary) -> Dictionary:
+	var scene: PackedScene = load(def.glb)
+	if scene == null:
+		return {}
+	var sample := scene.instantiate()
+	var verts := PackedVector3Array()
+	TerrainUtil.collect_mesh_vertices_recursive(sample, Transform3D.IDENTITY, verts)
+	var face_dir := TerrainUtil.sum_mesh_normals_recursive(sample, Transform3D.IDENTITY)
+	sample.free()
+	if verts.is_empty():
+		return {}
+	face_dir = face_dir.normalized() if face_dir.length_squared() > 0.000001 else Vector3.BACK
+	# "lay_flat": false -- the model already stands the right way up on a flat base; turning its
+	# mean surface normal to UP would lean that base (beach_rock_formation: 5.4 deg, ~1 m over
+	# its 12 m length -- that end floated).
+	var lay_flat := Basis(Quaternion(face_dir, Vector3.UP)) if bool(def.get("lay_flat", true)) else Basis.IDENTITY
+	var lo := Vector3(INF, INF, INF)
+	var hi := Vector3(-INF, -INF, -INF)
+	var flat_verts := PackedVector3Array()
+	flat_verts.resize(verts.size())
+	for vi in verts.size():
+		var tv := lay_flat * verts[vi]
+		flat_verts[vi] = tv
+		lo = lo.min(tv)
+		hi = hi.max(tv)
+	var nx := maxi(1, int(ceil((hi.x - lo.x) / OUTCROP_UNDERSIDE_CELL)))
+	var nz := maxi(1, int(ceil((hi.z - lo.z) / OUTCROP_UNDERSIDE_CELL)))
+	var under := PackedFloat32Array()
+	under.resize(nx * nz)
+	under.fill(INF)
+	for tv in flat_verts:
+		var cx := clampi(int((tv.x - lo.x) / OUTCROP_UNDERSIDE_CELL), 0, nx - 1)
+		var cz := clampi(int((tv.z - lo.z) / OUTCROP_UNDERSIDE_CELL), 0, nz - 1)
+		var ci := cz * nx + cx
+		if tv.y < under[ci]:
+			under[ci] = tv.y
+	var filled := 0
+	for u in under:
+		if u < INF:
+			filled += 1
+	return {"lay_flat": lay_flat, "lo": lo, "hi": hi, "under": under, "nx": nx, "nz": nz, "face_dir": face_dir, "filled": filled}
 
 ## Picks outcrop spots (pixel space) on the valley floor: random floor spot, yaw, scale;
 ## rejected if too steep, too uneven under the footprint, off the map, or too close to a

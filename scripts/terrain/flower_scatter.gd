@@ -120,9 +120,76 @@ static func scatter_flowers(terrain: Terrain3D, heights: PackedFloat32Array, wid
 
 	var steps_x := int((float(width - 1) - 2.0 * EDGE_MARGIN) / CANDIDATE_STEP)
 	var steps_z := int((float(length - 1) - 2.0 * EDGE_MARGIN) / CANDIDATE_STEP)
-	for iz in steps_z:
+	# The candidate rows run in bands on the engine's worker threads, one random stream per row
+	# (2026-10-05, same scheme and same caveat as UnderstoryScatter.scatter_understory: a seed
+	# gives the same flowers every run, but not the ones it gave when all rows shared `rng`).
+	var bands := ceili(float(steps_z) / BAND_ROWS)
+	var band_out: Array = []
+	band_out.resize(bands)
+	ctx.merge({
+		"canopy": canopy, "gw": gw, "gl": gl, "coverage": coverage, "min_grass": min_grass,
+		"sorrel_noise": sorrel_noise, "poppy_noise": poppy_noise, "clover_noise": clover_noise,
+		"steps_x": steps_x, "steps_z": steps_z, "row_seed": rng.randi(),
+		"out": band_out, "mutex": Mutex.new(),
+	})
+	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_scatter_band.bind(ctx), bands, -1, true))
+	for b: Dictionary in band_out:
+		for id in FLOWER_MESH_IDS:
+			(transforms[id] as Array).append_array(b.transforms[id])
+		for key in counts:
+			counts[key] += b.counts[key]
+	var checksum := 0 # the same seed must print the same number on every run
+	for id in FLOWER_MESH_IDS:
+		checksum = hash([checksum, transforms[id]])
+	print("TERRAIN_GEN: flower placement checksum %d" % checksum)
+
+	for id in FLOWER_MESH_IDS:
+		var list: Array[Transform3D] = transforms[id]
+		if not list.is_empty():
+			var colors := PackedColorArray()
+			colors.resize(list.size())
+			colors.fill(Color.WHITE)
+			instancer.add_transforms(id, list, colors, true)
+
+	last_counts = counts
+	print("TERRAIN_GEN: flowers -- %d wood sorrel, %d poppies (%d on road verges), %d dandelions, %d clover piece(s) in %d patch(es) from %d candidate spots; %d rejected (slope / road / rock / deadfall); %d ms" % [
+		counts.sorrel, counts.poppy, counts.poppy_verge, counts.dandelion, counts.clover, counts.clover_patches, counts.candidates, counts.rejected, Time.get_ticks_msec() - t0])
+
+const BAND_ROWS := 16 ## candidate rows per worker-thread task in scatter_flowers()
+
+## scatter_flowers()'s candidate loop for rows [band * BAND_ROWS, +BAND_ROWS). Runs on a worker
+## thread: reads the shared data in `shared`, and gives _add / _add_clover_patch its own copy of
+## that dictionary with band-local "rng", "transforms" and "counts", which the caller joins in
+## band order. One random stream per row, seeded from shared.row_seed and the row number.
+static func _scatter_band(band: int, shared: Dictionary) -> void:
+	var width: int = shared.width
+	var length: int = shared.length
+	var canopy: PackedFloat32Array = shared.canopy
+	var gw: int = shared.gw
+	var gl: int = shared.gl
+	var coverage: PackedByteArray = shared.coverage
+	var min_grass: int = shared.min_grass
+	var sorrel_noise: FastNoiseLite = shared.sorrel_noise
+	var poppy_noise: FastNoiseLite = shared.poppy_noise
+	var clover_noise: FastNoiseLite = shared.clover_noise
+	var steps_x: int = shared.steps_x
+	var steps_z: int = shared.steps_z
+	var row_seed: int = shared.row_seed
+
+	var rng := RandomNumberGenerator.new()
+	var transforms := {}
+	for id in FLOWER_MESH_IDS:
+		transforms[id] = [] as Array[Transform3D]
+	var counts := {"candidates": 0, "sorrel": 0, "poppy": 0, "poppy_verge": 0, "dandelion": 0, "clover": 0, "clover_patches": 0, "rejected": 0}
+	var ctx := shared.duplicate()
+	ctx.rng = rng
+	ctx.transforms = transforms
+	ctx.counts = counts
+	var n_candidates := 0
+	for iz in range(band * BAND_ROWS, mini((band + 1) * BAND_ROWS, steps_z)):
+		rng.seed = hash(row_seed + iz)
 		for ix in steps_x:
-			counts.candidates += 1
+			n_candidates += 1
 			var px := EDGE_MARGIN + (float(ix) + rng.randf()) * CANDIDATE_STEP
 			var pz := EDGE_MARGIN + (float(iz) + rng.randf()) * CANDIDATE_STEP
 			var c := UnderstoryScatter._grid_sample(canopy, gw, gl, px, pz)
@@ -153,18 +220,12 @@ static func scatter_flowers(terrain: Terrain3D, heights: PackedFloat32Array, wid
 					counts.dandelion += 1
 			elif roll < p_poppy + DANDELION_P + p_clover:
 				_add_clover_patch(ctx, px, pz)
+	counts.candidates = n_candidates
 
-	for id in FLOWER_MESH_IDS:
-		var list: Array[Transform3D] = transforms[id]
-		if not list.is_empty():
-			var colors := PackedColorArray()
-			colors.resize(list.size())
-			colors.fill(Color.WHITE)
-			instancer.add_transforms(id, list, colors, true)
-
-	last_counts = counts
-	print("TERRAIN_GEN: flowers -- %d wood sorrel, %d poppies (%d on road verges), %d dandelions, %d clover piece(s) in %d patch(es) from %d candidate spots; %d rejected (slope / road / rock / deadfall); %d ms" % [
-		counts.sorrel, counts.poppy, counts.poppy_verge, counts.dandelion, counts.clover, counts.clover_patches, counts.candidates, counts.rejected, Time.get_ticks_msec() - t0])
+	var mutex: Mutex = shared.mutex
+	mutex.lock()
+	(shared.out as Array)[band] = {"transforms": transforms, "counts": counts}
+	mutex.unlock()
 
 ## One clover patch: 2-4 carpet pieces overlapping around the centre + a few dandelions among them.
 static func _add_clover_patch(ctx: Dictionary, px: float, pz: float) -> void:

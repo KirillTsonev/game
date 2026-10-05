@@ -214,6 +214,15 @@ static func scatter_deadfall(parent_node: Node, terrain: Terrain3D, heights: Pac
 		ctx.transforms[id] = [] as Array[Transform3D]
 		ctx.colors[id] = PackedColorArray()
 		ctx.counts[id] = 0
+	# Lookup grids for _capsule_blocked (2026-10-05: its plain scans of every circle and every
+	# placed piece were 0.67 s of this stage's 0.93 s). KEEP_GRID_CELL cells -> indices into
+	# ctx.circles / ctx.placed of whatever overlaps the cell; same answers, far fewer tests.
+	ctx["circle_grid"] = {}
+	ctx["placed_grid"] = {}
+	var all_circles: Array[Vector3] = ctx.circles
+	for i in all_circles.size():
+		var kc := all_circles[i]
+		_bucket_index(ctx.circle_grid, i, kc.x - kc.z, kc.y - kc.z, kc.x + kc.z, kc.y + kc.z)
 
 	# 1. Debris banked against the uphill side of the larger rocks.
 	for i in RockScatter.rock_keep_circles.size():
@@ -318,6 +327,12 @@ static func scatter_deadfall(parent_node: Node, terrain: Terrain3D, heights: Pac
 	# 4. Pine cones -- after the keep-out grid (they stay out of stumps and logs), and after every
 	# other roll, so adding them changed nothing above.
 	_scatter_cones(ctx, instancer, assets, rng)
+
+	# Placement checksum (pieces + keep-out circles): must not change across a speed-only change.
+	var checksum := hash(deadfall_keep_circles)
+	for id in DEADFALL_MESH_IDS:
+		checksum = hash([checksum, ctx.transforms[id]])
+	print("TERRAIN_GEN: deadfall placement checksum %d" % checksum)
 
 	var counts: Dictionary = ctx.counts
 	_debug_transforms = ctx.transforms
@@ -676,8 +691,18 @@ static func _try_place(ctx: Dictionary, id: int, p: Vector2, angle: float, scale
 	ctx.transforms[id].append(xf)
 	ctx.colors[id].append(Color.WHITE)
 	ctx.placed.append({"a": a, "b": b, "r": r, "kind": kind})
+	_bucket_index(ctx.placed_grid, (ctx.placed as Array).size() - 1, minf(a.x, b.x) - r, minf(a.y, b.y) - r, maxf(a.x, b.x) + r, maxf(a.y, b.y) + r)
 	counts[id] += 1
 	return true
+
+## Lists `index` in every KEEP_GRID_CELL cell of `grid` that the box (x0, z0)-(x1, z1) touches.
+static func _bucket_index(grid: Dictionary, index: int, x0: float, z0: float, x1: float, z1: float) -> void:
+	for gz in range(floori(z0 / KEEP_GRID_CELL), floori(z1 / KEEP_GRID_CELL) + 1):
+		for gx in range(floori(x0 / KEEP_GRID_CELL), floori(x1 / KEEP_GRID_CELL) + 1):
+			var cell := Vector2i(gx, gz)
+			if not grid.has(cell):
+				grid[cell] = []
+			grid[cell].append(index)
 
 ## Capsule (segment a-b, radius r, pixel space) vs cliff rects, outcrop/rock circles, trunks,
 ## knot ramps and the deadfall placed so far (branches/sticks keep only SMALL_GAP from each other).
@@ -685,6 +710,7 @@ static func _capsule_blocked(ctx: Dictionary, a: Vector2, b: Vector2, r: float, 
 	var n := maxi(1, int(ceil(a.distance_to(b) / maxf(r, 0.25))))
 	var pad := r + KEEPOUT_MARGIN
 	var circles: Array[Vector3] = ctx.circles
+	var circle_grid: Dictionary = ctx.circle_grid
 	for k in n + 1:
 		var q := a.lerp(b, float(k) / float(n))
 		for kr: Dictionary in ctx.rects:
@@ -693,20 +719,38 @@ static func _capsule_blocked(ctx: Dictionary, a: Vector2, b: Vector2, r: float, 
 			var lz := d.dot(kr.az)
 			if lx >= float(kr.x0) - pad and lx <= float(kr.x1) + pad and lz >= float(kr.z0) - pad and lz <= float(kr.z1) + pad:
 				return true
-		for i in circles.size():
-			if i != skip_circle and q.distance_to(Vector2(circles[i].x, circles[i].y)) < circles[i].z + pad:
-				return true
+		# Only the circles bucketed in the cells within `pad` of q can be closer than radius + pad.
+		for gz in range(floori((q.y - pad) / KEEP_GRID_CELL), floori((q.y + pad) / KEEP_GRID_CELL) + 1):
+			for gx in range(floori((q.x - pad) / KEEP_GRID_CELL), floori((q.x + pad) / KEEP_GRID_CELL) + 1):
+				var cell := Vector2i(gx, gz)
+				if not circle_grid.has(cell):
+					continue
+				for i: int in circle_grid[cell]:
+					if i != skip_circle and q.distance_to(Vector2(circles[i].x, circles[i].y)) < circles[i].z + pad:
+						return true
 		var tr := _nearest_trunk(ctx.trunk_grid, q, pad + TRUNK_RADIUS * 1.5)
 		if tr.z > 0.0 and q.distance_to(Vector2(tr.x, tr.y)) < TRUNK_RADIUS * tr.z + pad:
 			return true
 		for knot in ctx.knots:
 			if RockScatter._near_knot_ramp(knot, q.x, q.y, KNOT_RAMP_CLEAR + r):
 				return true
-	for cap: Dictionary in ctx.placed:
-		# Branches and sticks lie close together in a clump, but never through each other.
-		var gap := SMALL_GAP if SMALL_KINDS.has(kind) and SMALL_KINDS.has(cap.kind) else KEEPOUT_MARGIN
-		if _segment_distance(a, b, cap.a, cap.b) < r + float(cap.r) + gap:
-			return true
+	# Placed pieces: only those bucketed in the cells this capsule's box reaches, grown by its radius
+	# and the larger of the two gaps (a piece is bucketed by its own box grown by its own radius).
+	var placed: Array[Dictionary] = ctx.placed
+	var placed_grid: Dictionary = ctx.placed_grid
+	var grow := r + maxf(SMALL_GAP, KEEPOUT_MARGIN)
+	var small := SMALL_KINDS.has(kind)
+	for gz in range(floori((minf(a.y, b.y) - grow) / KEEP_GRID_CELL), floori((maxf(a.y, b.y) + grow) / KEEP_GRID_CELL) + 1):
+		for gx in range(floori((minf(a.x, b.x) - grow) / KEEP_GRID_CELL), floori((maxf(a.x, b.x) + grow) / KEEP_GRID_CELL) + 1):
+			var cell := Vector2i(gx, gz)
+			if not placed_grid.has(cell):
+				continue
+			for i: int in placed_grid[cell]:
+				var cap := placed[i]
+				# Branches and sticks lie close together in a clump, but never through each other.
+				var gap := SMALL_GAP if small and SMALL_KINDS.has(cap.kind) else KEEPOUT_MARGIN
+				if _segment_distance(a, b, cap.a, cap.b) < r + float(cap.r) + gap:
+					return true
 	return false
 
 ## Shortest distance between segments p1-p2 and q1-q2.
@@ -744,6 +788,23 @@ static func _nearest_trunk(grid: Dictionary, p: Vector2, radius: float) -> Vecto
 					best = tp
 	return best
 
+const COLLISION_BAKE_VERSION := 1 ## bump after changing _bake_collision_shape (see TerrainUtil.cached_shape)
+
+## Collision shape of one piece, from its glb's last LOD: a trimesh for logs, else a simplified hull.
+static func _bake_collision_shape(glb_path: String, kind: String) -> Shape3D:
+	var scene: PackedScene = load(glb_path)
+	if scene == null:
+		return null
+	var sample := scene.instantiate()
+	var lods := sample.find_children("*LOD*", "MeshInstance3D", true, false)
+	lods.sort_custom(func(x: Node, y: Node) -> bool: return String(x.name) < String(y.name))
+	var src: MeshInstance3D = lods.back() if not lods.is_empty() else null
+	var shape: Shape3D = null
+	if src and src.mesh:
+		shape = src.mesh.create_trimesh_shape() if kind == "log" else src.mesh.create_convex_shape(true, true)
+	sample.free()
+	return shape
+
 ## One shared collision shape per mesh id, from the glb's LOD2: stumps a simplified convex hull,
 ## logs a trimesh (static bodies only). Branches get none.
 static func _build_collision_shapes() -> Dictionary:
@@ -753,18 +814,13 @@ static func _build_collision_shapes() -> Dictionary:
 		var piece: Dictionary = PIECES[id]
 		if SMALL_KINDS.has(piece.kind):
 			continue
-		var scene: PackedScene = load(SCENE_DIR + "%s/%s.glb" % [piece.dir, piece.get("file", piece.dir)])
-		if scene == null:
-			push_warning("TERRAIN_GEN: deadfall %s glb failed to load -- no collision for it" % piece.dir)
+		var glb_path: String = SCENE_DIR + "%s/%s.glb" % [piece.dir, piece.get("file", piece.dir)]
+		var shape := TerrainUtil.cached_shape(glb_path, "deadfall", COLLISION_BAKE_VERSION, _bake_collision_shape.bind(glb_path, piece.kind))
+		if shape == null:
+			push_warning("TERRAIN_GEN: deadfall %s -- no collision shape could be built for it" % piece.dir)
 			continue
-		var sample := scene.instantiate()
-		var lods := sample.find_children("*LOD*", "MeshInstance3D", true, false)
-		lods.sort_custom(func(x: Node, y: Node) -> bool: return String(x.name) < String(y.name))
-		var src: MeshInstance3D = lods.back() if not lods.is_empty() else null
-		if src and src.mesh:
-			shapes[id] = src.mesh.create_trimesh_shape() if piece.kind == "log" else src.mesh.create_convex_shape(true, true)
-		sample.free()
-	print("TERRAIN_GEN_STARTUP:   deadfall glb load + collision shapes (%d): %.2fs" % [shapes.size(), (Time.get_ticks_msec() - t0) / 1000.0])
+		shapes[id] = shape
+	print("TERRAIN_GEN_STARTUP:   deadfall collision shapes, disk-cached (%d): %.2fs" % [shapes.size(), (Time.get_ticks_msec() - t0) / 1000.0])
 	return shapes
 
 static func _h(ctx: Dictionary, px: float, pz: float) -> float:

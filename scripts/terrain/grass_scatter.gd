@@ -192,22 +192,118 @@ static func bake(_parent_node: Node, maps: Dictionary, corner: Vector3, rng: Ran
 	var canopy_grid := UnderstoryScatter._build_canopy_grid(gw, gl)
 
 	# -- Noise (FastNoiseLite.get_image runs in C++; ~1 ms each) --
-	var patch_n := _noise_bytes(rng.randi(), PATCH_NOISE_FREQ, width, length)
-	var clump_n := _noise_bytes(rng.randi(), CLUMP_NOISE_FREQ, width, length)
-	var dry_n := _noise_bytes(rng.randi(), DRY_NOISE_FREQ, width, length)
-	var patch_seed := rng.randi() # drawn here so the worn seeds below don't shift the patch layout
-	var worn_a := _noise_bytes(rng.randi(), WORN_REGION_FREQ, width, length)
-	var worn_b := _noise_bytes(rng.randi(), WORN_DETAIL_FREQ, width, length)
-	worn = PackedByteArray()
-	worn.resize(n)
+	# The seeds are drawn in this fixed order; the images are then rendered together on worker
+	# threads (2026-10-05: one get_image() is ~16 ms here, not ~1 ms, and there are six).
+	var patch_noise := _noise(rng.randi(), PATCH_NOISE_FREQ)
+	var clump_noise := _noise(rng.randi(), CLUMP_NOISE_FREQ)
+	var dry_noise := _noise(rng.randi(), DRY_NOISE_FREQ)
+	# Blade patch noise (see PATCH_*): 2 octaves, normalised 0..1. Seed drawn here so the worn
+	# seeds below don't shift the patch layout.
+	var pn := FastNoiseLite.new()
+	pn.seed = rng.randi()
+	pn.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	pn.fractal_type = FastNoiseLite.FRACTAL_FBM
+	pn.fractal_octaves = 2
+	pn.fractal_lacunarity = PATCH_LACUNARITY
+	pn.fractal_gain = PATCH_GAIN
+	pn.frequency = 1.0 / (PATCH_SCALE * PATCH_RES)
+	var worn_a_noise := _noise(rng.randi(), WORN_REGION_FREQ)
+	var worn_b_noise := _noise(rng.randi(), WORN_DETAIL_FREQ)
+	var noise_images := noise_images_parallel([
+		[patch_noise, width, length], [clump_noise, width, length], [dry_noise, width, length],
+		[worn_a_noise, width, length], [worn_b_noise, width, length],
+		[pn, width * PATCH_RES, length * PATCH_RES]])
+	var patch_n: PackedByteArray = (noise_images[0] as Image).get_data()
+	var clump_n: PackedByteArray = (noise_images[1] as Image).get_data()
+	var dry_n: PackedByteArray = (noise_images[2] as Image).get_data()
+	var worn_a: PackedByteArray = (noise_images[3] as Image).get_data()
+	var worn_b: PackedByteArray = (noise_images[4] as Image).get_data()
 	var t_fields := Time.get_ticks_msec() - t0
 
-	# -- Per-pixel combine --
+	# -- Per-pixel combine, in row bands on worker threads (see _bake_band) --
+	var bands := ceili(float(length) / BAKE_BAND_ROWS)
+	var band_out: Array = []
+	band_out.resize(bands)
+	var ctx := {
+		"width": width, "length": length, "heights": heights, "rock_d": rock_d, "road_d": road_d,
+		"canopy_grid": canopy_grid, "gw": gw, "gl": gl,
+		"patch_n": patch_n, "clump_n": clump_n, "dry_n": dry_n, "worn_a": worn_a, "worn_b": worn_b,
+		"height_min": height_min, "hspan": hspan, "road_lo": road_clear_distance(),
+		"out": band_out, "mutex": Mutex.new(),
+	}
+	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_bake_band.bind(ctx), bands, -1, true))
 	var bytes := PackedByteArray()
-	bytes.resize(n * 4)
+	worn = PackedByteArray()
+	var dens_sum := 0.0
+	var covered := 0
+	var full := 0
+	var dry_sum := 0.0
+	var tall_sum := 0.0
+	var curv_samples := PackedFloat32Array()
+	for b: Dictionary in band_out:
+		bytes.append_array(b.bytes)
+		worn.append_array(b.worn)
+		curv_samples.append_array(b.curv_samples)
+		dens_sum += b.dens_sum
+		covered += b.covered
+		full += b.full
+		dry_sum += b.dry_sum
+		tall_sum += b.tall_sum
+
+	density_image = Image.create_from_data(width, length, false, Image.FORMAT_RGBA8, bytes)
+	density_texture = ImageTexture.create_from_image(density_image)
+	height_texture = ImageTexture.create_from_image(maps.height)
+	color_texture = ImageTexture.create_from_image(maps.color)
+	patch_image = noise_images[5]
+	patch_texture = ImageTexture.create_from_image(patch_image)
+	_dbg = {"heights": heights, "rock_d": rock_d, "road_d": road_d, "canopy": canopy_grid, "gw": gw, "gl": gl, "patch": patch_n, "clump": clump_n, "dry": dry_n}
+
+	curv_samples.sort()
+	var cs := curv_samples.size()
+	var c10 := curv_samples[int(cs * 0.1)] if cs > 0 else 0.0
+	var c90 := curv_samples[int(cs * 0.9)] if cs > 0 else 0.0
+	last_stats = {"mean_density": dens_sum / n, "covered_pct": 100.0 * covered / n, "full_pct": 100.0 * full / n}
+	print("GRASS: density bake -- mean density %.2f, %.1f%% of map has grass (>0.15), %.1f%% full (>0.8); on grassed ground mean dry %.2f / tall %.2f" % [
+		dens_sum / n, 100.0 * covered / n, 100.0 * full / n, dry_sum / maxf(1.0, covered), tall_sum / maxf(1.0, covered)])
+	print("GRASS: rock sources %d boulder/erratic + %d outcrop circle(s), %d scree-band point(s), %d cliff rect(s); road %d stamp(s) from %d path pts; curvature p10 %.3f p90 %.3f (CURV_FULL %.3f)" % [
+		boulder_count, outcrop_count, scree_points, rects.size(), road_stamps, road_path.size(), c10, c90, CURV_FULL])
+	# Output checksum: must not change across a speed-only change.
+	print("GRASS: checksum density %d, worn %d, patch %d" % [hash(bytes), hash(worn), hash(patch_image.get_data())])
+	print("GRASS: timing -- rock field %d ms, all fields %d ms, total %d ms" % [t_rock, t_fields, Time.get_ticks_msec() - t0])
+
+const BAKE_BAND_ROWS := 16 ## rows per worker-thread task in bake()
+
+## bake()'s per-pixel combine for rows [band * BAKE_BAND_ROWS, +BAKE_BAND_ROWS). Runs on a worker
+## thread: reads the shared fields in ctx, fills band-sized outputs of its own (density RGBA bytes,
+## worn bytes, curvature samples, stats), which bake() joins in band order -- the same bytes the
+## single loop produced. No engine-object calls in the loop.
+static func _bake_band(band: int, ctx: Dictionary) -> void:
+	var width: int = ctx.width
+	var length: int = ctx.length
+	var heights: PackedFloat32Array = ctx.heights
+	var rock_d: PackedFloat32Array = ctx.rock_d
+	var road_d: PackedFloat32Array = ctx.road_d
+	var canopy_grid: PackedFloat32Array = ctx.canopy_grid
+	var gw: int = ctx.gw
+	var gl: int = ctx.gl
+	var patch_n: PackedByteArray = ctx.patch_n
+	var clump_n: PackedByteArray = ctx.clump_n
+	var dry_n: PackedByteArray = ctx.dry_n
+	var worn_a: PackedByteArray = ctx.worn_a
+	var worn_b: PackedByteArray = ctx.worn_b
+	var h_min: float = ctx.height_min
+	var hspan: float = ctx.hspan
+	var road_lo: float = ctx.road_lo
+
+	var z0 := band * BAKE_BAND_ROWS
+	var z1 := mini(z0 + BAKE_BAND_ROWS, length)
+	var bn := (z1 - z0) * width
+	var bytes := PackedByteArray()
+	bytes.resize(bn * 4)
+	var worn_out := PackedByteArray()
+	worn_out.resize(bn)
 	var w1 := width - 1
 	var l1 := length - 1
-	var road_lo := road_clear_distance()
 	var road_hi := road_lo + ROAD_FADE
 	var inv_r2 := 1.0 / float(CURV_RADIUS * CURV_RADIUS)
 	var dens_sum := 0.0
@@ -216,7 +312,7 @@ static func bake(_parent_node: Node, maps: Dictionary, corner: Vector3, rng: Ran
 	var dry_sum := 0.0
 	var tall_sum := 0.0
 	var curv_samples := PackedFloat32Array()
-	for pz in length:
+	for pz in range(z0, z1):
 		var zm := maxi(pz - 1, 0)
 		var zp := mini(pz + 1, l1)
 		var zcm := maxi(pz - CURV_RADIUS, 0)
@@ -224,6 +320,7 @@ static func bake(_parent_node: Node, maps: Dictionary, corner: Vector3, rng: Ran
 		var row := pz * width
 		for px in width:
 			var i := row + px
+			var li := (pz - z0) * width + px
 			var xm := maxi(px - 1, 0)
 			var xp := mini(px + 1, w1)
 			var h := heights[i]
@@ -246,18 +343,18 @@ static func bake(_parent_node: Node, maps: Dictionary, corner: Vector3, rng: Ran
 			var meadow_f := lerpf(MEADOW_VAR_MIN, 1.0, patch_n[i] / 255.0)
 			var clump := clump_n[i] / 255.0
 			var worn_w := smoothstep(WORN_LO, WORN_HI, (worn_a[i] + worn_b[i]) / 510.0)
-			worn[i] = int(worn_w * 255.0 + 0.5)
+			worn_out[li] = int(worn_w * 255.0 + 0.5)
 			var density := OPEN_COVERAGE * meadow_f * slope_f * rock_f * road_f * canopy_f * (1.0 - worn_w) # = coverage
 			var tussock := road_f * smoothstep(0.0, TUSSOCK_ROCK_CLEAR, rock_d[i]) * smoothstep(TUSSOCK_SLOPE_BARE_NY, TUSSOCK_SLOPE_FULL_NY, ny)
 
 			var verge := rock_f * road_f # 0 right at a rock/road edge, 1 in the open
 			var dry := clampf(DRY_BASE + DRY_NOISE_WEIGHT * (dry_n[i] / 127.5 - 1.0) + DRY_CONVEX_WEIGHT * ridge \
-				- DRY_CONCAVE_WEIGHT * hollow + DRY_HEIGHT_WEIGHT * (h - height_min) / hspan \
+				- DRY_CONCAVE_WEIGHT * hollow + DRY_HEIGHT_WEIGHT * (h - h_min) / hspan \
 				+ DRY_EDGE_WEIGHT * (1.0 - verge) - DRY_SHADE_WEIGHT * canopy, 0.0, 1.0)
 			var tall := clampf((TALL_BASE + TALL_CONCAVE_WEIGHT * hollow - TALL_CONVEX_WEIGHT * ridge \
 				+ TALL_CLUMP_WEIGHT * (clump * 2.0 - 1.0)) * lerpf(TALL_EDGE_MIN, 1.0, verge), 0.0, 1.0)
 
-			var o := i * 4
+			var o := li * 4
 			bytes[o] = int(density * 255.0 + 0.5)
 			bytes[o + 1] = int(dry * 255.0 + 0.5)
 			bytes[o + 2] = int(tall * 255.0 + 0.5)
@@ -270,35 +367,11 @@ static func bake(_parent_node: Node, maps: Dictionary, corner: Vector3, rng: Ran
 			if density > 0.8:
 				full += 1
 
-	density_image = Image.create_from_data(width, length, false, Image.FORMAT_RGBA8, bytes)
-	density_texture = ImageTexture.create_from_image(density_image)
-	height_texture = ImageTexture.create_from_image(maps.height)
-	color_texture = ImageTexture.create_from_image(maps.color)
-	# Blade patch noise (see PATCH_*): one C++ get_image call, 2 octaves, normalised 0..1.
-	var pn := FastNoiseLite.new()
-	pn.seed = patch_seed
-	pn.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
-	pn.fractal_type = FastNoiseLite.FRACTAL_FBM
-	pn.fractal_octaves = 2
-	pn.fractal_lacunarity = PATCH_LACUNARITY
-	pn.fractal_gain = PATCH_GAIN
-	pn.frequency = 1.0 / (PATCH_SCALE * PATCH_RES)
-	patch_image = pn.get_image(width * PATCH_RES, length * PATCH_RES)
-	if patch_image.get_format() != Image.FORMAT_L8:
-		patch_image.convert(Image.FORMAT_L8)
-	patch_texture = ImageTexture.create_from_image(patch_image)
-	_dbg = {"heights": heights, "rock_d": rock_d, "road_d": road_d, "canopy": canopy_grid, "gw": gw, "gl": gl, "patch": patch_n, "clump": clump_n, "dry": dry_n}
-
-	curv_samples.sort()
-	var cs := curv_samples.size()
-	var c10 := curv_samples[int(cs * 0.1)] if cs > 0 else 0.0
-	var c90 := curv_samples[int(cs * 0.9)] if cs > 0 else 0.0
-	last_stats = {"mean_density": dens_sum / n, "covered_pct": 100.0 * covered / n, "full_pct": 100.0 * full / n}
-	print("GRASS: density bake -- mean density %.2f, %.1f%% of map has grass (>0.15), %.1f%% full (>0.8); on grassed ground mean dry %.2f / tall %.2f" % [
-		dens_sum / n, 100.0 * covered / n, 100.0 * full / n, dry_sum / maxf(1.0, covered), tall_sum / maxf(1.0, covered)])
-	print("GRASS: rock sources %d boulder/erratic + %d outcrop circle(s), %d scree-band point(s), %d cliff rect(s); road %d stamp(s) from %d path pts; curvature p10 %.3f p90 %.3f (CURV_FULL %.3f)" % [
-		boulder_count, outcrop_count, scree_points, rects.size(), road_stamps, road_path.size(), c10, c90, CURV_FULL])
-	print("GRASS: timing -- rock field %d ms, all fields %d ms, total %d ms" % [t_rock, t_fields, Time.get_ticks_msec() - t0])
+	var result := {"bytes": bytes, "worn": worn_out, "curv_samples": curv_samples, "dens_sum": dens_sum, "covered": covered, "full": full, "dry_sum": dry_sum, "tall_sum": tall_sum}
+	var mutex: Mutex = ctx.mutex
+	mutex.lock()
+	(ctx.out as Array)[band] = result
+	mutex.unlock()
 
 ## m from the road centreline where grass may start: worst-case painted edge + margin (see ROAD_CLEAR_MARGIN).
 static func road_clear_distance() -> float:
@@ -378,14 +451,39 @@ static func _stamp_rect(field: PackedFloat32Array, width: int, length: int, kr: 
 
 ## Normalised 0..255 noise, one byte per heightmap pixel (row-major, same layout as `heights`).
 static func _noise_bytes(seed_value: int, freq: float, width: int, length: int) -> PackedByteArray:
+	var img := _noise(seed_value, freq).get_image(width, length)
+	if img.get_format() != Image.FORMAT_L8:
+		img.convert(Image.FORMAT_L8)
+	return img.get_data()
+
+## The noise _noise_bytes renders (smooth simplex at `freq`).
+static func _noise(seed_value: int, freq: float) -> FastNoiseLite:
 	var fn := FastNoiseLite.new()
 	fn.seed = seed_value
 	fn.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
 	fn.frequency = freq
-	var img := fn.get_image(width, length)
+	return fn
+
+## Renders several noise images at the same time on the engine's worker threads. Each spec is
+## [FastNoiseLite, width, height]; returns one L8 Image per spec, in the same order. Create the
+## noises (and draw their seeds) in a fixed order BEFORE calling, so the result does not depend
+## on thread timing.
+static func noise_images_parallel(specs: Array) -> Array:
+	var out: Array = []
+	out.resize(specs.size())
+	var ctx := {"specs": specs, "out": out, "mutex": Mutex.new()}
+	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_noise_image_task.bind(ctx), specs.size(), -1, true))
+	return out
+
+static func _noise_image_task(index: int, ctx: Dictionary) -> void:
+	var spec: Array = ctx.specs[index]
+	var img: Image = (spec[0] as FastNoiseLite).get_image(spec[1], spec[2])
 	if img.get_format() != Image.FORMAT_L8:
 		img.convert(Image.FORMAT_L8)
-	return img.get_data()
+	var mutex: Mutex = ctx.mutex
+	mutex.lock()
+	(ctx.out as Array)[index] = img
+	mutex.unlock()
 
 ## ---------------------------------------------------------------- DEBUG ----
 

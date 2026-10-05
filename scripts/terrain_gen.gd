@@ -21,6 +21,9 @@
 extends Node3D
 
 func _ready() -> void:
+	# First: the models/textures the later stages need start loading on background threads now,
+	# so they are ready by the time the heightmap build below is done.
+	TerrainPreload.begin()
 	# Per-run static state in the terrain modules (was member vars on this node).
 	CliffDressing.reset_run_state()
 	CliffInstancer.reset_run_state()
@@ -45,17 +48,46 @@ func _ready() -> void:
 	# other autoloads/_ready() calls, etc.) -- a category of cost this
 	# script's own timers can never see, since it hasn't run yet.
 	print("TERRAIN_GEN: WorldGenerator._ready() started at t=%.2fs since process start" % (t_ready_start / 1000.0))
+	startup_timings = {"ready_started_at_ms": t_ready_start, "stage_ms": {}}
 	# -1 means "randomize": roll a fresh seed via randi() this run rather than
 	# reusing MASTER_SEED literally. Always printed either way, so whatever
 	# came out (random or pinned) is copy-pasteable back into MASTER_SEED to
 	# reproduce this exact map later.
 	var resolved_seed := randi() if TerrainConfig.MASTER_SEED < 0 else TerrainConfig.MASTER_SEED
 	print("TERRAIN_GEN: building %dx%d heightmap (master_seed=%d)..." % [TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, resolved_seed])
+	var terrain: Terrain3D = get_parent().get_node_or_null("Terrain3D")
+	if terrain == null:
+		push_error("TERRAIN_GEN: no sibling Terrain3D node found under %s -- WorldGenerator must be a direct child of the same parent as the live Terrain3D" % get_parent().name)
+		LoadingScreen.end() # the boot scene may have put it up
+		return
+	var data: Terrain3DData = terrain.get_data()
+	# Terrain3D auto-loads whatever's on disk at terrain.data_directory when
+	# it enters the tree (that's still there as a static fallback/editor
+	# preview), so clear any regions that brought in before importing this
+	# run's fresh heightmap -- otherwise a previous playthrough's (or the
+	# editor's last saved) terrain would still be sitting underneath.
+	# Done before the first loading-screen frame is drawn, so that terrain never shows.
+	for region_location in data.get_region_locations().duplicate():
+		data.remove_regionl(region_location, false)
+
+	# Loading screen (2026-10-05): this function hands control back to the engine before each
+	# group of stages (_loading_step) so the bar can be redrawn. The player is switched off until
+	# the world exists -- it would fall through the still-empty map otherwise.
+	var player: Node3D = get_parent().get_node_or_null("Player")
+	var player_process_mode := Node.PROCESS_MODE_INHERIT
+	if player:
+		player_process_mode = player.process_mode
+		player.process_mode = Node.PROCESS_MODE_DISABLED
+	LoadingScreen.begin() # no-op when the boot scene already started it
+	_loading_from = LoadingScreen.progress
+	await _loading_step(0)
+
 	var t_start := Time.get_ticks_msec() # temporary timing probe -- answering "is runtime-per-session generation viable" needs a real number, not a guess
 	var maps := TerrainHeightmap.build_heightmap(resolved_seed)
 	_debug_maps = maps # 2026-09-29 DEBUG (landmark capture / listing)
 	_debug_seed = resolved_seed
 	print("TERRAIN_GEN: heightmap build took %d ms (noise+erosion+smoothing+features+road, no I/O)" % (Time.get_ticks_msec() - t_start))
+	startup_timings.stage_ms["heightmap build"] = Time.get_ticks_msec() - t_start
 
 	# -- RUNTIME roguelike generation --
 	# This script now lives attached to a "WorldGenerator" node placed as a
@@ -70,21 +102,6 @@ func _ready() -> void:
 	# time, so nothing here touches DATA_DIRECTORY/save_directory anymore --
 	# WRITE_TARGET/DATA_DIRECTORY/TEST_DATA_DIRECTORY above are now unused,
 	# kept only as a record of the old on-disk layout.
-	var terrain: Terrain3D = get_parent().get_node_or_null("Terrain3D")
-	if terrain == null:
-		push_error("TERRAIN_GEN: no sibling Terrain3D node found under %s -- WorldGenerator must be a direct child of the same parent as the live Terrain3D" % get_parent().name)
-		return
-
-	var data: Terrain3DData = terrain.get_data()
-
-	# Terrain3D auto-loads whatever's on disk at terrain.data_directory when
-	# it enters the tree (that's still there as a static fallback/editor
-	# preview), so clear any regions that brought in before importing this
-	# run's fresh heightmap -- otherwise a previous playthrough's (or the
-	# editor's last saved) terrain would still be sitting underneath.
-	for region_location in data.get_region_locations().duplicate():
-		data.remove_regionl(region_location, false)
-
 	var t_ready_stage := Time.get_ticks_msec()
 	var half_width := TerrainConfig.AREA_WIDTH * 0.5
 	var half_length := TerrainConfig.AREA_LENGTH * 0.5
@@ -95,7 +112,7 @@ func _ready() -> void:
 
 	var height_range: Vector2 = data.get_height_range()
 	print("TERRAIN_GEN: imported. region_count=%d height_range=%s" % [data.get_region_count(), height_range])
-	print("TERRAIN_GEN: Terrain3D import+height_range (%.2fs)" % ((Time.get_ticks_msec() - t_ready_stage) / 1000.0))
+	_log_stage("Terrain3D import+height_range", t_ready_stage)
 	t_ready_stage = Time.get_ticks_msec()
 
 	# Terrain3DData.import_images()'s `global_position` argument does NOT
@@ -148,12 +165,14 @@ func _ready() -> void:
 	#     N save the copy shape into the landmark JSON (used by stamp() from the next run)
 	# TerrainLandmarks.spawn_debug_overlay(get_parent(), heightmap_corner, maps)
 
+	await _loading_step(1)
+	t_ready_stage = Time.get_ticks_msec()
 	var boulder_rng := RandomNumberGenerator.new()
 	# Independent stream from the main pipeline's _derive_seeds -- purely
 	# cosmetic scattering, doesn't need to be in that fixed derivation order.
 	boulder_rng.seed = resolved_seed ^ 0x424F554C # 'BOUL' salt
 	RockScatter.scatter_boulders(get_parent(), terrain, maps.heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, maps.cliff_features, heightmap_corner, boulder_rng, maps.road_weight, maps.cliff_dressing_plan, maps.cliff_dressing_top_profiles, maps.outcrop_plan, maps.knots)
-	print("TERRAIN_GEN: boulder scattering (%.2fs)" % ((Time.get_ticks_msec() - t_ready_stage) / 1000.0))
+	_log_stage("boulder scattering", t_ready_stage)
 	t_ready_stage = Time.get_ticks_msec()
 
 	# Scree: dense collider-free debris carpet over the SAME cliff-foot masks,
@@ -161,30 +180,34 @@ func _ready() -> void:
 	var scree_rng := RandomNumberGenerator.new()
 	scree_rng.seed = resolved_seed ^ 0x53435245 # 'SCRE' salt -- own cosmetic stream
 	RockScatter.scatter_scree(terrain, maps.heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, maps.cliff_features, heightmap_corner, scree_rng, maps.road_weight, maps.cliff_dressing_plan, maps.cliff_dressing_top_profiles, maps.outcrop_plan, maps.knots)
-	print("TERRAIN_GEN: scree scattering (%.2fs)" % ((Time.get_ticks_msec() - t_ready_stage) / 1000.0))
+	_log_stage("scree scattering", t_ready_stage)
 	t_ready_stage = Time.get_ticks_msec()
 
 	var tree_rng := RandomNumberGenerator.new()
 	tree_rng.seed = resolved_seed ^ 0x54524545 # 'TREE' salt -- own cosmetic stream
 	TreeScatter.scatter_trees(get_parent(), terrain, maps.heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, heightmap_corner, tree_rng, maps.road_weight, maps.road_path, maps.cliff_dressing_plan, maps.cliff_dressing_top_profiles, maps.outcrop_plan)
-	print("TERRAIN_GEN: tree scattering (%.2fs)" % ((Time.get_ticks_msec() - t_ready_stage) / 1000.0))
+	_log_stage("tree scattering", t_ready_stage)
 	t_ready_stage = Time.get_ticks_msec()
 
 	# Deadfall (stumps, logs, branch clumps): banked uphill of the larger rocks and of trunks, and
 	# scattered through the stands -- reads rock_keep_circles + tree_points, so after both. Runs
 	# before the understory/grass so they keep clear of it. Own cosmetic stream.
+	await _loading_step(2)
+	t_ready_stage = Time.get_ticks_msec()
 	var deadfall_rng := RandomNumberGenerator.new()
 	deadfall_rng.seed = resolved_seed ^ 0x44454144 # 'DEAD' salt
 	DeadfallScatter.scatter_deadfall(get_parent(), terrain, maps.heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, heightmap_corner, deadfall_rng, maps.road_weight, maps.cliff_dressing_plan, maps.cliff_dressing_top_profiles, maps.outcrop_plan, maps.knots)
-	print("TERRAIN_GEN: deadfall scattering (%.2fs)" % ((Time.get_ticks_msec() - t_ready_stage) / 1000.0))
+	_log_stage("deadfall scattering", t_ready_stage)
 	t_ready_stage = Time.get_ticks_msec()
 
 	# Understory (shrubs + ferns): density reads the canopy just placed (TreeScatter.tree_points)
 	# plus shaded cliff feet -- must run after trees + boulders. Own cosmetic stream.
+	await _loading_step(3)
+	t_ready_stage = Time.get_ticks_msec()
 	var understory_rng := RandomNumberGenerator.new()
 	understory_rng.seed = resolved_seed ^ 0x554E4452 # 'UNDR' salt
 	UnderstoryScatter.scatter_understory(get_parent(), terrain, maps.heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, heightmap_corner, understory_rng, maps.road_weight, maps.cliff_features, maps.cliff_dressing_plan, maps.cliff_dressing_top_profiles, maps.outcrop_plan)
-	print("TERRAIN_GEN: understory scattering (%.2fs)" % ((Time.get_ticks_msec() - t_ready_stage) / 1000.0))
+	_log_stage("understory scattering", t_ready_stage)
 	t_ready_stage = Time.get_ticks_msec()
 
 	# Saplings (mid-storey): scaled-down canopy trees at grove edges -- reads the canopy, the rock
@@ -192,17 +215,19 @@ func _ready() -> void:
 	var sapling_rng := RandomNumberGenerator.new()
 	sapling_rng.seed = resolved_seed ^ 0x5341504C # 'SAPL' salt
 	SaplingScatter.scatter_saplings(terrain, maps.heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, heightmap_corner, sapling_rng, maps.road_weight, maps.cliff_dressing_plan, maps.cliff_dressing_top_profiles, maps.outcrop_plan)
-	print("TERRAIN_GEN: sapling scattering (%.2fs)" % ((Time.get_ticks_msec() - t_ready_stage) / 1000.0))
+	_log_stage("sapling scattering", t_ready_stage)
 	t_ready_stage = Time.get_ticks_msec()
 
 	# Grass step 1: bake the groundcover density/dry/tall texture (no instances -- the GPU
 	# renderer reads it). Reads rock_keep_circles + the canopy, so after boulders/trees. Own stream.
+	await _loading_step(4)
+	t_ready_stage = Time.get_ticks_msec()
 	var grass_rng := RandomNumberGenerator.new()
 	grass_rng.seed = resolved_seed ^ 0x47525353 # 'GRSS' salt
 	GrassScatter.bake(get_parent(), maps, heightmap_corner, grass_rng)
 	# Grass step 2: the player-following GPU renderer that reads that bake (added deferred).
 	GrassField.spawn(get_parent())
-	print("TERRAIN_GEN: grass density bake (%.2fs)" % ((Time.get_ticks_msec() - t_ready_stage) / 1000.0))
+	_log_stage("grass density bake", t_ready_stage)
 	t_ready_stage = Time.get_ticks_msec()
 
 	# Flowers: wood sorrel under the canopy; poppies, dandelions and clover on open grassed ground --
@@ -210,31 +235,35 @@ func _ready() -> void:
 	var flower_rng := RandomNumberGenerator.new()
 	flower_rng.seed = resolved_seed ^ 0x464C5752 # 'FLWR' salt
 	FlowerScatter.scatter_flowers(terrain, maps.heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, heightmap_corner, flower_rng, maps.road_weight, maps.cliff_dressing_plan, maps.cliff_dressing_top_profiles, maps.outcrop_plan)
-	print("TERRAIN_GEN: flower scattering (%.2fs)" % ((Time.get_ticks_msec() - t_ready_stage) / 1000.0))
+	_log_stage("flower scattering", t_ready_stage)
 	t_ready_stage = Time.get_ticks_msec()
 
 	# Ground texturing (2026-09-27): rewrites the control map in place -- Grass texture from the
 	# grass coverage bake, rock/scree rings around cliffs, road kept. Needs the bake, so here.
+	await _loading_step(5)
+	t_ready_stage = Time.get_ticks_msec()
 	var paint_rng := RandomNumberGenerator.new()
 	paint_rng.seed = resolved_seed ^ 0x50414E54 # 'PANT' salt
 	TerrainGroundPaint.paint(get_parent(), terrain, maps, heightmap_corner, paint_rng)
-	print("TERRAIN_GEN: ground painting (%.2fs)" % ((Time.get_ticks_msec() - t_ready_stage) / 1000.0))
+	_log_stage("ground painting", t_ready_stage)
 	t_ready_stage = Time.get_ticks_msec()
 
+	await _loading_step(6)
+	t_ready_stage = Time.get_ticks_msec()
 	# Planned + terrain-fitted in _build_heightmap (round 2) -- instancing only here.
 	TerrainOutcrops.place_outcrops(get_parent(), maps.outcrop_plan, maps.outcrop_models, heightmap_corner)
-	print("TERRAIN_GEN: outcrop placement (%.2fs)" % ((Time.get_ticks_msec() - t_ready_stage) / 1000.0))
+	_log_stage("outcrop placement", t_ready_stage)
 	t_ready_stage = Time.get_ticks_msec()
 
 	TerrainRoad.build_road_mesh(get_parent(), maps.heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, maps.road_path, heightmap_corner, resolved_seed)
-	print("TERRAIN_GEN: road mesh build (%.2fs)" % ((Time.get_ticks_msec() - t_ready_stage) / 1000.0))
+	_log_stage("road mesh build", t_ready_stage)
 	t_ready_stage = Time.get_ticks_msec()
 
 	# 2026-09-17 reorder: placement is already decided (maps.cliff_dressing_plan, computed
 	# inside _build_heightmap before Terrain3D import so the heightmap could be flattened to
 	# match each mesh's footprint -- see _plan_cliff_dressing) -- this call only instances it.
 	CliffInstancer.dress_cliff_faces(get_parent(), maps.cliff_dressing_plan, heightmap_corner, data, maps.cliff_dressing_top_profiles)
-	print("TERRAIN_GEN: cliff face dressing (%.2fs)" % ((Time.get_ticks_msec() - t_ready_stage) / 1000.0))
+	_log_stage("cliff face dressing", t_ready_stage)
 	t_ready_stage = Time.get_ticks_msec()
 
 	# Move the Player to this run's actual generated spawn point and face it
@@ -245,7 +274,6 @@ func _ready() -> void:
 	# move, but "forward" for a hand-placed rotation has no reason to still
 	# point at where the (now much longer) map's content actually is. Doing
 	# this here, every run, means it can never go stale again.
-	var player: Node3D = get_parent().get_node_or_null("Player")
 	if player == null:
 		push_warning("TERRAIN_GEN: no sibling Player node found -- skipping spawn placement")
 	else:
@@ -259,8 +287,14 @@ func _ready() -> void:
 		facing.y = 0.0 # look_at with a tilted target would pitch/roll the body itself, not just yaw it
 		if facing.length_squared() > 0.0001:
 			player.look_at(player.global_position + facing, Vector3.UP)
+		# Player._ready() used to run after this placement and do these two itself; with the
+		# loading screen it has long since run (on the empty map), so repeat them here.
+		if player.has_method("_snap_to_ground"):
+			player.call("_snap_to_ground")
+			player.set("last_safe_transform", player.global_transform)
 		print("TERRAIN_GEN: player spawned at %s facing exit at %s" % [player.global_position, exit_world])
-	print("TERRAIN_GEN: player placement (%.3fs)" % ((Time.get_ticks_msec() - t_ready_stage) / 1000.0))
+	_log_stage("player placement", t_ready_stage)
+	TerrainPreload.finish()
 
 	print("TERRAIN_GEN: done (runtime -- nothing written to disk)")
 	print("TERRAIN_GEN: _ready() TOTAL (%.2fs) -- this is the actual splash-to-playable gap this script controls" % ((Time.get_ticks_msec() - t_ready_start) / 1000.0))
@@ -272,15 +306,67 @@ func _ready() -> void:
 	# frame -- is invisible to it. These absolute timestamps (since process start, same
 	# clock as the "_ready() started at" line) bracket that remaining gap.
 	var t_ready_end := Time.get_ticks_msec()
+	startup_timings["ready_total_ms"] = t_ready_end - t_ready_start
 	print("TERRAIN_GEN_STARTUP: _ready() finished at t=%.2fs since process start | pipelines so far: %s" % [t_ready_end / 1000.0, _pipeline_counts_str()])
+	# The world is built: 3D rendering goes back on, but the loading screen stays up over the
+	# first frames (the first one compiles the shader pipelines and takes ~0.3 s).
+	LoadingScreen.set_progress(_loading_from + (1.0 - _loading_from) * _loading_fraction(LOADING_STEPS.size() - 1), LOADING_STEPS[-1][0])
+	LoadingScreen.show_world()
 	await RenderingServer.frame_post_draw
 	var t_first_draw := Time.get_ticks_msec()
 	print("TERRAIN_GEN_STARTUP: first frame drawn at t=%.2fs since process start (+%.2fs after _ready) | pipelines so far: %s | physics step time %.1f ms" % [t_first_draw / 1000.0, (t_first_draw - t_ready_end) / 1000.0, _pipeline_counts_str(), Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0])
 	for i in 3:
 		await RenderingServer.frame_post_draw
 	var t_settled := Time.get_ticks_msec()
+	startup_timings["first_frame_at_ms"] = t_first_draw
+	startup_timings["pipelines_at_settle"] = _pipeline_counts_str()
+	startup_timings["settled_at_ms"] = t_settled # PerfBench waits for this key before it starts
 	print("TERRAIN_GEN_STARTUP: 4th frame drawn at t=%.2fs since process start (frames 2-4 took %.2fs -- a big number here means shader compile stalls spilling past frame 1) | pipelines so far: %s" % [t_settled / 1000.0, (t_settled - t_first_draw) / 1000.0, _pipeline_counts_str()])
+	if player:
+		player.process_mode = player_process_mode
+	LoadingScreen.end()
 
+## Loading-screen steps: [text shown while the step runs, its rough duration in ms]. The durations
+## only set how far the bar moves per step (measured 2026-10-05); the last entry is the wait for
+## the first drawn frames.
+const LOADING_STEPS := [
+	["Shaping the terrain", 2450],
+	["Placing rocks and trees", 290],
+	["Scattering deadfall", 410],
+	["Growing the undergrowth", 410],
+	["Growing grass and flowers", 380],
+	["Painting the ground", 470],
+	["Raising cliffs and outcrops", 240],
+	["Finishing", 900],
+]
+var _loading_from := 0.0 ## bar position when generation started (the boot scene's share)
+
+## Share of the generation work done before step `index` starts, 0..1.
+func _loading_fraction(index: int) -> float:
+	var before := 0.0
+	var total := 0.0
+	for i in LOADING_STEPS.size():
+		total += float(LOADING_STEPS[i][1])
+		if i < index:
+			before += float(LOADING_STEPS[i][1])
+	return before / total
+
+## Shows step `index` on the loading screen and waits for one frame to be drawn, so the player
+## sees it before the step's (blocking) work starts.
+func _loading_step(index: int) -> void:
+	LoadingScreen.set_progress(_loading_from + (1.0 - _loading_from) * _loading_fraction(index), LOADING_STEPS[index][0])
+	await RenderingServer.frame_post_draw
+
+
+## Startup timings of this run, in ms: "stage_ms" (one entry per _log_stage call) plus the absolute
+## timestamps since process start. Read by the benchmark (scripts/debug/perf_bench.gd).
+var startup_timings: Dictionary = {}
+
+## Prints one _ready() stage's duration (measured from t_from) and keeps it in startup_timings.
+func _log_stage(stage: String, t_from: int) -> void:
+	var ms := Time.get_ticks_msec() - t_from
+	startup_timings.stage_ms[stage] = ms
+	print("TERRAIN_GEN: %s (%.2fs)" % [stage, ms / 1000.0])
 
 ## 2026-09-21 startup-time probe: cumulative GPU pipeline compilations by source. mesh/surface
 ## are compiled when materials/meshes load; draw/specialization are compiled on demand while

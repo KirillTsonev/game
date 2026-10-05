@@ -151,9 +151,92 @@ static func scatter_understory(parent_node: Node, terrain: Terrain3D, heights: P
 
 	var steps_x := int((float(width - 1) - 2.0 * EDGE_MARGIN) / CANDIDATE_STEP)
 	var steps_z := int((float(length - 1) - 2.0 * EDGE_MARGIN) / CANDIDATE_STEP)
-	for iz in steps_z:
+	# The candidate rows run in bands on the engine's worker threads (2026-10-05: the loop was
+	# ~1.2 s on the main thread). Each row draws from its own random stream (row_seed + row), so a
+	# seed still gives the same plants every run whatever the thread timing -- but not the plants
+	# it gave before this change, when all rows shared `rng` in order.
+	var bands := ceili(float(steps_z) / BAND_ROWS)
+	var band_out: Array = []
+	band_out.resize(bands)
+	var ctx := {
+		"width": width, "length": length, "heights": heights, "road_weight": road_weight,
+		"import_position": import_position, "steps_x": steps_x, "steps_z": steps_z,
+		"canopy": canopy, "cliff": cliff, "gw": gw, "gl": gl, "hmin": hmin, "hspan": hspan,
+		"trunk_grid": trunk_grid, "keep_rects": keep_rects, "keep_circles": keep_circles,
+		"glade_noise": glade_noise, "clump_noise": clump_noise, "active": active,
+		"row_seed": rng.randi(), "out": band_out, "mutex": Mutex.new(),
+	}
+	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_scatter_band.bind(ctx), bands, -1, true))
+	for b: Dictionary in band_out:
+		for id in UNDERSTORY_MESH_IDS:
+			(transforms_by_mesh[id] as Array).append_array(b.transforms[id])
+		for key in counts:
+			counts[key] += b.counts[key]
+	for id in UNDERSTORY_MESH_IDS:
+		var colors := PackedColorArray()
+		colors.resize((transforms_by_mesh[id] as Array).size())
+		colors.fill(Color.WHITE)
+		colors_by_mesh[id] = colors
+
+	for id in UNDERSTORY_MESH_IDS:
+		if not (transforms_by_mesh[id] as Array).is_empty():
+			instancer.add_transforms(id, transforms_by_mesh[id], colors_by_mesh[id], true)
+
+	# Placement checksum: the same seed must print the same number on every run.
+	var checksum := 0
+	for id in UNDERSTORY_MESH_IDS:
+		checksum = hash([checksum, transforms_by_mesh[id]])
+	print("TERRAIN_GEN: understory placement checksum %d" % checksum)
+
+	last_counts = counts
+	var total: int = counts.fern_group + counts.shrub_group
+	var lady := 0
+	for id in LADY_FERN_IDS:
+		lady += counts[id]
+	print("TERRAIN_GEN: understory -- %d plant(s): %d fern-group (fern %d, broad fern %d, lady fern %d) + %d shrub(s) (bush04 %d, bush05 %d, bush02 green %d, elderberry %d) from %d candidate spots (%.1f%%); rolled %d, rejected slope %d / road %d / rock %d / deadfall %d / trunk %d; fields %d ms, total %d ms" % [
+		total, counts.fern_group, counts[FERN_ID], counts[BROAD_FERN_ID], lady, counts.shrub_group, counts[BUSH04_ID], counts[BUSH05_ID], counts[BUSH02_GREEN_ID], counts[ELDERBERRY_A_ID] + counts[ELDERBERRY_B_ID],
+		counts.candidates, 100.0 * total / maxf(1.0, counts.candidates), counts.rolled, counts.rej_slope, counts.rej_road, counts.rej_rock, counts.rej_deadfall, counts.rej_trunk,
+		t_fields, Time.get_ticks_msec() - t0])
+
+const BAND_ROWS := 16 ## candidate rows per worker-thread task in scatter_understory()
+
+## scatter_understory()'s candidate loop for rows [band * BAND_ROWS, +BAND_ROWS). Runs on a worker
+## thread: reads the shared data in ctx, writes only its own lists, which the caller joins in band
+## order. One random stream per row, seeded from ctx.row_seed and the row number.
+static func _scatter_band(band: int, ctx: Dictionary) -> void:
+	var width: int = ctx.width
+	var length: int = ctx.length
+	var heights: PackedFloat32Array = ctx.heights
+	var road_weight: PackedFloat32Array = ctx.road_weight
+	var import_position: Vector3 = ctx.import_position
+	var steps_x: int = ctx.steps_x
+	var steps_z: int = ctx.steps_z
+	var canopy: PackedFloat32Array = ctx.canopy
+	var cliff: PackedFloat32Array = ctx.cliff
+	var gw: int = ctx.gw
+	var gl: int = ctx.gl
+	var hmin: float = ctx.hmin
+	var hspan: float = ctx.hspan
+	var trunk_grid: Dictionary = ctx.trunk_grid
+	var keep_rects: Array[Dictionary] = ctx.keep_rects
+	var keep_circles: Array[Vector3] = ctx.keep_circles
+	var glade_noise: FastNoiseLite = ctx.glade_noise
+	var clump_noise: FastNoiseLite = ctx.clump_noise
+	var active: Dictionary = ctx.active
+	var row_seed: int = ctx.row_seed
+
+	var transforms := {}
+	for id in UNDERSTORY_MESH_IDS:
+		transforms[id] = [] as Array[Transform3D]
+	var counts := {"candidates": 0, "rolled": 0, "rej_slope": 0, "rej_road": 0, "rej_rock": 0, "rej_deadfall": 0, "rej_trunk": 0, "fern_group": 0, "shrub_group": 0}
+	for id in UNDERSTORY_MESH_IDS:
+		counts[id] = 0
+	var n_candidates := 0
+	var rng := RandomNumberGenerator.new()
+	for iz in range(band * BAND_ROWS, mini((band + 1) * BAND_ROWS, steps_z)):
+		rng.seed = hash(row_seed + iz)
 		for ix in steps_x:
-			counts.candidates += 1
+			n_candidates += 1
 			var px := EDGE_MARGIN + (float(ix) + rng.randf()) * CANDIDATE_STEP
 			var pz := EDGE_MARGIN + (float(iz) + rng.randf()) * CANDIDATE_STEP
 			var c := _grid_sample(canopy, gw, gl, px, pz)
@@ -208,27 +291,32 @@ static func scatter_understory(parent_node: Node, terrain: Terrain3D, heights: P
 				var la := rng.randf() * TAU
 				basis = Basis(Vector3(cos(la), 0.0, sin(la)), lean) * basis
 			var pos := Vector3(import_position.x + px, h - EMBED, import_position.z + pz)
-			transforms_by_mesh[id].append(Transform3D(basis.scaled(Vector3.ONE * scale), pos))
-			colors_by_mesh[id].append(Color.WHITE)
+			transforms[id].append(Transform3D(basis.scaled(Vector3.ONE * scale), pos))
 			counts[id] += 1
 			counts["fern_group" if group == FERN_MIX else "shrub_group"] += 1
+	counts.candidates = n_candidates
 
-	for id in UNDERSTORY_MESH_IDS:
-		if not (transforms_by_mesh[id] as Array).is_empty():
-			instancer.add_transforms(id, transforms_by_mesh[id], colors_by_mesh[id], true)
-
-	last_counts = counts
-	var total: int = counts.fern_group + counts.shrub_group
-	var lady := 0
-	for id in LADY_FERN_IDS:
-		lady += counts[id]
-	print("TERRAIN_GEN: understory -- %d plant(s): %d fern-group (fern %d, broad fern %d, lady fern %d) + %d shrub(s) (bush04 %d, bush05 %d, bush02 green %d, elderberry %d) from %d candidate spots (%.1f%%); rolled %d, rejected slope %d / road %d / rock %d / deadfall %d / trunk %d; fields %d ms, total %d ms" % [
-		total, counts.fern_group, counts[FERN_ID], counts[BROAD_FERN_ID], lady, counts.shrub_group, counts[BUSH04_ID], counts[BUSH05_ID], counts[BUSH02_GREEN_ID], counts[ELDERBERRY_A_ID] + counts[ELDERBERRY_B_ID],
-		counts.candidates, 100.0 * total / maxf(1.0, counts.candidates), counts.rolled, counts.rej_slope, counts.rej_road, counts.rej_rock, counts.rej_deadfall, counts.rej_trunk,
-		t_fields, Time.get_ticks_msec() - t0])
+	var mutex: Mutex = ctx.mutex
+	mutex.lock()
+	(ctx.out as Array)[band] = {"transforms": transforms, "counts": counts}
+	mutex.unlock()
 
 ## Canopy cover grid from TreeScatter.tree_points: summed gaussians -> 1 - exp(-gain * sum).
+## Built once per run and reused (2026-10-05: deadfall, understory, grass, flowers and ground paint
+## each rebuilt it, ~50 ms a time). The key includes the tree count, so a caller that runs before
+## the trees are placed can't leave a stale grid behind. Callers must treat it as read-only.
 static func _build_canopy_grid(gw: int, gl: int) -> PackedFloat32Array:
+	var key := Vector3i(gw, gl, TreeScatter.tree_points.size())
+	if key == _canopy_key and not _canopy_cache.is_empty():
+		return _canopy_cache
+	_canopy_cache = _compute_canopy_grid(gw, gl)
+	_canopy_key = key
+	return _canopy_cache
+
+static var _canopy_cache := PackedFloat32Array()
+static var _canopy_key := Vector3i(-1, -1, -1)
+
+static func _compute_canopy_grid(gw: int, gl: int) -> PackedFloat32Array:
 	var sum := PackedFloat32Array()
 	sum.resize(gw * gl)
 	for tp in TreeScatter.tree_points:
@@ -369,3 +457,5 @@ static func _build_keep_rects(cliff_plan: Array[Dictionary], cliff_top_profiles:
 ## Per-run static state reset -- called first thing in WorldGenerator._ready().
 static func reset_run_state() -> void:
 	last_counts = {}
+	_canopy_cache = PackedFloat32Array()
+	_canopy_key = Vector3i(-1, -1, -1)

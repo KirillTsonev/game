@@ -49,6 +49,29 @@ const ROCK_SCENE_PATHS := {
 	36: "res://assets/models/rocks/namaqualand_boulder_05/namaqualand_boulder_05_2k.glb",
 	37: "res://assets/models/rocks/namaqualand_boulder_06/namaqualand_boulder_06_2k.glb",
 }
+const ROCK_HULL_BAKE_VERSION := 1 ## bump after changing _bake_rock_hull (see TerrainUtil.cached_shape)
+
+## Simplified convex hull of one rock glb.
+static func _bake_rock_hull(glb_path: String) -> Shape3D:
+	var scene: PackedScene = load(glb_path)
+	if scene == null:
+		return null
+	var sample := scene.instantiate()
+	# 2026-09-30: hull from the LOWEST-poly LOD (last *_LODn), not LOD0. Every LOD
+	# shares the same silhouette (dims within ~0.3%), and the simplified hull ends
+	# up ~32 points either way -- but the batch-2 boulders' 59k-109k-tri LOD0s
+	# took ~3.1 s to hull at startup.
+	var lods := sample.find_children("*LOD*", "MeshInstance3D", true, false)
+	lods.sort_custom(func(a: Node, b: Node) -> bool: return String(a.name) < String(b.name))
+	var hull_src: MeshInstance3D = lods.back() if not lods.is_empty() else null
+	var shape: Shape3D = null
+	if hull_src and hull_src.mesh:
+		# simplify=true: the 2k meshes would otherwise give 300-500-point hulls; the
+		# simplified hull is ~32 points and matches the rock's size within ~1-3%.
+		shape = hull_src.mesh.create_convex_shape(true, true)
+	sample.free()
+	return shape
+
 ## Poly Haven's boulder_01 was modeled/exported at genuine boulder scale
 ## (LOD0 mesh AABB ~1.83 units on its longest axis). stone_01/rock_07/
 ## rock_09 turned out to be modeled at a much smaller real-world scale
@@ -211,24 +234,13 @@ static func scatter_boulders(parent_node: Node, terrain: Terrain3D, heights: Pac
 	var rock_shapes: Dictionary = {}
 	var hull_start_ms := Time.get_ticks_msec()
 	for mesh_id in ROCK_MESH_IDS:
-		var scene: PackedScene = load(ROCK_SCENE_PATHS[mesh_id])
-		if scene:
-			var sample := scene.instantiate()
-			# 2026-09-30: hull from the LOWEST-poly LOD (last *_LODn), not LOD0. Every LOD
-			# shares the same silhouette (dims within ~0.3%), and the simplified hull ends
-			# up ~32 points either way -- but the batch-2 boulders' 59k-109k-tri LOD0s
-			# took ~3.1 s to hull at startup.
-			var lods := sample.find_children("*LOD*", "MeshInstance3D", true, false)
-			lods.sort_custom(func(a: Node, b: Node) -> bool: return String(a.name) < String(b.name))
-			var hull_src: MeshInstance3D = lods.back() if not lods.is_empty() else null
-			if hull_src and hull_src.mesh:
-				# simplify=true: the 2k meshes would otherwise give 300-500-point hulls; the
-				# simplified hull is ~32 points and matches the rock's size within ~1-3%.
-				rock_shapes[mesh_id] = hull_src.mesh.create_convex_shape(true, true)
-			sample.free()
+		var glb_path: String = ROCK_SCENE_PATHS[mesh_id]
+		var hull := TerrainUtil.cached_shape(glb_path, "rock", ROCK_HULL_BAKE_VERSION, _bake_rock_hull.bind(glb_path))
+		if hull:
+			rock_shapes[mesh_id] = hull
 		if not rock_shapes.has(mesh_id):
 			push_warning("TERRAIN_GEN: could not build a collision shape from %s (mesh id %d) -- these rocks will render but have no collision" % [ROCK_SCENE_PATHS[mesh_id], mesh_id])
-	print("TERRAIN_GEN_STARTUP:   rock glb load + convex hulls (%d mesh ids): %.2fs" % [ROCK_MESH_IDS.size(), (Time.get_ticks_msec() - hull_start_ms) / 1000.0])
+	print("TERRAIN_GEN_STARTUP:   rock convex hulls, disk-cached (%d mesh ids): %.2fs" % [ROCK_MESH_IDS.size(), (Time.get_ticks_msec() - hull_start_ms) / 1000.0])
 
 	# Per-mesh-id batches -- Terrain3DInstancer.add_transforms takes one mesh
 	# id per call, so instances using different rock meshes can't share one

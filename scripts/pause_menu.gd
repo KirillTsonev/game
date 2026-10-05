@@ -10,6 +10,8 @@ const SCALING_MODE_OFF := 0   # Bilinear / scaling disabled (matches fsr_debug_t
 const SCALING_MODE_FSR := 1   # FSR 1.0
 const DEFAULT_FSR_SCALE := 0.85
 const SETTINGS_PATH := "user://settings.cfg"
+# Item index == RenderingServer.EnvironmentSSAOQuality value.
+const SSAO_QUALITY_NAMES: Array[String] = ["Very Low", "Low", "Medium", "High", "Ultra"]
 
 @onready var root: Control = $Root
 @onready var main_panel: VBoxContainer = $Root/Center/MainPanel
@@ -22,6 +24,9 @@ const SETTINGS_PATH := "user://settings.cfg"
 @onready var fsr_value_label: Label = $Root/Center/OptionsPanel/FSRScaleRow/FSRScaleValue
 @onready var shadows_toggle: CheckBox = $Root/Center/OptionsPanel/ShadowsRow/ShadowsToggle
 @onready var postfx_toggle: CheckBox = $Root/Center/OptionsPanel/PostFXRow/PostFXToggle
+@onready var ssao_toggle: CheckBox = $Root/Center/OptionsPanel/SSAORow/SSAOToggle
+@onready var ssao_quality_row: HBoxContainer = $Root/Center/OptionsPanel/SSAOQualityRow
+@onready var ssao_quality_option: OptionButton = $Root/Center/OptionsPanel/SSAOQualityRow/SSAOQualityOption
 
 var _is_open: bool = false
 
@@ -37,11 +42,21 @@ func _ready() -> void:
 	shadows_toggle.toggled.connect(_on_shadows_toggled)
 	postfx_toggle.toggled.connect(_on_postfx_toggled)
 
+	# Filled and selected before the signals are connected, so neither this
+	# nor _load_settings() below triggers a save.
+	for quality_name in SSAO_QUALITY_NAMES:
+		ssao_quality_option.add_item(quality_name)
+	ssao_quality_option.select(int(ProjectSettings.get_setting("rendering/environment/ssao/quality")))
+
 	# Apply whatever was saved from last session (if anything) to the
 	# viewport BEFORE the controls read the viewport's state, so both the
 	# rendering and the UI reflect the saved setting from frame one.
 	_load_settings()
 	_sync_fsr_controls_from_viewport()
+	_apply_ssao_quality()
+	ssao_quality_row.visible = ssao_toggle.button_pressed
+	ssao_toggle.toggled.connect(_on_ssao_toggled)
+	ssao_quality_option.item_selected.connect(_on_ssao_quality_selected)
 
 	# The DirectionalLight3D and WorldEnvironment both live in the
 	# (not-yet-loaded) main scene -- autoloads ready before the main scene
@@ -49,6 +64,17 @@ func _ready() -> void:
 	# later, once those nodes actually exist.
 	call_deferred("_apply_deferred_shadows_setting")
 	call_deferred("_apply_deferred_postfx_setting")
+	call_deferred("_apply_deferred_ssao_setting")
+	# Since the boot scene (scripts/boot.gd) the main scene arrives several frames later than
+	# that, by a scene change -- apply the same settings again whenever its light or
+	# WorldEnvironment enters the tree.
+	get_tree().node_added.connect(_on_node_added)
+
+func _on_node_added(node: Node) -> void:
+	if node is DirectionalLight3D or node is WorldEnvironment:
+		call_deferred("_apply_deferred_shadows_setting")
+		call_deferred("_apply_deferred_postfx_setting")
+		call_deferred("_apply_deferred_ssao_setting")
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
@@ -68,6 +94,7 @@ func _open_menu() -> void:
 	_sync_fsr_controls_from_viewport()
 	_sync_shadows_control_from_light()
 	_sync_postfx_control_from_compositor()
+	_sync_ssao_control_from_environment()
 	get_tree().paused = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
@@ -116,6 +143,32 @@ func _on_postfx_toggled(enabled: bool) -> void:
 	_set_postfx_enabled(enabled)
 	_save_settings()
 
+func _on_ssao_toggled(enabled: bool) -> void:
+	_set_ssao_enabled(enabled)
+	ssao_quality_row.visible = enabled
+	_save_settings()
+
+func _on_ssao_quality_selected(_index: int) -> void:
+	_apply_ssao_quality()
+	_save_settings()
+
+func _set_ssao_enabled(enabled: bool) -> void:
+	var world_env := _get_world_environment()
+	if world_env and world_env.environment:
+		world_env.environment.ssao_enabled = enabled
+
+## SSAO quality is a global renderer setting, not an Environment property, and
+## the only runtime setter takes every SSAO project setting at once -- so the
+## other five are passed through unchanged from the project settings.
+func _apply_ssao_quality() -> void:
+	RenderingServer.environment_set_ssao_quality(
+		ssao_quality_option.selected as RenderingServer.EnvironmentSSAOQuality,
+		ProjectSettings.get_setting("rendering/environment/ssao/half_size"),
+		ProjectSettings.get_setting("rendering/environment/ssao/adaptive_target"),
+		ProjectSettings.get_setting("rendering/environment/ssao/blur_passes"),
+		ProjectSettings.get_setting("rendering/environment/ssao/fadeout_from"),
+		ProjectSettings.get_setting("rendering/environment/ssao/fadeout_to"))
+
 ## Finds the scene's sun/shadow-caster the same defensive way player.gd
 ## looks up Terrain3D -- a search rather than a hardcoded path, so this
 ## autoload doesn't break if main.tscn's node layout changes or this menu
@@ -158,6 +211,9 @@ func _apply_deferred_shadows_setting() -> void:
 func _apply_deferred_postfx_setting() -> void:
 	_set_postfx_enabled(postfx_toggle.button_pressed)
 
+func _apply_deferred_ssao_setting() -> void:
+	_set_ssao_enabled(ssao_toggle.button_pressed)
+
 ## Reads whatever the viewport's actual scaling state is (which may have
 ## been set by fsr_debug_toggle.gd's F10 shortcut, or a previous menu
 ## session) so the Options panel never shows a stale value.
@@ -187,6 +243,12 @@ func _sync_postfx_control_from_compositor() -> void:
 			break
 	postfx_toggle.button_pressed = any_enabled
 
+func _sync_ssao_control_from_environment() -> void:
+	var world_env := _get_world_environment()
+	if world_env and world_env.environment:
+		ssao_toggle.set_pressed_no_signal(world_env.environment.ssao_enabled)
+		ssao_quality_row.visible = ssao_toggle.button_pressed
+
 ## Video settings are saved to a small ConfigFile every time they change --
 ## no save button needed, and it's the only persisted state this project
 ## has, so a single flat file is plenty.
@@ -197,6 +259,8 @@ func _save_settings() -> void:
 	cfg.set_value("video", "fsr_scale", fsr_slider.value)
 	cfg.set_value("video", "shadows_enabled", shadows_toggle.button_pressed)
 	cfg.set_value("video", "postfx_enabled", postfx_toggle.button_pressed)
+	cfg.set_value("video", "ssao_enabled", ssao_toggle.button_pressed)
+	cfg.set_value("video", "ssao_quality", ssao_quality_option.selected)
 	var err := cfg.save(SETTINGS_PATH)
 	if err != OK:
 		push_warning("[PauseMenu] Failed to save %s (error %d)" % [SETTINGS_PATH, err])
@@ -214,6 +278,15 @@ func _load_settings() -> void:
 	else:
 		vp.scaling_3d_mode = SCALING_MODE_OFF
 		vp.scaling_3d_scale = 1.0
+	# SSAO is read FIRST: the shadows/post-FX assignments below fire their
+	# toggled signals, which save every control's current value -- the SSAO
+	# controls must already hold the loaded values by then. Same pattern as
+	# those two otherwise (authored ssao_enabled = true in main.tscn; the
+	# Environment gets it in _apply_deferred_ssao_setting()). The quality
+	# falls back to the project setting the dropdown was initialised with.
+	ssao_toggle.button_pressed = cfg.get_value("video", "ssao_enabled", true)
+	var saved_quality: int = cfg.get_value("video", "ssao_quality", ssao_quality_option.selected)
+	ssao_quality_option.select(clampi(saved_quality, 0, SSAO_QUALITY_NAMES.size() - 1))
 	# shadows_toggle already defaults to button_pressed = true (the scene's
 	# authored default, matching DirectionalLight3D's own default); just
 	# override it here if a save file says otherwise. The actual light

@@ -2,7 +2,7 @@
 ## at one layer on its own. Opened with J via PerfDebug (scripts/perf_debug.gd). Built in code, no scene.
 ##
 ## - Grass: the GrassField node (hidden + its processing stopped, so the GPU cull pass stops too).
-## - Trees / Rocks / Ferns + shrubs / Saplings / Flowers / Deadfall: Terrain3DMeshAsset.enabled on that layer's mesh ids.
+## - Trees / Rocks / Ferns + shrubs / Saplings / Flowers / Deadfall: the instancer nodes of that layer's mesh ids are hidden.
 ##   Their colliders go with them (TreeColliders / BoulderColliders / DeadfallColliders disabled;
 ##   saplings: their soft stem push is switched off),
 ##   so a hidden tree or boulder can be walked through.
@@ -87,12 +87,13 @@ func _on_layer_toggled(on: bool, key: StringName) -> void:
 			cliffs.visible = on
 			cliffs.process_mode = Node.PROCESS_MODE_INHERIT if on else Node.PROCESS_MODE_DISABLED
 	else:
-		_set_meshes_enabled(_mesh_ids(key), on)
+		_set_meshes_shown(mesh_ids(key), on)
 		_set_colliders_enabled(key, on)
 	_status.text = "%s %s -- %d FPS at toggle (let it settle)" % [key, "ON" if on else "OFF", Engine.get_frames_per_second()]
 	print("[Layers] " + _status.text)
 
-func _mesh_ids(key: StringName) -> Array[int]:
+## Terrain3D mesh ids of a layer (also read by the benchmark, scripts/debug/perf_bench.gd).
+static func mesh_ids(key: StringName) -> Array[int]:
 	match key:
 		&"trees":
 			return TreeScatter.TREE_MESH_IDS
@@ -128,13 +129,24 @@ func _set_colliders_enabled(key: StringName, on: bool) -> void:
 	if container:
 		container.process_mode = Node.PROCESS_MODE_INHERIT if on else Node.PROCESS_MODE_DISABLED
 
-func _set_meshes_enabled(ids: Array[int], on: bool) -> void:
-	var terrain := get_tree().current_scene.get_node_or_null("Terrain3D") as Terrain3D
-	var assets: Terrain3DAssets = terrain.get_assets() if terrain else null
-	if assets == null:
+## The Terrain3D instancer names its nodes "MMI3D_C<cell x>_<cell z>_M<mesh id>_L<lod>".
+## Returns (mesh id, lod), or (-1, -1) for any other node name.
+static func parse_mmi_name(node_name: String) -> Vector2i:
+	var parts := node_name.split("_")
+	if parts.size() < 5 or parts[0] != "MMI3D":
+		return Vector2i(-1, -1)
+	return Vector2i(parts[3].substr(1).to_int(), parts[4].substr(1).to_int())
+
+## Shows / hides the instancer's nodes of these mesh ids. Not Terrain3DMeshAsset.enabled: switching
+## that off closes the game one frame later with no error printed (stack overflow, exit code
+## 0xC00000FD, found 2026-10-04; cause inside Terrain3D not investigated).
+func _set_meshes_shown(ids: Array[int], on: bool) -> void:
+	var terrain := get_tree().current_scene.get_node_or_null("Terrain3D")
+	if terrain == null:
 		return
-	for id in ids:
-		if id < assets.get_mesh_count():
-			var asset: Terrain3DMeshAsset = assets.get_mesh_asset(id)
-			if asset:
-				asset.enabled = on
+	var stack: Array[Node] = [terrain]
+	while not stack.is_empty():
+		var node: Node = stack.pop_back()
+		stack.append_array(node.get_children(true))
+		if node is MultiMeshInstance3D and parse_mmi_name(node.name).x in ids:
+			node.visible = on

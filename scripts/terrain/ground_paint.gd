@@ -260,14 +260,19 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 	var cliff_shade := UnderstoryScatter._build_cliff_shade_grid(gw, gl, maps.cliff_features, UnderstoryScatter._sun_to_dir(parent_node))
 
 	# -- Noise fields (C++ get_image, one byte per pixel) --
-	var big_n := GrassScatter._noise_bytes(rng.randi(), ROCK_BIG_FREQ, width, length)
-	var small_n := GrassScatter._noise_bytes(rng.randi(), ROCK_SMALL_FREQ, width, length)
-	var type_a := GrassScatter._noise_bytes(rng.randi(), TYPE_NOISE_FREQ, width, length)
-	var type_b := GrassScatter._noise_bytes(rng.randi(), TYPE_NOISE_FREQ, width, length)
-	var spray_n := GrassScatter._noise_bytes(rng.randi(), SPRAY_FREQ, width, length)
+	# Seeds drawn in this fixed order, images rendered together on worker threads (2026-10-05).
 	# 2026-09-29 domain warp -- drawn AFTER the existing noise seeds so those stay as they were.
-	var warp_x := GrassScatter._noise_bytes(rng.randi(), ROCK_WARP_FREQ, width, length)
-	var warp_z := GrassScatter._noise_bytes(rng.randi(), ROCK_WARP_FREQ, width, length)
+	var noise_specs: Array = []
+	for freq: float in [ROCK_BIG_FREQ, ROCK_SMALL_FREQ, TYPE_NOISE_FREQ, TYPE_NOISE_FREQ, SPRAY_FREQ, ROCK_WARP_FREQ, ROCK_WARP_FREQ]:
+		noise_specs.append([GrassScatter._noise(rng.randi(), freq), width, length])
+	var noise_images := GrassScatter.noise_images_parallel(noise_specs)
+	var big_n: PackedByteArray = (noise_images[0] as Image).get_data()
+	var small_n: PackedByteArray = (noise_images[1] as Image).get_data()
+	var type_a: PackedByteArray = (noise_images[2] as Image).get_data()
+	var type_b: PackedByteArray = (noise_images[3] as Image).get_data()
+	var spray_n: PackedByteArray = (noise_images[4] as Image).get_data()
+	var warp_x: PackedByteArray = (noise_images[5] as Image).get_data()
+	var warp_z: PackedByteArray = (noise_images[6] as Image).get_data()
 	# Rock vertices are packed in a post-pass (seam/island fade): per vertex its rock id
 	# (ROCK_NONE = soil/road), soil base and pre-spray rockiness.
 	var rock_of := PackedByteArray()
@@ -311,7 +316,7 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 	for pz in length:
 		for px in width:
 			var c := old_control.decode_u32((pz * width + px) * 4)
-			if Terrain3DUtil.get_base(c) == ROAD_ID or Terrain3DUtil.get_overlay(c) == ROAD_ID:
+			if ((c >> 27) & 0x1F) == ROAD_ID or ((c >> 22) & 0x1F) == ROAD_ID: # base / overlay bits, see _paint_band
 				GrassScatter._stamp_circle(road_d, width, length, px, pz, 0.0, LITTER_ROAD_REACH)
 	var control := PackedInt32Array()
 	control.resize(n)
@@ -324,176 +329,74 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 	for id in ROCK_TYPES:
 		type_counts[id] = 0
 	var grass_sum := 0.0
-	var w1 := width - 1
-	var l1 := length - 1
-	for pz in length:
-		var zm := maxi(pz - 1, 0)
-		var zp := mini(pz + 1, l1)
-		for px in width:
-			var i := pz * width + px
-			var old := old_control.decode_u32(i * 4)
-			# Verge: is the roadside here worn to soil (1) or grown over (0)? Regional noise, so soil
-			# and grass alternate along the road in stretches instead of one even strip (BARE_VERGE_*).
-			var verge := smoothstep(BARE_VERGE_LO, BARE_VERGE_HI, 0.6 * (type_b[i] / 255.0) + 0.4 * (big_n[i] / 255.0))
-			if Terrain3DUtil.get_base(old) == ROAD_ID or Terrain3DUtil.get_overlay(old) == ROAD_ID:
-				# Road vertices keep their Road blend; only what the road fades INTO at its edge
-				# changes: Ground on a worn verge, Grass elsewhere (TerrainRoad paints Ground).
-				control[i] = TerrainHeightmap.pack_control_blend(GROUND_ID if verge >= 0.5 else GRASS_ID, ROAD_ID, Terrain3DUtil.get_blend(old) / 255.0)
-				counts.road += 1
-				continue
+	var t_prep := Time.get_ticks_msec() - t0
+	# Main per-vertex pass, in row bands on the engine's worker threads (2026-10-05: it was 740 ms
+	# on the main thread). A vertex only reads the shared fields and writes its own slot, so the
+	# result is the same as the single loop's -- see _paint_band.
+	var bands := ceili(float(length) / PAINT_BAND_ROWS)
+	var band_out: Array = []
+	band_out.resize(bands)
+	# The patch map as bytes + GrassScatter.patch_keep's smoothstep of each byte value. The value
+	# goes through a float32 first because that is what Image.get_pixel() returns for it.
+	var byte_as_f32 := PackedFloat32Array()
+	byte_as_f32.resize(256)
+	var patch_nv := PackedFloat64Array()
+	patch_nv.resize(256)
+	for v in 256:
+		byte_as_f32[v] = v / 255.0
+		patch_nv[v] = smoothstep(GrassScatter.PATCH_N_LO, GrassScatter.PATCH_N_HI, byte_as_f32[v])
+	var ctx := {
+		"width": width, "length": length, "heights": heights, "old_control": old_control,
+		"coverage_bytes": coverage_bytes, "worn_bytes": worn_bytes,
+		"big_n": big_n, "small_n": small_n, "type_a": type_a, "type_b": type_b, "spray_n": spray_n,
+		"warp_x": warp_x, "warp_z": warp_z,
+		"cliff_d": cliff_d, "boulder_d": boulder_d, "scree_d": scree_d, "road_d": road_d,
+		"dead_d": dead_d, "tree_d": tree_d,
+		"canopy": canopy, "cliff_shade": cliff_shade, "gw": gw, "gl": gl, "litter_ok": litter_ok,
+		"patch_bytes": GrassScatter.patch_image.get_data(), "patch_nv": patch_nv,
+		"out": band_out, "mutex": Mutex.new(),
+	}
+	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_paint_band.bind(ctx), bands, -1, true))
+	control.clear()
+	patch_shade.clear()
+	rock_of.clear()
+	soil_of.clear()
+	rocky_of.clear()
+	soil_pair.clear()
+	soil_b.clear()
+	for b: Dictionary in band_out:
+		control.append_array(b.control)
+		patch_shade.append_array(b.patch_shade)
+		rock_of.append_array(b.rock_of)
+		soil_of.append_array(b.soil_of)
+		rocky_of.append_array(b.rocky_of)
+		soil_pair.append_array(b.soil_pair)
+		soil_b.append_array(b.soil_b)
+		counts.road += b.road
+		counts.soil += b.soil
+		counts.rock += b.rock
+		for id in ROCK_TYPES:
+			type_counts[id] += b.type_counts[id]
+		grass_sum += b.grass_sum
+		bare_sum += b.bare_sum
+		litter_full += b.litter_full
+		litter_ramp += b.litter_ramp
 
-			# Grass = the blades' own patch keep, softened over +-0.5 m (5 taps) so the 1 m vertex
-			# grid doesn't stair-step the patch outlines.
-			var cov := coverage_bytes[i * 4] / 255.0
-			cov += GRASS_TEXTURE_GROW * smoothstep(0.0, 0.1, cov) # texture margin (blades unaffected)
-			var g := 0.0
-			if cov > 0.0:
-				g = (2.0 * GrassScatter.patch_keep(px, pz, cov)
-					+ _patch_keep_half(px * 2 - 1, pz * 2, cov, width, length)
-					+ _patch_keep_half(px * 2 + 1, pz * 2, cov, width, length)
-					+ _patch_keep_half(px * 2, pz * 2 - 1, cov, width, length)
-					+ _patch_keep_half(px * 2, pz * 2 + 1, cov, width, length)) / 6.0
-			grass_sum += g
-			patch_shade[i] = int(round(255.0 * (1.0 - PATCH_SHADE * g - GAP_SHADE * (1.0 - g) * smoothstep(0.05, 0.25, cov))))
-			var spray := spray_n[i] / 255.0 - 0.5
-
-			# Rockiness.
-			var xm := maxi(px - 1, 0)
-			var xp := mini(px + 1, w1)
-			var dx := (heights[pz * width + xp] - heights[pz * width + xm]) / float(xp - xm)
-			var dz := (heights[zp * width + px] - heights[zm * width + px]) / float(zp - zm)
-			var ny := 1.0 / sqrt(1.0 + dx * dx + dz * dz)
-			var steep := 1.0 - smoothstep(STEEP_NY_FULL, STEEP_NY_NONE, ny)
-			# Domain-warped lookup (ROCK_WARP_*): iso-lines of the rect/circle fields turn into blobs.
-			var wpx := clampi(int(round(px + (warp_x[i] / 255.0 - 0.5) * 2.0 * ROCK_WARP_AMP)), 0, w1)
-			var wpz := clampi(int(round(pz + (warp_z[i] / 255.0 - 0.5) * 2.0 * ROCK_WARP_AMP)), 0, l1)
-			var j := wpz * width + wpx
-			var p_cliff := 1.0 - smoothstep(0.0, CLIFF_REACH, cliff_d[j])
-			var p_boulder := (1.0 - smoothstep(0.0, BOULDER_REACH, boulder_d[j])) * BOULDER_STRENGTH
-			var p_scree := 1.0 - smoothstep(0.0, SCREE_REACH, scree_d[j])
-			var prox := maxf(maxf(p_cliff, p_boulder), p_scree)
-			var nb := big_n[i] / 255.0
-			var rocky := 0.0
-			if prox > 0.0:
-				rocky = smoothstep(ROCKY_LO, ROCKY_HI, prox * (ROCKY_BASE + ROCKY_BIG * nb) + ROCKY_SMALL * (small_n[i] / 255.0 - 0.5))
-			rocky = maxf(rocky, steep * (0.6 + 0.4 * nb))
-
-			var canopy_c := UnderstoryScatter._grid_sample(canopy, gw, gl, px, pz)
-			var lit := 0.0
-			if litter_ok:
-				lit = 1.0 - smoothstep(0.0, LITTER_TREE_FADE, tree_d[i] + LITTER_EDGE_NOISE * (small_n[i] / 255.0 - 0.5))
-				# Strays (LITTER_SUPPLY_* etc.): only where nearby trees can supply them.
-				var supply := smoothstep(LITTER_SUPPLY_LO, LITTER_SUPPLY_HI, canopy_c)
-				if supply > 0.0:
-					# Collar around boulders / stumps / logs. k = the spot LITTER_UPHILL_STEP m downhill:
-					# an obstacle there means this vertex is on its uphill side, where litter stops.
-					var k := j
-					var glen := sqrt(dx * dx + dz * dz)
-					if glen > 0.04:
-						k = clampi(int(round(wpz - dz / glen * LITTER_UPHILL_STEP)), 0, l1) * width + clampi(int(round(wpx - dx / glen * LITTER_UPHILL_STEP)), 0, w1)
-					var collar := maxf(
-						LITTER_COLLAR_SIDE * (1.0 - smoothstep(0.0, LITTER_COLLAR_REACH, minf(boulder_d[j], dead_d[j]))),
-						1.0 - smoothstep(0.0, LITTER_COLLAR_REACH, minf(boulder_d[k], dead_d[k])))
-					# Hollows: laplacian of the height, + = concave (same measure as GrassScatter's).
-					var curv := (heights[pz * width + maxi(px - GrassScatter.CURV_RADIUS, 0)] + heights[pz * width + mini(px + GrassScatter.CURV_RADIUS, w1)] \
-						+ heights[maxi(pz - GrassScatter.CURV_RADIUS, 0) * width + px] + heights[mini(pz + GrassScatter.CURV_RADIUS, l1) * width + px] \
-						- 4.0 * heights[i]) / float(GrassScatter.CURV_RADIUS * GrassScatter.CURV_RADIUS)
-					var hollow := smoothstep(LITTER_CURV_LO, LITTER_CURV_HI, curv)
-					lit = maxf(lit, supply * maxf(collar, hollow))
-				# Wind drifts: noise blobs in and beside stands.
-				var drift := smoothstep(LITTER_DRIFT_LO, LITTER_DRIFT_HI, 0.6 * nb + 0.4 * (small_n[i] / 255.0))
-				lit = maxf(lit, drift * smoothstep(LITTER_DRIFT_SUPPLY_LO, LITTER_DRIFT_SUPPLY_HI, canopy_c))
-				# Read at the warped position (j), so the fade line along the road is ragged.
-				lit *= smoothstep(LITTER_ROAD_CLEAR, LITTER_ROAD_REACH, road_d[j])
-				lit *= smoothstep(LITTER_NY_NONE, LITTER_NY_FULL, ny) * smoothstep(LITTER_CLIFF_CLEAR, LITTER_CLIFF_REACH, cliff_d[j])
-
-			# Bare soil (BARE_*): the road verge + sparse worn patches. Everything else is Grass.
-			var bare := maxf(
-				verge * (1.0 - smoothstep(BARE_ROAD_CLEAR, BARE_ROAD_REACH, road_d[j])),
-				BARE_WORN_MAX * worn_bytes[i] / 255.0)
-			# No turf on steep ground or against cliffs (user screenshot 2026-10-01: grass up a bank
-			# and blending into a cliff mesh) -- there the soil under the rock texture is Ground.
-			bare = maxf(bare, maxf(1.0 - smoothstep(BARE_NY_FULL, BARE_NY_NONE, ny), 1.0 - smoothstep(BARE_CLIFF_CLEAR, BARE_CLIFF_REACH, cliff_d[j])))
-
-			if rocky < ROCKY_MIN:
-				counts.soil += 1
-				if lit >= LITTER_FULL:
-					litter_full += 1
-					control[i] = TerrainHeightmap.pack_control_blend(PINE_LITTER_ID, GRASS_ID, _spray(g, spray))
-				elif lit > bare and lit > LITTER_MIN:
-					litter_ramp += 1
-					soil_pair[i] = PAIR_GROUND_LITTER
-					soil_b[i] = lit / LITTER_FULL
-					control[i] = TerrainHeightmap.pack_control_blend(GRASS_ID, PINE_LITTER_ID, _spray(soil_b[i], spray))
-				else:
-					bare_sum += bare
-					soil_pair[i] = PAIR_GROUND_GRASS
-					soil_b[i] = bare
-					control[i] = TerrainHeightmap.pack_control_blend(GRASS_ID, GROUND_ID, _spray(bare, spray))
-				continue
-
-			# Rock type: correlated weights + regional noise, highest wins.
-			var ta := type_a[i] / 255.0
-			var tb := type_b[i] / 255.0
-			var shade := maxf(canopy_c, UnderstoryScatter._grid_sample(cliff_shade, gw, gl, px, pz))
-			var flat := smoothstep(STEEP_NY_NONE, FLAT_NY, ny)
-			var core := 1.0 - smoothstep(0.0, 2.5, cliff_d[j])
-			var w_face := 0.3 + 1.1 * core + 1.0 * steep + 0.5 * ta
-			var w_moss := 1.7 * smoothstep(MOSS_SHADE_LO, MOSS_SHADE_HI, shade + 0.25 * (tb - 0.5)) + 0.2 * tb
-			var w_trail := 1.1 * p_scree + 0.8 * p_boulder / BOULDER_STRENGTH + 0.5 * (1.0 - ta)
-			var w_terr := 0.4 + 0.7 * g + 0.6 * tb
-			var w_coast := flat * (0.5 + 1.2 * p_cliff * (1.0 - core)) + 0.5 * (1.0 - tb)
-			var rock_id := ROCK_FACE_ID
-			var best := w_face
-			if w_moss > best:
-				best = w_moss
-				rock_id = AERIAL_ROCKS_ID
-			if w_trail > best:
-				best = w_trail
-				rock_id = ROCKY_TRAIL_ID
-			if w_terr > best:
-				best = w_terr
-				rock_id = ROCKY_TERRAIN_ID
-			if w_coast > best:
-				rock_id = COAST_SAND_ROCKS_ID
-			type_counts[rock_id] += 1
-			counts.rock += 1
-			var soil := PINE_LITTER_ID if lit >= 0.5 else (GROUND_ID if bare >= 0.5 else GRASS_ID)
-			rock_of[i] = rock_id
-			soil_of[i] = soil
-			rocky_of[i] = rocky
-
+	var t_main := Time.get_ticks_msec() - t0
 	# Rock-type majority filter (2026-09-29): the per-vertex "highest weight wins" type pick flips
 	# between neighbours all the time (first run: 9818 of ~18.9k rock vertices sat on a type seam),
 	# and every flip is a hard 1 m Terrain3D seam. Each rock vertex takes the most common type among
 	# the rock vertices within ROCK_TYPE_MODE_RADIUS, ROCK_TYPE_MODE_PASSES times -> coherent regions.
+	# Also in row bands on worker threads (it was most of the ~370 ms of post passes).
 	for _mp in ROCK_TYPE_MODE_PASSES:
-		var src := rock_of.duplicate()
-		for pz in length:
-			for px in width:
-				var i := pz * width + px
-				var rid := src[i]
-				if rid == ROCK_NONE:
-					continue
-				var tally := {}
-				for dz in range(-ROCK_TYPE_MODE_RADIUS, ROCK_TYPE_MODE_RADIUS + 1):
-					var zz := pz + dz
-					if zz < 0 or zz >= length:
-						continue
-					for dx in range(-ROCK_TYPE_MODE_RADIUS, ROCK_TYPE_MODE_RADIUS + 1):
-						var xx := px + dx
-						if xx < 0 or xx >= width:
-							continue
-						var nr := src[zz * width + xx]
-						if nr != ROCK_NONE:
-							tally[nr] = int(tally.get(nr, 0)) + 1
-				var best_id := rid
-				var best_n := int(tally.get(rid, 0))
-				for k in tally:
-					if int(tally[k]) > best_n:
-						best_n = int(tally[k])
-						best_id = k
-				rock_of[i] = best_id
+		var mode_out: Array = []
+		mode_out.resize(bands)
+		var mode_ctx := {"width": width, "length": length, "src": rock_of, "out": mode_out, "mutex": Mutex.new()}
+		WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_mode_band.bind(mode_ctx), bands, -1, true))
+		var filtered := PackedByteArray()
+		for b: PackedByteArray in mode_out:
+			filtered.append_array(b)
+		rock_of = filtered
 
 	# Post-pass (2026-09-29): pack rock vertices, fading hard rock-type seams and lone rock squares.
 	var seams := 0
@@ -562,6 +465,8 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 	last_stats["islands"] = islands
 	print("GROUND_PAINT v2: shape softening -- %d rock-type seam vertices faded, %d island vertices faded, warp +-%.1f m" % [seams, islands, ROCK_WARP_AMP])
 	var t_px := Time.get_ticks_msec() - t0
+	# Output checksum: must stay the same across a change that is only meant to be faster.
+	print("GROUND_PAINT v2: checksum control %d, patch shade %d; timing prep %d ms, main loop %d ms, post passes %d ms" % [hash(control), hash(patch_shade), t_prep - t_dist, t_main - t_prep, t_px - t_main])
 
 	# -- Write into each region's control image, then push to the GPU --
 	var data: Terrain3DData = terrain.get_data()
@@ -631,6 +536,283 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 		100.0 * counts.soil / n, grass_sum / maxf(1.0, n - counts.road), 100.0 * counts.rock / n, 100.0 * counts.road / n, ", ".join(parts)])
 	print("GROUND_PAINT v2: sources %d escarpment face(s), %d cliff-mesh rect(s), %d outcrop(s), %d boulder(s), %d scree pt(s); %d region(s) written; blend_sharpness %.2f; timing dist %d ms, pixels %d ms, total %d ms" % [
 		faces, rects.size(), maps.outcrop_plan.size(), RockScatter.rock_keep_circles.size(), scree_circles.size(), regions_written, BLEND_SHARPNESS, t_dist, t_px - t_dist, Time.get_ticks_msec() - t0])
+
+const PAINT_BAND_ROWS := 16 ## rows per worker-thread task in paint()
+
+## TerrainHeightmap.pack_control_blend with the bits packed here (base << 27, overlay << 22,
+## blend byte << 14) instead of through three Terrain3DUtil calls -- for the per-vertex loop.
+static func _pack(base_id: int, overlay_id: int, blend_frac: float) -> int:
+	var blend_byte := clampi(int(round(clampf(blend_frac, 0.0, 1.0) * 255.0)), 0, 255)
+	return ((base_id & 0x1F) << 27) | ((overlay_id & 0x1F) << 22) | (blend_byte << 14)
+
+## paint()'s main per-vertex pass for rows [band * PAINT_BAND_ROWS, +PAINT_BAND_ROWS). Runs on a
+## worker thread: it only READS the shared arrays in ctx (a write to a shared packed array from a
+## thread would silently copy it) and fills its own band-sized outputs, which paint() joins in
+## band order. Output index li is band-local; i / j / k index the full-map inputs.
+static func _paint_band(band: int, ctx: Dictionary) -> void:
+	var width: int = ctx.width
+	var length: int = ctx.length
+	var heights: PackedFloat32Array = ctx.heights
+	var old_control: PackedByteArray = ctx.old_control
+	var coverage_bytes: PackedByteArray = ctx.coverage_bytes
+	var worn_bytes: PackedByteArray = ctx.worn_bytes
+	var big_n: PackedByteArray = ctx.big_n
+	var small_n: PackedByteArray = ctx.small_n
+	var type_a: PackedByteArray = ctx.type_a
+	var type_b: PackedByteArray = ctx.type_b
+	var spray_n: PackedByteArray = ctx.spray_n
+	var warp_x: PackedByteArray = ctx.warp_x
+	var warp_z: PackedByteArray = ctx.warp_z
+	var cliff_d: PackedFloat32Array = ctx.cliff_d
+	var boulder_d: PackedFloat32Array = ctx.boulder_d
+	var scree_d: PackedFloat32Array = ctx.scree_d
+	var road_d: PackedFloat32Array = ctx.road_d
+	var dead_d: PackedFloat32Array = ctx.dead_d
+	var tree_d: PackedFloat32Array = ctx.tree_d
+	var canopy: PackedFloat32Array = ctx.canopy
+	var cliff_shade: PackedFloat32Array = ctx.cliff_shade
+	var gw: int = ctx.gw
+	var gl: int = ctx.gl
+	var litter_ok: bool = ctx.litter_ok
+	var patch_bytes: PackedByteArray = ctx.patch_bytes
+	var patch_nv: PackedFloat64Array = ctx.patch_nv
+	var pw := width * GrassScatter.PATCH_RES
+	var pw1 := pw - 1
+	var pl1 := length * GrassScatter.PATCH_RES - 1
+	var edge2 := 2.0 * GrassScatter.PATCH_EDGE
+
+	var z0 := band * PAINT_BAND_ROWS
+	var z1 := mini(z0 + PAINT_BAND_ROWS, length)
+	var bn := (z1 - z0) * width
+	var control := PackedInt32Array()
+	control.resize(bn)
+	var patch_shade := PackedByteArray()
+	patch_shade.resize(bn)
+	patch_shade.fill(255)
+	var rock_of := PackedByteArray()
+	rock_of.resize(bn)
+	rock_of.fill(ROCK_NONE)
+	var soil_of := PackedByteArray()
+	soil_of.resize(bn)
+	var rocky_of := PackedFloat32Array()
+	rocky_of.resize(bn)
+	var soil_pair := PackedByteArray()
+	soil_pair.resize(bn)
+	var soil_b := PackedFloat32Array()
+	soil_b.resize(bn)
+	var n_road := 0
+	var n_soil := 0
+	var n_rock := 0
+	var type_counts := {}
+	for id in ROCK_TYPES:
+		type_counts[id] = 0
+	var grass_sum := 0.0
+	var bare_sum := 0.0
+	var litter_full := 0
+	var litter_ramp := 0
+
+	var w1 := width - 1
+	var l1 := length - 1
+	for pz in range(z0, z1):
+		var zm := maxi(pz - 1, 0)
+		var zp := mini(pz + 1, l1)
+		for px in width:
+			var i := pz * width + px
+			var li := (pz - z0) * width + px
+			var old := old_control.decode_u32(i * 4)
+			# Verge: is the roadside here worn to soil (1) or grown over (0)? Regional noise, so soil
+			# and grass alternate along the road in stretches instead of one even strip (BARE_VERGE_*).
+			var verge := smoothstep(BARE_VERGE_LO, BARE_VERGE_HI, 0.6 * (type_b[i] / 255.0) + 0.4 * (big_n[i] / 255.0))
+			# Control-map bits read directly (base = bits 27-31, overlay = 22-26, blend = 14-21; same
+			# as Terrain3DUtil.get_base / get_overlay / get_blend, without the calls).
+			if ((old >> 27) & 0x1F) == ROAD_ID or ((old >> 22) & 0x1F) == ROAD_ID:
+				# Road vertices keep their Road blend; only what the road fades INTO at its edge
+				# changes: Ground on a worn verge, Grass elsewhere (TerrainRoad paints Ground).
+				control[li] = _pack(GROUND_ID if verge >= 0.5 else GRASS_ID, ROAD_ID, ((old >> 14) & 0xFF) / 255.0)
+				n_road += 1
+				continue
+
+			# Grass = the blades' own patch keep, softened over +-0.5 m (5 taps) so the 1 m vertex
+			# grid doesn't stair-step the patch outlines.
+			var cov := coverage_bytes[i * 4] / 255.0
+			cov += GRASS_TEXTURE_GROW * smoothstep(0.0, 0.1, cov) # texture margin (blades unaffected)
+			var g := 0.0
+			if cov > 0.0:
+				# GrassScatter.patch_keep at the vertex + the 4 half-metre taps around it, read from
+				# the patch map's bytes (patch_nv = its smoothstep, per byte value).
+				var tx := px * 2
+				var tz := pz * 2
+				var trow := tz * pw
+				var nv := patch_nv[patch_bytes[trow + tx]]
+				g = 2.0 * smoothstep(nv, nv + edge2, cov)
+				nv = patch_nv[patch_bytes[trow + maxi(tx - 1, 0)]]
+				g += smoothstep(nv, nv + edge2, cov)
+				nv = patch_nv[patch_bytes[trow + mini(tx + 1, pw1)]]
+				g += smoothstep(nv, nv + edge2, cov)
+				nv = patch_nv[patch_bytes[maxi(tz - 1, 0) * pw + tx]]
+				g += smoothstep(nv, nv + edge2, cov)
+				nv = patch_nv[patch_bytes[mini(tz + 1, pl1) * pw + tx]]
+				g += smoothstep(nv, nv + edge2, cov)
+				g /= 6.0
+			grass_sum += g
+			patch_shade[li] = int(round(255.0 * (1.0 - PATCH_SHADE * g - GAP_SHADE * (1.0 - g) * smoothstep(0.05, 0.25, cov))))
+			var spray := spray_n[i] / 255.0 - 0.5
+
+			# Rockiness.
+			var xm := maxi(px - 1, 0)
+			var xp := mini(px + 1, w1)
+			var dx := (heights[pz * width + xp] - heights[pz * width + xm]) / float(xp - xm)
+			var dz := (heights[zp * width + px] - heights[zm * width + px]) / float(zp - zm)
+			var ny := 1.0 / sqrt(1.0 + dx * dx + dz * dz)
+			var steep := 1.0 - smoothstep(STEEP_NY_FULL, STEEP_NY_NONE, ny)
+			# Domain-warped lookup (ROCK_WARP_*): iso-lines of the rect/circle fields turn into blobs.
+			var wpx := clampi(int(round(px + (warp_x[i] / 255.0 - 0.5) * 2.0 * ROCK_WARP_AMP)), 0, w1)
+			var wpz := clampi(int(round(pz + (warp_z[i] / 255.0 - 0.5) * 2.0 * ROCK_WARP_AMP)), 0, l1)
+			var j := wpz * width + wpx
+			var p_cliff := 1.0 - smoothstep(0.0, CLIFF_REACH, cliff_d[j])
+			var p_boulder := (1.0 - smoothstep(0.0, BOULDER_REACH, boulder_d[j])) * BOULDER_STRENGTH
+			var p_scree := 1.0 - smoothstep(0.0, SCREE_REACH, scree_d[j])
+			var prox := maxf(maxf(p_cliff, p_boulder), p_scree)
+			var nb := big_n[i] / 255.0
+			var rocky := 0.0
+			if prox > 0.0:
+				rocky = smoothstep(ROCKY_LO, ROCKY_HI, prox * (ROCKY_BASE + ROCKY_BIG * nb) + ROCKY_SMALL * (small_n[i] / 255.0 - 0.5))
+			rocky = maxf(rocky, steep * (0.6 + 0.4 * nb))
+
+			var canopy_c := UnderstoryScatter._grid_sample(canopy, gw, gl, px, pz)
+			var lit := 0.0
+			if litter_ok:
+				lit = 1.0 - smoothstep(0.0, LITTER_TREE_FADE, tree_d[i] + LITTER_EDGE_NOISE * (small_n[i] / 255.0 - 0.5))
+				# Strays (LITTER_SUPPLY_* etc.): only where nearby trees can supply them.
+				var supply := smoothstep(LITTER_SUPPLY_LO, LITTER_SUPPLY_HI, canopy_c)
+				if supply > 0.0:
+					# Collar around boulders / stumps / logs. k = the spot LITTER_UPHILL_STEP m downhill:
+					# an obstacle there means this vertex is on its uphill side, where litter stops.
+					var k := j
+					var glen := sqrt(dx * dx + dz * dz)
+					if glen > 0.04:
+						k = clampi(int(round(wpz - dz / glen * LITTER_UPHILL_STEP)), 0, l1) * width + clampi(int(round(wpx - dx / glen * LITTER_UPHILL_STEP)), 0, w1)
+					var collar := maxf(
+						LITTER_COLLAR_SIDE * (1.0 - smoothstep(0.0, LITTER_COLLAR_REACH, minf(boulder_d[j], dead_d[j]))),
+						1.0 - smoothstep(0.0, LITTER_COLLAR_REACH, minf(boulder_d[k], dead_d[k])))
+					# Hollows: laplacian of the height, + = concave (same measure as GrassScatter's).
+					var curv := (heights[pz * width + maxi(px - GrassScatter.CURV_RADIUS, 0)] + heights[pz * width + mini(px + GrassScatter.CURV_RADIUS, w1)] \
+						+ heights[maxi(pz - GrassScatter.CURV_RADIUS, 0) * width + px] + heights[mini(pz + GrassScatter.CURV_RADIUS, l1) * width + px] \
+						- 4.0 * heights[i]) / float(GrassScatter.CURV_RADIUS * GrassScatter.CURV_RADIUS)
+					var hollow := smoothstep(LITTER_CURV_LO, LITTER_CURV_HI, curv)
+					lit = maxf(lit, supply * maxf(collar, hollow))
+				# Wind drifts: noise blobs in and beside stands.
+				var drift := smoothstep(LITTER_DRIFT_LO, LITTER_DRIFT_HI, 0.6 * nb + 0.4 * (small_n[i] / 255.0))
+				lit = maxf(lit, drift * smoothstep(LITTER_DRIFT_SUPPLY_LO, LITTER_DRIFT_SUPPLY_HI, canopy_c))
+				# Read at the warped position (j), so the fade line along the road is ragged.
+				lit *= smoothstep(LITTER_ROAD_CLEAR, LITTER_ROAD_REACH, road_d[j])
+				lit *= smoothstep(LITTER_NY_NONE, LITTER_NY_FULL, ny) * smoothstep(LITTER_CLIFF_CLEAR, LITTER_CLIFF_REACH, cliff_d[j])
+
+			# Bare soil (BARE_*): the road verge + sparse worn patches. Everything else is Grass.
+			var bare := maxf(
+				verge * (1.0 - smoothstep(BARE_ROAD_CLEAR, BARE_ROAD_REACH, road_d[j])),
+				BARE_WORN_MAX * worn_bytes[i] / 255.0)
+			# No turf on steep ground or against cliffs (user screenshot 2026-10-01: grass up a bank
+			# and blending into a cliff mesh) -- there the soil under the rock texture is Ground.
+			bare = maxf(bare, maxf(1.0 - smoothstep(BARE_NY_FULL, BARE_NY_NONE, ny), 1.0 - smoothstep(BARE_CLIFF_CLEAR, BARE_CLIFF_REACH, cliff_d[j])))
+
+			if rocky < ROCKY_MIN:
+				n_soil += 1
+				if lit >= LITTER_FULL:
+					litter_full += 1
+					control[li] = _pack(PINE_LITTER_ID, GRASS_ID, _spray(g, spray))
+				elif lit > bare and lit > LITTER_MIN:
+					litter_ramp += 1
+					soil_pair[li] = PAIR_GROUND_LITTER
+					soil_b[li] = lit / LITTER_FULL
+					control[li] = _pack(GRASS_ID, PINE_LITTER_ID, _spray(soil_b[li], spray))
+				else:
+					bare_sum += bare
+					soil_pair[li] = PAIR_GROUND_GRASS
+					soil_b[li] = bare
+					control[li] = _pack(GRASS_ID, GROUND_ID, _spray(bare, spray))
+				continue
+
+			# Rock type: correlated weights + regional noise, highest wins.
+			var ta := type_a[i] / 255.0
+			var tb := type_b[i] / 255.0
+			var shade := maxf(canopy_c, UnderstoryScatter._grid_sample(cliff_shade, gw, gl, px, pz))
+			var flat := smoothstep(STEEP_NY_NONE, FLAT_NY, ny)
+			var core := 1.0 - smoothstep(0.0, 2.5, cliff_d[j])
+			var w_face := 0.3 + 1.1 * core + 1.0 * steep + 0.5 * ta
+			var w_moss := 1.7 * smoothstep(MOSS_SHADE_LO, MOSS_SHADE_HI, shade + 0.25 * (tb - 0.5)) + 0.2 * tb
+			var w_trail := 1.1 * p_scree + 0.8 * p_boulder / BOULDER_STRENGTH + 0.5 * (1.0 - ta)
+			var w_terr := 0.4 + 0.7 * g + 0.6 * tb
+			var w_coast := flat * (0.5 + 1.2 * p_cliff * (1.0 - core)) + 0.5 * (1.0 - tb)
+			var rock_id := ROCK_FACE_ID
+			var best := w_face
+			if w_moss > best:
+				best = w_moss
+				rock_id = AERIAL_ROCKS_ID
+			if w_trail > best:
+				best = w_trail
+				rock_id = ROCKY_TRAIL_ID
+			if w_terr > best:
+				best = w_terr
+				rock_id = ROCKY_TERRAIN_ID
+			if w_coast > best:
+				rock_id = COAST_SAND_ROCKS_ID
+			type_counts[rock_id] += 1
+			n_rock += 1
+			var soil := PINE_LITTER_ID if lit >= 0.5 else (GROUND_ID if bare >= 0.5 else GRASS_ID)
+			rock_of[li] = rock_id
+			soil_of[li] = soil
+			rocky_of[li] = rocky
+
+	var result := {
+		"control": control, "patch_shade": patch_shade, "rock_of": rock_of, "soil_of": soil_of,
+		"rocky_of": rocky_of, "soil_pair": soil_pair, "soil_b": soil_b,
+		"road": n_road, "soil": n_soil, "rock": n_rock, "type_counts": type_counts,
+		"grass_sum": grass_sum, "bare_sum": bare_sum, "litter_full": litter_full, "litter_ramp": litter_ramp,
+	}
+	var mutex: Mutex = ctx.mutex
+	mutex.lock()
+	(ctx.out as Array)[band] = result
+	mutex.unlock()
+
+## One band of the rock-type majority filter (see paint()): each rock vertex takes the most common
+## type among the rock vertices within ROCK_TYPE_MODE_RADIUS, read from the unfiltered `src`.
+## Worker thread, same rules as _paint_band; the output is the band's slice of the filtered map.
+static func _mode_band(band: int, ctx: Dictionary) -> void:
+	var width: int = ctx.width
+	var length: int = ctx.length
+	var src: PackedByteArray = ctx.src
+	var z0 := band * PAINT_BAND_ROWS
+	var z1 := mini(z0 + PAINT_BAND_ROWS, length)
+	var out := src.slice(z0 * width, z1 * width)
+	for pz in range(z0, z1):
+		for px in width:
+			var rid := src[pz * width + px]
+			if rid == ROCK_NONE:
+				continue
+			var tally := {}
+			for dz in range(-ROCK_TYPE_MODE_RADIUS, ROCK_TYPE_MODE_RADIUS + 1):
+				var zz := pz + dz
+				if zz < 0 or zz >= length:
+					continue
+				for dx in range(-ROCK_TYPE_MODE_RADIUS, ROCK_TYPE_MODE_RADIUS + 1):
+					var xx := px + dx
+					if xx < 0 or xx >= width:
+						continue
+					var nr := src[zz * width + xx]
+					if nr != ROCK_NONE:
+						tally[nr] = int(tally.get(nr, 0)) + 1
+			var best_id := rid
+			var best_n := int(tally.get(rid, 0))
+			for k in tally:
+				if int(tally[k]) > best_n:
+					best_n = int(tally[k])
+					best_id = k
+			out[(pz - z0) * width + px] = best_id
+	var mutex: Mutex = ctx.mutex
+	mutex.lock()
+	(ctx.out as Array)[band] = out
+	mutex.unlock()
 
 static func _new_field(n: int, cap: float) -> PackedFloat32Array:
 	var f := PackedFloat32Array()

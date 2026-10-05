@@ -13,8 +13,14 @@ extends Node
 ##       Y opens it with the cursor; click outside to look around again; Y = cursor back / close.
 ##   P = GPU/CPU frame time: averages the viewport's measured render time over TIMING_FRAMES frames
 ##       and prints avg / worst ms (works with VSync / the 60 FPS cap -- use this, not FPS).
+##   F9 = full benchmark (scripts/debug/perf_bench.gd): stations, per-layer / per-effect cost,
+##       road walk, mesh + texture audit -> res://perf_reports/. Also runs (then quits) when the
+##       game is launched with the user argument --bench [--bench-label=<name>].
 
 const TIMING_FRAMES := 120
+const PerfBench := preload("res://scripts/debug/perf_bench.gd")
+
+var _bench: Node
 
 var _grass_panel: GrassTuningPanel
 var _layer_panel: LayerTogglePanel
@@ -26,6 +32,19 @@ var _cpu_max := 0.0
 
 func _ready() -> void:
 	RenderingServer.viewport_set_measure_render_time(get_tree().root.get_viewport_rid(), true)
+	if "--bench" in OS.get_cmdline_user_args():
+		_start_bench(true)
+
+func _start_bench(quit_when_done: bool) -> void:
+	if is_instance_valid(_bench):
+		return # already running
+	var label := ""
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--bench-label="):
+			label = arg.trim_prefix("--bench-label=")
+	_bench = PerfBench.new()
+	add_child(_bench)
+	_bench.run(quit_when_done, label)
 
 func _process(_delta: float) -> void:
 	if _timing_left <= 0:
@@ -55,6 +74,8 @@ func _input(event: InputEvent) -> void:
 			_gpu_max = 0.0
 			_cpu_max = 0.0
 			print("[Timing] measuring %d frames -- hold still..." % TIMING_FRAMES)
+	elif event.physical_keycode == KEY_F9:
+		_start_bench(false)
 	elif event.physical_keycode == KEY_Y:
 		if not is_instance_valid(_grass_panel):
 			_grass_panel = GrassTuningPanel.new()

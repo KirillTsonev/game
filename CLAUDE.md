@@ -20,6 +20,9 @@ automatically) -- a local copy also lives at
 - `docs/forest_floor_plan.md` -- PLAN (2026-10-01) for the "empty patches" problem: reference
   findings, decisions (ambient light, SSAO off, optimisation deferred) and the build order for
   colour matching, litter, moss, gap cover, grounding, cones and the mid-storey.
+- `docs/performance_findings.md` -- (2026-10-05) what the first uncapped benchmark showed (where
+  the frame goes, per layer and per effect) and the ordered remedy plan with a status column.
+  Update it with the measured saving after each optimisation step.
 - This file stays the reference for pitfalls and *why* things are done the way they are.
 
 ## Local tooling paths (this machine)
@@ -792,6 +795,58 @@ automatically) -- a local copy also lives at
   - If revisited: set up ONE GLB first, verify in a run, then do the rest, then strip the
     runtime collision code for those models.
 
+## Performance benchmark (since 2026-10-04)
+
+`scripts/debug/perf_bench.gd` (header comment = what it measures). Run it before and after every
+optimisation; never judge by GPU utilisation %.
+- Run: F9 in a running game, or from a shell (the editor can stay open):
+  `Godot_v4.7.2-stable_win64_console.exe --path herald-of-oblivion --disable-vsync --max-fps 0 -- --bench --bench-label=<name>`
+  (~5 min, quits when done). `--bench-only=<text>` keeps only the ablation toggles whose name
+  contains `<text>` (e.g. `layer:trees`, `post:`) for a ~2 min targeted run.
+- Output: `perf_reports/<time>_<git>_<label>.json` + `.txt`. Diff two runs:
+  `powershell -File tools\perf_compare.ps1` (two newest) or `-A <a.json> -B <b.json>`.
+- Stations are picked from the map data, so `MASTER_SEED` must stay pinned between compared runs.
+- Frame cap: on 2026-10-04 frames stayed locked at 16.67 ms even with VSync off and `max_fps` 0.
+  The cause was a RivaTuner (RTSS) frame limiter; the user raised it to 200 FPS on 2026-10-05 and
+  frame ms is now real. A station sitting at exactly 5.00 ms is on that 200 FPS limit (only
+  `spawn_sky` so far) -- read its GPU ms instead. The report flags a capped run (`frame_capped`).
+- Baseline to compare against: `20261005_105951_ea72f831_baseline2.json` (taken after the
+  understory + flower placement changed, see `docs/performance_findings.md` step 6). The earlier
+  `..._uncapped.json` has the old plant placement (GPU ms within 4 % of baseline2); the capped
+  `..._baseline.json` must not be used at all: for the same scene its GPU ms read 2-19 % lower
+  at seven of the eight stations (cause unknown), so a diff against it shows a false regression.
+- Startup only: a 20-frame launch is enough (`... --path herald-of-oblivion --quit-after 20`,
+  ~15 s) -- read the `TERRAIN_GEN` timing and checksum lines it prints.
+- The bench lifts VSync and `max_fps` itself. A normal play session is separately capped by
+  `run/max_fps=60` in `project.godot` (and by VSync, which is on by default).
+- **Never set `Terrain3DMeshAsset.enabled = false` at runtime**: the game closes one frame later
+  with no error (stack overflow inside Terrain3D, exit code 0xC00000FD). To hide a mesh layer,
+  hide the instancer's nodes instead -- they are named `MMI3D_C<x>_<z>_M<mesh id>_L<lod>` under
+  `Terrain3D/MMI/Region*/` (see `LayerTogglePanel._set_meshes_shown`).
+- The game process also exits with an access violation (0xC0000005) on a normal `quit()`; the
+  report is already written by then. Not investigated.
+
+## Loading screen and start scene (since 2026-10-05)
+
+- The project's start scene is `scenes/boot.tscn` (`scripts/boot.gd`), not `main.tscn`. It shows
+  the `LoadingScreen` autoload (`scripts/loading_screen.gd`, built in code), loads `main.tscn`
+  and switches to it; `WorldGenerator._ready()` then updates the bar before each group of stages
+  (`LOADING_STEPS` / `_loading_step` in `terrain_gen.gd`) and hides it after the first frames.
+  Running `main.tscn` directly still works (the screen just starts later).
+- `WorldGenerator._ready()` therefore AWAITS between stage groups: other nodes' `_ready()` (the
+  Player's included) run BEFORE the world exists. The Player is `PROCESS_MODE_DISABLED` until the
+  end, and the generator repeats the Player's ground snap after placing it. 3D rendering is off
+  (`Viewport.disable_3d`) while the screen is up. Code that needs the world must wait for
+  `startup_timings.has("settled_at_ms")`, as the benchmark does.
+- Autoloads no longer see the main scene one frame after start; the pause menu re-applies its
+  saved video settings when a `DirectionalLight3D` / `WorldEnvironment` enters the tree.
+- Do not poll a threaded load from `_process()` to animate the bar: it took 4.7 s instead of
+  2 s (loader threads wait on the main thread once per frame). `boot.gd` requests the load with
+  sub-threads and fetches it at once (blocking).
+- The engine's own splash (first ~1 s) is set to plain black in Project Settings
+  (`application/boot_splash/*`). The Godot MCP's `update_project_settings` cannot write a `Color`
+  (it stores a string or a dictionary): the colour line was fixed in `project.godot` by hand.
+
 ## Terrain generation code layout (since 2026-09-25)
 
 `scripts/terrain_gen.gd` (the WorldGenerator node) is only the orchestrator; every system is a
@@ -805,3 +860,18 @@ and functions called across modules lost their leading underscore
 - Per-run mutable state (caches, debug buffers) = `static var`, reset in the module's
   `reset_run_state()`, which `_ready()` calls first.
 - Functions that add nodes to the scene take `parent_node: Node` (WorldGenerator passes `get_parent()`).
+- Since 2026-10-05 some stages run their hot loop in row bands on `WorkerThreadPool`
+  (ground paint, grass bake, understory, flowers), noise images are rendered together
+  (`GrassScatter.noise_images_parallel`), the canopy grid is built once per run
+  (`UnderstoryScatter._build_canopy_grid`, read-only for callers), deadfall's overlap test uses
+  lookup grids, cliff/outcrop assets load in the background
+  (`TerrainPreload`), and rock/deadfall collision shapes are disk-cached
+  (`TerrainUtil.cached_shape`, in `user://collision_shape_cache/`; bump the module's bake-version
+  constant after changing how a shape is built). The cliff top-profile scan and the outcrop model
+  scan are cached the same way (`TerrainUtil.cached_value`, `user://model_analysis_cache/`,
+  `TOP_PROFILE_SCAN_VERSION` / `OUTCROP_SCAN_VERSION`). A thread that calls `load()` hangs for
+  good if the main thread blocks in `wait_to_finish()` meanwhile -- poll
+  `RenderingServer.force_sync()` while it is alive instead. The rules for a threaded band -- read-only
+  shared data, no engine/GDExtension calls in the inner loop, one random stream per row, output
+  checksum -- are in `docs/performance_findings.md` step 6. A new `class_name` script is unknown
+  to a command-line launch until the editor has rescanned (`rescan_filesystem`).

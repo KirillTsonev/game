@@ -411,6 +411,7 @@ static func build_heightmap(master_seed: int = TerrainConfig.MASTER_SEED) -> Dic
 	var knot_obstacle_mask := PackedByteArray()
 	knot_obstacle_mask.resize(TerrainConfig.AREA_WIDTH * TerrainConfig.AREA_LENGTH)
 	var cliff_dressing_top_profiles := CliffDressing.build_cliff_dressing_top_profiles() # per-model, no terrain dependency
+	print("TERRAIN_GEN: cliff top profiles done (%.2fs)" % ((Time.get_ticks_msec() - t_stage) / 1000.0))
 	var knot_rng := RandomNumberGenerator.new()
 	knot_rng.seed = master_seed ^ 0x4B4E4F54 # 'KNOT' salt
 	var no_plan: Array[Dictionary] = []
@@ -481,6 +482,7 @@ static func build_heightmap(master_seed: int = TerrainConfig.MASTER_SEED) -> Dic
 					in_knots += 1
 		mesh_tally.append("%s %d (%d in knots)" % [def.name, total, in_knots])
 	print("TERRAIN_GEN: cliff mesh usage -- " + ", ".join(mesh_tally))
+	print("TERRAIN_GEN: knot ground restore + landmark stamp done (%.2fs)" % ((Time.get_ticks_msec() - t_stage) / 1000.0))
 	t_stage = Time.get_ticks_msec()
 
 	# Control map: defaults to ground everywhere; the road step below paints
@@ -509,6 +511,8 @@ static func build_heightmap(master_seed: int = TerrainConfig.MASTER_SEED) -> Dic
 	t_stage = Time.get_ticks_msec()
 
 	_print_roughness_stats(heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH)
+	print("TERRAIN_GEN: roughness stats done (%.2fs)" % ((Time.get_ticks_msec() - t_stage) / 1000.0))
+	t_stage = Time.get_ticks_msec()
 
 	# height_image built directly from `heights`' raw bytes (2026-09-16) --
 	# `heights` is already a PackedFloat32Array in the exact row-major

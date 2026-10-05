@@ -15,19 +15,18 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 [application]
 
 config/name="Retro FP Walk Demo"
-run/main_scene="res://scenes/main.tscn"
+run/main_scene="res://scenes/boot.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 run/max_fps=60.0
+boot_splash/bg_color=Color(0, 0, 0, 1)
+boot_splash/show_image=false
 
 [autoload]
 
 MCPRuntime="*uid://b0fxpjy0tff2n"
 PauseMenu="*res://scenes/pause_menu.tscn"
 PerfDebug="*res://scripts/perf_debug.gd"
-
-[display]
-
-window/vsync/vsync_mode=1.0
+LoadingScreen="*res://scripts/loading_screen.gd"
 
 [editor_plugins]
 

@@ -503,8 +503,21 @@ static func flatten_terrain_for_cliff_dressing(plan: Array[Dictionary], heights:
 ## the model's own x_min/x_max necessarily lands in bucket 0 / sample_count-1. Computed once
 ## per model (5 models total, cached by _build_cliff_dressing_top_profiles), not once per
 ## placement.
+##
+## 2026-10-05: the scan result is kept on disk between runs (TerrainUtil.cached_value) -- it
+## depends only on the glb and the def, and scanning the 5 models cost 0.27 s every start.
 static func _compute_cliff_dressing_top_profile(def: Dictionary) -> Dictionary:
-	var fallback := {"x_min": -def.real_size * 0.5, "x_max": def.real_size * 0.5, "heights": PackedFloat32Array([def.height, def.height]), "y_min": 0.0, "y_max": def.height, "z_min": -def.depth * 0.5, "z_max": def.depth * 0.5}
+	var key := "%s|%d" % [str(def), CLIFF_DRESSING_TOP_PROFILE_SAMPLES]
+	var profile: Dictionary = TerrainUtil.cached_value(def.glb, "cliff_top_profile", key, TOP_PROFILE_SCAN_VERSION, _scan_cliff_dressing_top_profile.bind(def))
+	if profile.is_empty():
+		return {"x_min": -def.real_size * 0.5, "x_max": def.real_size * 0.5, "heights": PackedFloat32Array([def.height, def.height]), "y_min": 0.0, "y_max": def.height, "z_min": -def.depth * 0.5, "z_max": def.depth * 0.5}
+	return profile
+
+const TOP_PROFILE_SCAN_VERSION := 1 ## bump after changing _scan_cliff_dressing_top_profile
+
+## The scan itself; {} when the glb can't be loaded or has no geometry (never cached).
+static func _scan_cliff_dressing_top_profile(def: Dictionary) -> Dictionary:
+	var fallback := {}
 	var scene: PackedScene = load(def.glb)
 	if scene == null:
 		push_warning("TERRAIN_GEN: could not load %s for top-profile sampling -- falling back to flat height" % def.glb)
