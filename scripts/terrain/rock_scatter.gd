@@ -232,12 +232,21 @@ static func scatter_boulders(parent_node: Node, terrain: Terrain3D, heights: Pac
 	# different mesh, so (unlike the old single-Boulder01 version) a single
 	# shared shape no longer applies to every scattered instance.
 	var rock_shapes: Dictionary = {}
+	var rock_dims: Dictionary = {} # mesh id -> Vector2(widest half-extent, height), for _seat_rock
+	var rock_base: Dictionary = {} # mesh id -> the hull points of its base, for _settle_on_base
+	debug_rocks = []
+	_settled_count = 0
+	_settled_max = 0.0
+	var seat_sunk := 0 # rocks _seat_rock lowered by more than 5 cm
+	var seat_max_sink := 0.0
 	var hull_start_ms := Time.get_ticks_msec()
 	for mesh_id in ROCK_MESH_IDS:
 		var glb_path: String = ROCK_SCENE_PATHS[mesh_id]
 		var hull := TerrainUtil.cached_shape(glb_path, "rock", ROCK_HULL_BAKE_VERSION, _bake_rock_hull.bind(glb_path))
 		if hull:
 			rock_shapes[mesh_id] = hull
+		rock_dims[mesh_id] = _rock_dims(hull)
+		rock_base[mesh_id] = _rock_base_points(hull)
 		if not rock_shapes.has(mesh_id):
 			push_warning("TERRAIN_GEN: could not build a collision shape from %s (mesh id %d) -- these rocks will render but have no collision" % [ROCK_SCENE_PATHS[mesh_id], mesh_id])
 	print("TERRAIN_GEN_STARTUP:   rock convex hulls, disk-cached (%d mesh ids): %.2fs" % [ROCK_MESH_IDS.size(), (Time.get_ticks_msec() - hull_start_ms) / 1000.0])
@@ -415,12 +424,20 @@ static func scatter_boulders(parent_node: Node, terrain: Terrain3D, heights: Pac
 				# boulder rather than force it onto the road or a steep face.
 				continue
 
-			var boulder_pos := Vector3(import_position.x + px, height - BOULDER_EMBED_DEPTH, import_position.z + pz)
-			var align := Quaternion(Vector3.UP, normal)
-			var spin := Quaternion(normal, rng.randf_range(0.0, TAU))
+			var spin_angle := rng.randf_range(0.0, TAU)
 			var mesh_id: int = ROCK_MESH_IDS[rng.randi() % ROCK_MESH_IDS.size()]
 			var boulder_scale: float = size_scale * float(ROCK_BASE_SCALE[mesh_id]) # item 3: size rolled up front
+			# Height and lean from the ground under the whole footprint (see _seat_rock).
+			var seat := _seat_rock(heights, width, length, px, pz, rock_dims[mesh_id], boulder_scale)
+			normal = seat.normal
+			if float(seat.sink) > 0.05:
+				seat_sunk += 1
+			seat_max_sink = maxf(seat_max_sink, float(seat.sink))
+			var boulder_pos := Vector3(import_position.x + px, float(seat.height) - BOULDER_EMBED_DEPTH, import_position.z + pz)
+			var align := Quaternion(Vector3.UP, normal)
+			var spin := Quaternion(normal, spin_angle)
 			var boulder_basis := Basis(spin * align).scaled(Vector3.ONE * boulder_scale)
+			boulder_pos.y -= _settle_on_base("talus", heights, width, length, import_position, boulder_basis, boulder_pos, mesh_id, boulder_scale, rock_dims[mesh_id], rock_base[mesh_id], float(seat.sink))
 
 			transforms_by_mesh[mesh_id].append(Transform3D(boulder_basis, boulder_pos))
 			rock_keep_circles.append(Vector3(px, pz, BOULDER_KEEPOUT_RADIUS * boulder_scale))
@@ -477,12 +494,19 @@ static func scatter_boulders(parent_node: Node, terrain: Terrain3D, heights: Pac
 		if not found_clear_spot:
 			continue
 
-		var erratic_pos := Vector3(import_position.x + px, height - BOULDER_EMBED_DEPTH, import_position.z + pz)
-		var erratic_align := Quaternion(Vector3.UP, normal)
-		var erratic_spin := Quaternion(normal, rng.randf_range(0.0, TAU))
+		var erratic_spin_angle := rng.randf_range(0.0, TAU)
 		var mesh_id: int = ROCK_MESH_IDS[rng.randi() % ROCK_MESH_IDS.size()]
 		var erratic_scale: float = rng.randf_range(ERRATIC_SCALE_MIN, ERRATIC_SCALE_MAX) * float(ROCK_BASE_SCALE[mesh_id])
+		var erratic_seat := _seat_rock(heights, width, length, px, pz, rock_dims[mesh_id], erratic_scale)
+		normal = erratic_seat.normal
+		if float(erratic_seat.sink) > 0.05:
+			seat_sunk += 1
+		seat_max_sink = maxf(seat_max_sink, float(erratic_seat.sink))
+		var erratic_pos := Vector3(import_position.x + px, float(erratic_seat.height) - BOULDER_EMBED_DEPTH, import_position.z + pz)
+		var erratic_align := Quaternion(Vector3.UP, normal)
+		var erratic_spin := Quaternion(normal, erratic_spin_angle)
 		var erratic_basis := Basis(erratic_spin * erratic_align).scaled(Vector3.ONE * erratic_scale)
+		erratic_pos.y -= _settle_on_base("erratic", heights, width, length, import_position, erratic_basis, erratic_pos, mesh_id, erratic_scale, rock_dims[mesh_id], rock_base[mesh_id], float(erratic_seat.sink))
 
 		transforms_by_mesh[mesh_id].append(Transform3D(erratic_basis, erratic_pos))
 		rock_keep_circles.append(Vector3(px, pz, BOULDER_KEEPOUT_RADIUS * erratic_scale))
@@ -567,11 +591,16 @@ static func scatter_boulders(parent_node: Node, terrain: Terrain3D, heights: Pac
 		for b in placed:
 			var bpx: float = b.px
 			var bpz: float = b.pz
-			var normal := TerrainUtil.sample_normal(heights, width, length, bpx, bpz)
-			var pos := Vector3(import_position.x + bpx, TerrainUtil.sample_height_bilinear(heights, width, length, bpx, bpz) - BOULDER_EMBED_DEPTH, import_position.z + bpz)
 			var mesh_id: int = ROCK_MESH_IDS[rng.randi() % ROCK_MESH_IDS.size()]
 			var knot_scale: float = float(b.size) * float(ROCK_BASE_SCALE[mesh_id])
+			var knot_seat := _seat_rock(heights, width, length, bpx, bpz, rock_dims[mesh_id], knot_scale)
+			var normal: Vector3 = knot_seat.normal
+			if float(knot_seat.sink) > 0.05:
+				seat_sunk += 1
+			seat_max_sink = maxf(seat_max_sink, float(knot_seat.sink))
+			var pos := Vector3(import_position.x + bpx, float(knot_seat.height) - BOULDER_EMBED_DEPTH, import_position.z + bpz)
 			var knot_basis := Basis(Quaternion(normal, rng.randf_range(0.0, TAU)) * Quaternion(Vector3.UP, normal)).scaled(Vector3.ONE * knot_scale)
+			pos.y -= _settle_on_base("knot talus", heights, width, length, import_position, knot_basis, pos, mesh_id, knot_scale, rock_dims[mesh_id], rock_base[mesh_id], float(knot_seat.sink))
 			transforms_by_mesh[mesh_id].append(Transform3D(knot_basis, pos))
 			colors_by_mesh[mesh_id].append(Color(1.0, 1.0, 1.0, 1.0))
 			rock_keep_circles.append(Vector3(bpx, bpz, BOULDER_KEEPOUT_RADIUS * knot_scale))
@@ -592,6 +621,7 @@ static func scatter_boulders(parent_node: Node, terrain: Terrain3D, heights: Pac
 			instancer.add_transforms(mesh_id, transforms_by_mesh[mesh_id], colors_by_mesh[mesh_id], true)
 
 	print("TERRAIN_GEN: scattered %d talus boulder(s) + %d glacial erratic(s) + %d knot talus = %d total (%d with collision) along %d cliff feature(s) + %d knot(s)" % [talus_count, erratic_count, knot_talus_total, total_count, collider_count, cliff_features.size(), knots.size()])
+	print("TERRAIN_GEN: rock seating -- %d of %d rock(s) lowered by more than 5 cm to meet the ground under their footprint (most: %.2f m); %d lowered further onto their own base (most: %.2f m)" % [seat_sunk, total_count, seat_max_sink, _settled_count, _settled_max])
 	print("TERRAIN_GEN_DEBUG knot talus -- per knot (boulders, levels walk-checked): %s; %d boulder(s) dropped by the walk check" % [", ".join(knot_talus_parts), knot_talus_dropped])
 	print("TERRAIN_GEN_DEBUG boulders -- %d rockfall centre(s) (%d under a cliff mesh), %d spot(s) rejected by cliff/outcrop keep-outs, mean step %.2f" % [cluster_total, face_cluster_total, keepout_rejects, mean_step])
 
@@ -853,6 +883,132 @@ static func _lost_any(baseline: Array[String], now: Array[String]) -> bool:
 	return false
 
 ## One StaticBody3D + CollisionShape3D for a scattered rock, under the collider container.
+## -- Ground seat (2026-10-06) --
+## A rock used to stand on the ground height and normal of ONE point, its centre. Where the ground
+## curves away under it (a knoll, a bank edge, the lip of a hollow) one side hung in the air
+## (Kirill: "a rock is partly floating"). _seat_rock reads the ground under the whole footprint
+## instead, like the outcrops (_tilted_seat) and the litter mounds' rim fit: the rock leans with
+## the average slope there and is lowered until no sampled point of the ground is below its base.
+## Where a rock goes is still decided from the centre point alone, so a seed keeps its rocks.
+const SEAT_FOOT_FRACTION := 0.75 ## footprint radius as a share of the rock's widest half-extent (the base is narrower than the girth). TUNING: higher = more ground considered, rocks sink a little more on bumpy ground
+const SEAT_MAX_TILT_SLOPE := 0.7 ## steepest lean, rise / run (0.7 = 35 degrees)
+const SEAT_MAX_SINK_FRACTION := 0.45 ## a rock is lowered by at most this share of its own height below the ground at its centre; past that it is left there (a rim may still show a gap)
+const SEAT_RING_POINTS := 8 ## ground samples per ring; two rings (half and full footprint radius) + the centre
+
+## Widest horizontal half-extent (x) and height (y) of a rock's collision hull at scale 1.
+static func _rock_dims(shape: Shape3D) -> Vector2:
+	var hull := shape as ConvexPolygonShape3D
+	if hull == null or hull.points.is_empty():
+		return Vector2(0.5, 0.6)
+	var reach := 0.0
+	var lo := INF
+	var hi := -INF
+	for point in hull.points:
+		reach = maxf(reach, Vector2(point.x, point.z).length())
+		lo = minf(lo, point.y)
+		hi = maxf(hi, point.y)
+	return Vector2(reach, hi - lo)
+
+## Where a rock of `dims` (see _rock_dims) x `rock_scale` centred on pixel (px, pz) rests:
+## "height" = ground-contact height for its origin, "normal" = the direction its up axis leans to,
+## "sink" = how far that is below the ground at its centre.
+static func _seat_rock(heights: PackedFloat32Array, width: int, length: int, px: float, pz: float, dims: Vector2, rock_scale: float) -> Dictionary:
+	var radius := maxf(dims.x * rock_scale * SEAT_FOOT_FRACTION, 0.1)
+	var centre := TerrainUtil.sample_height_bilinear(heights, width, length, px, pz)
+	var offsets: Array[Vector2] = [Vector2.ZERO]
+	var sampled: Array[float] = [centre]
+	for ring in 2:
+		var r := radius * (0.5 if ring == 0 else 1.0)
+		for i in SEAT_RING_POINTS:
+			var offset := Vector2.from_angle(TAU * i / SEAT_RING_POINTS) * r
+			var h := TerrainUtil.sample_height_bilinear(heights, width, length,
+				clampf(px + offset.x / TerrainUtil.VERTEX_SPACING, 0.0, float(width - 1)),
+				clampf(pz + offset.y / TerrainUtil.VERTEX_SPACING, 0.0, float(length - 1)))
+			# A cliff step or a drop inside the footprint must not tip or bury the rock.
+			offsets.append(offset)
+			sampled.append(clampf(h, centre - radius, centre + radius))
+	# Average slope under the footprint. The offsets are symmetric about the centre, so the plane
+	# fit splits into one sum per axis.
+	var sum_xx := 0.0
+	var sum_zz := 0.0
+	var sum_xh := 0.0
+	var sum_zh := 0.0
+	for i in offsets.size():
+		sum_xx += offsets[i].x * offsets[i].x
+		sum_zz += offsets[i].y * offsets[i].y
+		sum_xh += offsets[i].x * sampled[i]
+		sum_zh += offsets[i].y * sampled[i]
+	var slope := Vector2(sum_xh / sum_xx, sum_zh / sum_zz).limit_length(SEAT_MAX_TILT_SLOPE)
+	# The base plane, leaned to that slope, lowered until no sampled ground point is below it.
+	var seat := INF
+	for i in offsets.size():
+		seat = minf(seat, sampled[i] - slope.dot(offsets[i]))
+	seat = maxf(seat, centre - dims.y * rock_scale * SEAT_MAX_SINK_FRACTION)
+	return {"height": seat, "normal": Vector3(-slope.x, 1.0, -slope.y).normalized(), "sink": centre - seat}
+
+## Second step of the seat (2026-10-06, a rock still floated after _seat_rock alone): the rocks'
+## undersides are not flat discs at their origin. Some models' lowest points sit above the origin,
+## and most undersides are rounded or lopsided, so a rim could still hang over the ground. This
+## takes the rock's own lowest hull points (its base: the lowest SEAT_BASE_BAND of its height),
+## puts them through the final transform and lowers the rock until each is at or below the ground
+## under it. The total drop (ring seat + this) stays within SEAT_MAX_SINK_FRACTION.
+const SEAT_BASE_BAND := 0.2 ## share of the rock's height, from its lowest point up, whose hull points count as its base. TUNING: higher = rocks sit deeper
+
+## Seat records of the last run, for debug_probe(): one dictionary per rock.
+static var debug_rocks: Array[Dictionary] = []
+static var _settled_count := 0 ## rocks the base step lowered by more than 5 cm
+static var _settled_max := 0.0
+
+## The hull points that make up a rock's base (see SEAT_BASE_BAND), at scale 1.
+static func _rock_base_points(shape: Shape3D) -> PackedVector3Array:
+	var base := PackedVector3Array()
+	var hull := shape as ConvexPolygonShape3D
+	if hull == null or hull.points.is_empty():
+		return base
+	var lo := INF
+	var hi := -INF
+	for point in hull.points:
+		lo = minf(lo, point.y)
+		hi = maxf(hi, point.y)
+	for point in hull.points:
+		if point.y <= lo + (hi - lo) * SEAT_BASE_BAND:
+			base.append(point)
+	return base
+
+## How much further to lower a rock placed with `basis` at world `pos` so that its base points
+## reach the ground; 0 when they already do. Records the rock for debug_probe().
+static func _settle_on_base(kind: String, heights: PackedFloat32Array, width: int, length: int, import_position: Vector3, basis: Basis, pos: Vector3, mesh_id: int, rock_scale: float, dims: Vector2, base_points: PackedVector3Array, ring_sink: float) -> float:
+	var gap := 0.0 # highest base point above the ground under it
+	for point in base_points:
+		var world := basis * point + pos
+		var ground := TerrainUtil.sample_height_bilinear(heights, width, length,
+			clampf((world.x - import_position.x) / TerrainUtil.VERTEX_SPACING, 0.0, float(width - 1)),
+			clampf((world.z - import_position.z) / TerrainUtil.VERTEX_SPACING, 0.0, float(length - 1)))
+		gap = maxf(gap, world.y - ground)
+	var allowed := maxf(dims.y * rock_scale * SEAT_MAX_SINK_FRACTION - ring_sink, 0.0)
+	var drop := minf(gap, allowed)
+	if drop > 0.05:
+		_settled_count += 1
+	_settled_max = maxf(_settled_max, drop)
+	debug_rocks.append({"kind": kind, "mesh_id": mesh_id, "scale": rock_scale, "pos": pos - Vector3(0.0, drop, 0.0),
+		"size": dims * rock_scale, "ring_sink": ring_sink, "base_drop": drop, "gap_left": gap - drop, "base_points": base_points.size()})
+	return drop
+
+## DEBUG (PerfDebug R): the seat numbers of every rock within `radius` m of `world_pos`.
+static func debug_probe(world_pos: Vector3, radius: float = 12.0) -> String:
+	var lines: Array[String] = []
+	for rock in debug_rocks:
+		var at: Vector3 = rock.pos
+		var dist := Vector2(at.x - world_pos.x, at.z - world_pos.z).length()
+		if dist > radius:
+			continue
+		var size: Vector2 = rock.size
+		lines.append("  %.1f m away at (%.1f, %.2f, %.1f): %s, mesh id %d, scale %.2f, half-width %.2f m, height %.2f m; lowered %.2f m by the ground ring + %.2f m onto its base (%d base points); gap still open %.2f m" % [
+			dist, at.x, at.y, at.z, rock.kind, int(rock.mesh_id), float(rock.scale), size.x, size.y, float(rock.ring_sink), float(rock.base_drop), int(rock.base_points), float(rock.gap_left)])
+	if lines.is_empty():
+		return "[RockProbe] no boulder, erratic or knot rock within %.0f m of %s (scree, outcrops and cliffs are not listed)" % [radius, world_pos]
+	return "[RockProbe] %d rock(s) within %.0f m of %s:\n%s" % [lines.size(), radius, world_pos, "\n".join(lines)]
+
 static func _add_rock_collider(container: Node3D, shape: Shape3D, xform: Transform3D, index: int) -> void:
 	var body := StaticBody3D.new()
 	body.name = "Boulder%d" % index
@@ -883,4 +1039,5 @@ static func boulder_blocked(px: float, pz: float, radius: float, keep_rects: Arr
 ## values. Called at the start of every WorldGenerator run so each run starts clean, the
 ## same as when these were per-instance member variables on WorldGenerator.
 static func reset_run_state() -> void:
+	debug_rocks = []
 	rock_keep_circles = []

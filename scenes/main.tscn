@@ -11,11 +11,11 @@
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_moonsky"]
 shader = ExtResource("9_moonsky")
 shader_parameter/sky_top_color = Color(0.09803922, 0.019607844, 0.08627451, 1)
-shader_parameter/sky_horizon_color = Color(0.3254902, 0.4117647, 0.6039216, 1)
+shader_parameter/sky_horizon_color = Color(0.3491902, 0.39588127, 0.50638646, 1)
 shader_parameter/sky_curve = 0.15
 shader_parameter/sky_energy_multiplier = 1.0
 shader_parameter/ground_bottom_color = Color(0.2, 0.169, 0.133, 1)
-shader_parameter/ground_horizon_color = Color(0.6463, 0.6558, 0.6708, 1)
+shader_parameter/ground_horizon_color = Color(0.34901962, 0.39607844, 0.5058824, 1)
 shader_parameter/ground_curve = 0.02
 shader_parameter/ground_energy_multiplier = 1.0
 shader_parameter/sun_angle_max = 30.0
@@ -25,6 +25,29 @@ shader_parameter/moon_texture = ExtResource("10_moontex")
 shader_parameter/moon_size = 8.0
 shader_parameter/moon_brightness = 5.0
 shader_parameter/moon_rotation = 0.0
+shader_parameter/star_amount = 0.3
+shader_parameter/star_cells = 28.0
+shader_parameter/star_size = 0.16
+shader_parameter/star_brightness = 4.0
+shader_parameter/star_min_size = 0.85
+shader_parameter/star_min_brightness = 0.5
+shader_parameter/star_dim_bias = 5.0
+shader_parameter/star_color_variety = 0.6
+shader_parameter/star_twinkle = 0.35
+shader_parameter/star_twinkle_speed = 3.0
+shader_parameter/star_horizon_fade = 0.15
+shader_parameter/cloud_amount = 0.0
+shader_parameter/cloud_offset = Vector2(0, 0)
+shader_parameter/cloud_coverage = 0.5
+shader_parameter/cloud_softness = 0.18
+shader_parameter/cloud_scale = 0.45
+shader_parameter/cloud_opacity = 0.85
+shader_parameter/cloud_flatten = 0.15
+shader_parameter/cloud_horizon_fade = 0.12
+shader_parameter/cloud_color = Color(0.17, 0.2, 0.29, 1)
+shader_parameter/cloud_core_shade = 0.65
+shader_parameter/cloud_moon_glow = 1.2
+shader_parameter/cloud_moon_glow_angle = 14.0
 
 [sub_resource type="Sky" id="Sky_1"]
 sky_material = SubResource("ShaderMaterial_moonsky")
@@ -656,7 +679,6 @@ script = ExtResource("8_tipki")
 
 [node name="Player" parent="." unique_id=313949835 instance=ExtResource("2_player")]
 transform = Transform3D(0.99888444, 0.04720238, -0.0017926504, 0.019217469, -0.37142542, 0.92826396, 0.043150645, -0.9272622, -0.3719184, -124.76501, 28.531517, -8.0424385)
-speed = 6.0
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=1103997712]
 transform = Transform3D(-0.26986122, 0.93281305, 0.23881906, 0.8673005, 0.1277328, 0.4811173, 0.4182875, 0.33696285, -0.8434994, -112.68039, 120.22815, -1066.3844)

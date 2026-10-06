@@ -4,6 +4,8 @@ extends Node
 ##   T = tree probe: why can/can't a tree grow where the player stands.
 ##       Re-runs the tree placement checks at the player's feet via
 ##       WorldGenerator.debug_tree_probe() (terrain_gen.gd) and prints the report.
+##   R = rock probe: the ground-seat numbers of every boulder / erratic within 12 m of the player
+##       (RockScatter.debug_probe) -- for a rock that floats or sits too deep.
 ##   G = grass overlay: cycles a decal over the whole map -- off / density / dry / tall
 ##       (GrassScatter.cycle_debug_overlay).
 ##   H = grass probe: every density factor at the player's feet (GrassScatter.debug_probe).
@@ -155,6 +157,10 @@ func _input(event: InputEvent) -> void:
 			print(GrassScatter.debug_probe(player.global_position))
 	elif event.physical_keycode == KEY_M:
 		_toggle_church_preview()
+	elif event.physical_keycode == KEY_R:
+		var player := get_tree().current_scene.get_node_or_null("Player") as Node3D
+		if player:
+			print(RockScatter.debug_probe(player.global_position))
 
 ## The church is in no scene since the tree work (commit 20a630b): this puts it in front of the
 ## player to look at, with the tint script and the scale it had in main.tscn. No collision.

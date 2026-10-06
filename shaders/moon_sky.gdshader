@@ -121,8 +121,11 @@ uniform float cloud_opacity : hint_range(0.0, 1.0, 0.01) = 0.85;
 uniform float cloud_flatten : hint_range(0.02, 1.0, 0.01) = 0.15;
 // Clouds fade out below this height above the horizon (EYEDIR.y).
 uniform float cloud_horizon_fade : hint_range(0.01, 0.5, 0.01) = 0.12;
-// Colour of a cloud away from the moon.
-uniform vec3 cloud_color : source_color = vec3(0.07, 0.09, 0.15);
+// Colour of a cloud away from the moon: lighter than the sky overhead (sky_top_color), or the
+// clouds there cannot be told from it.
+uniform vec3 cloud_color : source_color = vec3(0.17, 0.2, 0.29);
+// Brightness of a cloud's thick middle as a share of its thin edges: gives the clouds some shape.
+uniform float cloud_core_shade : hint_range(0.0, 1.0, 0.01) = 0.65;
 // Moonlight in the clouds around the moon: strength (x the light's colour) and the angle from
 // the moon, in degrees, at which it has dropped to about a third. Thin edges catch the most.
 uniform float cloud_moon_glow : hint_range(0.0, 8.0, 0.01) = 1.2;
@@ -142,9 +145,16 @@ void sky() {
 	vec3 sky = mix(sky_horizon_color, sky_top_color, clamp(1.0 - pow(1.0 - c, 1.0 / sky_curve), 0.0, 1.0));
 	sky *= sky_energy_multiplier;
 
+	float cloud = 0.0;
+	if (cloud_amount > 0.0 && EYEDIR.y > 0.0) {
+		cloud = cloud_density(EYEDIR) * cloud_amount;
+	}
+
 	// Not in the sky's reflection map: points this small only add noise to it.
 	if (star_amount > 0.0 && EYEDIR.y > 0.0 && !AT_CUBEMAP_PASS) {
-		sky += star_light(EYEDIR) * smoothstep(0.0, star_horizon_fade, EYEDIR.y);
+		// A cloud hides the stars behind it well before it is thick: they are far brighter than
+		// the sky, so the share that cloud_opacity lets through would still show as stars.
+		sky += star_light(EYEDIR) * smoothstep(0.0, star_horizon_fade, EYEDIR.y) * (1.0 - smoothstep(0.0, 0.5, cloud));
 	}
 
 	if (LIGHT0_ENABLED) {
@@ -174,14 +184,13 @@ void sky() {
 		sky = mix(sky, moon.rgb * LIGHT0_COLOR * moon_brightness, moon.a * inside);
 	}
 
-	if (cloud_amount > 0.0 && EYEDIR.y > 0.0) {
-		float density = cloud_density(EYEDIR);
-		vec3 cloud = cloud_color;
+	if (cloud > 0.0) {
+		vec3 cloud_light = cloud_color * mix(1.0, cloud_core_shade, cloud);
 		if (LIGHT0_ENABLED) {
 			float moon_angle = acos(clamp(dot(LIGHT0_DIRECTION, EYEDIR), -1.0, 1.0));
-			cloud += LIGHT0_COLOR * cloud_moon_glow * exp(-moon_angle / radians(cloud_moon_glow_angle)) * mix(1.0, 0.3, density);
+			cloud_light += LIGHT0_COLOR * cloud_moon_glow * exp(-moon_angle / radians(cloud_moon_glow_angle)) * mix(1.0, 0.3, cloud);
 		}
-		sky = mix(sky, cloud, density * cloud_opacity * cloud_amount);
+		sky = mix(sky, cloud_light, cloud * cloud_opacity);
 	}
 
 	c = (v_angle - (PI * 0.5)) / (PI * 0.5);
