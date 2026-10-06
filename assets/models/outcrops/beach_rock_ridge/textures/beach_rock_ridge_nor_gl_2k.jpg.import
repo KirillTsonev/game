@@ -3,27 +3,28 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dqyhf5e5h2nax"
-path="res://.godot/imported/beach_rock_ridge_nor_gl_2k.jpg-138c3ffa2042c2acca8500049c24f235.ctex"
+path.s3tc="res://.godot/imported/beach_rock_ridge_nor_gl_2k.jpg-138c3ffa2042c2acca8500049c24f235.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/models/outcrops/beach_rock_ridge/textures/beach_rock_ridge_nor_gl_2k.jpg"
-dest_files=["res://.godot/imported/beach_rock_ridge_nor_gl_2k.jpg-138c3ffa2042c2acca8500049c24f235.ctex"]
+dest_files=["res://.godot/imported/beach_rock_ridge_nor_gl_2k.jpg-138c3ffa2042c2acca8500049c24f235.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
-compress/normal_map=0
+compress/normal_map=1
 compress/channel_pack=0
-mipmaps/generate=false
+mipmaps/generate=true
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""

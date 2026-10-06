@@ -25,10 +25,15 @@ extends Node
 ##       size with VSync and the FPS cap off -- for a profiler capture of the view the reports
 ##       measure (editor: Debugger > Visual Profiler).
 ##   F11 = sun shadows on / off (not saved).
+##   M = church preview: places the church model in front of the player; M again removes it.
 
 const TIMING_FRAMES := 120
 const PerfBench := preload("res://scripts/debug/perf_bench.gd")
+const CHURCH_SCENE := "res://assets/models/castle-church/source/Untitled.glb"
+const CHURCH_SCALE := 2.2
+const CHURCH_GAP := 15.0 # metres between the player and the church's nearest side
 
+var _church: Node3D
 var _bench: Node
 var _holder: Node # a PerfBench used only for hold_station()
 var _held_station := -1 # index into PerfBench.ABLATION_STATIONS, -1 = not holding
@@ -142,6 +147,41 @@ func _input(event: InputEvent) -> void:
 		var player := get_tree().current_scene.get_node_or_null("Player") as Node3D
 		if player:
 			print(GrassScatter.debug_probe(player.global_position))
+	elif event.physical_keycode == KEY_M:
+		_toggle_church_preview()
+
+## The church is in no scene since the tree work (commit 20a630b): this puts it in front of the
+## player to look at, with the tint script and the scale it had in main.tscn. No collision.
+func _toggle_church_preview() -> void:
+	if is_instance_valid(_church):
+		_church.queue_free()
+		_church = null
+		print("[PerfDebug] church preview removed")
+		return
+	var player := get_tree().current_scene.get_node_or_null("Player") as Node3D
+	if player == null:
+		return
+	_church = (load(CHURCH_SCENE) as PackedScene).instantiate() as Node3D
+	_church.set_script(load("res://scripts/church_material_tint.gd"))
+	_church.scale = Vector3.ONE * CHURCH_SCALE
+	get_tree().current_scene.add_child(_church)
+	var box := AABB()
+	var first := true
+	for mesh_instance: MeshInstance3D in _church.find_children("*", "MeshInstance3D", true, false):
+		var part: AABB = mesh_instance.global_transform * mesh_instance.get_aabb()
+		box = part if first else box.merge(part)
+		first = false
+	var forward := -player.global_transform.basis.z
+	forward.y = 0.0
+	forward = forward.normalized()
+	var centre := box.get_center()
+	var target := player.global_position + forward * (maxf(box.size.x, box.size.z) * 0.5 + CHURCH_GAP)
+	var terrain := get_tree().current_scene.get_node_or_null("Terrain3D")
+	var ground: float = terrain.data.get_height(target) if terrain else player.global_position.y
+	if is_nan(ground):
+		ground = player.global_position.y
+	_church.global_position += Vector3(target.x - centre.x, ground - box.position.y, target.z - centre.z)
+	print("[PerfDebug] church preview placed %.0f m ahead (size %s) -- M removes it" % [player.global_position.distance_to(target), box.size])
 
 func _hold_next_station() -> void:
 	if is_instance_valid(_bench):

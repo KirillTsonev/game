@@ -1018,6 +1018,37 @@ What changes visually: LODs switch per plant at exactly the asset's range instea
 cell (about 22 m either side of it). From phase 2 on, the view LOD is per plant while the shadow
 stays per cell, so near the range a plant can show one LOD and cast the other's shadow.
 
+### 9. Texture memory (done 2026-10-06)
+
+Video memory about 2,075 -> 1,350 MB (three alternating pairs, `..._tex_old_1..3` and
+`..._tex_new_1..3`: old 2,096 / 2,032 / 2,096, new 1,395 / 1,299 / 1,363 -- the figure differs
+between runs of the same state). Frame and GPU ms: no difference (within 0.1 ms at every
+station). Startup: `_ready()` begins 0.2 s earlier (3.36 -> 3.14 s) and the world settles 0.4 s
+earlier (8.97 -> 8.56 s). In `tex_old_3` five of the 46 textures were still in the new format.
+
+- Survey: 30 cliff and outcrop textures at 2048 were imported Lossless with no mipmaps (24 as
+  RGB8 at about 16 MB each, 6 EXR maps as half-float at 32 MB each). Their materials are built at
+  run time (`CliffInstancer`, `Outcrops`), so the editor's "detect 3D" never switched them to
+  VRAM compression. A texture only ever loaded by run-time code needs its import set by hand.
+- Change: `compress/mode=2` and `mipmaps/generate=true` on those 30, `compress/normal_map=1` on
+  the JPG normal maps (the EXR ones stay three-channel, compressed HDR, like the rocks).
+- Church: its 11 textures at 4096 were capped at 2048 and restored the same day -- Kirill wants
+  the full resolution because the model is placed at scale 2. The church is in no scene (removed
+  from `main.tscn` in `20a630b`), so it was no part of the measured saving either way.
+- Also capped at 2048: `oak_bark_*` (3, were 2048x4096) and `elderberry_diffuse` / `_normal`.
+  Only the church's textures are larger than 2048 now.
+- The cliffs now have mipmaps, so check them in game for the changed look at a distance.
+- Reimport after hand-editing a texture's `.import` params: `rescan_filesystem` is enough in
+  4.7.2 (give it some seconds and check the imported files before launching);
+  `force_reimport_paths()` in `tools/assign_flat_textures.gd` forces it.
+- Source files (working folder only, nothing in game changes): the embedded images were stripped
+  from the `boulder_01`, `stone_01`, `rock_07` and `rock_09` GLBs (97 -> 7 MB; the import
+  discards them anyway; mesh sizes and `root_scale` unchanged), and four 16-bit bark PNGs were
+  re-saved as 8-bit (100 -> 34 MB). Godot reads a 16-bit PNG as 8-bit, so the imported textures
+  came out byte-identical.
+- `git gc` (2026-10-06) packed the history: 1.08 -> 1.07 GiB, so no gain; the assets in it are
+  already compressed. Only rewriting history would shrink it.
+
 ## Research (2026-10-05)
 
 A web search for optimisation guidance, read against the findings above.

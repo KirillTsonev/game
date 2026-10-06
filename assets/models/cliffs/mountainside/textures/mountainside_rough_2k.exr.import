@@ -3,19 +3,20 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://voc2238qdpmd"
-path="res://.godot/imported/mountainside_rough_2k.exr-590696788aabe2fd90f3d8d92593ffa4.ctex"
+path.bptc="res://.godot/imported/mountainside_rough_2k.exr-590696788aabe2fd90f3d8d92593ffa4.bptc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/models/cliffs/mountainside/textures/mountainside_rough_2k.exr"
-dest_files=["res://.godot/imported/mountainside_rough_2k.exr-590696788aabe2fd90f3d8d92593ffa4.ctex"]
+dest_files=["res://.godot/imported/mountainside_rough_2k.exr-590696788aabe2fd90f3d8d92593ffa4.bptc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
@@ -23,7 +24,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=false
+mipmaps/generate=true
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""

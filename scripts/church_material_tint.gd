@@ -36,6 +36,11 @@ func _apply_tints(node: Node) -> void:
 		_apply_tints(child)
 
 func _tint_mesh_instance(mesh_instance: MeshInstance3D) -> void:
+	# The wall plants' texture has a checkerboard for an alpha channel (broken in the source
+	# model), so the cards draw as dark squares: hidden until a proper texture turns up.
+	if mesh_instance.name.to_lower().contains("leaves"):
+		mesh_instance.visible = false
+		return
 	var tint = _find_tint(mesh_instance.name)
 	if tint == null:
 		return

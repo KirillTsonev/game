@@ -41,7 +41,7 @@ GPU ms saved by switching each thing off, at spawn_ahead / exit_look_back / fore
 ## Next steps, in the order Kirill set
 
 1. **Hitches.** Averages are 7–8 ms, but single frames of 43 ms (one road walk) and 50 ms (cliff_face station) turned up in two of the day's runs. Cause not looked at. The benchmark's walk records only the worst frame, so the probe needs a per-frame trace with position and time.
-2. **Size optimisation.** Kirill wants to look at asset size: compression, disk and video memory. Not started. Known facts: video memory about 2,030 MB, an estimated 1,090 MB of textures, ten cliff and outcrop texture sets at 64 MB each, and the church's oversized textures (left alone by Kirill's decision on 2026-09-16, see `CLAUDE.md`). Start with a survey of what takes the space.
+2. **Size optimisation.** First pass done 2026-10-06: video memory about 2,075 → 1,350 MB, no change in frame time, the world settles 0.4 s earlier (30 cliff and outcrop textures compressed with mipmaps; 3 oak bark and 2 elderberry textures capped at 2048; `docs/performance_findings.md`, step 9). The church keeps its 4096 textures (Kirill: it is placed at scale 2); it is in no scene at the moment, and PerfDebug's M key places it in front of the player. Kirill still has to check the cliffs, oak trunks and elderberries in game. `git gc` gained nothing (1.07 GiB). Source files: four rock GLBs stripped of unused embedded images and four bark PNGs re-saved as 8-bit, 197 → 41 MB, no change in game. Left: build size (no export preset yet).
 
 ## Open, not scheduled
 

@@ -914,7 +914,12 @@ static func _git_head() -> String:
 	var git := ProjectSettings.globalize_path("res://") + ".git/"
 	var head := FileAccess.get_file_as_string(git + "HEAD").strip_edges()
 	if head.begins_with("ref: "):
-		head = FileAccess.get_file_as_string(git + head.substr(5)).strip_edges()
+		var ref_name := head.substr(5)
+		head = FileAccess.get_file_as_string(git + ref_name).strip_edges()
+		if head.is_empty(): # after `git gc` the ref lives in packed-refs ("<hash> <ref name>" per line)
+			for line in FileAccess.get_file_as_string(git + "packed-refs").split("\n"):
+				if line.strip_edges().ends_with(" " + ref_name):
+					head = line.strip_edges().get_slice(" ", 0)
 	return head.left(8) if not head.is_empty() else "nogit"
 
 static func _summary(report: Dictionary) -> String:

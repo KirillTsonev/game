@@ -164,6 +164,23 @@ func force_reimport() -> String:
 		log_lines.append("%s -> size=%s format=%s alpha=%s" % [p, tex.get_size(), img.get_format() if img != null else "n/a", alpha_state])
 	return "\n".join(log_lines)
 
+## Reimports any textures after their `.import` params were edited by hand (a rescan alone does
+## not). Returns each texture's size, format and mipmap state as imported.
+func force_reimport_paths(paths: Array) -> String:
+	var list := PackedStringArray()
+	for p in paths:
+		list.append(str(p))
+	EditorInterface.get_resource_filesystem().reimport_files(list)
+	var log_lines: Array[String] = []
+	for p in list:
+		var tex: Texture2D = ResourceLoader.load(p, "", ResourceLoader.CACHE_MODE_IGNORE)
+		var img: Image = tex.get_image() if tex != null else null
+		if img == null:
+			log_lines.append("%s -> FAILED" % p)
+			continue
+		log_lines.append("%s -> size=%s format=%s mipmaps=%s" % [p.get_file(), img.get_size(), img.get_format(), img.has_mipmaps()])
+	return "\n".join(log_lines)
+
 ## Average LINEAR colour of each layer's albedo (read from the source PNG, not the compressed
 ## import) -- the input for per-texture tints (TerrainGroundPaint.GRASS_TINT).
 func diag_average_color() -> String:

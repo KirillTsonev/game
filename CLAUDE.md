@@ -377,6 +377,12 @@ automatically) -- a local copy also lives at
 
 ## Church model textures are oversized for a background prop -- real load-time cost, not yet fixed
 
+- **UPDATE 2026-10-06:** the 11 church textures at 4096 stay at 4096: a 2048 cap was tried and
+  taken back the same day, because the model is placed at scale 2 (Kirill). Do not cap them
+  again without asking. See `docs/performance_findings.md` step 9.
+  **The church is in no scene** since commit `20a630b` ("feat: trees") removed its node from
+  `main.tscn`, so it costs no load time or video memory now. PerfDebug's M key places it in
+  front of the player to look at. The notes below describe the state before that.
 - Found 2026-09-16 while investigating why the gap between the Godot boot
   splash and a playable level was ~4s even after `terrain_gen.gd`'s own
   runtime generation was optimized down to ~1.8s (see that script's

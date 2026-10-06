@@ -3,19 +3,20 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://csm8j8g0ctl78"
-path="res://.godot/imported/nordic_coastal_cliff_huge_orm_2k.png-36f9a612b74ae6a513a04800ca5f0951.ctex"
+path.s3tc="res://.godot/imported/nordic_coastal_cliff_huge_orm_2k.png-36f9a612b74ae6a513a04800ca5f0951.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/models/cliffs/nordic_coastal_cliff_huge/textures/nordic_coastal_cliff_huge_orm_2k.png"
-dest_files=["res://.godot/imported/nordic_coastal_cliff_huge_orm_2k.png-36f9a612b74ae6a513a04800ca5f0951.ctex"]
+dest_files=["res://.godot/imported/nordic_coastal_cliff_huge_orm_2k.png-36f9a612b74ae6a513a04800ca5f0951.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
@@ -23,7 +24,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=false
+mipmaps/generate=true
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""
