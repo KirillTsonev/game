@@ -263,8 +263,8 @@ func _save_settings() -> void:
 func _load_settings() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load(SETTINGS_PATH) != OK:
-		return # no settings file yet (first run) -- keep engine defaults
-	var enabled: bool = cfg.get_value("video", "fsr_enabled", false)
+		return # no settings file yet (first run) -- keep the project's defaults (FSR on at 85 %, see project.godot [rendering] scaling_3d)
+	var enabled: bool = cfg.get_value("video", "fsr_enabled", true)
 	var saved_scale: float = cfg.get_value("video", "fsr_scale", DEFAULT_FSR_SCALE)
 	var vp := get_viewport()
 	if enabled:

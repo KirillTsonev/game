@@ -7,6 +7,9 @@ addons/godot_mcp
 # Knot diagnostics, rewritten by scripts/terrain/knots.gd on every run
 godot_notes/knot_diag.txt
 
+# Godot's temporary working copies of the Terrain3D library (made while the editor runs)
+addons/terrain_3d/bin/~*
+
 # OS cruft
 .DS_Store
 Thumbs.db
