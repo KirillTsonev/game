@@ -38,12 +38,20 @@ static var enabled := true
 static var _submitted: Dictionary = {}
 ## mesh id -> the asset's own cast-shadows setting, for the assets claim_shadow_casters() switched.
 static var _claimed_shadow_modes: Dictionary = {}
+## The reduced-shadow trial: which mesh ids, and whether it is on. See declare_reduced_shadows().
+static var reduced_shadow_ids: Array[int] = []
+static var reduced_shadows_on := false
+static var _shadow_twins: Dictionary = {} # plant mesh id -> its shadow twin's mesh id
+static var _twin_layers: Dictionary = {} # plant mesh id -> layer key (known once submitted)
+static var _terrain_ref: Terrain3D
 
 var _terrain: Terrain3D
 var _sets: Array[Dictionary] = [] # per mesh id: layer, id, name, transforms, count, radius, lods, push, RD rids
 var _layer_shown: Dictionary = {} # layer key -> bool (missing = shown)
+var _lod_hidden: Dictionary = {} # "<layer>:<lod>" -> true, see set_lod_shown()
 var _gpu_driven := true # false = the plants were handed back to Terrain3D (PerfDebug U)
 var _switching := false # set_gpu_driven() is part-way through
+var _restore_reduced_shadows := false # the reduced-shadow trial was on when the plants went back to Terrain3D
 var _rd: RenderingDevice
 var _shader_rid: RID
 var _pipeline: RID
@@ -56,6 +64,11 @@ var _rt_ready := false
 static func reset_run_state() -> void:
 	_submitted = {}
 	_claimed_shadow_modes = {}
+	_shadow_twins = {}
+	_twin_layers = {}
+	reduced_shadow_ids = []
+	reduced_shadows_on = false
+	_terrain_ref = null
 	enabled = not ("--plants-terrain3d" in OS.get_cmdline_user_args())
 
 ## Shadow-casting plants (2026-10-06, phase 2): PlantField draws the view, and the instancer keeps a
@@ -76,6 +89,71 @@ static func claim_shadow_casters(assets: Terrain3DAssets, ids: Array[int]) -> vo
 			continue
 		_claimed_shadow_modes[id] = mode
 		asset.set_cast_shadows(GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY)
+
+## Casts these plants' sun shadows from their second, reduced mesh (LOD 1, about a quarter of the
+## triangles) instead of the near mesh (2026-10-06; on by default since Kirill saw no significant
+## difference in game; saves 0.1-0.3 ms of GPU). For this run only; the asset file is not touched.
+## Call it before anything is added to the instancer, like claim_shadow_casters(). In a running
+## game: set_reduced_shadows() (PerfDebug O).
+##
+## How: Terrain3D's own `shadow_impostor` cannot do it here -- it is limited to LODs that cast
+## shadows, and making LOD 1 cast would stretch these shadows from 60 m to 150 m. So each plant
+## gets a SHADOW TWIN: a mesh asset made here at run time (not saved) whose only LOD is the
+## plant's LOD 1 mesh, shadows only, with the plant's own near range. While the trial is on, the
+## plants' transforms go to the instancer under the twin's id and not under their own.
+static func declare_reduced_shadows(terrain: Terrain3D, ids: Array[int], on: bool) -> void:
+	reduced_shadow_ids = []
+	reduced_shadows_on = on
+	_terrain_ref = terrain
+	var assets := terrain.get_assets() if terrain else null
+	if assets == null or not enabled:
+		return
+	for id in ids:
+		var asset := assets.get_mesh_asset(id)
+		if asset == null or not _claimed_shadow_modes.has(id) or mini(asset.get_lod_count(), asset.get_last_lod() + 1) < 2:
+			continue
+		var root := Node3D.new()
+		root.name = asset.get_name() + "Shadow"
+		var lod0 := MeshInstance3D.new()
+		lod0.name = "LOD0"
+		lod0.mesh = asset.get_mesh(1)
+		root.add_child(lod0)
+		lod0.owner = root
+		var scene := PackedScene.new()
+		scene.pack(root)
+		root.free()
+		var twin := Terrain3DMeshAsset.new()
+		var twin_id := assets.get_mesh_count()
+		twin.set_id(twin_id)
+		twin.set_name(asset.get_name() + "Shadow")
+		twin.set_scene_file(scene)
+		twin.set_material_override(null)
+		twin.set_height_offset(asset.get_height_offset())
+		twin.set_density(asset.get_density())
+		twin.set_lod_range(0, asset.get_lod_range(0))
+		twin.set_last_lod(0)
+		twin.set_last_shadow_lod(0)
+		twin.set_shadow_impostor(0)
+		twin.set_fade_margin(0.0)
+		twin.set_cast_shadows(GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY)
+		assets.set_mesh_asset(twin_id, twin)
+		_shadow_twins[id] = twin_id
+		reduced_shadow_ids.append(id)
+
+## Terrain3D mesh ids of the shadow twins whose plants belong to `layer` (for code that hides a
+## layer's instancer nodes by mesh id: the J panel, the benchmark).
+static func shadow_twin_ids(layer: StringName) -> Array[int]:
+	var ids: Array[int] = []
+	for id: int in _shadow_twins:
+		if _twin_layers.get(id, &"") == layer:
+			ids.append(_shadow_twins[id])
+	return ids
+
+static func _white(count: int) -> PackedColorArray:
+	var colors := PackedColorArray()
+	colors.resize(count)
+	colors.fill(Color.WHITE)
+	return colors
 
 ## Takes over the drawing of one mesh asset's plants. Returns TRUE if the caller must NOT add them
 ## to the Terrain3D instancer, FALSE if it still must:
@@ -101,6 +179,12 @@ static func submit(layer: StringName, id: int, asset: Terrain3DMeshAsset, transf
 			push_error("PLANTS: mesh %d (%s) was claimed as a shadow caster but cannot be drawn by PlantField -- it will cast shadows and not be visible" % [id, asset.get_name()])
 		return false
 	_submitted[id] = {"layer": layer, "id": id, "asset": asset, "transforms": transforms, "shadow_mode": shadow_mode}
+	if _shadow_twins.has(id):
+		_twin_layers[id] = layer
+		if reduced_shadows_on and _terrain_ref:
+			# The shadow comes from the plant's twin: the caller must not add the plant itself.
+			_terrain_ref.get_instancer().add_transforms(_shadow_twins[id], transforms, _white(transforms.size()), true)
+			return true
 	return shadow_mode == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 ## Adds a fresh PlantField under parent_node (deferred, like GrassField.spawn). No node if nothing
@@ -148,6 +232,11 @@ func _debug_toggle_test() -> void:
 		print(await set_gpu_driven(on))
 		await get_tree().create_timer(1.5).timeout
 		print("[Plants] toggle test: still running 1.5 s after switching to %s" % ("PlantField" if on else "Terrain3D"))
+		request_debug_counts()
+	for on: bool in [not reduced_shadows_on, reduced_shadows_on]:
+		print(await set_reduced_shadows(on))
+		await get_tree().create_timer(1.5).timeout
+		print("[Plants] toggle test: still running 1.5 s after reduced shadows %s" % ("on" if on else "off"))
 		request_debug_counts()
 	await get_tree().create_timer(1.0).timeout
 	print("[Plants] toggle test: PASSED")
@@ -244,8 +333,24 @@ func _set_drawn(s: Dictionary) -> bool:
 func _apply_visibility() -> void:
 	for s in _sets:
 		var shown := _set_drawn(s)
-		for l: Dictionary in s.lods:
-			RenderingServer.instance_set_visible(l.inst, shown)
+		for k in (s.lods as Array).size():
+			RenderingServer.instance_set_visible(s.lods[k].inst, shown and not _lod_hidden.has("%s:%d" % [s.layer, k]))
+
+## Shows / hides one LOD of every set of a layer (the benchmark's "plants:<layer>:lod<n>" toggles:
+## what the near meshes, the far meshes and the impostors each cost). The cull pass keeps running.
+func set_lod_shown(layer: StringName, lod: int, on: bool) -> void:
+	if on:
+		_lod_hidden.erase("%s:%d" % [layer, lod])
+	else:
+		_lod_hidden["%s:%d" % [layer, lod]] = true
+	_apply_visibility()
+
+## Layers drawn here, each with its highest LOD count.
+func layer_lod_counts() -> Dictionary:
+	var counts := {}
+	for s in _sets:
+		counts[s.layer] = maxi(int(counts.get(s.layer, 0)), (s.lods as Array).size())
+	return counts
 
 ## Shows / hides every set of one layer (PerfDebug's J panel, the benchmark's layer toggles).
 func set_layer_shown(layer: StringName, on: bool) -> void:
@@ -275,6 +380,10 @@ func audit_rows() -> Array[Dictionary]:
 func set_gpu_driven(on: bool, after_rebuild: Callable = Callable()) -> String:
 	if on == _gpu_driven or _terrain == null or _switching:
 		return "[Plants] unchanged%s" % (" (a switch is still running)" if _switching else "")
+	if not on and reduced_shadows_on:
+		# Terrain3D's own drawing needs the plants under their own ids, not their shadow twins'.
+		_restore_reduced_shadows = true
+		set_reduced_shadows(false)
 	_switching = true # the switch takes a frame per shadow-casting mesh
 	_gpu_driven = on
 	var instancer := _terrain.get_instancer()
@@ -312,14 +421,34 @@ func set_gpu_driven(on: bool, after_rebuild: Callable = Callable()) -> String:
 				(node as MultiMeshInstance3D).visible = false
 				leftover += 1
 	_apply_visibility()
+	_switching = false
+	if on and _restore_reduced_shadows:
+		_restore_reduced_shadows = false
+		set_reduced_shadows(true)
 	if after_rebuild.is_valid():
 		after_rebuild.call()
-	_switching = false
 	return "[Plants] %d plants of %d meshes now drawn by %s%s" % [plants, _sets.size(), "the GPU-culled PlantField" if on else "Terrain3D (old path)",
 		" -- %d Terrain3D nodes were left over and hidden" % leftover if leftover > 0 else ""]
 
 func is_gpu_driven() -> bool:
 	return _gpu_driven
+
+## TRIAL (PerfDebug O): shadows of the reduced_shadow_ids plants from their reduced mesh (on) or
+## their near mesh (off). One asset per frame, like set_gpu_driven(), for the same reason.
+func set_reduced_shadows(on: bool, after_rebuild: Callable = Callable()) -> String:
+	if _terrain == null or _switching or reduced_shadow_ids.is_empty() or not _gpu_driven or on == reduced_shadows_on:
+		return "[Plants] reduced shadows unchanged"
+	reduced_shadows_on = on
+	var instancer := _terrain.get_instancer()
+	for s in _sets:
+		if not _shadow_twins.has(s.id):
+			continue
+		# No asset setting changes, so no rebuild of everything: just move the transforms.
+		instancer.clear_by_mesh(s.id if on else _shadow_twins[s.id])
+		instancer.add_transforms(_shadow_twins[s.id] if on else s.id, s.transforms, _white(s.count), true)
+	if after_rebuild.is_valid():
+		after_rebuild.call()
+	return "[Plants] fern / lady fern / elderberry shadows now cast from %s" % ("the REDUCED mesh (about a quarter of the triangles)" if on else "the full near mesh")
 
 ## Main thread: this frame's camera, then queue the cull on the render thread.
 func _update() -> void:
@@ -408,6 +537,8 @@ func request_debug_counts() -> void:
 	for s in _sets:
 		if s.shadow_mode != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF:
 			ids.append(s.id)
+			if _shadow_twins.has(s.id):
+				ids.append(_shadow_twins[s.id])
 	if ids.is_empty() or _terrain == null:
 		return
 	var by_mode := {}
@@ -417,7 +548,9 @@ func request_debug_counts() -> void:
 		stack.append_array(node.get_children(true))
 		var mmi := node as MultiMeshInstance3D
 		if mmi and LayerTogglePanel.parse_mmi_name(mmi.name).x in ids:
-			var key := "lod %d cast_shadow %d" % [LayerTogglePanel.parse_mmi_name(mmi.name).y, mmi.cast_shadow]
+			var parts := str(mmi.name).split("_")
+			var key := "lod %d%s cast_shadow %d range %.0f-%.0f m" % [LayerTogglePanel.parse_mmi_name(mmi.name).y,
+				" (%s)" % "_".join(parts.slice(5)) if parts.size() > 5 else "", mmi.cast_shadow, mmi.visibility_range_begin, mmi.visibility_range_end]
 			by_mode[key] = int(by_mode.get(key, 0)) + 1
 	print("[Plants] Terrain3D nodes of the %d shadow-casting meshes: %s" % [ids.size(), str(by_mode)])
 

@@ -194,6 +194,119 @@ func _without_duplicate_triangles(verts: PackedVector3Array, idx_in: Variant) ->
 		out.append(idx[t + 2])
 	return out
 
+## Diagnostic (read-only, 2026-10-06): how the leaf CARDS of the baked trees are built. A card =
+## one connected piece of a leaf surface (triangles sharing a corner position, to 1 mm). Per tree:
+## how many cards, how many triangles each, and how many of the cards with more than two
+## triangles are flat (every corner within 2 % of the card's diagonal of its mean plane) -- a flat
+## card could be drawn with fewer triangles and keep its area and outline; a bent one could not.
+func debug_print_leaf_cards() -> String:
+	var out: Array[String] = []
+	for entry: Dictionary in PACK_TREES:
+		var mesh: ArrayMesh = ResourceLoader.load(PACK_OUT_DIR + "%s.res" % entry.name, "", ResourceLoader.CACHE_MODE_IGNORE)
+		if mesh == null:
+			continue
+		var tris_total := 0
+		var cards_total := 0
+		var hist := {2: 0, 4: 0, 6: 0, 8: 0, 9: 0} # triangles per card: <=2, 3-4, 5-6, 7-8, more
+		var multi_tris := 0 # triangles in cards of more than two
+		var flat_cards := 0
+		var flat_tris := 0
+		var multi_cards := 0
+		var bends: Array[float] = []
+		var facing_counts: Array[int] = []
+		for si in mesh.get_surface_count():
+			if not (mesh.surface_get_material(si) is ShaderMaterial):
+				continue # bark
+			var arr := mesh.surface_get_arrays(si)
+			var verts: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+			var idx: PackedInt32Array = arr[Mesh.ARRAY_INDEX] if arr[Mesh.ARRAY_INDEX] != null else PackedInt32Array(range(verts.size()))
+			# Union-find over corner positions.
+			var pos_id := {}
+			var parent := PackedInt32Array()
+			var corner := PackedInt32Array()
+			corner.resize(idx.size())
+			for k in idx.size():
+				var key := Vector3i((verts[idx[k]] * 1000.0).round())
+				if not pos_id.has(key):
+					pos_id[key] = parent.size()
+					parent.append(parent.size())
+				corner[k] = pos_id[key]
+			for t in range(0, idx.size(), 3):
+				for k in [1, 2]:
+					var a := corner[t]
+					var b := corner[t + k]
+					while parent[a] != a:
+						a = parent[a]
+					while parent[b] != b:
+						b = parent[b]
+					if a != b:
+						parent[b] = a
+			var cards := {} # root -> [triangle start indices]
+			for t in range(0, idx.size(), 3):
+				var r := corner[t]
+				while parent[r] != r:
+					r = parent[r]
+				if not cards.has(r):
+					cards[r] = [] # a plain Array: a packed array in a Dictionary is a copy when read
+				(cards[r] as Array).append(t)
+			tris_total += idx.size() / 3
+			cards_total += cards.size()
+			for r: int in cards:
+				var tl: Array = cards[r]
+				var n := tl.size()
+				hist[2 if n <= 2 else (4 if n <= 4 else (6 if n <= 6 else (8 if n <= 8 else 9)))] += 1
+				if n <= 2:
+					continue
+				multi_cards += 1
+				multi_tris += n
+				# Mean plane: area-weighted normal (signs aligned to the first triangle) through the centroid.
+				var normal := Vector3.ZERO
+				var centre := Vector3.ZERO
+				var lo := Vector3(INF, INF, INF)
+				var hi := -lo
+				for t in tl:
+					var p0 := verts[idx[t]]
+					var p1 := verts[idx[t + 1]]
+					var p2 := verts[idx[t + 2]]
+					var g := (p1 - p0).cross(p2 - p0)
+					normal += g if g.dot(normal) >= 0.0 else -g
+					for p: Vector3 in [p0, p1, p2]:
+						centre += p
+						lo = lo.min(p)
+						hi = hi.max(p)
+				centre /= float(n * 3)
+				normal = normal.normalized()
+				var dev := 0.0
+				for t in tl:
+					for k in 3:
+						dev = maxf(dev, absf((verts[idx[t + k]] - centre).dot(normal)))
+				if dev <= 0.02 * (hi - lo).length():
+					flat_cards += 1
+					flat_tris += n
+				# How bent: the deviation as a share of the diagonal, and how many distinct facings
+				# the card's triangles have (normals within 10 degrees count as one, either side).
+				bends.append(dev / maxf((hi - lo).length(), 0.0001))
+				var facings: Array[Vector3] = []
+				for t in tl:
+					var g := (verts[idx[t + 1]] - verts[idx[t]]).cross(verts[idx[t + 2]] - verts[idx[t]]).normalized()
+					var known := false
+					for f in facings:
+						if absf(f.dot(g)) > 0.985:
+							known = true
+							break
+					if not known:
+						facings.append(g)
+				facing_counts.append(facings.size())
+		out.append("%s: %d leaf tris in %d cards (%.1f per card) | cards by tris <=2 / 3-4 / 5-6 / 7-8 / more: %d / %d / %d / %d / %d | %d tris (%d %%) are in the %d cards of more than two; %d of those cards are flat (%d tris -> %d if each became two)" % [
+			entry.name, tris_total, cards_total, float(tris_total) / maxf(cards_total, 1.0), hist[2], hist[4], hist[6], hist[8], hist[9],
+			multi_tris, roundi(100.0 * multi_tris / maxi(tris_total, 1)), multi_cards, flat_cards, flat_tris, flat_cards * 2])
+		if not bends.is_empty():
+			bends.sort()
+			facing_counts.sort()
+			out.append("    bend (off-plane distance / diagonal): min %.2f, median %.2f, max %.2f | distinct facings per card: min %d, median %d, max %d" % [
+				bends[0], bends[bends.size() / 2], bends[-1], facing_counts[0], facing_counts[facing_counts.size() / 2], facing_counts[-1]])
+	return "\n".join(out)
+
 ## Diagnostic: every surface of the baked trees -- triangles, material kind, texture and where
 ## in the tree it sits (height range, widest horizontal extent).
 func debug_print_tree_surfaces() -> String:

@@ -11,6 +11,8 @@ extends Node
 ##   K = grass culling readback: tufts actually drawn per variant vs buffer capacity.
 ##   U = plant renderer A/B (scripts/terrain/plant_field.gd): moves the GPU-culled plants back to
 ##       Terrain3D's instancer and here again, and prints how many are drawn. A short hitch each time.
+##   O = fern / lady fern / elderberry shadows from their reduced mesh (the default) or their full
+##       mesh (not saved).
 ##   Y = grass tuning panel (scripts/debug/grass_tuning_panel.gd): distance bands + widening.
 ##       Y opens it with the cursor; click outside to look around again; Y = cursor back / close.
 ##   P = GPU/CPU frame time: averages the viewport's measured render time over TIMING_FRAMES frames
@@ -126,6 +128,16 @@ func _input(event: InputEvent) -> void:
 				plants.request_debug_counts()
 		else:
 			print("[Plants] no PlantField in this run (started with --plants-terrain3d?)")
+	elif event.physical_keycode == KEY_O:
+		var plants := get_tree().current_scene.get_node_or_null(PlantField.NODE_NAME) as PlantField
+		if plants:
+			var rehide := func() -> void:
+				if is_instance_valid(_layer_panel):
+					_layer_panel.reapply_hidden()
+			print("[Plants] switching fern shadows -- a few seconds at a few FPS while Terrain3D rebuilds its nodes...")
+			print(await plants.set_reduced_shadows(not PlantField.reduced_shadows_on, rehide))
+			await get_tree().process_frame
+			rehide.call()
 	elif event.physical_keycode == KEY_H:
 		var player := get_tree().current_scene.get_node_or_null("Player") as Node3D
 		if player:

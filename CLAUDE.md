@@ -825,13 +825,24 @@ optimisation; never judge by GPU utilisation %.
   (to split a layer's cost into view vs shadow and pixels vs triangles).
 - Output: `perf_reports/<time>_<git>_<label>.json` + `.txt`. Diff two runs:
   `powershell -File tools\perf_compare.ps1` (two newest) or `-A <a.json> -B <b.json>`.
+- **GPU ms reads lower while the CPU (or a frame limiter) is the limit** -- the GPU idles part of
+  each frame. Found 2026-10-06: a change that removed 2,000 draws made two CPU-limited stations
+  GPU-limited, and their GPU ms "rose" 0.6-0.7 ms with no extra GPU work. Compare GPU ms only
+  between runs limited the same way: check frame ms against GPU ms at the station. To force both
+  sides GPU-limited, hide draw-heavy layers for the whole run with
+  `--bench-hide=<layer>[,<layer>...]` (e.g. `saplings,rocks,deadfall,flowers`). `--bench-scale`
+  cannot do it: a total 3D scale above 1.0 crashes the renderer with MSAA on.
 - Stations are picked from the map data, so `MASTER_SEED` must stay pinned between compared runs.
 - Frame cap: on 2026-10-04 frames stayed locked at 16.67 ms even with VSync off and `max_fps` 0.
   The cause was a RivaTuner (RTSS) frame limiter; the user raised it to 200 FPS on 2026-10-05 and
   frame ms is now real. A station sitting at exactly 5.00 ms is on that 200 FPS limit (only
   `spawn_sky` so far) -- read its GPU ms instead. In the afternoon runs of 2026-10-05 the limit read
-  6.06 ms (165 FPS) instead. The report flags a capped run (`frame_capped`).
-- Baseline to compare against, since 2026-10-06: `20261006_112323_bd39ed6d_full_after_trees.json`
+  6.06 ms (165 FPS) instead, and it still did on 2026-10-06 up to the `full_plantfield` run. After
+  that run the user raised it to 240 FPS: a station at about 4.17 ms is on the limit from then on. The report flags a capped run (`frame_capped`).
+- Baseline to compare against, since 2026-10-06 12:53: `20261006_125350_627980c4_full_plantfield.json`
+  (a FULL run: flowers and understory drawn by `PlantField`, poppy shadows to 40 m). Every station
+  is GPU-limited in it, so its per-layer GPU figures can be trusted at all three ablation stations.
+- Baseline before that, from 11:23 the same day: `20261006_112323_bd39ed6d_full_after_trees.json`
   (a FULL run: duplicate leaf cards dropped from the trees, sun angular distance 0). The three
   targeted runs of the same state, `..._dd_dedup_1..3.json` (2026-10-05, `--bench-only=layer:trees`),
   have the stations and the walk but not the other ablations.

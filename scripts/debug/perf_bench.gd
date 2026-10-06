@@ -5,7 +5,10 @@
 ##     More user arguments: --bench-only=<text>[,<text>...] (only the ablation toggles whose name
 ##     contains one of the texts),
 ##     --bench-no-shadows (sun shadows off for the whole run), --bench-scale=<x> (3D render scale
-##     multiplied by x for the whole run). The last two are recorded in the report's meta.
+##     multiplied by x for the whole run; a scale above 1.0 in total crashes the renderer with MSAA
+##     on), --bench-hide=<layer>[,<layer>...] (those layers hidden for the whole run),
+##     --bench-lantern-shadow-off (the lantern's own shadow off for the whole run). The last
+##     four are recorded in the report's meta.
 ##
 ## What a run does (about 4 minutes; the player is frozen and moved by the benchmark):
 ##   1. Conditions: VSync off, FPS cap off, window WINDOW_SIZE. Needs MASTER_SEED pinned
@@ -90,6 +93,10 @@ func run(quit_when_done: bool, label: String) -> void:
 			sun.shadow_enabled = false
 		elif arg.begins_with("--bench-scale="):
 			root.scaling_3d_scale = saved_scale * arg.trim_prefix("--bench-scale=").to_float()
+		elif arg == "--bench-lantern-shadow-off": # the lantern's own shadow off for the whole run
+			var lantern_light := _player.get_node_or_null("Lantern") as Light3D
+			if lantern_light:
+				lantern_light.shadow_enabled = false
 
 	_read_corner()
 	var stations := _build_stations()
@@ -141,6 +148,22 @@ func run(quit_when_done: bool, label: String) -> void:
 	}
 	report.audit["layers"] = _audit_layers()
 	report.audit["textures"] = _audit_textures()
+	# --bench-hide=<layer>[,<layer>...]: these layers stay hidden for the whole run (2026-10-06).
+	# Taking the draw-heavy layers out makes a CPU-limited view GPU-limited, so two setups can be
+	# compared with the GPU as the limit on both sides (GPU ms reads lower while the CPU is the
+	# limit). Do not combine with an ablation toggle of the same layer: that would show it again.
+	var hidden_layers: Array[String] = []
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--bench-hide="):
+			for key in arg.trim_prefix("--bench-hide=").split(",", false):
+				if _layer_nodes.has(StringName(key)):
+					_set_layer_shown(false, StringName(key))
+					hidden_layers.append(key)
+	report.meta["hidden_layers"] = hidden_layers
+	var lantern_node := _player.get_node_or_null("Lantern") as Light3D
+	report.meta["lantern_shadow"] = lantern_node != null and lantern_node.visible and lantern_node.shadow_enabled
+	if not hidden_layers.is_empty():
+		print("[Bench] layers hidden for the whole run: %s" % ", ".join(hidden_layers))
 
 	for st in stations:
 		_goto(st)
@@ -577,6 +600,26 @@ func _build_toggles() -> Array[Dictionary]:
 		for key: StringName in _layer_nodes:
 			_set_layer_shown(on, key)
 	toggles.append({"name": "layer:ALL", "apply": all_layers})
+	# The grass, band by band (2026-10-06): each toggle hides one layer and stops its cull pass.
+	var grass := _scene.get_node_or_null(GrassField.NODE_NAME) as GrassField
+	if grass:
+		for band in grass.layer_names():
+			toggles.append({"name": "grass:%s" % band, "apply":func(on: bool) -> void: grass.set_layer_shown(band, on)})
+	# The GPU-culled plants, LOD by LOD (2026-10-06): view only, their shadows stay.
+	var plant_field := _scene.get_node_or_null(PlantField.NODE_NAME) as PlantField
+	if plant_field:
+		var lod_counts := plant_field.layer_lod_counts()
+		for layer: StringName in lod_counts:
+			for lod in int(lod_counts[layer]):
+				toggles.append({"name": "plants:%s:lod%d" % [layer, lod], "apply":func(on: bool) -> void: plant_field.set_lod_shown(layer, lod, on)})
+	# The ground (2026-10-06). "terrain_texturing": Terrain3D's flat grey debug view in place of its
+	# texture blending -- the ground still covers what is behind it, so the saving is the ground
+	# shader's own cost. "terrain_shadows": the ground no longer drawn into the sun's shadow maps.
+	if _terrain:
+		toggles.append({"name": "terrain_texturing", "apply":func(on: bool) -> void: _terrain.show_grey = not on})
+		var terrain_shadows: int = _terrain.cast_shadows
+		if terrain_shadows != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF:
+			toggles.append({"name": "terrain_shadows", "apply":func(on: bool) -> void: _terrain.cast_shadows = terrain_shadows if on else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF})
 
 	var world_env := _scene.get_node_or_null("WorldEnvironment") as WorldEnvironment
 	if world_env and world_env.compositor:
@@ -614,6 +657,14 @@ func _build_toggles() -> Array[Dictionary]:
 	var lantern := _player.get_node_or_null("Lantern") as Light3D
 	if lantern and lantern.visible:
 		toggles.append({"name": "lantern", "apply":func(on: bool) -> void: lantern.visible = on})
+		# Its parts (2026-10-06). At a station the player stands still, so "lantern_shadow" shows the
+		# per-pixel shadow lookup only; the cost of redrawing the shadow while moving shows in the
+		# walk of a --bench-lantern-shadow-off run against a normal one.
+		if lantern.shadow_enabled:
+			toggles.append({"name": "lantern_shadow", "apply":func(on: bool) -> void: lantern.shadow_enabled = on})
+		var pool := lantern.get_node_or_null("GroundPool") as Light3D
+		if pool and pool.visible:
+			toggles.append({"name": "lantern_ground_pool", "apply":func(on: bool) -> void: pool.visible = on})
 
 	var msaa := root.msaa_3d
 	if msaa != Viewport.MSAA_DISABLED:

@@ -113,7 +113,7 @@ static func mesh_ids(key: StringName) -> Array[int]:
 		&"rocks":
 			return RockScatter.ROCK_MESH_IDS + RockScatter.SCREE_MESH_IDS
 		&"understory":
-			return UnderstoryScatter.UNDERSTORY_MESH_IDS
+			return UnderstoryScatter.UNDERSTORY_MESH_IDS + PlantField.shadow_twin_ids(&"understory")
 		&"saplings":
 			return SaplingScatter.SAPLING_MESH_IDS
 		&"flowers":

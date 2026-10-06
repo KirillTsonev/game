@@ -11,8 +11,102 @@ How to run and compare benchmarks: the "Performance benchmark" section of `CLAUD
   This is the baseline for every later comparison.
 - Setup: 1906x942 window, 3D render scale 0.85, RTX 3070 Laptop GPU, Godot 4.7.2, seed 858829582.
   Fullscreen at a higher resolution will be slower than these figures.
-- **Baseline for later comparisons, since 2026-10-06:
-  `20261006_112323_bd39ed6d_full_after_trees.json`** (full run, one run only; duplicate leaf cards
+- **Baseline for later comparisons, since 2026-10-06 12:53:
+  `20261006_125350_627980c4_full_plantfield.json`** (full run, one run only; flowers and
+  understory drawn by `PlantField`, step 8). Frame / GPU ms: spawn_ahead 8.23 / 7.58,
+  exit_look_back 8.18 / 7.60, road_open 8.07 / 7.38, forest_dense 7.69 / 7.13, road_mid
+  7.22 / 6.62, cliff_face 7.08 / 6.27. Road walk 8.07 ms, p99 9.72, GPU 7.46. Every station is
+  GPU-limited, so "frame saved" and "GPU saved" now agree in the ablation. GPU ms saved by hiding
+  (spawn_ahead / exit_look_back / forest_dense):
+
+  | Switched off      | GPU ms saved       | Draws saved           |
+  | ----------------- | ------------------ | --------------------- |
+  | trees             | 2.21 / 1.90 / 1.73 | 3,115 / 2,605 / 2,094 |
+  | sun shadows (all) | 2.01 / 2.22 / 1.73 | 3,769 / 3,234 / 2,975 |
+  | understory        | 1.18 / 1.52 / 0.80 | 339 / 657 / 308       |
+  | grass             | 1.18 / 0.96 / 1.00 | 11 / 8 / 7            |
+  | post effects, all | 1.07 / 1.05 / 1.07 | --                    |
+  | MSAA              | 0.58 / 0.53 / 0.47 | --                    |
+  | lantern           | 0.36 / 0.33 / 0.44 | --                    |
+  | cliffs            | 0.29 / 0.12 / 0.17 | 108 / 57 / 82         |
+  | saplings          | 0.20 / 0.25 / 0.17 | 1,062 / 906 / 789     |
+  | flowers           | 0.17 / 0.02 / 0.05 | 43 / 37 / 45          |
+  | rocks, deadfall   | under 0.25 each    | 581 + 468 / 296 + 370 / 530 + 348 |
+  | half render scale | 2.40 / 2.25 / 2.52 | --                    |
+
+  **Lantern, measured the same day: its shadow is not the cost.** The lantern is an omni light
+  (13 m, shadows on, cube map) plus a shadowless spot, `GroundPool` (7 m), both on the player.
+  Runs `..._lantern_on_1` and `..._lantern_noshadow_1` (`--bench-lantern-shadow-off`): switching
+  only the shadow off saves 0.02 / 0.01 / 0.12 ms of GPU standing still, and the road walk reads
+  7.92 -> 7.79 ms frame, 7.21 -> 7.16 ms GPU with the shadow off for the whole run -- inside the
+  spread of single runs. The spot alone is 0.11-0.26 ms; the rest of the 0.30-0.46 ms is the omni
+  light shading the pixels near the player. Nothing to gain without changing the lantern's look.
+
+  **Tree cost split again, the same day, with every reading GPU-limited** (240 FPS limiter;
+  runs `..._trees_ref_1`, `..._trees_noshadow_1`, `..._trees_scale07_1`, one each). GPU ms saved
+  by hiding the trees, spawn_ahead / exit_look_back / forest_dense:
+
+  | Condition                          | Trees cost         | Draws                 | Tris (M)           |
+  | ---------------------------------- | ------------------ | --------------------- | ------------------ |
+  | Normal                             | 2.25 / 1.92 / 1.66 | 3,111 / 2,604 / 2,094 | 4.73 / 3.54 / 3.29 |
+  | Sun shadows off (= the view share) | 1.23 / 1.31 / 1.00 | 1,177 / 1,054 / 710   | 1.19 / 0.89 / 0.86 |
+  | 3D scale x0.7 (half the pixels)    | 1.96 / 1.62 / 1.55 | as normal             | as normal          |
+
+  - View 1.0-1.3 ms, shadow passes 0.6-1.0 ms. The shadow passes draw three times the view's
+    triangles (2.4-3.5 M against 0.9-1.2 M).
+  - Halving the pixels takes 0.1-0.3 ms off, so about 0.2-0.6 ms of the view share is per pixel
+    (leaf shading and overdraw) and 0.65-0.8 ms is per vertex or per draw.
+  - These replace step 1's split below, which was read while CPU-limited at two of the stations.
+  - Saplings: 0.04-0.34 ms in all.
+  - How the leaf cards are built (read-only scan, `debug_print_leaf_cards()` in
+    `tools/setup_tree_assets.gd`): a card is a curved sheet, not a flat quad. The deciduous trees
+    and pines C / D have 187-392 cards of about 12 triangles each, bulging 5-8 % of the card's
+    diagonal out of its mean plane; pines A / B have 42-72 cards of about 22 triangles, bulging
+    10-14 %. No card is flat. So a shadow mesh could keep every card and flatten it to 2-4
+    triangles (leaf triangles down to 17-33 %), which neither thins the crown nor shrinks the
+    cards -- the two ways that failed on 2026-10-05. Not tried. Risk: the visible card stays
+    curved, so parts of it would sit behind its own flat shadow caster and could shade themselves.
+
+  **Four more probes the same afternoon** (single targeted runs, all GPU-limited; differences
+  under about 0.15 ms are noise). GPU ms, spawn_ahead / exit_look_back / forest_dense:
+
+  - **Sun shadows by layer** (`..._layers_ref_1` against `..._layers_noshadow_1`): trees
+    1.05 / 0.57 / 0.69 (3.6 / 2.7 / 2.4 M shadow triangles); **understory 0.44 / 0.97 / 0.37
+    (2.6 / 5.0 / 1.8 M)**; rocks 0.06 / -0.09 / 0.21; saplings 0.01 / 0.10 / 0.10; cliffs,
+    outcrops, deadfall, flowers within +-0.1. All shadows 1.7 / 2.1 / 1.6. The rocks' and scree's
+    far shadows are not a cost. The understory's are: every fern and bush casts from its full near
+    mesh. Untried remedy from step 3: `shadow_impostor` = 1, casting from the reduced far mesh
+    (ferns, lady ferns, elderberries have one at about 25 %; the four bushes do not).
+    **Done the same day and on by default** (Kirill compared both in game: "no significant
+    difference"; `--plants-full-shadows` starts without it). `shadow_impostor` itself
+    did nothing with `last_shadow_lod` 0 (it is limited to LODs that cast), and raising that would
+    stretch these shadows from 60 m to 150 m. Instead `PlantField.declare_reduced_shadows()` makes
+    a run-time, unsaved "shadow twin" mesh asset per plant (its LOD 1 mesh only, shadows only,
+    the plant's near range) and gives the instancer the twins in place of the plants. PerfDebug O
+    switches it in game (instant, nothing else is rebuilt). The runs below used the earlier
+    `--plants-reduced-shadows` argument, when it was still off by default. Two alternating pairs (`..._ushadow_full_1..2`, `..._ushadow_reduced_1..2`), GPU ms:
+    spawn_ahead 7.59 -> 7.40, exit_look_back 7.64 -> 7.31, spawn_ground 4.48 -> 4.29, cliff_face
+    6.38 -> 6.17, road_mid 6.74 -> 6.65, road_open 7.41 -> 7.35, forest_dense 7.11 -> 7.18; walk
+    7.34 -> 7.17. Triangles drawn fall by 0.7-2.1 M. So 0.1-0.3 ms, not the whole shadow share:
+    the bushes keep their full meshes, and part of a shadow draw's cost is not its triangles.
+  - **Understory view by LOD** (`..._plant_lods_1`): near meshes 0.31 / 0.23 / 0.18, second LOD
+    (fern far meshes and bush impostors) 0.30 / 0.23 / 0.22, fern impostors about 0.05. So the
+    understory is about half view, half shadow.
+  - **Grass by band** (`..._grass_bands_1`): blades 0-50 m 0.37 / 0.33 / 0.43, blades 50-100 m
+    0.20 / 0.31 / 0.19, the three bands beyond 100 m under 0.1 together, short grass 0-37.5 m
+    0.28 / 0.33 / 0.24, short grass 37.5-75 m 0.07 / 0.16 / 0.00. The short-grass layers, never
+    measured before, are 0.25-0.5 ms of the grass's 1.0-1.2 ms.
+  - **The ground** (`..._terrain_1`): its texture blending 0.15 ms (Terrain3D's grey debug view
+    in its place), its sun shadows under 0.1 ms. With every layer hidden about 2.3 ms of GPU
+    remains: post effects 1.07, MSAA 0.5, lantern 0.35, ground and sky the rest.
+  - New benchmark toggles for these: `grass:<band>`, `plants:<layer>:lod<n>`,
+    `terrain_texturing`, `terrain_shadows`, `lantern_shadow`, `lantern_ground_pool`.
+
+  The rows overlap (sun shadows includes the trees' and plants' shadow passes). The "tris"
+  columns of this report count every `PlantField` buffer at full size and are not comparable
+  with earlier reports. The frame limiter sits at 6.06 ms, 1-2 ms below these frame times.
+- Baseline before that, from 11:23 the same day:
+  `20261006_112323_bd39ed6d_full_after_trees.json` (full run, one run only; duplicate leaf cards
   dropped from the trees, sun angular distance 0). Against `baseline4`:
 
   | Station        | GPU ms       | Frame ms       | Render CPU ms | Draws |
@@ -896,10 +990,20 @@ game by Kirill and measured with alternating benchmark pairs before the next:
    - **Every station is now GPU-limited** (frame within 0.7 ms of GPU time), spawn_ahead and
      exit_look_back included.
    - **GPU time rose 0.2-0.7 ms at the heavy views.** Hiding the understory saves 0.95 ms of GPU
-     at spawn_ahead where it saved 0.35 (exit_look_back 1.52 against 1.03). Cause not established.
-     Suspect: draw order -- Terrain3D's cells were drawn front to back, so near plants hid far
-     ones before their pixels were shaded; one MultiMesh per LOD is drawn in whatever order the
-     cull wrote it. To test: give the near-LOD draws priority over the impostor draws.
+     at spawn_ahead where it saved 0.35 (exit_look_back 1.52 against 1.03). **Resolved the same
+     day: not extra work, a property of the GPU reading.** GPU ms reads lower while the CPU is the
+     limit (the GPU idles part of each frame); the old side was CPU-limited at exactly the
+     stations that "rose". Checked with one pair in which both sides are GPU-limited
+     (`..._gpulim_old_1`, `..._gpulim_new_1`: saplings, rocks, deadfall and flowers hidden for the
+     whole run with the new `--bench-hide`): GPU spawn_ahead 7.17 -> 7.33, exit_look_back
+     7.28 -> 7.34, road_open 7.17 -> 7.15, forest_dense 6.56 -> 6.64, road_mid 6.42 -> 6.41, walk
+     7.04 -> 7.05 ms. Hiding the understory saves the same GPU time on both sides: 1.04 / 1.54 /
+     0.79 ms old against 1.09 / 1.52 / 0.83 ms new (spawn_ahead / exit_look_back / forest_dense).
+     So `PlantField` costs the GPU 0.0-0.16 ms, and **the understory's real GPU cost is 0.8-1.5
+     ms** -- the 0.35 ms read at spawn_ahead in earlier reports was taken CPU-limited. Draw order
+     was not the cause (Godot sorts solid draws front to back only in 16 depth bands of the camera
+     range, 250 m each here). An attempt at `--bench-scale=2` crashed the renderer: a total 3D
+     scale above 1.0 fails with MSAA on.
    - `PlantField`'s 80 draws are issued whatever the camera sees (spawn_sky: +80 draws, +0.16 ms
      of GPU looking at the sky).
    - The old side's draws are 288 lower than in `full_after_trees` (8,213): that is the poppy

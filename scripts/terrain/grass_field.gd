@@ -125,6 +125,7 @@ var debug_counts_text := "" ## filled by request_debug_counts() (render thread),
 var _player: Node3D
 var _blade_mat: ShaderMaterial
 var _layers: Array[Dictionary] = [] # per layer: mesh, mm, inst, n, capacity, base params, RD rids
+var _hidden_layers: Dictionary = {} # layer name -> true, see set_layer_shown()
 var _rd: RenderingDevice
 var _shader_rid: RID
 var _pipeline: RID
@@ -264,7 +265,22 @@ func _notification(what: int) -> void:
 func _apply_visibility() -> void:
 	var shown := is_inside_tree() and is_visible_in_tree()
 	for l in _layers:
-		RenderingServer.instance_set_visible(l.inst, shown)
+		RenderingServer.instance_set_visible(l.inst, shown and not _hidden_layers.has(l.name))
+
+## Shows / hides one layer (band) by its name, and stops its cull pass while hidden -- for the
+## benchmark's per-band toggles ("grass:<name>").
+func set_layer_shown(layer_name: String, on: bool) -> void:
+	if on:
+		_hidden_layers.erase(layer_name)
+	else:
+		_hidden_layers[layer_name] = true
+	_apply_visibility()
+
+func layer_names() -> PackedStringArray:
+	var names := PackedStringArray()
+	for l in _layers:
+		names.append(l.name)
+	return names
 
 ## Main thread: gather this frame's camera + player state and queue the cull on the render thread.
 func _update() -> void:
@@ -277,6 +293,8 @@ func _update() -> void:
 	var frames := {} # layer index -> params bytes
 	for i in _layers.size():
 		var l: Dictionary = _layers[i]
+		if _hidden_layers.has(l.name):
+			continue
 		var params: PackedFloat32Array = (l.base as PackedFloat32Array).duplicate()
 		for k in 6:
 			var pl: Plane = planes[k]

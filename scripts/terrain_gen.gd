@@ -119,6 +119,12 @@ func _ready() -> void:
 	# Shadow-casting plants PlantField will draw: their instancer copies become shadow casters only.
 	# Here, while the instancer is still empty -- each change makes Terrain3D rebuild its nodes.
 	PlantField.claim_shadow_casters(terrain.get_assets(), FlowerScatter.POPPY_IDS + UnderstoryScatter.UNDERSTORY_MESH_IDS)
+	# Ferns, lady ferns and elderberries cast their sun shadows from their reduced mesh (2026-10-06,
+	# Kirill compared both in game: "no significant difference"). --plants-full-shadows starts the
+	# game with the full meshes casting; PerfDebug O switches it in a running game.
+	var reduced_shadow_ids: Array[int] = [UnderstoryScatter.FERN_ID, UnderstoryScatter.ELDERBERRY_A_ID, UnderstoryScatter.ELDERBERRY_B_ID]
+	reduced_shadow_ids.append_array(UnderstoryScatter.LADY_FERN_IDS)
+	PlantField.declare_reduced_shadows(terrain, reduced_shadow_ids, not ("--plants-full-shadows" in OS.get_cmdline_user_args()))
 
 	# Terrain3DData.import_images()'s `global_position` argument does NOT
 	# behave like a simple "center of the whole image, expand symmetrically

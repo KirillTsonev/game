@@ -322,6 +322,13 @@ material override), `debug_print_sizes()`.
 4. **fern_02 is double-layered** (every frond duplicated back-to-back, normals 50/50 up/down).
    CULL_DISABLED draws both layers -> they self-shadow -> near-black fronds. Must be CULL_BACK.
 
+- **Shadows from the reduced mesh (2026-10-06).** Fern02, the nine lady ferns and the two
+  elderberries cast their sun shadows from their LOD 1 mesh (about a quarter of the triangles),
+  still out to 60 m. `PlantField.declare_reduced_shadows()` builds a run-time "shadow twin" mesh
+  asset for each (ids from 89 up, never saved) and the instancer holds the twins in place of the
+  plants. The four plain bushes have no reduced mesh and cast from their full one. Kirill compared
+  in game: no significant difference. PerfDebug **O** switches it; `--plants-full-shadows` starts
+  without it. Saves 0.1-0.3 ms of GPU (`docs/performance_findings.md`).
 - Raw source packs stay outside the project in `raw-assets/models/bushes` and
   `raw-assets/models/free_fern_pack_02` (bush_03, 2044 tris with flowers, not imported).
 
