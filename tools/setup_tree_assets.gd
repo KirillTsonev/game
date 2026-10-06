@@ -194,6 +194,120 @@ func _without_duplicate_triangles(verts: PackedVector3Array, idx_in: Variant) ->
 		out.append(idx[t + 2])
 	return out
 
+## -- Wind sway data for the leaf / branch cards (2026-10-06) --
+## The trunk and the bark branches stand still; each leaf card sways about the point where it
+## meets the bark. build_pack_trees() writes that into the leaf surfaces' UV2 (the cards have no
+## other use for it): x = metres from the card's attachment point, y = a per-card phase (0-1).
+## foliage_cutout.gdshaderinc reads it when `sway_cards` is on (FoliageWind switches it on at run
+## time). A card = one connected piece of a leaf surface; its attachment point = its corner
+## nearest to the bark, found against points sampled over the bark triangles.
+const SWAY_BARK_SAMPLE_M := 0.3  ## spacing of the points sampled over each bark triangle
+const SWAY_BARK_CELL_M := 0.5  ## lookup grid cell for those points
+const SWAY_BARK_SEARCH_CELLS := 8  ## a card further than this many cells from any bark hangs from its corner nearest the trunk axis
+
+func _is_leaf_surface(mi: MeshInstance3D, si: int) -> bool:
+	var m := mi.get_active_material(si) as BaseMaterial3D
+	return m != null and m.albedo_texture != null and _is_leaf_texture(m.albedo_texture.resource_path.get_file())
+
+## Adds points covering one bark surface's triangles to `grid` (cell -> Array of Vector3).
+func _add_bark_points(grid: Dictionary, verts: PackedVector3Array, idx_in: Variant) -> void:
+	var idx: PackedInt32Array = idx_in if idx_in != null else PackedInt32Array(range(verts.size()))
+	for t in range(0, idx.size(), 3):
+		var a := verts[idx[t]]
+		var b := verts[idx[t + 1]]
+		var c := verts[idx[t + 2]]
+		var n := maxi(1, ceili(maxf(a.distance_to(b), maxf(b.distance_to(c), c.distance_to(a))) / SWAY_BARK_SAMPLE_M))
+		for i in n + 1:
+			for j in n + 1 - i:
+				var p := a + (b - a) * (float(i) / n) + (c - a) * (float(j) / n)
+				var key := Vector3i((p / SWAY_BARK_CELL_M).floor())
+				if not grid.has(key):
+					grid[key] = []
+				(grid[key] as Array).append(p)
+
+## Squared distance from `p` to the nearest bark point, INF if none within the search range.
+func _bark_distance_sq(grid: Dictionary, p: Vector3) -> float:
+	var c := Vector3i((p / SWAY_BARK_CELL_M).floor())
+	var best := INF
+	for ring in range(1, SWAY_BARK_SEARCH_CELLS + 1):
+		for x in range(-ring, ring + 1):
+			for y in range(-ring, ring + 1):
+				for z in range(-ring, ring + 1):
+					# Ring 1 is the whole 3x3x3 block; later rings only their outer shell.
+					if ring > 1 and maxi(absi(x), maxi(absi(y), absi(z))) != ring:
+						continue
+					var pts: Variant = grid.get(c + Vector3i(x, y, z))
+					if pts == null:
+						continue
+					for q: Vector3 in pts:
+						best = minf(best, p.distance_squared_to(q))
+		# Everything not yet looked at is at least `ring` cells away.
+		if best <= (ring * SWAY_BARK_CELL_M) ** 2:
+			break
+	return best
+
+## UV2 for one leaf surface (see above). Appends [card length m, gap to the bark m] per card to
+## `stats` (gap -1 = no bark in range).
+func _card_sway_uv2(verts: PackedVector3Array, idx_in: Variant, bark_grid: Dictionary, stats: Array) -> PackedVector2Array:
+	var idx: PackedInt32Array = idx_in if idx_in != null else PackedInt32Array(range(verts.size()))
+	var uv2 := PackedVector2Array()
+	uv2.resize(verts.size())
+	# Union-find over corner positions (1 mm), as in debug_print_leaf_cards().
+	var pos_id := {}
+	var parent := PackedInt32Array()
+	var corner := PackedInt32Array()
+	corner.resize(idx.size())
+	for k in idx.size():
+		var key := Vector3i((verts[idx[k]] * 1000.0).round())
+		if not pos_id.has(key):
+			pos_id[key] = parent.size()
+			parent.append(parent.size())
+		corner[k] = pos_id[key]
+	for t in range(0, idx.size(), 3):
+		for k in [1, 2]:
+			var a := corner[t]
+			var b := corner[t + k]
+			while parent[a] != a:
+				a = parent[a]
+			while parent[b] != b:
+				b = parent[b]
+			if a != b:
+				parent[b] = a
+	var cards := {} # root -> {vertex index: true}
+	for k in idx.size():
+		var r := corner[k]
+		while parent[r] != r:
+			r = parent[r]
+		if not cards.has(r):
+			cards[r] = {}
+		(cards[r] as Dictionary)[idx[k]] = true
+	for r: int in cards:
+		var vis: Array = (cards[r] as Dictionary).keys()
+		var attach := verts[vis[0]]
+		var best := INF
+		var axis_attach := attach
+		var axis_best := INF
+		for vi: int in vis:
+			var p := verts[vi]
+			var d := _bark_distance_sq(bark_grid, p)
+			if d < best:
+				best = d
+				attach = p
+			var ad := p.x * p.x + p.z * p.z
+			if ad < axis_best:
+				axis_best = ad
+				axis_attach = p
+		if best == INF:
+			attach = axis_attach
+		var phase := float((r * 7919) % 1000) / 1000.0
+		var length := 0.0
+		for vi: int in vis:
+			var d := verts[vi].distance_to(attach)
+			length = maxf(length, d)
+			uv2[vi] = Vector2(d, phase)
+		stats.append([length, sqrt(best) if best < INF else -1.0])
+	return uv2
+
 ## Diagnostic (read-only, 2026-10-06): how the leaf CARDS of the baked trees are built. A card =
 ## one connected piece of a leaf surface (triangles sharing a corner position, to 1 mm). Per tree:
 ## how many cards, how many triangles each, and how many of the cards with more than two
@@ -363,6 +477,17 @@ func build_pack_trees(drop_duplicates: bool = PACK_DROP_DUPLICATE_CARDS) -> Stri
 			for v: Vector3 in mi.mesh.surface_get_arrays(si)[Mesh.ARRAY_VERTEX]:
 				min_y = minf(min_y, (basis * v).y)
 		var lift := Vector3(0.0, -min_y, 0.0)
+		# Wind sway data (see SWAY_BARK_*): the bark first, to find where each leaf card is attached.
+		var bark_grid := {}
+		var sway_stats: Array = []
+		for si in mi.mesh.get_surface_count():
+			if _is_leaf_surface(mi, si):
+				continue
+			var bark_arr := mi.mesh.surface_get_arrays(si)
+			var bark_verts: PackedVector3Array = bark_arr[Mesh.ARRAY_VERTEX]
+			for i in bark_verts.size():
+				bark_verts[i] = basis * bark_verts[i] + lift
+			_add_bark_points(bark_grid, bark_verts, bark_arr[Mesh.ARRAY_INDEX])
 		var am := ArrayMesh.new()
 		var tris := 0
 		for si in mi.mesh.get_surface_count():
@@ -385,9 +510,11 @@ func build_pack_trees(drop_duplicates: bool = PACK_DROP_DUPLICATE_CARDS) -> Stri
 						tg[i + 3] = -tg[i + 3]
 				arr[Mesh.ARRAY_TANGENT] = tg
 			var src_mat := mi.get_active_material(si)
-			var is_leaf := src_mat is BaseMaterial3D and (src_mat as BaseMaterial3D).albedo_texture and _is_leaf_texture((src_mat as BaseMaterial3D).albedo_texture.resource_path.get_file())
+			var is_leaf := _is_leaf_surface(mi, si)
 			if drop_duplicates and is_leaf:
 				arr[Mesh.ARRAY_INDEX] = _without_duplicate_triangles(verts, arr[Mesh.ARRAY_INDEX])
+			if is_leaf:
+				arr[Mesh.ARRAY_TEX_UV2] = _card_sway_uv2(verts, arr[Mesh.ARRAY_INDEX], bark_grid, sway_stats)
 			tris += ((arr[Mesh.ARRAY_INDEX] as PackedInt32Array).size() if arr[Mesh.ARRAY_INDEX] != null else verts.size()) / 3
 			var bark_key := ""
 			if src_mat is BaseMaterial3D and (src_mat as BaseMaterial3D).albedo_texture:
@@ -469,6 +596,20 @@ func build_pack_trees(drop_duplicates: bool = PACK_DROP_DUPLICATE_CARDS) -> Stri
 			a.set_shadow_impostor(0)
 		out.append("id=%d %s <- %s: %d tris, %.1f m tall, last_lod=%d last_shadow_lod=%d shadow_impostor=%d fade=%.0f ranges %.0f/%.0f" % [
 			entry.id, entry.name, entry.node, tris, am.get_aabb().size.y, a.get_last_lod(), a.get_last_shadow_lod(), a.get_shadow_impostor(), a.get_fade_margin(), a.get_lod_range(0), a.get_lod_range(1)])
+		if not sway_stats.is_empty():
+			var lengths: Array[float] = []
+			var gaps: Array[float] = []
+			var unattached := 0
+			for s: Array in sway_stats:
+				lengths.append(s[0])
+				if s[1] < 0.0:
+					unattached += 1
+				else:
+					gaps.append(s[1])
+			lengths.sort()
+			gaps.sort()
+			out.append("  sway: %d cards, length median %.2f / max %.2f m; gap to the bark median %.2f / max %.2f m; %d with no bark in range" % [
+				sway_stats.size(), lengths[lengths.size() / 2], lengths[-1], gaps[gaps.size() / 2] if not gaps.is_empty() else -1.0, gaps[-1] if not gaps.is_empty() else -1.0, unattached])
 	src.free()
 	assets.update_mesh_list()
 	out.append("saved %s (err=%d)" % [ASSETS_PATH, assets.save(ASSETS_PATH)])

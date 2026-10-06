@@ -123,6 +123,8 @@
 //     blade has no room for a tip-only highlight. Full-height blades are unchanged (tip_blend 0,
 //     see "NO BRIGHT TIPS" -- if the glow facing the moon comes back in the gaps, lower this).
 //     The ground side of the separation is GAP_SHADE / PATCH_SHADE in ground_paint.gd.
+//   - SHARED WIND FIELD (2026-10-06): the wind noise lookups moved, unchanged, into
+//     shaders/wind.gdshaderinc so the understory and flowers sway in the same gusts.
 //   - LESS DRY GRASS (2026-09-29): v_dry threshold smoothstep(0.30, 0.60) -> (0.45, 0.75) so fewer
 //     patches turn straw, and dry_tip_color (0.75, 0.62, 0.30) -> (0.58, 0.50, 0.26) so the ones
 //     that do are less glaring. The bake's dry channel itself is unchanged.
@@ -134,8 +136,8 @@ uniform vec3 player_position = vec3(0.0, -1000.0, 0.0);
 group_uniforms GrassProperties;
 uniform float clumping_factor : hint_range(0.0, 1.0) = 0.5;
 uniform sampler2D clump_noise : repeat_enable, filter_linear;
-uniform float wind_speed : hint_range(0.0, 5.0) = 1.0;
-uniform sampler2D wind_noise : repeat_enable, filter_linear;
+// wind_speed, wind_noise and the wind field functions (shared with the foliage since 2026-10-06).
+#include "res://shaders/wind.gdshaderinc"
 uniform float wind_fade_start = 40.0; // m from the camera -- full wind sway closer than this
 uniform float wind_fade_end = 80.0; // m -- no wind sway beyond this
 uniform float crush_radius = 0.9; // m (horizontal) -- blades inside this lie down around the player
@@ -284,17 +286,17 @@ void vertex() {
 	float facing = smoothstep(short_face_range.x, short_face_range.y, camera_distance);
 	short_angle += (mod(face_angle - short_angle + PI, TAU) - PI) * facing;
 	turn_angle_base = mix(turn_angle_base, short_angle, shortness);
-	float wind_direction = texture(wind_noise, root.zx * 0.005 / wind_speed + TIME * 0.005 * wind_speed).x * TAU;
-	float wind_strength = mix(0.25, 1.0, texture(wind_noise, root.xz * 0.025 / wind_speed + TIME * 0.05).x) * crushed_factor;
+	float wind_angle = wind_direction(root.xz);
+	float wind_strength = wind_gust_raw(root.xz, 0.0) * crushed_factor;
 	wind_strength *= wind_strength;
 	wind_strength *= mix(0.6, 0.7, hash1) * wind_speed * wind_fade;
-	mat3 grass_rotate = rotate_y(mix(turn_angle_base, wind_direction, wind_strength));
+	mat3 grass_rotate = rotate_y(mix(turn_angle_base, wind_angle, wind_strength));
 
 	// Own hash (was hash1, shared with width) so thin blades don't all bend alike; range widened (0.12-0.25).
 	float bend_angle_base = (mix(0.10, 0.30, hash_bend + height_offset * 0.1) + short_lean * shortness) * PI * height_factor;
 	// We sample wind noise identically to strength, but with a time offset based on
 	// the height to simulate the turbulence as the grass blade shakes from the wind.
-	float wind_strength_turbulence = mix(0.25, 1.0, texture(wind_noise, root.xz * 0.025 / wind_speed + (TIME + height_factor * height_factor * 0.25) * 0.05).x);
+	float wind_strength_turbulence = wind_gust_raw(root.xz, height_factor * height_factor * 0.25);
 	wind_strength_turbulence *= wind_strength_turbulence;
 	wind_strength_turbulence *= mix(0.16, 0.25 * hash0, clump1) * PI * min(wind_speed, 1.0) * wind_fade;
 	mat3 grass_bend = rotate_x(mix(0.45 * PI, bend_angle_base + wind_strength_turbulence, crushed_factor));

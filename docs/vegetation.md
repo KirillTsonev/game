@@ -373,6 +373,49 @@ material override), `debug_print_sizes()`.
 
 ---
 
+## Wind sway (2026-10-06)
+
+The understory and the flowers sway in the grass's wind. Not yet judged in-game; render cost not
+measured.
+
+- **One wind field:** `shaders/wind.gdshaderinc` holds the grass's noise lookups (direction and
+  gust strength at a world position). `grass_blade.gdshader` and `foliage_cutout.gdshaderinc` both
+  include it and read the same texture (`FoliageWind.noise_texture()`), so a gust reaches a plant
+  and the grass around it together.
+- **Plants:** `vertex()` in `foliage_cutout.gdshaderinc` reads the field at the plant's root and
+  pushes each vertex along the wind by gust^2 x `sway_amount` x a weight: height above the root
+  (relative to `sway_height`) x how far out from the centre axis it is (`sway_core`), plus a
+  sideways wobble (`sway_flutter`). No mesh data is needed, so every LOD and the reduced shadow
+  meshes move alike, and shadows move with the plants.
+- **Switched on at run time** by `FoliageWind.setup()` (`scripts/terrain/foliage_wind.gd`), per
+  plant kind from its `SWAY` table (amount, height, core). The saved materials keep
+  `sway_amount` 0. Tuning = edit `SWAY` and restart.
+- **Fade:** the grass's own wind fade (`GrassField.wind_fade_start` / `_end`, 40-80 m, tuning
+  panel Y). `GrassField` passes it and the camera position every frame; the shader cannot use
+  `CAMERA_POSITION_WORLD`, which is the light's camera in the shadow pass.
+- **Trees and saplings (same day):** each leaf / branch card sways about the point where it meets
+  the bark; the trunk and the bark branches stand still (Kirill: fine for now -- the bark is
+  world-triplanar and would slide over a moving trunk). `build_pack_trees()` bakes the per-card
+  data into the leaf surfaces' UV2: x = metres from the card's attachment point (its corner
+  nearest the bark), y = a per-card phase. The shader's `sway_cards` mode reads it, takes the gust
+  at the card's own position (so a gust travels through a crown), and adds an up-and-down bob.
+  - Bake check: every card of all 14 trees has bark within 0.4 m of its attachment point (median
+    0.08 m). Cards are 0.8-3.6 m long (median per tree), the longest 8.5 m.
+  - `SWAY`: leafy trees 0.20 m per 2 m of card (at most 0.30 m), dry trees half; own fade
+    110-150 m, so trees are still before the impostor cross-fade (from 155 m).
+  - Saplings share the trees' meshes and materials: same data, and the shader bends them more
+    for their size (x 1 / sqrt(scale)). Their stems stand still too.
+  - After `build_pack_trees()` run `build_sapling_assets()`, as before. Impostors need no rebake.
+- **Not swayed:** impostors, deadfall, trunks and bark branches.
+- Compare: user argument `--no-foliage-wind` starts the game without the sway.
+- **Cost (2026-10-06, one pair of full runs, `..._wind_off_2.json` vs `..._wind_on.json`):** GPU
+  +0.2 to +0.5 ms at the seven stations with vegetation (4-7 %), nothing at `spawn_sky`; road walk
+  GPU 7.20 -> 7.41 ms, frame 7.94 -> 8.12 ms. The ablations put it on the trees (layer cost +0.13
+  to +0.16 ms at all three stations) and the sun shadows (+0.14 / +0.15 ms at two); the understory
+  layer did not change. One pair only: differences under about 0.1 ms are noise.
+
+---
+
 ## Saplings -- the mid-storey (built 2026-10-04)
 
 The saplings are the canopy trees themselves, scaled down per instance to 2-4 m. Kirill compared

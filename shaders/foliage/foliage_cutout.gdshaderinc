@@ -32,6 +32,75 @@ uniform float mip_alpha_scale : hint_range(0.0, 1.0) = 0.25; // Golus: ~0.25 kee
 uniform float shadow_alpha_cutoff : hint_range(0.0, 1.0) = 0.35;
 uniform float shadow_mip_alpha_scale : hint_range(0.0, 2.0) = 0.6;
 
+// Wind sway (2026-10-06): the plant leans with the grass's own gust field (shaders/wind.gdshaderinc),
+// read at the plant's root, so grass and plants move in the same gusts. All of it is set at run
+// time by FoliageWind (scripts/terrain/foliage_wind.gd) for the understory and the flowers; a
+// material nobody sets up keeps sway_amount 0 and stands still (the tree leaf cards, the editor).
+#include "res://shaders/wind.gdshaderinc"
+// m a point at sway_height moves in a full gust. 0 = no sway.
+uniform float sway_amount = 0.0;
+// m above the root (in the world, so after the plant's scale) where the sway reaches sway_amount.
+// Lower points move in proportion; higher ones up to 1.5x.
+uniform float sway_height = 1.0;
+// Share of the sway a point on the plant's centre axis gets; points sway_height out to the side
+// get all of it. 1 = the whole plant tilts from its root (flower stalks), lower = the middle of a
+// bush holds still while its outer leaves move.
+uniform float sway_core : hint_range(0.0, 1.0) = 1.0;
+// Sideways wobble across the wind, as a share of the push along it.
+uniform float sway_flutter : hint_range(0.0, 1.0) = 0.35;
+// Speed of that wobble, rad/s (5 = about 0.8 Hz).
+uniform float sway_speed = 5.0;
+// Tree leaf / branch cards: each card sways about the point where it meets the bark, which stands
+// still. Needs the per-card data build_pack_trees() bakes into UV2 (x = m from the attachment
+// point, y = the card's phase); sway_height is then the card length that gets sway_amount, and
+// sway_core is not used. The gust is read where the card is, not at the tree's root, so it
+// travels through the crown as it does over the grass below.
+uniform bool sway_cards = false;
+// Same fade as the grass's (GrassField.wind_fade_*): full sway nearer than start, none past end.
+uniform float wind_fade_start = 40.0;
+uniform float wind_fade_end = 80.0;
+// The view camera. Not CAMERA_POSITION_WORLD: in the shadow pass that is the light's camera, and
+// the shadow would then sway differently from the plant casting it.
+uniform vec3 sway_camera_position = vec3(0.0);
+
+void vertex() {
+	if (sway_amount > 0.0) {
+		vec3 root = MODEL_MATRIX[3].xyz;
+		float fade = 1.0 - smoothstep(wind_fade_start, wind_fade_end, distance(root, sway_camera_position));
+		if (fade > 0.0) {
+			// The scatter scales plants uniformly, so one basis column gives the scale.
+			float scale_sq = dot(MODEL_MATRIX[0].xyz, MODEL_MATRIX[0].xyz);
+			float scale = sqrt(scale_sq);
+			// Each plant, and each part of it, wobbles out of step with its neighbours.
+			float phase = fract(sin(dot(root.xz, vec2(12.9898, 78.233))) * 43758.5453) * TAU;
+			vec2 at = root.xz;
+			float weight;
+			if (sway_cards) {
+				at = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xz;
+				// sqrt(scale): a sapling (the same mesh at 0.13-0.3) bends more for its size than the tree.
+				weight = min(UV2.x * sqrt(scale) / sway_height, 1.5);
+				phase += UV2.y * TAU;
+			} else {
+				float height = min(max(VERTEX.y, 0.0) * scale / sway_height, 1.5);
+				float reach = min(length(VERTEX.xz) * scale / sway_height, 1.0);
+				weight = height * mix(sway_core, 1.0, reach);
+				phase += (VERTEX.x + VERTEX.z) * scale * 4.0;
+			}
+			// Like a grass blade's tip, the far parts get the gust a moment early.
+			float gust = wind_gust_raw(at, weight * weight * 0.25);
+			gust *= gust;
+			float angle = wind_direction(at);
+			vec2 along = vec2(sin(angle), cos(angle));
+			float strength = gust * sway_amount * weight * fade;
+			vec2 push = (along + vec2(along.y, -along.x) * sin(TIME * sway_speed + phase) * sway_flutter) * strength;
+			// A branch also bobs up and down.
+			float bob = sway_cards ? sin(TIME * sway_speed * 0.8 + phase * 1.7) * sway_flutter * 0.5 * strength : 0.0;
+			// World-space push -> model space (v * M = transpose(M) * v; / scale^2 makes it the inverse).
+			VERTEX += (vec3(push.x, bob, push.y) * mat3(MODEL_MATRIX)) / scale_sq;
+		}
+	}
+}
+
 // Mip level the hardware picks for `uv` on a texture of `size` texels (from screen-space
 // derivatives -- in the shadow pass these are shadow-map texels, i.e. the cascade's coarseness).
 float foliage_mip_level(vec2 uv, vec2 size) {

@@ -1,0 +1,292 @@
+==== PERF BENCH wind_on  git 71451b5e  2026-10-06T17:35:04 ====
+viewport 1906x942, 3D scale 0.850, sun shadows on, SSAO OFF, 6 post effects | NVIDIA GeForce RTX 3070 Laptop GPU | Godot 4.7.2-stable (official) | seed 858829582
+
+STATIONS (ms)       frame    p95    p99  worst    GPU  CPUrender   draws  tris(M)  VRAM MB
+spawn_ahead          8.54   9.98  10.65  10.94   7.87       5.35    6007    37.43     1301
+spawn_ground         5.16   5.98   6.68   7.78   4.52       2.95    3498    34.59     1301
+spawn_sky            4.17   4.21   4.24   4.29   1.84       1.04     387    29.20     1301
+road_mid             7.47   8.32   8.49   8.78   6.89       3.65    3959    35.10     1301
+exit_look_back       8.25   9.05   9.61  11.02   7.67       4.83    5277    37.95     1301
+forest_dense         8.69   9.68  12.01  13.83   8.08       4.86    4825    36.99     1301
+road_open            8.29   9.57  10.87  11.60   7.55       5.10    5358    36.94     1301
+cliff_face           7.17   8.08   8.54   8.83   6.53       2.69    2431    34.31     1301
+
+ABLATION at spawn_ahead -- baseline 8.46 ms frame / 7.85 ms GPU (end of pass: 8.64 / 7.96)
+switched off          frame saved  GPU saved  draws saved  tris saved(M)
+layer:cliffs                 0.11       0.22          108           0.52
+layer:outcrops              -0.28       0.15           29           0.17
+layer:flowers               -0.07       0.09           43           5.33
+layer:saplings               0.32       0.24         1094           0.78
+layer:understory             0.88       0.94          389          19.01
+layer:instanced_other       -0.13       0.07           15           0.05
+layer:deadfall               0.11       0.11          474           0.27
+layer:trees                  2.49       2.39         3151           4.79
+layer:rocks                  0.14       0.06          581           0.20
+layer:grass                  1.15       1.10           11           5.98
+layer:ALL                    4.38       5.46         5895          36.91
+grass:blades_0               0.28       0.38            5           3.19
+grass:blades_1               0.19       0.24            5           2.06
+grass:blades_2               0.01       0.03            5           0.16
+grass:blades_3               0.08      -0.00            5           0.07
+grass:blades_4              -0.02      -0.01            5           0.04
+grass:short_0                0.31       0.37            5           0.44
+grass:short_1                0.12       0.07            5           0.23
+plants:understory:lod0       0.28       0.28           20          14.86
+plants:understory:lod1       0.32       0.28           20           2.45
+plants:understory:lod2       0.00      -0.01           16           0.09
+plants:flowers:lod0         -0.22      -0.05           22           4.36
+plants:flowers:lod1         -0.04      -0.05           17           0.99
+plants:flowers:lod2         -0.05       0.00            9           0.04
+terrain_texturing            0.04       0.07           34           0.11
+terrain_shadows              0.10       0.01          112           0.43
+post:painterly_sat           0.20       0.33           34           0.11
+post:radial_blur             0.10       0.14           34           0.11
+post:gaussian_blur           0.15       0.02           34           0.11
+post:noise                   0.07       0.04           34           0.11
+post:unreal_bloom           -0.01       0.20           34           0.11
+post:glare                   0.10       0.10           34           0.11
+post:ALL                     0.93       1.00           34           0.11
+sun_shadows                  2.00       1.91         3799           6.57
+sun_shadow_100m             -0.20      -0.24          637           0.64
+lantern                      0.52       0.41          164           0.47
+lantern_shadow               0.21       0.10          164           0.47
+lantern_ground_pool          0.13       0.11           34           0.11
+msaa_3d                      0.48       0.52           34           0.11
+screen_space_aa              0.12      -0.01           34           0.11
+render_scale_50              0.87       2.56           34           0.11
+POST PASSES, GPU ms from timestamps ("x/y" = pass y inside effect x; the bare name = its last pass): painterly_sat/copy 0.07, painterly_sat/sum_h 0.10, painterly_sat/sum_v 0.11, painterly_sat 0.10, radial_blur 0.17, gaussian_blur 0.10, noise 0.08, unreal_bloom 0.14, glare 0.16 | total 1.03
+
+ABLATION at exit_look_back -- baseline 8.32 ms frame / 7.80 ms GPU (end of pass: 8.38 / 7.85)
+switched off          frame saved  GPU saved  draws saved  tris saved(M)
+layer:cliffs                 0.13       0.11           57           0.28
+layer:outcrops               0.11       0.15           23           0.33
+layer:flowers                0.00       0.03           37           5.30
+layer:saplings               0.24       0.27          909           0.79
+layer:understory             1.01       1.22          732          20.44
+layer:instanced_other       -0.04      -0.00           11           0.02
+layer:deadfall               0.01       0.07          376           0.32
+layer:trees                  2.08       2.12         2701           3.74
+layer:rocks                  0.07       0.03          300           0.12
+layer:grass                  1.15       1.20            8           5.96
+layer:ALL                    4.19       5.52         5169          37.35
+grass:blades_0               0.35       0.39            2           3.16
+grass:blades_1               0.25       0.31            2           2.03
+grass:blades_2              -0.01       0.08            2           0.13
+grass:blades_3              -0.00       0.01            2           0.04
+grass:blades_4               0.05       0.02            2           0.02
+grass:short_0                0.32       0.30            2           0.41
+grass:short_1               -0.05       0.19            2           0.20
+plants:understory:lod0       0.22       0.28           17          14.83
+plants:understory:lod1       0.20       0.29           17           2.43
+plants:understory:lod2       0.09       0.07           13           0.06
+plants:flowers:lod0         -0.01       0.03           19           4.33
+plants:flowers:lod1          0.03       0.00           14           0.97
+plants:flowers:lod2          0.02       0.01            6           0.01
+terrain_texturing            0.19       0.21           19           0.09
+terrain_shadows             -0.02       0.07           89           0.50
+post:painterly_sat           0.28       0.36           19           0.09
+post:radial_blur             0.15       0.15           19           0.09
+post:gaussian_blur          -0.00       0.13           19           0.09
+post:noise                   0.07       0.08           19           0.09
+post:unreal_bloom            0.15       0.18           19           0.09
+post:glare                   0.18       0.21           19           0.09
+post:ALL                     0.96       1.07           19           0.09
+sun_shadows                  1.94       2.00         3252           7.27
+sun_shadow_100m              0.12       0.09          869           1.46
+lantern                      0.46       0.50          209           0.68
+lantern_shadow               0.24       0.27          209           0.68
+lantern_ground_pool          0.08       0.11           19           0.09
+msaa_3d                      0.54       0.57           19           0.09
+screen_space_aa              0.06       0.13           19           0.09
+render_scale_50              1.20       2.57           19           0.09
+POST PASSES, GPU ms from timestamps ("x/y" = pass y inside effect x; the bare name = its last pass): painterly_sat/copy 0.06, painterly_sat/sum_h 0.12, painterly_sat/sum_v 0.13, painterly_sat 0.10, radial_blur 0.17, gaussian_blur 0.10, noise 0.08, unreal_bloom 0.16, glare 0.18 | total 1.09
+
+ABLATION at forest_dense -- baseline 8.75 ms frame / 8.14 ms GPU (end of pass: 8.85 / 8.19)
+switched off          frame saved  GPU saved  draws saved  tris saved(M)
+layer:cliffs                 0.23       0.13           82           0.52
+layer:outcrops               0.06      -0.02           32           0.18
+layer:flowers                0.21       0.08           45           5.32
+layer:saplings               0.19       0.09          789           0.39
+layer:understory             0.83       0.78          442          18.88
+layer:instanced_other        0.09       0.00           10           0.01
+layer:deadfall               0.13       0.01          351           0.18
+layer:trees                  2.05       2.02         2220           3.63
+layer:rocks                  0.81       0.78          746           1.38
+layer:grass                  1.38       1.10            7           5.95
+layer:ALL                    4.63       5.71         4730          36.51
+grass:blades_0               0.56       0.43            1           3.16
+grass:blades_1               0.32       0.20            1           2.02
+grass:blades_2               0.13       0.00            1           0.13
+grass:blades_3               0.13       0.01            1           0.04
+grass:blades_4               0.02      -0.07            1           0.01
+grass:short_0                0.42       0.25            1           0.40
+grass:short_1                0.22       0.06            1           0.20
+plants:understory:lod0       0.22       0.12           16          14.82
+plants:understory:lod1       0.21       0.11           16           2.42
+plants:understory:lod2      -0.06      -0.15           12           0.06
+plants:flowers:lod0          0.05       0.04           18           4.33
+plants:flowers:lod1          0.04      -0.04           13           0.96
+plants:flowers:lod2          0.11       0.00            5           0.00
+terrain_texturing            0.17       0.08            0           0.00
+terrain_shadows              0.13       0.03           72           0.35
+post:painterly_sat           0.29       0.26            0           0.00
+post:radial_blur             0.07       0.09            0           0.00
+post:gaussian_blur           0.13       0.05            0           0.00
+post:noise                   0.06       0.03            0           0.00
+post:unreal_bloom            0.24       0.13            0           0.00
+post:glare                   0.22       0.14            0           0.00
+post:ALL                     1.03       1.01            0           0.00
+sun_shadows                  1.71       1.69         2981           5.11
+sun_shadow_100m             -0.11      -0.19          515           0.42
+lantern                      1.17       1.17          479           1.79
+lantern_shadow               0.74       0.90          479           1.79
+lantern_ground_pool          0.04       0.09            0           0.00
+msaa_3d                      0.54       0.47            0           0.00
+screen_space_aa              0.11       0.05            0           0.00
+render_scale_50              1.87       2.30            0           0.00
+POST PASSES, GPU ms from timestamps ("x/y" = pass y inside effect x; the bare name = its last pass): painterly_sat/copy 0.06, painterly_sat/sum_h 0.08, painterly_sat/sum_v 0.11, painterly_sat 0.10, radial_blur 0.17, gaussian_blur 0.10, noise 0.08, unreal_bloom 0.18, glare 0.21 | total 1.08
+
+WALK 200 m in 20.0 s: frame 8.12 ms, p95 9.35, p99 10.46, worst 16.24 | GPU 7.41 | 1 frames over 2x median, 0 over 16.7 ms (of 2464)
+
+STARTUP: _ready() began at 3.13 s, took 5.11 s, first frame at 8.53 s, settled at 8.73 s
+  heightmap build                    2448 ms
+  Terrain3D import+height_range        11 ms
+  boulder scattering                  125 ms
+  scree scattering                     66 ms
+  tree scattering                     104 ms
+  deadfall scattering                 428 ms
+  understory scattering               308 ms
+  sapling scattering                   77 ms
+  grass density bake                  167 ms
+  flower scattering                   161 ms
+  ground painting                     495 ms
+  outcrop placement                    48 ms
+  road mesh build                     148 ms
+  cliff face dressing                  65 ms
+  player placement                      6 ms
+
+MESHES: 221 unique, 9341 nodes, 43623 instances, 89.3 M tris at LOD 0 (83.1 M cast shadows). Top by total tris:
+      5.18 M =   24220 tris x    214 inst (214 shadow)  namaqualand_stones_01_a_EXPORT_TMP_realCap_Model_2_005
+      4.28 M =   19794 tris x    216 inst (216 shadow)  namaqualand_stones_01_c_EXPORT_TMP_realCap_Model_2_002
+      2.80 M =   24792 tris x    113 inst (113 shadow)  namaqualand_rocks_01_b_EXPORT_TMP_realCap_Model_2_009
+      2.44 M =   11160 tris x    219 inst (219 shadow)  namaqualand_stones_01_e_EXPORT_TMP_realCap_Model_2_001
+      2.44 M =   24910 tris x     98 inst (98 shadow)  namaqualand_rocks_01_d_EXPORT_TMP_realCap_Model_2_002
+      2.40 M =  109114 tris x     22 inst (22 shadow)  namaqualand_boulder_06_2k_mesh_boulder_01_5m
+      2.32 M =    1481 tris x   1564 inst (0 shadow)  cone_open_cone_open_LOD0
+      2.16 M =   97964 tris x     22 inst (22 shadow)  namaqualand_boulder_02_2k_boulder_02_5m
+      2.00 M =   22432 tris x     89 inst (89 shadow)  namaqualand_rocks_01_c_EXPORT_TMP_realCap_Model_2_014
+      1.94 M =   64826 tris x     30 inst (30 shadow)  namaqualand_boulder_03_2k_realCap_Model_2
+      1.92 M =     880 tris x   2179 inst (2179 shadow)  MMI3D_C06_07_M32_L0
+      1.91 M =    9086 tris x    210 inst (210 shadow)  namaqualand_stones_01_b_EXPORT_TMP_realCap_Model_2_003
+      1.60 M =   13582 tris x    118 inst (118 shadow)  namaqualand_rocks_01_a_EXPORT_TMP_realCap_Model_2_006
+      1.53 M =    1747 tris x    876 inst (0 shadow)  cone_long_cone_long_LOD0
+      1.52 M =   89618 tris x     17 inst (17 shadow)  namaqualand_boulder_05_2k_Boulder
+
+LAYERS -- instances x LOD 0 triangles (an upper bound: LODs and culling draw fewer; the ablation's "tris saved" is what is really drawn)
+rocks               35.74 M tris     1676 instances   2086 nodes
+        5.18 M =    214 inst x   24220 tris  LODs 24220/4974/2486/316  shadow LODs [0, 1, 2, 3]  9 ScreeStoneA
+        4.28 M =    216 inst x   19794 tris  LODs 19794/4064/2032/480  shadow LODs [0, 1, 2, 3]  11 ScreeStoneC
+        2.80 M =    113 inst x   24792 tris  LODs 24792/11678/5616/2678  shadow LODs [0, 1, 2, 3]  6 ScreeRockB
+        2.44 M =    219 inst x   11160 tris  LODs 11160/5580/2790/680  shadow LODs [0, 1, 2, 3]  13 ScreeStoneE
+        2.44 M =     98 inst x   24910 tris  LODs 24910/13192/6258/2836  shadow LODs [0, 1, 2, 3]  8 ScreeRockD
+        2.40 M =     22 inst x  109114 tris  LODs 109114/54554/27278/13638  shadow LODs [0, 1, 2, 3]  37 NamaBoulder06
+        2.16 M =     22 inst x   97964 tris  LODs 97964/48982/24490/12245  shadow LODs [0, 1, 2, 3]  33 NamaBoulder02
+        2.00 M =     89 inst x   22432 tris  LODs 22432/9362/4274/2044  shadow LODs [0, 1, 2, 3]  7 ScreeRockC
+    ... 10 more in the .json
+understory          17.21 M tris    36340 instances   2012 nodes
+        1.92 M =   2179 inst x     880 tris  LODs 880  shadow LODs [0]  32 Bush05
+        1.69 M =   3831 inst x     440 tris  LODs 440/88/4  shadow LODs []  28 Fern02
+        1.44 M =   1273 inst x    1129 tris  LODs 1129/282/4  shadow LODs []  55 LadyFernA
+        1.37 M =   1298 inst x    1053 tris  LODs 1053/263/4  shadow LODs []  59 LadyFernE
+        1.29 M =   2326 inst x     556 tris  LODs 556  shadow LODs [0]  29 Bush01
+        1.26 M =    317 inst x    3968 tris  LODs 3968/992/4  shadow LODs []  70 ElderberryB
+        1.23 M =   2465 inst x     500 tris  LODs 500  shadow LODs [0]  31 Bush04
+        1.23 M =    390 inst x    3150 tris  LODs 3150/787/4  shadow LODs []  69 ElderberryA
+    ... 20 more in the .json
+grass                5.95 M tris  1347987 instances      7 nodes
+        3.16 M = 350700 inst x       9 tris  LODs 9  shadow LODs []  blades_0
+        2.02 M = 224560 inst x       9 tris  LODs 9  shadow LODs []  blades_1
+        0.40 M = 402965 inst x       1 tris  LODs 1  shadow LODs []  short_0
+        0.20 M = 197400 inst x       1 tris  LODs 1  shadow LODs []  short_1
+        0.13 M = 126420 inst x       1 tris  LODs 1  shadow LODs []  blades_2
+        0.04 M =  36064 inst x       1 tris  LODs 1  shadow LODs []  blades_3
+        0.01 M =   9878 inst x       1 tris  LODs 1  shadow LODs []  blades_4
+flowers              4.33 M tris    13484 instances    269 nodes
+        1.09 M =   1717 inst x     632 tris  LODs 632/158  shadow LODs []  78 WoodSorrelH
+        0.51 M =   1562 inst x     326 tris  LODs 326/81  shadow LODs []  72 WoodSorrelB
+        0.47 M =   1694 inst x     276 tris  LODs 276/69  shadow LODs []  77 WoodSorrelG
+        0.40 M =   1625 inst x     248 tris  LODs 248/62  shadow LODs []  74 WoodSorrelD
+        0.34 M =    924 inst x     369 tris  LODs 369  shadow LODs []  84 Dandelion
+        0.33 M =   1432 inst x     228 tris  LODs 228/57  shadow LODs []  73 WoodSorrelC
+        0.29 M =   1415 inst x     203 tris  LODs 203/50  shadow LODs []  76 WoodSorrelF
+        0.17 M =   1106 inst x     152 tris  LODs 152/48  shadow LODs []  75 WoodSorrelE
+    ... 10 more in the .json
+instanced_other      4.06 M tris     2895 instances    937 nodes
+        2.32 M =   1564 inst x    1481 tris  LODs 1481/589/313  shadow LODs []  53 ConeOpen
+        1.53 M =    876 inst x    1747 tris  LODs 1747/582/201  shadow LODs []  54 ConeLong
+        0.08 M =    166 inst x     476 tris  LODs 476  shadow LODs []  50 LitterMoundA
+        0.07 M =    147 inst x     476 tris  LODs 476  shadow LODs []  51 LitterMoundB
+        0.07 M =    142 inst x     476 tris  LODs 476  shadow LODs []  52 LitterMoundC
+trees                3.50 M tris      982 instances   1470 nodes
+        0.52 M =     78 inst x    6612 tris  LODs 6612/8  shadow LODs [0]  17 PackPineD
+        0.45 M =     68 inst x    6612 tris  LODs 6612/8  shadow LODs [0]  21 PackPineD2
+        0.40 M =     81 inst x    4913 tris  LODs 4913/8  shadow LODs [0]  25 PackDecidB2
+        0.33 M =     68 inst x    4913 tris  LODs 4913/8  shadow LODs [0]  24 PackDecidB
+        0.31 M =     75 inst x    4096 tris  LODs 4096/8  shadow LODs [0]  23 PackDecidA2
+        0.29 M =     70 inst x    4096 tris  LODs 4096/8  shadow LODs [0]  22 PackDecidA
+        0.24 M =     73 inst x    3313 tris  LODs 3313/8  shadow LODs [0]  27 PackDecidC2
+        0.22 M =     67 inst x    3313 tris  LODs 3313/8  shadow LODs [0]  26 PackDecidC
+    ... 6 more in the .json
+cliffs               2.86 M tris       65 instances    164 nodes
+        1.36 M =      7 inst x  194080 tris  LODs 194080/97039/48519/24258  shadow LODs [0, 1, 2, 3]  namaqualand_cliff_02
+        0.85 M =      9 inst x   94369 tris  LODs 94369/47184/23591/11794  shadow LODs [0, 1, 2, 3]  namaqualand_cliff_01
+        0.19 M =      7 inst x   27025 tris  LODs 27025/13512/6755/3243  shadow LODs [0, 1, 2, 3]  nordic_coastal_cliff_large
+        0.17 M =      5 inst x   34783 tris  LODs 34783/17390/8695/4172  shadow LODs [0, 1, 2, 3]  icelandic_lava_cliff_huge
+        0.14 M =      5 inst x   27513 tris  LODs 27513/13756/6878/3301  shadow LODs [0, 1, 2, 3]  nordic_coastal_cliff_huge
+        0.09 M =      7 inst x   13070 tris  LODs 13070  shadow LODs [0]  namaqualand_cliff_02_FILL
+        0.03 M =      9 inst x    3226 tris  LODs 3226  shadow LODs [0]  namaqualand_cliff_01_PATCH
+        0.02 M =      7 inst x    3570 tris  LODs 3570  shadow LODs [0]  namaqualand_cliff_02_PATCH
+    ... 1 more in the .json
+deadfall             2.27 M tris      812 instances   1620 nodes
+        0.38 M =     68 inst x    5537 tris  LODs 5537/1936/552  shadow LODs [0, 1, 2]  42 LogFallenNordic
+        0.37 M =     51 inst x    7196 tris  LODs 7196/2056/616  shadow LODs [0, 1, 2]  38 StumpBroken
+        0.30 M =    148 inst x    2007 tris  LODs 2007/601/199  shadow LODs [0, 1, 2]  45 StickArbem
+        0.25 M =     51 inst x    4885 tris  LODs 4885/1709/488  shadow LODs [0, 1, 2]  39 StumpOld
+        0.25 M =     52 inst x    4735 tris  LODs 4735/1656/473  shadow LODs [0, 1, 2]  43 LogFallenLarge
+        0.20 M =     30 inst x    6587 tris  LODs 6587/2305/658  shadow LODs [0, 1, 2]  40 StumpRottenLarge
+        0.19 M =     66 inst x    2946 tris  LODs 2946/1031/294  shadow LODs [0, 1, 2]  44 BranchFallen
+        0.09 M =     85 inst x    1017 tris  LODs 1017/305/150  shadow LODs [0, 1, 2]  47 StickDebrisB
+    ... 4 more in the .json
+saplings             1.90 M tris      725 instances    790 nodes
+        0.69 M =    208 inst x    3313 tris  LODs 3313/8  shadow LODs [0, 1]  67 SaplingDecidC2
+        0.54 M =    133 inst x    4096 tris  LODs 4096/8  shadow LODs [0, 1]  68 SaplingDecidA2
+        0.28 M =     98 inst x    2872 tris  LODs 2872/8  shadow LODs [0, 1]  66 SaplingPineC2
+        0.22 M =    136 inst x    1587 tris  LODs 1587/8  shadow LODs [0, 1]  65 SaplingPineA2
+        0.17 M =    150 inst x    1158 tris  LODs 1158/8  shadow LODs [0, 1]  64 SaplingPineB
+outcrops             0.58 M tris       12 instances     48 nodes
+        0.31 M =      2 inst x  153472 tris  LODs 153472/76735/38366/19182  shadow LODs [0, 1, 2, 3]  mountainside
+        0.09 M =      3 inst x   29622 tris  LODs 29622/14811/7404/3554  shadow LODs [0, 1, 2, 3]  beach_rock_formation
+        0.07 M =      3 inst x   24472 tris  LODs 24472/12235/6118/2935  shadow LODs [0, 1, 2, 3]  beach_rock_ridge
+        0.06 M =      2 inst x   29820 tris  LODs 29820/14910/7454/3578  shadow LODs [0, 1, 2, 3]  beach_rock_tower
+        0.05 M =      2 inst x   25690 tris  LODs 25690/12844/6422/3082  shadow LODs [0, 1, 2, 3]  beach_rock_slabs
+road                 0.01 M tris        1 instances      1 nodes
+        0.01 M =      1 inst x   12864 tris  LODs 12864  shadow LODs []  RoadMesh
+terrain_other        0.00 M tris        1 instances      1 nodes
+        0.00 M =      1 inst x       2 tris  LODs 2  shadow LODs [0]  MouseQuad
+
+TEXTURES: 180 used by mesh materials + terrain, ~497 MB estimated. Top folders:
+      41.3 MB  res://textures/source
+      26.7 MB  res://assets/models/scree/textures
+      22.2 MB  res://assets/models/cliffs/namaqualand_cliff_02/textures
+      16.9 MB  res://assets/models/cliffs/namaqualand_cliff_01/textures
+      16.0 MB  res://assets/models/rocks/stone_01/textures
+      16.0 MB  res://assets/models/candidates/vegetation/bark
+      13.3 MB  res://assets/models/rocks/namaqualand_boulder_06/textures
+      13.3 MB  res://assets/models/rocks/namaqualand_boulder_05/textures
+      13.3 MB  res://assets/models/rocks/namaqualand_boulder_04/textures
+      13.3 MB  res://assets/models/cliffs/mountainside/textures
+      13.3 MB  res://assets/models/rocks/namaqualand_boulder_03/textures
+      13.3 MB  res://assets/models/rocks/namaqualand_boulder_02/textures
+      13.3 MB  res://assets/models/rocks/rock_09/textures
+      13.3 MB  res://assets/models/rocks/rock_07/textures
+      13.3 MB  res://assets/models/rocks/boulder_01/textures

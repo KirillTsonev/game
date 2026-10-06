@@ -16,6 +16,7 @@
 ##   SaplingScatter  sapling_scatter.gd  mid-storey saplings (scaled-down canopy trees) at grove edges
 ##   FlowerScatter   flower_scatter.gd   wood sorrel under canopy; poppies, dandelions, clover in the open
 ##   PlantField      plant_field.gd      (a node, like GrassField) GPU-culled drawing of plants handed over by the scatter modules
+##   FoliageWind     foliage_wind.gd     the wind noise shared by grass and plants; switches the understory / flower sway on
 ##   TerrainUtil     terrain_util.gd     height/normal sampling, zone ranges, mesh helpers
 ## New system -> new module there (class_name + extends RefCounted + static funcs), called from
 ## _ready() below. Per-run mutable state = static vars reset in the module's reset_run_state().
@@ -34,6 +35,7 @@ func _ready() -> void:
 	SaplingScatter.reset_run_state()
 	FlowerScatter.reset_run_state()
 	PlantField.reset_run_state()
+	FoliageWind.reset_run_state()
 	DeadfallScatter.reset_run_state()
 	GrassScatter.reset_run_state()
 	# Whole-_ready() timing (2026-09-16): the earlier per-stage prints only
@@ -125,6 +127,8 @@ func _ready() -> void:
 	var reduced_shadow_ids: Array[int] = [UnderstoryScatter.FERN_ID, UnderstoryScatter.ELDERBERRY_A_ID, UnderstoryScatter.ELDERBERRY_B_ID]
 	reduced_shadow_ids.append_array(UnderstoryScatter.LADY_FERN_IDS)
 	PlantField.declare_reduced_shadows(terrain, reduced_shadow_ids, not ("--plants-full-shadows" in OS.get_cmdline_user_args()))
+	# Understory and flowers sway in the grass's wind (--no-foliage-wind starts without it).
+	FoliageWind.setup(terrain.get_assets())
 
 	# Terrain3DData.import_images()'s `global_position` argument does NOT
 	# behave like a simple "center of the whole image, expand symmetrically

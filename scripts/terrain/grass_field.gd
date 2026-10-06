@@ -151,21 +151,14 @@ func _ready() -> void:
 	if _player == null:
 		push_warning("GRASS: no sibling Player -- grass field centred on the origin")
 
-	# GodotGrass's mat_grass.tres noise, rebuilt in code: clump = cellular 256 seamless,
-	# wind = perlin 512 seamless, freq 0.0275, fractal gain 0.1, domain warp amp 20 freq 0.005.
+	# GodotGrass's mat_grass.tres noise, rebuilt in code: clump = cellular 256 seamless. The wind
+	# noise is FoliageWind's, shared with the understory and flowers so they sway in the same gusts.
 	_blade_mat = ShaderMaterial.new()
 	_blade_mat.shader = BLADE_SHADER
 	var clump := FastNoiseLite.new()
 	clump.noise_type = FastNoiseLite.TYPE_CELLULAR
 	_blade_mat.set_shader_parameter("clump_noise", ImageTexture.create_from_image(clump.get_seamless_image(256, 256)))
-	var wind := FastNoiseLite.new()
-	wind.noise_type = FastNoiseLite.TYPE_PERLIN
-	wind.frequency = 0.0275
-	wind.fractal_gain = 0.1
-	wind.domain_warp_enabled = true
-	wind.domain_warp_amplitude = 20.0
-	wind.domain_warp_frequency = 0.005
-	_blade_mat.set_shader_parameter("wind_noise", ImageTexture.create_from_image(wind.get_seamless_image(512, 512)))
+	_blade_mat.set_shader_parameter("wind_noise", FoliageWind.noise_texture())
 	apply_widen()
 
 	var blade_meshes := {"high": _build_blade_mesh(true), "low": _build_blade_mesh(false)}
@@ -289,6 +282,7 @@ func _update() -> void:
 	var cam := get_viewport().get_camera_3d()
 	if cam == null:
 		return
+	FoliageWind.update(cam.global_position, wind_fade_start, maxf(wind_fade_end, wind_fade_start + 1.0))
 	var planes := cam.get_frustum()
 	var frames := {} # layer index -> params bytes
 	for i in _layers.size():

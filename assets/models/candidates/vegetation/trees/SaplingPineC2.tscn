@@ -3,10 +3,10 @@
 [ext_resource type="ArrayMesh" uid="uid://dkljpjhkf6t4w" path="res://assets/models/candidates/vegetation/trees/PackPineC2.res" id="1_rxds1"]
 [ext_resource type="ArrayMesh" uid="uid://b0m5h4dgnptyt" path="res://assets/models/candidates/vegetation/trees/SaplingPineC2_impostor.res" id="2_83mty"]
 
-[node name="SaplingPineC2" type="Node3D" unique_id=956816218]
+[node name="SaplingPineC2" type="Node3D" unique_id=571003137]
 
-[node name="LOD0" type="MeshInstance3D" parent="." unique_id=514435715]
+[node name="LOD0" type="MeshInstance3D" parent="." unique_id=1165317809]
 mesh = ExtResource("1_rxds1")
 
-[node name="LOD1" type="MeshInstance3D" parent="." unique_id=347888428]
+[node name="LOD1" type="MeshInstance3D" parent="." unique_id=1096308268]
 mesh = ExtResource("2_83mty")
