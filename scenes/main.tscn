@@ -5,13 +5,17 @@
 [ext_resource type="Texture2D" uid="uid://dl10rdiciotsc" path="res://assets/color_grades/grade_nighttime_brown_sage.tres" id="1_tefeu"]
 [ext_resource type="PackedScene" uid="uid://dgnelkt1o1lo0" path="res://scenes/player.tscn" id="2_player"]
 [ext_resource type="Script" uid="uid://bpjrhatsexkdf" path="res://scripts/terrain_gen.gd" id="8_tipki"]
+[ext_resource type="Shader" uid="uid://cr52a4o7bidsp" path="res://shaders/moon_sky.gdshader" id="9_moonsky"]
+[ext_resource type="Texture2D" uid="uid://dec3ayvbrb7kj" path="res://textures/sky/moon_full.png" id="10_moontex"]
 
-[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
-sky_top_color = Color(0.09803922, 0.019607844, 0.08627451, 1)
-sky_horizon_color = Color(0.3254902, 0.4117647, 0.6039216, 1)
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_moonsky"]
+shader = ExtResource("9_moonsky")
+shader_parameter/sky_top_color = Color(0.09803922, 0.019607844, 0.08627451, 1)
+shader_parameter/sky_horizon_color = Color(0.3254902, 0.4117647, 0.6039216, 1)
+shader_parameter/moon_texture = ExtResource("10_moontex")
 
 [sub_resource type="Sky" id="Sky_1"]
-sky_material = SubResource("ProceduralSkyMaterial_1")
+sky_material = SubResource("ShaderMaterial_moonsky")
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 2
