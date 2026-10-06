@@ -17,6 +17,7 @@
 ##   FlowerScatter   flower_scatter.gd   wood sorrel under canopy; poppies, dandelions, clover in the open
 ##   PlantField      plant_field.gd      (a node, like GrassField) GPU-culled drawing of plants handed over by the scatter modules
 ##   FoliageWind     foliage_wind.gd     the wind noise shared by grass and plants; switches the understory / flower sway on
+##   WorldBounds     world_bounds.gd     invisible walls just inside the map's edges
 ##   TerrainUtil     terrain_util.gd     height/normal sampling, zone ranges, mesh helpers
 ## New system -> new module there (class_name + extends RefCounted + static funcs), called from
 ## _ready() below. Per-run mutable state = static vars reset in the module's reset_run_state().
@@ -285,6 +286,9 @@ func _ready() -> void:
 	_log_stage("cliff face dressing", t_ready_stage)
 	t_ready_stage = Time.get_ticks_msec()
 
+	# Invisible walls just inside the map's edges, so the player cannot walk off it.
+	WorldBounds.build(get_parent(), heightmap_corner)
+
 	# Move the Player to this run's actual generated spawn point and face it
 	# toward the exit -- a scene-baked Player transform (main.tscn's old
 	# approach) goes stale the moment terrain params change (AREA_LENGTH,
@@ -301,6 +305,8 @@ func _ready() -> void:
 		# placement, see above) can correctly turn those into world positions.
 		var spawn_world: Vector3 = heightmap_corner + Vector3(maps.spawn_pixel.x, maps.spawn_pixel.y, maps.spawn_pixel.z)
 		var exit_world: Vector3 = heightmap_corner + Vector3(maps.exit_pixel.x, maps.exit_pixel.y, maps.exit_pixel.z)
+		# The road starts on the very edge of the map: the player starts just inside the walls.
+		spawn_world = WorldBounds.clamp_inside(spawn_world, heightmap_corner)
 		player.global_position = spawn_world
 		var facing: Vector3 = exit_world - spawn_world
 		facing.y = 0.0 # look_at with a tilted target would pitch/roll the body itself, not just yaw it

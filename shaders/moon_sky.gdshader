@@ -28,6 +28,81 @@ uniform float moon_size : hint_range(0.5, 45.0, 0.1) = 8.0;
 uniform float moon_brightness : hint_range(0.0, 32.0, 0.05) = 12.0;
 uniform float moon_rotation : hint_range(-180.0, 180.0, 0.5) = 0.0;
 
+// Stars: the sky is cut into cells (star_cells x star_cells on each of the six faces of a cube
+// around the viewer), and each cell holds one possible star with its own fixed place, brightness,
+// colour and rank. A star shows once star_amount has passed its rank, so raising star_amount adds
+// stars and never moves or removes the ones already there. Drawn under the moon's glow, the moon
+// and the clouds.
+uniform float star_amount : hint_range(0.0, 1.0, 0.005) = 0.3;
+uniform float star_cells : hint_range(4.0, 96.0, 1.0) = 28.0;
+// Radius of the brightest stars, in degrees.
+uniform float star_size : hint_range(0.02, 1.0, 0.01) = 0.16;
+uniform float star_brightness : hint_range(0.0, 32.0, 0.05) = 4.0;
+// The dimmest stars, as a share of the brightest ones' radius and brightness. The painterly
+// effect removes dots smaller than its brush whatever their brightness, so the size floor is the
+// one that keeps the dim stars on screen.
+uniform float star_min_size : hint_range(0.1, 1.0, 0.01) = 0.85;
+uniform float star_min_brightness : hint_range(0.0, 1.0, 0.01) = 0.5;
+// Higher = fewer bright stars among the dim ones.
+uniform float star_dim_bias : hint_range(1.0, 12.0, 0.1) = 5.0;
+// 0 = all white, 1 = from blue-white to warm.
+uniform float star_color_variety : hint_range(0.0, 1.0, 0.01) = 0.6;
+// Share of a star's brightness that flickers, and how fast (rad/s).
+uniform float star_twinkle : hint_range(0.0, 1.0, 0.01) = 0.35;
+uniform float star_twinkle_speed : hint_range(0.0, 20.0, 0.1) = 3.0;
+// Stars fade out below this height above the horizon (EYEDIR.y).
+uniform float star_horizon_fade : hint_range(0.01, 0.5, 0.01) = 0.15;
+
+// Four random numbers in 0..1 for a cell (Dave Hoskins' hash43).
+vec4 star_hash(vec3 p) {
+	vec4 p4 = fract(p.xyzx * vec4(0.1031, 0.1030, 0.0973, 0.1099));
+	p4 += dot(p4, p4.wzxy + 33.33);
+	return fract((p4.xxyz + p4.yzzw) * p4.zywx);
+}
+
+// The light of the star whose cell the direction `dir` falls in.
+vec3 star_light(vec3 dir) {
+	// The cube face `dir` points at: `major` is its axis, `side_u` / `side_v` span the face.
+	vec3 a = abs(dir);
+	vec3 major;
+	vec3 side_u;
+	vec3 side_v;
+	if (a.x >= a.y && a.x >= a.z) {
+		major = vec3(sign(dir.x), 0.0, 0.0);
+		side_u = vec3(0.0, 1.0, 0.0);
+		side_v = vec3(0.0, 0.0, 1.0);
+	} else if (a.y >= a.z) {
+		major = vec3(0.0, sign(dir.y), 0.0);
+		side_u = vec3(1.0, 0.0, 0.0);
+		side_v = vec3(0.0, 0.0, 1.0);
+	} else {
+		major = vec3(0.0, 0.0, sign(dir.z));
+		side_u = vec3(1.0, 0.0, 0.0);
+		side_v = vec3(0.0, 1.0, 0.0);
+	}
+	// Position on the face by angle (-1..1), so cells near the face's corners are not much smaller.
+	vec2 face_pos = atan(vec2(dot(dir, side_u), dot(dir, side_v)) / dot(dir, major)) * (4.0 / PI);
+	vec2 cell = floor((face_pos * 0.5 + 0.5) * star_cells);
+	vec4 rnd = star_hash(vec3(cell, dot(major, vec3(1.0, 2.0, 3.0)) + 4.0));
+	float rnd_a = fract(rnd.w * 17.3);
+	float rnd_b = fract(rnd.w * 91.7);
+
+	float rank = pow(rnd.w, star_dim_bias);
+	float bright = mix(star_min_brightness, 1.0, rank);
+	float radius = radians(star_size) * mix(star_min_size, 1.0, rank);
+	// The star keeps its whole disc inside its cell, so no neighbouring cell has to be checked.
+	float margin = min(radians(star_size) / (PI * 0.5 / star_cells), 0.45);
+	vec2 star_pos = (cell + margin + rnd.xy * (1.0 - 2.0 * margin)) / star_cells * 2.0 - 1.0;
+	vec2 t = tan(star_pos * (PI / 4.0));
+	vec3 star_dir = normalize(major + side_u * t.x + side_v * t.y);
+
+	float falloff = clamp(1.0 - length(dir - star_dir) / radius, 0.0, 1.0);
+	float shown = clamp((star_amount - rnd.z) / 0.03, 0.0, 1.0);
+	float twinkle = 1.0 + star_twinkle * sin(TIME * star_twinkle_speed * (0.6 + 0.8 * rnd_a) + rnd_b * TAU);
+	vec3 tint = mix(vec3(1.0), mix(vec3(0.75, 0.85, 1.0), vec3(1.0, 0.85, 0.7), rnd_a), star_color_variety);
+	return tint * (star_brightness * bright * falloff * falloff * shown * twinkle);
+}
+
 // Clouds: two layers of one noise texture drifting across a flattened dome, drawn over the sky,
 // the glow and the moon. scripts/cloud_sky.gd supplies the texture and the drift and switches them
 // on (cloud_amount), and repeats cloud_density() on the CPU to dim the moonlight when a cloud is
@@ -66,6 +141,11 @@ void sky() {
 	float c = 1.0 - v_angle / (PI * 0.5);
 	vec3 sky = mix(sky_horizon_color, sky_top_color, clamp(1.0 - pow(1.0 - c, 1.0 / sky_curve), 0.0, 1.0));
 	sky *= sky_energy_multiplier;
+
+	// Not in the sky's reflection map: points this small only add noise to it.
+	if (star_amount > 0.0 && EYEDIR.y > 0.0 && !AT_CUBEMAP_PASS) {
+		sky += star_light(EYEDIR) * smoothstep(0.0, star_horizon_fade, EYEDIR.y);
+	}
 
 	if (LIGHT0_ENABLED) {
 		float facing = dot(LIGHT0_DIRECTION, EYEDIR);
