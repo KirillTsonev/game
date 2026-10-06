@@ -512,6 +512,63 @@ func debug_print_lod_meshes() -> String:
 		root.free()
 	return "\n".join(out)
 
+## Diagnostic (read-only): for every mesh asset in terrain_assets.tres, every LOD mesh and surface,
+## the triangles whose three corners repeat an earlier triangle of the same surface (same test as
+## `_without_duplicate_triangles()` in setup_tree_assets.gd, corners rounded to 1 mm). "flipped" =
+## the copy faces the other way (a back-to-back card), "same" = it faces the same way.
+## `only_dup` = true lists only the surfaces that have duplicates.
+func debug_print_duplicate_triangles(only_dup: bool = false) -> String:
+	var out: Array[String] = []
+	var assets: Terrain3DAssets = ResourceLoader.load(ASSETS_PATH, "", ResourceLoader.CACHE_MODE_IGNORE)
+	for id in assets.get_mesh_count():
+		var a: Terrain3DMeshAsset = assets.get_mesh_asset(id)
+		if a == null or a.get_scene_file() == null:
+			continue
+		var root := a.get_scene_file().instantiate()
+		var nodes: Array[Node] = root.find_children("*", "MeshInstance3D", true, false)
+		if root is MeshInstance3D:
+			nodes.push_front(root)
+		for mi: MeshInstance3D in nodes:
+			if mi.mesh == null:
+				continue
+			for si in mi.mesh.get_surface_count():
+				if mi.mesh.surface_get_primitive_type(si) != Mesh.PRIMITIVE_TRIANGLES:
+					continue
+				var arr := mi.mesh.surface_get_arrays(si)
+				var verts: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+				var idx: PackedInt32Array = arr[Mesh.ARRAY_INDEX] if arr[Mesh.ARRAY_INDEX] != null else PackedInt32Array(range(verts.size()))
+				var seen := {}
+				var flipped := 0
+				var same := 0
+				for t in range(0, idx.size(), 3):
+					var corners: Array[Vector3i] = []
+					for k in 3:
+						corners.append(Vector3i((verts[idx[t + k]] * 1000.0).round()))
+					corners.sort()
+					var g := (verts[idx[t + 1]] - verts[idx[t]]).cross(verts[idx[t + 2]] - verts[idx[t]])
+					if seen.has(corners):
+						if g.dot(seen[corners]) < 0.0:
+							flipped += 1
+						else:
+							same += 1
+						continue
+					seen[corners] = g
+				if only_dup and flipped + same == 0:
+					continue
+				var m: Material = mi.material_override if mi.material_override else (mi.get_surface_override_material(si) if mi.get_surface_override_material(si) else mi.mesh.surface_get_material(si))
+				if a.get_material_override():
+					m = a.get_material_override()
+				var mat := "no material"
+				if m is ShaderMaterial and (m as ShaderMaterial).shader:
+					mat = (m as ShaderMaterial).shader.resource_path.get_file()
+				elif m is BaseMaterial3D:
+					mat = "standard, cull %d" % (m as BaseMaterial3D).cull_mode
+				var tris := idx.size() / 3
+				out.append("%d %s / %s s%d: %d tris, duplicates %d (%d flipped, %d same) = %d %% | %s" % [
+					id, a.get_name(), mi.name, si, tris, flipped + same, flipped, same, roundi(100.0 * (flipped + same) / maxi(tris, 1)), mat])
+		root.free()
+	return "\n".join(out)
+
 func _tri_count(mesh: Mesh) -> int:
 	var tris := 0
 	for si in mesh.get_surface_count():

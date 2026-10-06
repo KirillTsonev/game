@@ -11,8 +11,32 @@ How to run and compare benchmarks: the "Performance benchmark" section of `CLAUD
   This is the baseline for every later comparison.
 - Setup: 1906x942 window, 3D render scale 0.85, RTX 3070 Laptop GPU, Godot 4.7.2, seed 858829582.
   Fullscreen at a higher resolution will be slower than these figures.
-- **Baseline for later comparisons, since 2026-10-05 15:28:
-  `20261005_152817_ba7cfd15_baseline4.json`.** Against `baseline3`: the painterly effect's sum
+- **Baseline for later comparisons, since 2026-10-06:
+  `20261006_112323_bd39ed6d_full_after_trees.json`** (full run, one run only; duplicate leaf cards
+  dropped from the trees, sun angular distance 0). Against `baseline4`:
+
+  | Station        | GPU ms       | Frame ms       | Render CPU ms | Draws |
+  | -------------- | ------------ | -------------- | ------------- | ----- |
+  | spawn_ahead    | 9.48 -> 6.75 | 11.93 -> 10.55 | 8.61 -> 7.62  | 8,213 |
+  | exit_look_back | 9.35 -> 7.19 | 10.96 -> 9.18  | 7.84 -> 6.50  | 7,248 |
+  | road_open      | 9.59 -> 7.06 | 10.16 -> 8.90  | 6.73 -> 6.29  | 7,082 |
+  | forest_dense   | 9.01 -> 6.91 | 9.62 -> 7.95   | 6.22 -> 5.28  | 5,865 |
+  | road_mid       | 8.45 -> 6.52 | 8.91 -> 7.14   | 5.07 -> 4.23  | 4,992 |
+  | cliff_face     | 7.78 -> 6.20 | 8.19 -> 6.70   | 3.02 -> 2.47  | 2,458 |
+  | spawn_ground   | 5.40 -> 3.89 | on the 165 FPS limit | 2.61 -> 2.54 | 3,622 |
+
+  Road walk: 10.19 -> 8.93 ms, p99 12.42 -> 11.82 ms, GPU 9.36 -> 7.05 ms. Draws are unchanged
+  (the tree fix removed triangles, not draws).
+
+  What each layer costs at spawn_ahead in this run (frame ms saved with the layer off / draws /
+  GPU ms). The view is CPU-limited, so the frame figure is roughly the layer's CPU cost:
+  understory 3.61 / 2,186 / 0.36; trees 3.07 / 3,115 / 1.80; saplings 1.44 / 1,062 / about 0;
+  rocks 1.21 / 581 / about 0; deadfall 0.74 / 468 / about 0; flowers 0.68 / 562 / about 0.
+  Sun shadows off: 2.34 / 4,057 / 1.73. "All layers off" reads 4.56 ms only because the frame
+  then sits on the 165 FPS limit. **Trees issue more draws than the understory**, and the
+  saplings cost 1.44 ms for 725 plants (790 nodes).
+- Baseline before that, since 2026-10-05 15:28:
+  `20261005_152817_ba7cfd15_baseline4.json`. Against `baseline3`: the painterly effect's sum
   passes rewritten (step 5), and the ferns' near LOD and shadows to 60 m instead of 50.
   GPU ms baseline3 -> baseline4: spawn_ahead 10.59 -> 9.48, road_open 10.31 -> 9.59,
   exit_look_back 10.05 -> 9.35, forest_dense 9.55 -> 9.01, road_mid 9.12 -> 8.45, cliff_face
