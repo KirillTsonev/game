@@ -445,6 +445,24 @@ Not yet judged in-game (look, brightness, counts); render cost not measured.
   - Rejects: slope, road, rocks / cliffs / outcrops, stumps and logs. No collision.
   - All knobs are the constants at the top of the module. "Flowers" in the J layer panel toggles
     the layer.
+- **Drawing (2026-10-06): wood sorrel, dandelion and clover are drawn by `PlantField`**
+  (`scripts/terrain/plant_field.gd` + `shaders/foliage/plant_cull.glsl`), not by Terrain3D's
+  instancer: 12,829 plants in 21 draws (one per mesh and LOD) instead of one node per 32 m cell,
+  mesh and LOD. A compute shader picks each plant's LOD from its own distance and frustum-culls it
+  every frame. Meshes, materials and ranges still come from the Terrain3D mesh asset, so the setup
+  tool is unchanged. LODs now switch per plant at exactly 25 m, and the plants are culled at
+  exactly 60 m; Terrain3D switched whole cells, about 22 m either side of those numbers.
+  The poppies cast shadows: `PlantField` draws them too (36 draws for all 18 flower meshes), and
+  their Terrain3D copies stay as shadow casters only -- `PlantField.claim_shadow_casters()` in
+  `terrain_gen.gd` switches the mesh assets to "shadows only" for the run, before anything is
+  scattered (the asset file is not changed). So a poppy's mesh switches per plant at 40 / 120 m
+  while its shadow still switches per cell. Since 2026-10-06 the poppies cast from their near mesh
+  only (`last_shadow_lod` 0, was 2): shadows to 40 m instead of the 150 m shadow range. `PlantField.submit()` refuses unclaimed shadow
+  casters, multi-surface meshes and material overrides. Compare in game: PerfDebug **U** switches
+  between Terrain3D's drawing and this one (a hitch: Terrain3D rebuilds its nodes; the J panel's
+  hidden layers are re-hidden afterwards). Start everything on Terrain3D: user argument
+  `--plants-terrain3d`. Drawn counts at start: `--plants-debug`. Kirill checked both steps in game
+  (2026-10-06); measurements: `docs/performance_findings.md` step 8.
 - **Visibility pass (user, 2026-10-04: "they get lost among the other foliage"):** colour strength
   1.6 (`FLOWER_SATURATION` in the setup tool -> the `saturation` uniform, new in
   `foliage_cutout.gdshaderinc`, default 1.0 for every other plant; the poppy impostors get the

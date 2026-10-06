@@ -133,12 +133,14 @@ const UNDERSTORY_ASSETS := [
 	{"id": 76, "name": "WoodSorrelF", "dir": "wood_sorrel", "mat": "wood_sorrel", "lods": ["VarF_Near", "VarF_Far"], "ranges": [25.0, 60.0], "last_shadow_lod": 0, "shadows": false},
 	{"id": 77, "name": "WoodSorrelG", "dir": "wood_sorrel", "mat": "wood_sorrel", "lods": ["VarG_Near", "VarG_Far"], "ranges": [25.0, 60.0], "last_shadow_lod": 0, "shadows": false},
 	{"id": 78, "name": "WoodSorrelH", "dir": "wood_sorrel", "mat": "wood_sorrel", "lods": ["VarH_Near", "VarH_Far"], "ranges": [25.0, 60.0], "last_shadow_lod": 0, "shadows": false},
-	# Poppy: Near 166-1474 tris to 40 m, Far (25 %) to 120 m, then the impostor.
-	{"id": 79, "name": "PoppyA", "dir": "poppy", "mat": "poppy", "lods": ["VarA_Near", "VarA_Far", "IMPOSTOR"], "ranges": [40.0, 120.0, 0.0], "last_shadow_lod": 2},
-	{"id": 80, "name": "PoppyB", "dir": "poppy", "mat": "poppy", "lods": ["VarB_Near", "VarB_Far", "IMPOSTOR"], "ranges": [40.0, 120.0, 0.0], "last_shadow_lod": 2},
-	{"id": 81, "name": "PoppyC", "dir": "poppy", "mat": "poppy", "lods": ["VarC_Near", "VarC_Far", "IMPOSTOR"], "ranges": [40.0, 120.0, 0.0], "last_shadow_lod": 2},
-	{"id": 82, "name": "PoppyD", "dir": "poppy", "mat": "poppy", "lods": ["VarD_Near", "VarD_Far", "IMPOSTOR"], "ranges": [40.0, 120.0, 0.0], "last_shadow_lod": 2},
-	{"id": 83, "name": "PoppyH", "dir": "poppy", "mat": "poppy", "lods": ["VarH_Near", "VarH_Far", "IMPOSTOR"], "ranges": [40.0, 120.0, 0.0], "last_shadow_lod": 2},
+	# Poppy: Near 166-1474 tris to 40 m, Far (25 %) to 120 m, then the impostor. Shadows from the near
+	# mesh only since 2026-10-06 (was all three LODs, to the 150 m shadow range: ~290 shadow draws at
+	# spawn_ahead for 655 plants). Kirill: "can always change later" -- restore 2 and run apply_shadow_lods().
+	{"id": 79, "name": "PoppyA", "dir": "poppy", "mat": "poppy", "lods": ["VarA_Near", "VarA_Far", "IMPOSTOR"], "ranges": [40.0, 120.0, 0.0], "last_shadow_lod": 0},
+	{"id": 80, "name": "PoppyB", "dir": "poppy", "mat": "poppy", "lods": ["VarB_Near", "VarB_Far", "IMPOSTOR"], "ranges": [40.0, 120.0, 0.0], "last_shadow_lod": 0},
+	{"id": 81, "name": "PoppyC", "dir": "poppy", "mat": "poppy", "lods": ["VarC_Near", "VarC_Far", "IMPOSTOR"], "ranges": [40.0, 120.0, 0.0], "last_shadow_lod": 0},
+	{"id": 82, "name": "PoppyD", "dir": "poppy", "mat": "poppy", "lods": ["VarD_Near", "VarD_Far", "IMPOSTOR"], "ranges": [40.0, 120.0, 0.0], "last_shadow_lod": 0},
+	{"id": 83, "name": "PoppyH", "dir": "poppy", "mat": "poppy", "lods": ["VarH_Near", "VarH_Far", "IMPOSTOR"], "ranges": [40.0, 120.0, 0.0], "last_shadow_lod": 0},
 	# Dandelion clump (369 tris) and the four clover carpet pieces (581-777 tris): one LOD, culled at 60 m.
 	{"id": 84, "name": "Dandelion", "dir": "dandelion", "mat": "dandelion", "lods": ["VarA_Near"], "ranges": [60.0], "last_shadow_lod": 0, "shadows": false},
 	{"id": 85, "name": "CloverA", "dir": "clover", "mat": "clover", "lods": ["VarA_Near"], "ranges": [60.0], "last_shadow_lod": 0, "shadows": false},

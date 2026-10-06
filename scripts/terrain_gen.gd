@@ -15,6 +15,7 @@
 ##   UnderstoryScatter understory_scatter.gd  shrubs + ferns, density from canopy + shaded cliff feet
 ##   SaplingScatter  sapling_scatter.gd  mid-storey saplings (scaled-down canopy trees) at grove edges
 ##   FlowerScatter   flower_scatter.gd   wood sorrel under canopy; poppies, dandelions, clover in the open
+##   PlantField      plant_field.gd      (a node, like GrassField) GPU-culled drawing of plants handed over by the scatter modules
 ##   TerrainUtil     terrain_util.gd     height/normal sampling, zone ranges, mesh helpers
 ## New system -> new module there (class_name + extends RefCounted + static funcs), called from
 ## _ready() below. Per-run mutable state = static vars reset in the module's reset_run_state().
@@ -32,6 +33,7 @@ func _ready() -> void:
 	UnderstoryScatter.reset_run_state()
 	SaplingScatter.reset_run_state()
 	FlowerScatter.reset_run_state()
+	PlantField.reset_run_state()
 	DeadfallScatter.reset_run_state()
 	GrassScatter.reset_run_state()
 	# Whole-_ready() timing (2026-09-16): the earlier per-stage prints only
@@ -114,6 +116,9 @@ func _ready() -> void:
 	print("TERRAIN_GEN: imported. region_count=%d height_range=%s" % [data.get_region_count(), height_range])
 	_log_stage("Terrain3D import+height_range", t_ready_stage)
 	t_ready_stage = Time.get_ticks_msec()
+	# Shadow-casting plants PlantField will draw: their instancer copies become shadow casters only.
+	# Here, while the instancer is still empty -- each change makes Terrain3D rebuild its nodes.
+	PlantField.claim_shadow_casters(terrain.get_assets(), FlowerScatter.POPPY_IDS + UnderstoryScatter.UNDERSTORY_MESH_IDS)
 
 	# Terrain3DData.import_images()'s `global_position` argument does NOT
 	# behave like a simple "center of the whole image, expand symmetrically
@@ -235,6 +240,8 @@ func _ready() -> void:
 	var flower_rng := RandomNumberGenerator.new()
 	flower_rng.seed = resolved_seed ^ 0x464C5752 # 'FLWR' salt
 	FlowerScatter.scatter_flowers(terrain, maps.heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, heightmap_corner, flower_rng, maps.road_weight, maps.cliff_dressing_plan, maps.cliff_dressing_top_profiles, maps.outcrop_plan)
+	# The GPU-culled renderer for the plants the scatter stages handed to PlantField.submit().
+	PlantField.spawn(get_parent())
 	_log_stage("flower scattering", t_ready_stage)
 	t_ready_stage = Time.get_ticks_msec()
 

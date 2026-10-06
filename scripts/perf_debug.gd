@@ -9,6 +9,8 @@ extends Node
 ##   J = layer panel (scripts/debug/layer_toggle_panel.gd): checkboxes to show/hide the grass,
 ##       tree, rock, fern/shrub and deadfall layers -- A/B their FPS cost. Same cursor handling as Y.
 ##   K = grass culling readback: tufts actually drawn per variant vs buffer capacity.
+##   U = plant renderer A/B (scripts/terrain/plant_field.gd): moves the GPU-culled plants back to
+##       Terrain3D's instancer and here again, and prints how many are drawn. A short hitch each time.
 ##   Y = grass tuning panel (scripts/debug/grass_tuning_panel.gd): distance bands + widening.
 ##       Y opens it with the cursor; click outside to look around again; Y = cursor back / close.
 ##   P = GPU/CPU frame time: averages the viewport's measured render time over TIMING_FRAMES frames
@@ -108,6 +110,22 @@ func _input(event: InputEvent) -> void:
 		var field := get_tree().current_scene.get_node_or_null("GrassField")
 		if field:
 			field.request_debug_counts() # prints "[Grass] drawn tufts ..." from the render thread
+	elif event.physical_keycode == KEY_U:
+		var plants := get_tree().current_scene.get_node_or_null(PlantField.NODE_NAME) as PlantField
+		if plants:
+			# The switch makes Terrain3D rebuild its nodes, all visible, once per shadow-casting
+			# mesh: the J panel re-hides what it has switched off after every rebuild.
+			var rehide := func() -> void:
+				if is_instance_valid(_layer_panel):
+					_layer_panel.reapply_hidden()
+			print("[Plants] switching -- about 5 s at a few FPS while Terrain3D rebuilds its nodes...")
+			print(await plants.set_gpu_driven(not plants.is_gpu_driven(), rehide))
+			await get_tree().process_frame
+			rehide.call()
+			if is_instance_valid(plants):
+				plants.request_debug_counts()
+		else:
+			print("[Plants] no PlantField in this run (started with --plants-terrain3d?)")
 	elif event.physical_keycode == KEY_H:
 		var player := get_tree().current_scene.get_node_or_null("Player") as Node3D
 		if player:

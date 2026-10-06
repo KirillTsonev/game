@@ -178,8 +178,13 @@ static func scatter_understory(parent_node: Node, terrain: Terrain3D, heights: P
 		colors.fill(Color.WHITE)
 		colors_by_mesh[id] = colors
 
+	# 2026-10-06: PlantField draws the plants (one draw per mesh and LOD). They cast shadows, so
+	# submit() returns false and the instancer still gets them -- as shadow casters only, see
+	# PlantField.claim_shadow_casters() in terrain_gen.gd.
 	for id in UNDERSTORY_MESH_IDS:
 		if not (transforms_by_mesh[id] as Array).is_empty():
+			if assets and PlantField.submit(&"understory", id, assets.get_mesh_asset(id), transforms_by_mesh[id]):
+				continue
 			instancer.add_transforms(id, transforms_by_mesh[id], colors_by_mesh[id], true)
 
 	# Placement checksum: the same seed must print the same number on every run.

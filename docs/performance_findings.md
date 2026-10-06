@@ -280,7 +280,7 @@ left blank where nothing supports an estimate yet.
 | 5   | Cheaper screen-space settings                                           | conclusion 6           | SSAO off and painterly rewritten (-0.6 ms) 2026-10-05; MSAA and the other five effects open |
 | 6   | Startup time                                                            | conclusion 8           | cheap wins done: 16.3 s -> 8.8 s to first frame |
 | 7   | Cheaper leaf shading                                                    | conclusions 2, 6       | worth a trial (step 1: part of the view cost is per pixel) |
-| 8   | GPU-driven drawing for the understory view pass                         | conclusion 7           | deferred; reassess after step 3                 |
+| 8   | GPU-driven drawing for the understory view pass                         | conclusion 7           | started 2026-10-06: `PlantField` built, flowers without shadows moved to it; not yet checked in game or benchmarked |
 
 Steps 1-3 were revised and steps 7-8 added on 2026-10-05, after the web research recorded under
 "Research" below.
@@ -819,6 +819,100 @@ Assessed 2026-10-05: could trees and ferns be culled on the GPU the way the gras
   foliage shaders, and rewiring the layer panel and the benchmark toggles.
 - When: after steps 1-3, for the understory view pass only, and only if the draw count has become
   the limit (conclusion 7). Not for trees.
+
+**Reassessed and started 2026-10-06.** Kirill's target is now "as fast as possible without
+compromising visual fidelity", and the full run of that day shows spawn_ahead and exit_look_back
+CPU-limited, with trees (3,115 draws) ahead of the understory (2,186). Plan, each phase checked in
+game by Kirill and measured with alternating benchmark pairs before the next:
+
+1. Flowers that cast no shadows (sorrel, dandelion, clover: 13 meshes, 12,829 plants). **Built
+   2026-10-06** as `PlantField` (`scripts/terrain/plant_field.gd`, `shaders/foliage/plant_cull.glsl`;
+   how it works: `docs/vegetation.md`, "Flowers"). 21 draws in all. A test launch ran without errors
+   and drew 414 of the 12,829 at the spawn view. Kirill checked it in game the same day ("looks
+   good"; the flowers now fill a full 60 m disc, kept).
+   **Measured: no gain in frame time.** Three alternating targeted pairs
+   (`..._pf_old_1..3`, `..._pf_new_1..3`, `--bench-only=layer:flowers`), means of three:
+
+   | Station        | Frame ms       | Render CPU ms | GPU ms       | Draws          |
+   | -------------- | -------------- | ------------- | ------------ | -------------- |
+   | spawn_ahead    | 10.92 -> 11.41 | 7.88 -> 8.16  | 6.95 -> 6.87 | 8,213 -> 8,189 |
+   | exit_look_back | 9.72 -> 9.90   | 6.96 -> 6.97  | 7.40 -> 7.39 | 7,248 -> 7,217 |
+   | road_open      | 9.70 -> 9.31   | 6.90 -> 6.51  | 7.11 -> 7.28 | 7,082 -> 7,062 |
+   | forest_dense   | 8.37 -> 8.64   | 5.78 -> 5.86  | 7.16 -> 7.10 | 5,865 -> 5,831 |
+   | road_mid       | 7.50 -> 7.52   | 4.60 -> 4.48  | 6.71 -> 6.78 | 4,992 -> 4,970 |
+   | cliff_face     | 6.97 -> 7.03   | 2.68 -> 2.62  | 6.35 -> 6.39 | 2,458 -> 2,434 |
+
+   Every difference is inside the spread of the three runs (spawn_ahead: 10.50-11.35 against
+   10.69-12.15). Road walk 9.55 -> 9.68 ms. Only 20-34 draws went, because these 13 meshes were
+   never the flowers' draws: with them gone, hiding the flower layer still removes 534 draws at
+   spawn_ahead (558 before) -- **the 655 poppies are about 510 of the flower layer's draws.** They
+   have an impostor LOD that is never culled and cast shadows from all three LODs, so their nodes
+   are drawn in every cell in view and again in the shadow passes. The sorrel, dandelion and
+   clover nodes were culled at 60 m and cast nothing. What did change: 2,233 fewer nodes
+   (18,701 -> 16,468) and flower scattering 220 -> 165 ms at startup.
+   Lesson for the next phases: a layer's draws come from its never-culled LODs and its shadow
+   casting, not from its plant count. The understory has both (impostors at any distance).
+   Reading the reports: the "tris" columns count a GPU-culled MultiMesh at its full buffer size,
+   so they read 4.7 M higher with `PlantField` although GPU time is unchanged.
+2. Understory view pass, plus the poppies. Terrain3D keeps casting their shadows: the mesh asset
+   is switched to "shadows only" for the run (`PlantField.claim_shadow_casters()`, called before
+   anything is scattered -- done later it costs 0.3 s per asset, because Terrain3D rebuilds its
+   nodes on every such change).
+   **Poppies done 2026-10-06** (5 meshes, 655 plants); Kirill compared old and new in game: no
+   visible difference. Terrain3D honours the setting (all 744 poppy nodes read "shadows only").
+   One targeted run, `..._pf2_poppies_1`, against the three `pf_old` runs: draws at spawn_ahead
+   8,213 -> 7,982, exit_look_back 7,248 -> 7,020, road_open 7,082 -> 6,903, forest_dense
+   5,865 -> 5,707. Frame time not resolved by one run (spawn_ahead read 11.72 ms against
+   10.50-11.35). Hiding the flower layer still removes 327 draws at spawn_ahead, 36 of them
+   PlantField's: **about 290 of the poppies' 510 draws were shadow draws and remain** (they cast
+   from all three LODs, impostor included, out to the 150 m shadow range). Casting from the near
+   mesh only, like the ferns since step 3, removes most of them: **done the same day on Kirill's
+   decision** ("can always change later") -- `last_shadow_lod` 2 -> 0 for the five poppies, so
+   their shadows stop at 40 m (per cell) instead of 150 m. Terrain3D then keeps 248 poppy nodes
+   instead of 744. Not yet checked in game, not yet measured. To undo: restore 2 in
+   `UNDERSTORY_ASSETS` and run `apply_shadow_lods([["poppy"]])`.
+   **Understory built 2026-10-06** (16 meshes, 22,442 plants): `UnderstoryScatter` hands them to
+   `PlantField.submit()`, and their Terrain3D copies stay as shadow casters (2,224 near-LOD nodes,
+   all "shadows only"; was 5,419 nodes). `PlantField` now draws 35,926 plants of 34 meshes in 80
+   draws. A test launch ran without errors, same placement checksum, no startup cost. Kirill
+   compared old and new in game: "the shrubs and ferns seem to look the same".
+   **Measured: 1-2.6 ms of frame time at the CPU-limited views.** Three alternating targeted
+   pairs (`..._us_old_1..3`, `..._us_new_1..3`, `--bench-only=layer:understory,layer:flowers`; both
+   sides have the 40 m poppy shadows), means of three:
+
+   | Station        | Frame ms       | Render CPU ms | GPU ms       | Draws          |
+   | -------------- | -------------- | ------------- | ------------ | -------------- |
+   | spawn_ahead    | 10.96 -> 8.33  | 7.94 -> 4.94  | 6.99 -> 7.70 | 7,925 -> 5,847 |
+   | exit_look_back | 10.29 -> 8.37  | 7.41 -> 4.79  | 7.21 -> 7.82 | 7,033 -> 5,063 |
+   | road_open      | 9.09 -> 8.12   | 6.45 -> 4.71  | 7.31 -> 7.51 | 6,811 -> 5,245 |
+   | forest_dense   | 8.31 -> 7.88   | 5.70 -> 3.94  | 7.15 -> 7.29 | 5,553 -> 4,340 |
+   | road_mid       | 7.51 -> 7.36   | 4.59 -> 3.23  | 6.74 -> 6.79 | 4,744 -> 3,839 |
+   | cliff_face     | 6.98 -> 7.04   | 2.61 -> 2.03  | 6.35 -> 6.40 | 2,397 -> 2,138 |
+   | spawn_sky      | on the limiter | 0.75 -> 0.76  | 1.75 -> 1.91 | 265 -> 345     |
+
+   The runs agree closely (spawn_ahead: 10.61-11.49 against 8.29-8.36). Road walk 9.32 -> 8.01 ms,
+   p99 12.33 -> 9.59 ms (one of the three new walks had a single 43 ms frame; the other two peaked
+   at 11.4 and 11.2 ms). Nodes 18,701 -> 12,529.
+   - **Every station is now GPU-limited** (frame within 0.7 ms of GPU time), spawn_ahead and
+     exit_look_back included.
+   - **GPU time rose 0.2-0.7 ms at the heavy views.** Hiding the understory saves 0.95 ms of GPU
+     at spawn_ahead where it saved 0.35 (exit_look_back 1.52 against 1.03). Cause not established.
+     Suspect: draw order -- Terrain3D's cells were drawn front to back, so near plants hid far
+     ones before their pixels were shaded; one MultiMesh per LOD is drawn in whatever order the
+     cull wrote it. To test: give the near-LOD draws priority over the impostor draws.
+   - `PlantField`'s 80 draws are issued whatever the camera sees (spawn_sky: +80 draws, +0.16 ms
+     of GPU looking at the sky).
+   - The old side's draws are 288 lower than in `full_after_trees` (8,213): that is the poppy
+     shadow limit.
+3. Trees and saplings, view pass. Their meshes have 2-3 surfaces, and an indirect MultiMesh has
+   one draw command per surface: `plant_cull.glsl` writes only the first one's instance count, so
+   this needs a second pass that copies it to the others.
+4. Tree shadow draws (2,000 or more remain after phase 3). Open design question: one buffer of
+   all casters makes every cascade draw every tree in range. Prototype before deciding.
+
+What changes visually: LODs switch per plant at exactly the asset's range instead of per 32 m
+cell (about 22 m either side of it). From phase 2 on, the view LOD is per plant while the shadow
+stays per cell, so near the range a plant can show one LOD and cast the other's shadow.
 
 ## Research (2026-10-05)
 

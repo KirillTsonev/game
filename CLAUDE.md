@@ -855,6 +855,13 @@ optimisation; never judge by GPU utilisation %.
   with no error (stack overflow inside Terrain3D, exit code 0xC00000FD). To hide a mesh layer,
   hide the instancer's nodes instead -- they are named `MMI3D_C<x>_<z>_M<mesh id>_L<lod>` under
   `Terrain3D/MMI/Region*/` (see `LayerTogglePanel._set_meshes_shown`).
+- The same silent exit (0xC00000FD) follows **changing many mesh assets in one frame**: 21
+  `Terrain3DMeshAsset.set_cast_shadows()` calls in a row closed the game a frame later
+  (2026-10-06; 5 in a row were fine). Each call makes Terrain3D rebuild its nodes (about 0.3 s once
+  the world is scattered). Change them before anything is added to the instancer
+  (`PlantField.claim_shadow_casters()`), or one per frame (`PlantField.set_gpu_driven()`).
+  `--plants-debug-toggle` runs that switch automatically in a command-line launch and prints
+  `toggle test: PASSED`.
 - The game process also exits with an access violation (0xC0000005) on a normal `quit()`; the
   report is already written by then. Not investigated.
 
@@ -892,6 +899,13 @@ and functions called across modules lost their leading underscore
 - Per-run mutable state (caches, debug buffers) = `static var`, reset in the module's
   `reset_run_state()`, which `_ready()` calls first.
 - Functions that add nodes to the scene take `parent_node: Node` (WorldGenerator passes `get_parent()`).
+- Since 2026-10-06 `PlantField` (`scripts/terrain/plant_field.gd`, a node like `GrassField`) draws
+  the plants a scatter module hands to `PlantField.submit()` instead of the instancer: one
+  indirect MultiMesh per mesh and LOD, LOD and frustum culling per plant in a compute shader. These
+  plants have no `MMI3D_*` nodes, so code that hides a layer must also call
+  `PlantField.set_layer_shown()` (the J panel and the benchmark do). `submit()` refuses shadow
+  casters and multi-surface meshes. `--plants-terrain3d` starts the game without it. See
+  `docs/vegetation.md` ("Flowers") and `docs/performance_findings.md` step 8.
 - Since 2026-10-05 some stages run their hot loop in row bands on `WorkerThreadPool`
   (ground paint, grass bake, understory, flowers), noise images are rendered together
   (`GrassScatter.noise_images_parallel`), the canopy grid is built once per run

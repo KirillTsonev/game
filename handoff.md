@@ -6,9 +6,9 @@ Read first: `CLAUDE.md` (pitfalls, how to run the benchmark) and `docs/performan
 
 ## Where the frame stands
 
-- Every benchmark station runs at 6–12 ms on Kirill's laptop (RTX 3070 Laptop GPU), inside the 16.7 ms budget of the 60 FPS cap. The road walk averages 9.5 ms.
-- Two views are CPU-limited: spawn_ahead (11.9 ms) and exit_look_back (10.3 ms), at about 7,200–8,200 draw calls, more than half of them in the shadow passes. Cheaper triangles or pixels do not help them; fewer draw calls and nodes do.
-- The other stations are GPU-limited at 6.4–7.5 ms of GPU.
+- Since the understory moved to `PlantField` (2026-10-06, not committed yet), every benchmark station runs at 6–8.4 ms on Kirill's laptop (RTX 3070 Laptop GPU), inside the 16.7 ms budget of the 60 FPS cap. The road walk averages 8.0 ms.
+- Every station is now GPU-limited, at 6.4–7.8 ms of GPU. spawn_ahead and exit_look_back were CPU-limited before (11.0 and 10.3 ms; now 8.3 and 8.4 ms at 5,850 and 5,060 draw calls).
+- The last full run, `full_after_trees`, predates the plant renderer: its per-layer figures for flowers and understory are out of date.
 - **Target (Kirill, 2026-10-06):** optimise as far as possible without compromising visual fidelity. Anything that changes the look needs his check in game.
 
 ## Next steps, in order
@@ -17,7 +17,13 @@ Read first: `CLAUDE.md` (pitfalls, how to run the benchmark) and `docs/performan
 
 2. **One full benchmark run: done 2026-10-06.** `20261006_112323_bd39ed6d_full_after_trees.json` is the new baseline; figures in `docs/performance_findings.md`. It showed that the trees issue more draw calls than the understory at spawn_ahead (3,115 against 2,186) and that 725 saplings cost 1.44 ms of frame time.
 
-3. **Fewer draw calls for the plants (GPU-driven drawing).** The remaining lever for the CPU-limited views. Scope widened from ferns and bushes to flowers, trees and saplings after the full run. A design proposal was given to Kirill on 2026-10-06; no code until he approves it. Earlier assessment and caveats: `docs/performance_findings.md`, step 8.
+3. **Fewer draw calls for the plants (GPU-driven drawing).** The remaining lever for the CPU-limited views. Scope widened from ferns and bushes to flowers, trees and saplings after the full run. Kirill approved the phased plan on 2026-10-06; the phases, and what each changes visually, are in `docs/performance_findings.md`, step 8.
+   - **Phase 1 is built and Kirill approved the look (2026-10-06), but it gained no frame time.** Wood sorrel, dandelion and clover (12,829 plants) are drawn by `PlantField` in 21 draws. Three alternating benchmark pairs showed every station within run-to-run spread and only 20-34 fewer draws: those plants were culled at 60 m and cast no shadows, so they were never the layer's draws. It did remove 2,233 nodes and 55 ms of startup.
+   - **Phase 2 is built, approved and measured (2026-10-06): poppies, ferns, bushes, lady ferns, elderberries.** `PlantField` draws 35,926 plants of 34 meshes in 80 draws; Terrain3D keeps shadow-only copies of the shadow casters. Three alternating pairs: spawn_ahead 10.96 → 8.33 ms, exit_look_back 10.29 → 8.37 ms, road walk 9.32 → 8.01 ms, about 2,000 fewer draws at the heavy views.
+   - **Open from phase 2: GPU time rose 0.2–0.7 ms at the heavy views.** Cause not established; the suspect is draw order (near plants are no longer drawn before far ones). Test first, since every view is now GPU-limited.
+   - **Poppy shadows stop at 40 m since 2026-10-06** (were 150 m), Kirill's decision, "can always change later".
+   - **Phase 3, not started: trees and saplings, view pass.** Their meshes have 2–3 surfaces, which the cull shader does not handle yet. Phase 4 is the tree shadow draws.
+   - PerfDebug key U switches between the old and the new drawing in a running game. It takes about 5 seconds at a few FPS.
 
 ## Smaller open items
 

@@ -643,6 +643,9 @@ func _set_layer_shown(on: bool, key: StringName) -> void:
 		node.visible = on
 		if node is GrassField: # hidden grass must also stop its GPU cull pass
 			node.process_mode = Node.PROCESS_MODE_INHERIT if on else Node.PROCESS_MODE_DISABLED
+	var plants := _scene.get_node_or_null(PlantField.NODE_NAME) as PlantField
+	if plants: # the layer's GPU-culled meshes are not nodes (2026-10-06)
+		plants.set_layer_shown(key, on)
 
 # ---------------------------------------------------------------- audit
 
@@ -676,6 +679,19 @@ func _audit_layers() -> Array:
 		_layer_assets[&"grass"] = {}
 		for l: Dictionary in field.get("_layers"):
 			_layer_assets[&"grass"][l.name] = {"instances": int(l.capacity), "nodes": 1, "lod_tris": {0: _tri_count(l.mesh)}, "shadow_lods": {}}
+	var plants := _scene.get_node_or_null(PlantField.NODE_NAME) as PlantField
+	if plants: # GPU-culled plants are not nodes either (2026-10-06): one draw per LOD, counted as a node
+		for row: Dictionary in plants.audit_rows():
+			if not _layer_assets.has(row.layer):
+				_layer_assets[row.layer] = {}
+			if not _layer_nodes.has(row.layer):
+				_layer_nodes[row.layer] = []
+			if _layer_assets[row.layer].has(row.label):
+				continue # a shadow caster: its instancer nodes (shadows only) were audited already
+			var lod_tris := {}
+			for i in (row.lod_meshes as Array).size():
+				lod_tris[i] = _tri_count(row.lod_meshes[i])
+			_layer_assets[row.layer][row.label] = {"instances": int(row.instances), "nodes": lod_tris.size(), "lod_tris": lod_tris, "shadow_lods": {}}
 	for key: StringName in [&"cliffs", &"outcrops"]: # one container node each: hide that, not every mesh
 		var container_name: String = CliffInstancer.CLIFF_DRESSING_NODE_NAME if key == &"cliffs" else TerrainOutcrops.OUTCROP_NODE_NAME
 		var container := _scene.get_node_or_null(container_name)

@@ -91,9 +91,19 @@ func _on_layer_toggled(on: bool, key: StringName) -> void:
 			container.process_mode = Node.PROCESS_MODE_INHERIT if on else Node.PROCESS_MODE_DISABLED
 	else:
 		_set_meshes_shown(mesh_ids(key), on)
+		var plants := get_tree().current_scene.get_node_or_null(PlantField.NODE_NAME) as PlantField
+		if plants: # the layer's GPU-culled meshes are not instancer nodes
+			plants.set_layer_shown(key, on)
 		_set_colliders_enabled(key, on)
 	_status.text = "%s %s -- %d FPS at toggle (let it settle)" % [key, "ON" if on else "OFF", Engine.get_frames_per_second()]
 	print("[Layers] " + _status.text)
+
+## Hides the instancer nodes of every layer that is switched off here, again. For after something
+## made Terrain3D rebuild its nodes (PerfDebug U): rebuilt nodes come back visible.
+func reapply_hidden() -> void:
+	for key: StringName in _shown:
+		if not _shown[key] and not mesh_ids(key).is_empty():
+			_set_meshes_shown(mesh_ids(key), false)
 
 ## Terrain3D mesh ids of a layer (also read by the benchmark, scripts/debug/perf_bench.gd).
 static func mesh_ids(key: StringName) -> Array[int]:

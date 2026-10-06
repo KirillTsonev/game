@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://cn064ycbr7wvg"
+path="res://.godot/imported/plant_cull.glsl-e27dcfe51325820467d97b592430152b.res"
+
+[deps]
+
+source_file="res://shaders/foliage/plant_cull.glsl"
+dest_files=["res://.godot/imported/plant_cull.glsl-e27dcfe51325820467d97b592430152b.res"]
+
+[params]
+

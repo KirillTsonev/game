@@ -145,6 +145,10 @@ static func scatter_flowers(terrain: Terrain3D, heights: PackedFloat32Array, wid
 
 	for id in FLOWER_MESH_IDS:
 		var list: Array[Transform3D] = transforms[id]
+		# 2026-10-06: the flowers that cast no shadows (sorrel, dandelion, clover) are drawn by
+		# PlantField, one draw per mesh and LOD; the poppies cast shadows and stay with Terrain3D.
+		if PlantField.submit(&"flowers", id, assets.get_mesh_asset(id), list):
+			continue
 		if not list.is_empty():
 			var colors := PackedColorArray()
 			colors.resize(list.size())
