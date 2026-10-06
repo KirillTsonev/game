@@ -23,14 +23,14 @@ extends RefCounted
 ## gets (see sway_core in the shader). Heights are for a plant at scale 1; a scaled-up plant moves
 ## more, up to 1.5x. First values, not yet judged in game.
 const SWAY: Array[Dictionary] = [
-	{"name": "ferns", "ids": [28, 55, 56, 57, 58, 59, 60, 61, 62, 63], "amount": 0.07, "height": 0.6, "core": 0.5},
-	{"name": "broad fern", "ids": [29], "amount": 0.06, "height": 1.2, "core": 0.4},
-	{"name": "bushes", "ids": [30, 31, 32], "amount": 0.05, "height": 1.0, "core": 0.35},
-	{"name": "elderberry", "ids": [69, 70], "amount": 0.06, "height": 1.3, "core": 0.3},
-	{"name": "wood sorrel", "ids": [71, 72, 73, 74, 75, 76, 77, 78], "amount": 0.015, "height": 0.15, "core": 1.0},
-	{"name": "poppies", "ids": [79, 80, 81, 82, 83], "amount": 0.10, "height": 0.6, "core": 1.0},
-	{"name": "dandelion", "ids": [84], "amount": 0.02, "height": 0.2, "core": 1.0},
-	{"name": "clover", "ids": [85, 86, 87, 88], "amount": 0.012, "height": 0.14, "core": 1.0},
+	{"name": "ferns", "ids": [28, 55, 56, 57, 58, 59, 60, 61, 62, 63], "amount": 0.14, "height": 0.6, "core": 0.5},
+	{"name": "broad fern", "ids": [29], "amount": 0.12, "height": 1.2, "core": 0.4},
+	{"name": "bushes", "ids": [30, 31, 32], "amount": 0.1, "height": 1.0, "core": 0.35},
+	{"name": "elderberry", "ids": [69, 70], "amount": 0.12, "height": 1.3, "core": 0.3},
+	{"name": "wood sorrel", "ids": [71, 72, 73, 74, 75, 76, 77, 78], "amount": 0.03, "height": 0.15, "core": 1.0},
+	{"name": "poppies", "ids": [79, 80, 81, 82, 83], "amount": 0.20, "height": 0.6, "core": 1.0},
+	{"name": "dandelion", "ids": [84], "amount": 0.04, "height": 0.2, "core": 1.0},
+	{"name": "clover", "ids": [85, 86, 87, 88], "amount": 0.024, "height": 0.14, "core": 1.0},
 	# Trees ("cards": each leaf / branch card sways about the point where it meets the bark; trunk
 	# and bark branches stand still). `height` = the card length in m that moves `amount` (longer
 	# ones up to 1.5x); the cards are 0.8-3.6 m long (median per tree), the longest 8.5 m.
@@ -38,9 +38,9 @@ const SWAY: Array[Dictionary] = [
 	# trees are seen much further than the grass sways, and must be still before the impostors take
 	# over (cross-fade from 155 m).
 	# The saplings (ids 64-68) share the leafy trees' meshes and materials, so they are covered.
-	{"name": "leafy trees", "ids": [15, 18, 20, 21, 23, 25, 27], "cards": true, "amount": 0.20, "height": 2.0, "speed": 2.5, "fade": [110.0, 150.0]},
+	{"name": "leafy trees", "ids": [15, 18, 20, 21, 23, 25, 27], "cards": true, "amount": 0.40, "height": 2.0, "speed": 2.5, "fade": [110.0, 150.0]},
 	# The dry ones (bare twig cards): stiffer.
-	{"name": "dry trees", "ids": [14, 16, 17, 19, 22, 24, 26], "cards": true, "amount": 0.10, "height": 2.0, "speed": 2.5, "fade": [110.0, 150.0]},
+	{"name": "dry trees", "ids": [14, 16, 17, 19, 22, 24, 26], "cards": true, "amount": 0.20, "height": 2.0, "speed": 2.5, "fade": [110.0, 150.0]},
 ]
 
 static var _noise: ImageTexture
