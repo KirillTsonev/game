@@ -15,12 +15,17 @@ const BAR_SIZE := Vector2(420.0, 6.0)
 const BAR_TRACK_COLOR := Color(1.0, 1.0, 1.0, 0.12)
 const BAR_FILL_COLOR := Color(0.85, 0.85, 0.8, 1.0)
 const TEXT_COLOR := Color(0.7, 0.7, 0.66, 1.0)
+const NOTE_COLOR := Color(0.7, 0.7, 0.66, 0.6)
+## Shown under the step text on a machine's first launch: the collision shapes and model scans are
+## built and saved then (see TerrainUtil.cached_shape and the cliff cache), so the bar moves slower.
+const FIRST_LAUNCH_NOTE := "First launch: preparing the world. This takes longer only once."
 
 ## Bar position 0..1 last set -- WorldGenerator continues from wherever the boot scene left it.
 var progress := 0.0
 
 var _bar: ProgressBar
 var _label: Label
+var _note: Label
 
 func _ready() -> void:
 	layer = 100 # above the pause menu and every debug overlay
@@ -37,6 +42,13 @@ func begin() -> void:
 	visible = true
 	get_tree().root.disable_3d = true
 	set_progress(0.0, "")
+	_note.text = FIRST_LAUNCH_NOTE if _is_first_launch() else ""
+
+## True while this machine has no saved cliff collision shapes, the largest of the caches the world
+## generator builds on its first run. Checked when the screen goes up, before that run fills it.
+func _is_first_launch() -> bool:
+	var cache_dir := CliffInstancer.CLIFF_TRIMESH_DISK_CACHE_DIR
+	return not DirAccess.dir_exists_absolute(cache_dir) or DirAccess.get_files_at(cache_dir).is_empty()
 
 func set_progress(fraction: float, text: String) -> void:
 	progress = clampf(fraction, 0.0, 1.0)
@@ -89,3 +101,8 @@ func _build() -> void:
 	_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_label.add_theme_color_override("font_color", TEXT_COLOR)
 	column.add_child(_label)
+
+	_note = Label.new()
+	_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_note.add_theme_color_override("font_color", NOTE_COLOR)
+	column.add_child(_note)

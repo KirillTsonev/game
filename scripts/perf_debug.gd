@@ -1,5 +1,6 @@
 extends Node
-## DEBUG: dev-only key, not meant to ship.
+## DEBUG: dev-only keys. Off in an exported game (see _ready): they work when the game is started
+## from the editor or from a command line with the editor's executable (the benchmark launches).
 ##   T = tree probe: why can/can't a tree grow where the player stands.
 ##       Re-runs the tree placement checks at the player's feet via
 ##       WorldGenerator.debug_tree_probe() (terrain_gen.gd) and prints the report.
@@ -47,6 +48,11 @@ var _gpu_max := 0.0
 var _cpu_max := 0.0
 
 func _ready() -> void:
+	# "editor" = the editor's executable is running the game; an exported game does not have it.
+	if not OS.has_feature("editor"):
+		set_process(false)
+		set_process_input(false)
+		return
 	RenderingServer.viewport_set_measure_render_time(get_tree().root.get_viewport_rid(), true)
 	if "--bench" in OS.get_cmdline_user_args():
 		_start_bench(true)
