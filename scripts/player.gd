@@ -6,10 +6,27 @@ extends CharacterBody3D
 @export var speed: float = 4.5
 @export var mouse_sensitivity: float = 0.003
 @export var gravity: float = 9.8
+@export var jump_velocity: float = 4.5 ## about 1 m of height at gravity 9.8
+@export var sprint_multiplier: float = 1.6
+@export var crouch_multiplier: float = 0.5
+@export var crouch_height: float = 1.1 ## capsule height while crouched (standing: the scene's capsule)
+@export var crouch_camera_height: float = 0.95
+@export var crouch_time: float = 0.15 ## seconds to ease between standing and crouched
 
 @onready var camera: Camera3D = $Camera3D
+@onready var collision: CollisionShape3D = $CollisionShape3D
 
 var pitch: float = 0.0
+
+## Sprint (Shift) and crouch (Ctrl) are toggles and cancel each other.
+var _sprinting: bool = false
+var _crouching: bool = false
+var _crouch_t: float = 0.0 ## 0 = standing, 1 = fully crouched
+var _capsule: CapsuleShape3D
+var _stand_height: float
+var _stand_camera_height: float
+## Space stood the player up from a crouch: no jump until the key is released.
+var _jump_held_from_crouch: bool = false
 
 ## Stall detector: logs a diagnostic entry (with the actual colliders
 ## involved) whenever the player is trying to move but barely progressing,
@@ -31,6 +48,11 @@ var last_safe_transform: Transform3D
 
 func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	# Own copy of the capsule: crouching resizes it, and the scene's sub-resource is shared.
+	_capsule = collision.shape.duplicate() as CapsuleShape3D
+	collision.shape = _capsule
+	_stand_height = _capsule.height
+	_stand_camera_height = camera.position.y
 	_snap_to_ground()
 	last_safe_transform = global_transform
 
@@ -79,6 +101,20 @@ func _unhandled_input(event: InputEvent) -> void:
 		if lantern:
 			lantern.visible = not lantern.visible
 
+	# Shift = sprint on/off, Ctrl = crouch on/off, Space while crouched = stand up (no jump).
+	if event is InputEventKey and event.pressed and not event.echo:
+		match event.physical_keycode:
+			KEY_SHIFT:
+				_set_crouching(false)
+				if not _crouching: # still crouched = no headroom to stand, so no sprint either
+					_sprinting = not _sprinting
+			KEY_CTRL:
+				_set_crouching(not _crouching)
+			KEY_SPACE:
+				if _crouching:
+					_set_crouching(false)
+					_jump_held_from_crouch = true
+
 	# Left click only (2026-09-27): the mouse WHEEL is also an InputEventMouseButton, and
 	# re-capturing on it stole the cursor from UI like the grass tuning panel.
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
@@ -98,6 +134,14 @@ func _physics_process(delta: float) -> void:
 	if not is_on_floor():
 		velocity.y -= gravity * delta
 
+	# Jump: held Space jumps again on landing. Not while crouched or still standing up.
+	if not Input.is_key_pressed(KEY_SPACE):
+		_jump_held_from_crouch = false
+	elif is_on_floor() and not _crouching and not _jump_held_from_crouch:
+		velocity.y = jump_velocity
+
+	_update_crouch(delta)
+
 	# Raw WASD reads -- no Input Map setup required to try this out.
 	var input_dir := Vector2.ZERO
 	if Input.is_key_pressed(KEY_W):
@@ -112,10 +156,17 @@ func _physics_process(delta: float) -> void:
 
 	var direction := (transform.basis * Vector3(input_dir.x, 0, input_dir.y)).normalized()
 
+	var move_speed := speed
+	if _crouching:
+		move_speed *= crouch_multiplier
+	elif _sprinting:
+		move_speed *= sprint_multiplier
+
 	if direction:
-		velocity.x = direction.x * speed
-		velocity.z = direction.z * speed
+		velocity.x = direction.x * move_speed
+		velocity.z = direction.z * move_speed
 	else:
+		_sprinting = false # sprint ends when the player stops, so the next walk starts at walking pace
 		velocity.x = move_toward(velocity.x, 0, speed)
 		velocity.z = move_toward(velocity.z, 0, speed)
 
@@ -140,6 +191,28 @@ func _physics_process(delta: float) -> void:
 		print("FALL: player dropped below y=%.1f (at %s) -- resetting to last safe position %s" % [FALL_RESET_Y, global_position, last_safe_transform.origin])
 		global_transform = last_safe_transform
 		velocity = Vector3.ZERO
+
+## Standing up is refused while something is overhead: the body's current shape is swept up
+## by the height it still has to grow.
+func _set_crouching(want: bool) -> void:
+	if want == _crouching:
+		return
+	if not want and test_move(global_transform, Vector3.UP * (_stand_height - _capsule.height)):
+		return
+	_crouching = want
+	if want:
+		_sprinting = false
+
+## Eases the capsule and the camera between standing and crouched. The capsule shrinks from
+## the top: its bottom stays at the body's origin (foot level, see _snap_to_ground).
+func _update_crouch(delta: float) -> void:
+	var target := 1.0 if _crouching else 0.0
+	if _crouch_t == target:
+		return
+	_crouch_t = move_toward(_crouch_t, target, delta / maxf(crouch_time, 0.001))
+	_capsule.height = lerpf(_stand_height, crouch_height, _crouch_t)
+	collision.position.y = _capsule.height * 0.5
+	camera.position.y = lerpf(_stand_camera_height, crouch_camera_height, _crouch_t)
 
 func _log_if_stuck(direction: Vector3, velocity_before_slide: Vector3, delta: float, pos_before: Vector3) -> void:
 	var actual_move := global_position - pos_before
