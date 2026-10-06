@@ -28,6 +28,39 @@ uniform float moon_size : hint_range(0.5, 45.0, 0.1) = 8.0;
 uniform float moon_brightness : hint_range(0.0, 32.0, 0.05) = 12.0;
 uniform float moon_rotation : hint_range(-180.0, 180.0, 0.5) = 0.0;
 
+// Clouds: two layers of one noise texture drifting across a flattened dome, drawn over the sky,
+// the glow and the moon. scripts/cloud_sky.gd supplies the texture and the drift and switches them
+// on (cloud_amount), and repeats cloud_density() on the CPU to dim the moonlight when a cloud is
+// in front of the moon -- change the maths in both places.
+uniform float cloud_amount : hint_range(0.0, 1.0, 0.01) = 0.0;
+uniform sampler2D cloud_noise : filter_linear_mipmap, repeat_enable;
+uniform vec2 cloud_offset = vec2(0.0);
+// Share of the sky the clouds fill, and how wide their edges are (in noise value).
+uniform float cloud_coverage : hint_range(0.0, 1.0, 0.01) = 0.5;
+uniform float cloud_softness : hint_range(0.01, 0.5, 0.01) = 0.18;
+// Bigger = smaller clouds.
+uniform float cloud_scale : hint_range(0.05, 2.0, 0.01) = 0.45;
+// How much the thickest cloud hides what is behind it.
+uniform float cloud_opacity : hint_range(0.0, 1.0, 0.01) = 0.85;
+// Lower = the dome is flatter: clouds near the horizon look further away.
+uniform float cloud_flatten : hint_range(0.02, 1.0, 0.01) = 0.15;
+// Clouds fade out below this height above the horizon (EYEDIR.y).
+uniform float cloud_horizon_fade : hint_range(0.01, 0.5, 0.01) = 0.12;
+// Colour of a cloud away from the moon.
+uniform vec3 cloud_color : source_color = vec3(0.07, 0.09, 0.15);
+// Moonlight in the clouds around the moon: strength (x the light's colour) and the angle from
+// the moon, in degrees, at which it has dropped to about a third. Thin edges catch the most.
+uniform float cloud_moon_glow : hint_range(0.0, 8.0, 0.01) = 1.2;
+uniform float cloud_moon_glow_angle : hint_range(1.0, 90.0, 0.5) = 14.0;
+
+// 0 = clear sky, 1 = thick cloud, in the direction `dir` (above the horizon only).
+float cloud_density(vec3 dir) {
+	vec2 uv = dir.xz / (dir.y + cloud_flatten) * cloud_scale + cloud_offset;
+	float n = texture(cloud_noise, uv).r * 0.65 + texture(cloud_noise, uv * 2.3 + cloud_offset * 0.6).r * 0.35;
+	float edge = 1.0 - cloud_coverage;
+	return smoothstep(edge - cloud_softness, edge + cloud_softness, n) * smoothstep(0.0, cloud_horizon_fade, dir.y);
+}
+
 void sky() {
 	float v_angle = acos(clamp(EYEDIR.y, -1.0, 1.0));
 	float c = 1.0 - v_angle / (PI * 0.5);
@@ -59,6 +92,16 @@ void sky() {
 		vec4 moon = texture(moon_texture, moon_uv);
 		float inside = step(0.0, facing) * step(abs(p.x), 1.0) * step(abs(p.y), 1.0);
 		sky = mix(sky, moon.rgb * LIGHT0_COLOR * moon_brightness, moon.a * inside);
+	}
+
+	if (cloud_amount > 0.0 && EYEDIR.y > 0.0) {
+		float density = cloud_density(EYEDIR);
+		vec3 cloud = cloud_color;
+		if (LIGHT0_ENABLED) {
+			float moon_angle = acos(clamp(dot(LIGHT0_DIRECTION, EYEDIR), -1.0, 1.0));
+			cloud += LIGHT0_COLOR * cloud_moon_glow * exp(-moon_angle / radians(cloud_moon_glow_angle)) * mix(1.0, 0.3, density);
+		}
+		sky = mix(sky, cloud, density * cloud_opacity * cloud_amount);
 	}
 
 	c = (v_angle - (PI * 0.5)) / (PI * 0.5);

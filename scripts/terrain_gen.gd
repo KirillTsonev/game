@@ -242,6 +242,8 @@ func _ready() -> void:
 	GrassScatter.bake(get_parent(), maps, heightmap_corner, grass_rng)
 	# Grass step 2: the player-following GPU renderer that reads that bake (added deferred).
 	GrassField.spawn(get_parent())
+	# Drifting clouds in the sky shader + the moonlight dimming under them (scripts/cloud_sky.gd).
+	CloudSky.spawn(get_parent())
 	_log_stage("grass density bake", t_ready_stage)
 	t_ready_stage = Time.get_ticks_msec()
 
