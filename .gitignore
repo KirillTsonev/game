@@ -4,6 +4,9 @@
 # godot-mcp addon's own screenshot/scratch cache (not project content)
 addons/godot_mcp
 
+# Knot diagnostics, rewritten by scripts/terrain/knots.gd on every run
+godot_notes/knot_diag.txt
+
 # OS cruft
 .DS_Store
 Thumbs.db

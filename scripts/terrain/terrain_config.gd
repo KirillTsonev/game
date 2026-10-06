@@ -22,10 +22,9 @@ extends RefCounted
 ## any other int -- always regenerate that exact map (byte-identical every
 ##                  run). Useful while tuning a specific result, or for
 ##                  pinning down a bug tied to one particular seed.
-const MASTER_SEED := 858829582
-#const MASTER_SEED := 1053712953
-#4176228882 steep cliff rise
-#master_seed=858829582 ridge between cliff meshes and weird top thing
+const MASTER_SEED := -1
+
+#master_seed=858829582 main testing done here
 
 ## World-space size of the area to (re)generate, in world units --
 ## independent X (width) and Z (length) so it doesn't have to be square.
@@ -65,43 +64,43 @@ const BOULDER_END_INSET_FRACTION := 0.15 ## keep boulders off the very tapering 
 ## footprint before any terrain-fitting work touches the heightmap again).
 const CLIFF_DRESSING_DEFS := [
 	{
-    "name": "namaqualand_cliff_01", 
-    "glb": "res://assets/models/cliffs/namaqualand_cliff_01/namaqualand_cliff_01_2k.glb", 
-    "diff": "res://assets/models/cliffs/namaqualand_cliff_01/textures/namaqualand_cliff_01_diff_2k.jpg", 
-    "nor": "res://assets/models/cliffs/namaqualand_cliff_01/textures/namaqualand_cliff_01_nor_gl_2k.exr", 
-    "rough": "res://assets/models/cliffs/namaqualand_cliff_01/textures/namaqualand_cliff_01_rough_2k.exr", 
-    "real_size": 8.3, 
-    "height": 4.96, 
-    "depth": 4.39,
-    "top_lift": 0.1
+	"name": "namaqualand_cliff_01", 
+	"glb": "res://assets/models/cliffs/namaqualand_cliff_01/namaqualand_cliff_01_2k.glb", 
+	"diff": "res://assets/models/cliffs/namaqualand_cliff_01/textures/namaqualand_cliff_01_diff_2k.jpg", 
+	"nor": "res://assets/models/cliffs/namaqualand_cliff_01/textures/namaqualand_cliff_01_nor_gl_2k.exr", 
+	"rough": "res://assets/models/cliffs/namaqualand_cliff_01/textures/namaqualand_cliff_01_rough_2k.exr", 
+	"real_size": 8.3, 
+	"height": 4.96, 
+	"depth": 4.39,
+	"top_lift": 0.1
   },
 	# 2026-09-20: mountainside moved out of the cliff system -> OUTCROP_DEFS (laid flat,
 	# scattered on the valley floor by _scatter_outcrops). Kirill: "looks very out of place".
 	{
-    "name": "namaqualand_cliff_02", 
-    "glb": "res://assets/models/cliffs/namaqualand_cliff_02/namaqualand_cliff_02_2k.glb", 
-    "diff": "res://assets/models/cliffs/namaqualand_cliff_02/textures/namaqualand_cliff_02_diff_2k.jpg", 
-    "nor": "res://assets/models/cliffs/namaqualand_cliff_02/textures/namaqualand_cliff_02_nor_gl_2k.exr", 
-    "rough": "res://assets/models/cliffs/namaqualand_cliff_02/textures/namaqualand_cliff_02_rough_2k.exr", 
-    "real_size": 20.2, 
-    "height": 7.18, 
-    "depth": 6.59,
-    "top_lift": 0.1
-    },
+	"name": "namaqualand_cliff_02", 
+	"glb": "res://assets/models/cliffs/namaqualand_cliff_02/namaqualand_cliff_02_2k.glb", 
+	"diff": "res://assets/models/cliffs/namaqualand_cliff_02/textures/namaqualand_cliff_02_diff_2k.jpg", 
+	"nor": "res://assets/models/cliffs/namaqualand_cliff_02/textures/namaqualand_cliff_02_nor_gl_2k.exr", 
+	"rough": "res://assets/models/cliffs/namaqualand_cliff_02/textures/namaqualand_cliff_02_rough_2k.exr", 
+	"real_size": 20.2, 
+	"height": 7.18, 
+	"depth": 6.59,
+	"top_lift": 0.1
+	},
 	# 2026-10-02: Megascans "Huge Nordic Coastal Cliff" (Fab) -- a promontory: straight open back at
 	# full height, rock mass projecting forward, ground skirt. Source is 18.7 m wide; scaled x0.7 by
 	# tools/blender/import_megascans_glb.py (--out cliffs). "orm" instead of "rough" (see
 	# CliffInstancer.dress_cliff_faces). In knots only as CLIFF_MID_DEEP (knots.gd).
 	{
-    "name": "nordic_coastal_cliff_huge", 
-    "glb": "res://assets/models/cliffs/nordic_coastal_cliff_huge/nordic_coastal_cliff_huge.glb", 
-    "diff": "res://assets/models/cliffs/nordic_coastal_cliff_huge/textures/nordic_coastal_cliff_huge_diff_2k.jpg", 
-    "nor": "res://assets/models/cliffs/nordic_coastal_cliff_huge/textures/nordic_coastal_cliff_huge_nor_gl_2k.jpg", 
-    "orm": "res://assets/models/cliffs/nordic_coastal_cliff_huge/textures/nordic_coastal_cliff_huge_orm_2k.png", 
-    "real_size": 13.06, 
-    "height": 7.05, 
-    "depth": 11.25,
-    "top_lift": 0.1
+	"name": "nordic_coastal_cliff_huge", 
+	"glb": "res://assets/models/cliffs/nordic_coastal_cliff_huge/nordic_coastal_cliff_huge.glb", 
+	"diff": "res://assets/models/cliffs/nordic_coastal_cliff_huge/textures/nordic_coastal_cliff_huge_diff_2k.jpg", 
+	"nor": "res://assets/models/cliffs/nordic_coastal_cliff_huge/textures/nordic_coastal_cliff_huge_nor_gl_2k.jpg", 
+	"orm": "res://assets/models/cliffs/nordic_coastal_cliff_huge/textures/nordic_coastal_cliff_huge_orm_2k.png", 
+	"real_size": 13.06, 
+	"height": 7.05, 
+	"depth": 11.25,
+	"top_lift": 0.1
   },
 	# 2026-10-02: Megascans "Large Nordic Coastal Cliff" (ulujfanga) -- a thin wall, even top, open
 	# back. Source is 6.75 m wide; scaled x2 (same script). "top_despike": the raised ground behind
@@ -112,32 +111,32 @@ const CLIFF_DRESSING_DEFS := [
 	# top (see CliffDressing.raise_terrain_behind_cliff_dressing). TUNING: raise until gaps close,
 	# 0 = exact match.
 	{
-    "name": "nordic_coastal_cliff_large", 
-    "glb": "res://assets/models/cliffs/nordic_coastal_cliff_large/nordic_coastal_cliff_large.glb", 
-    "diff": "res://assets/models/cliffs/nordic_coastal_cliff_large/textures/nordic_coastal_cliff_large_diff_2k.jpg", 
-    "nor": "res://assets/models/cliffs/nordic_coastal_cliff_large/textures/nordic_coastal_cliff_large_nor_gl_2k.jpg", 
-    "orm": "res://assets/models/cliffs/nordic_coastal_cliff_large/textures/nordic_coastal_cliff_large_orm_2k.png", 
-    "real_size": 13.49, 
-    "height": 6.0, 
-    "depth": 3.41, 
-    "top_despike": 2.0, 
-    "push_back": 0.75,
-    "top_lift": 0.25
+	"name": "nordic_coastal_cliff_large", 
+	"glb": "res://assets/models/cliffs/nordic_coastal_cliff_large/nordic_coastal_cliff_large.glb", 
+	"diff": "res://assets/models/cliffs/nordic_coastal_cliff_large/textures/nordic_coastal_cliff_large_diff_2k.jpg", 
+	"nor": "res://assets/models/cliffs/nordic_coastal_cliff_large/textures/nordic_coastal_cliff_large_nor_gl_2k.jpg", 
+	"orm": "res://assets/models/cliffs/nordic_coastal_cliff_large/textures/nordic_coastal_cliff_large_orm_2k.png", 
+	"real_size": 13.49, 
+	"height": 6.0, 
+	"depth": 3.41, 
+	"top_despike": 2.0, 
+	"push_back": 0.75,
+	"top_lift": 0.25
   },
 	# 2026-10-04: Megascans "Huge Icelandic Lava Cliff" (sieoz) -- a long blocky wall, even top
 	# (falls ~0.9 m toward +X), straight open back, debris skirt along the foot. Source is 15.4 m
 	# wide and only 4.4 m tall; scaled x1.3 (same script, no rotation needed).
 	{
-    "name": "icelandic_lava_cliff_huge",
-    "glb": "res://assets/models/cliffs/icelandic_lava_cliff_huge/icelandic_lava_cliff_huge.glb",
-    "diff": "res://assets/models/cliffs/icelandic_lava_cliff_huge/textures/icelandic_lava_cliff_huge_diff_2k.jpg",
-    "nor": "res://assets/models/cliffs/icelandic_lava_cliff_huge/textures/icelandic_lava_cliff_huge_nor_gl_2k.jpg",
-    "orm": "res://assets/models/cliffs/icelandic_lava_cliff_huge/textures/icelandic_lava_cliff_huge_orm_2k.png",
-    "real_size": 20.05,
-    "height": 5.67,
-    "depth": 6.69,
-    "push_back": 1.2,
-    "top_lift": 0.2
+	"name": "icelandic_lava_cliff_huge",
+	"glb": "res://assets/models/cliffs/icelandic_lava_cliff_huge/icelandic_lava_cliff_huge.glb",
+	"diff": "res://assets/models/cliffs/icelandic_lava_cliff_huge/textures/icelandic_lava_cliff_huge_diff_2k.jpg",
+	"nor": "res://assets/models/cliffs/icelandic_lava_cliff_huge/textures/icelandic_lava_cliff_huge_nor_gl_2k.jpg",
+	"orm": "res://assets/models/cliffs/icelandic_lava_cliff_huge/textures/icelandic_lava_cliff_huge_orm_2k.png",
+	"real_size": 20.05,
+	"height": 5.67,
+	"depth": 6.69,
+	"push_back": 1.2,
+	"top_lift": 0.2
   },
 ]
 const CLIFF_DRESSING_EMBED_DEPTH := 1.5 ## sink the mesh's base this far below the sampled terrain height (scaled by that instance's own scale jitter) so its bottom edge never floats visibly above the ground regardless of the source mesh's own base/pivot
