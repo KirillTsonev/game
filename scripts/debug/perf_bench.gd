@@ -83,6 +83,11 @@ func run(quit_when_done: bool, label: String) -> void:
 	root.size = WINDOW_SIZE
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_player.process_mode = Node.PROCESS_MODE_DISABLED # no input, no gravity: the benchmark places it
+	# That also stops the lantern's flame flicker (scripts/lantern_flicker.gd): put it at its
+	# resting brightness, so every run measures the same light.
+	var flicker := _player.get_node_or_null("Lantern")
+	if flicker and flicker.has_method("hold_steady"):
+		flicker.hold_steady()
 	# Whole-run conditions from user arguments, to split one layer's cost (with --bench-only=layer:<x>):
 	# --bench-no-shadows = sun shadows off, --bench-scale=<x> = 3D render scale multiplied by x.
 	var sun := _scene.get_node_or_null("DirectionalLight3D") as DirectionalLight3D

@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://dgnelkt1o1lo0"]
 
 [ext_resource type="Script" uid="uid://cb6l31e0oa14a" path="res://scripts/player.gd" id="1"]
+[ext_resource type="Script" uid="uid://c5o4g3fv2ko8m" path="res://scripts/lantern_flicker.gd" id="2"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
 radius = 0.4
@@ -8,7 +9,7 @@ height = 1.8
 
 [node name="Player" type="CharacterBody3D" unique_id=779426116]
 script = ExtResource("1")
-speed = 7.5
+speed = 6.0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1762986721]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
@@ -25,6 +26,7 @@ light_energy = 3.0
 shadow_enabled = true
 omni_range = 13.0
 omni_attenuation = 0.5
+script = ExtResource("2")
 
 [node name="GroundPool" type="SpotLight3D" parent="Lantern" unique_id=1550993870]
 transform = Transform3D(1, 0, 0, 0, 0.25881904, 0.9659258, 0, -0.9659258, 0.25881904, 0.22, 2.35, -0.3)
