@@ -154,6 +154,8 @@ static func bake(_parent_node: Node, maps: Dictionary, corner: Vector3, rng: Ran
 	var rects := UnderstoryScatter._build_keep_rects(maps.cliff_dressing_plan, maps.cliff_dressing_top_profiles)
 	for kr in rects:
 		_stamp_rect(rock_d, width, length, kr, ROCK_FADE)
+	# The rock band along the edge where the mountain wall begins (2026-10-08).
+	MountainWalls.stamp_rock_distance(rock_d, width, length, ROCK_FADE)
 	var t_rock := Time.get_ticks_msec() - t0
 
 	# -- Road distance field (m from centreline, capped) --

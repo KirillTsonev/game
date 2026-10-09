@@ -275,7 +275,7 @@ static func _scatter_band(band: int, ctx: Dictionary) -> void:
 			if road_weight[idx] > 0.0:
 				counts.rej_road += 1
 				continue
-			if RockScatter.boulder_blocked(px, pz, KEEPOUT_RADIUS, keep_rects, keep_circles):
+			if MountainWalls.on_mountain(px, pz, KEEPOUT_RADIUS) or RockScatter.boulder_blocked(px, pz, KEEPOUT_RADIUS, keep_rects, keep_circles):
 				counts.rej_rock += 1
 				continue
 			if DeadfallScatter.keep_blocked(px, pz, KEEPOUT_RADIUS): # stumps + logs (bucketed lookup)

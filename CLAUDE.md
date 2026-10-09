@@ -27,7 +27,7 @@ automatically) -- a local copy also lives at
   generation stage, scatter layer or model: the measure / checksum / fix / verify procedure, which
   reusable piece fits which cost (preload, disk caches, worker-thread bands, lookup grids), the
   rules for each, and how to hook a stage into the loading screen. Read before adding a layer.
-- This file stays the reference for pitfalls and *why* things are done the way they are.
+- This file stays the reference for pitfalls and _why_ things are done the way they are.
 
 ## Local tooling paths (this machine)
 
@@ -81,14 +81,14 @@ automatically) -- a local copy also lives at
 - Adding a new texture id via `assign_flat_textures.gd`'s `fix_textures()`
   (e.g. re-adding Rock as three separate varieties -- RockFace,
   CoastSandRocks, AerialRocks, added 2026-09-16) isn't enough by itself --
-  a texture file that's brand new to the project gets Godot's *default*
+  a texture file that's brand new to the project gets Godot's _default_
   import settings, which don't match the existing set's
   (`compress/mode`, `mipmaps/generate`, `compress/channel_pack`).
   Terrain3D requires every texture id's import settings to match id 0's
   exactly to build its shared texture array, and fails LOUD only at
   Play-mode (`run_scene` + `get_errors`), not in `get_resource_info` or any
   editor-side static check: `Terrain3DAssets:_update_texture_files: Texture
-  ID <n> albedo format: 4 doesn't match format of first texture: 17` /
+ID <n> albedo format: 4 doesn't match format of first texture: 17` /
   `...mipmap setting (false) doesn't match first texture (true)`, same
   pattern for the normal map.
 - Fix: read the reference `.import` files
@@ -103,7 +103,7 @@ automatically) -- a local copy also lives at
 - As with the `.glb.import`/`root_scale` gotcha further below, editing a
   `.import` file's `[params]` and calling `rescan_filesystem` alone does
   NOT trigger a real reimport -- same staleness class, `rescan_filesystem`
-  only reimports when the *source* file's mtime changed. Use
+  only reimports when the _source_ file's mtime changed. Use
   `assign_flat_textures.gd`'s `force_reimport()` (calls
   `EditorInterface.get_resource_filesystem().reimport_files(...)`) with
   the new paths added to its list, then re-run `fix_textures()` so the
@@ -122,7 +122,7 @@ automatically) -- a local copy also lives at
   DWAA import problem entirely; it never becomes a Godot-side EXR import
   at all.
 - Registering a new texture id in `terrain_assets.tres` only makes it a
-  *selectable* Terrain3DTextureAsset -- it does NOT paint anywhere on the
+  _selectable_ Terrain3DTextureAsset -- it does NOT paint anywhere on the
   terrain by itself. Painting requires either hand-painting with the
   Terrain3D dock's paint tool, or control-map logic in `terrain_gen.gd`
   (see "What was already tried and reverted" in
@@ -139,7 +139,7 @@ automatically) -- a local copy also lives at
   load the resource (`_load: Failed loading resource: ...exr`, then a
   cascading `[ext_resource] referenced non-existent resource` on whatever
   `.tres`/`.glb` references it, then `Terrain3DInstancer ... Mesh ID out
-  of range` once the failure reaches `terrain_assets.tres`). This is why
+of range` once the failure reaches `terrain_assets.tres`). This is why
   `boulder_01_material.tres` had `normal_enabled = true` but no
   `normal_texture` actually set for most of this project's history -- the
   map never successfully imported, so it was never wired in; it wasn't
@@ -147,7 +147,7 @@ automatically) -- a local copy also lives at
 - Fix: re-encode the EXR to `ZIP_COMPRESSION` (same pixel type/channels,
   different container -- Godot decodes ZIP fine). Done via a short Python
   script using the `OpenEXR` package (`pip install --break-system-packages
-  OpenEXR`), reading each channel at its native `pixel_type` (HALF for
+OpenEXR`), reading each channel at its native `pixel_type` (HALF for
   these) and writing a new file with
   `Imath.Compression(Imath.Compression.ZIP_COMPRESSION)`. There's no
   one-line Blender-CLI equivalent for this the way
@@ -169,7 +169,7 @@ automatically) -- a local copy also lives at
   it as a brand-new file and imports fresh. Confirmed by the `.import`
   file gaining a real `dest_files=[...].ctex` entry and losing the
   `valid=false` line.
-- Also note: a resource load that *succeeds* via `get_resource_info` in
+- Also note: a resource load that _succeeds_ via `get_resource_info` in
   the editor process is not proof the texture actually decodes -- it can
   return `ok:true` with a plausible `dependencies` list because that read
   is largely parsing the `.tres` text's `[ext_resource]` lines, not
@@ -187,7 +187,7 @@ automatically) -- a local copy also lives at
 - **UPDATE 2026-09-24:** the four rock glbs (now in `assets/models/rocks/<dir>/`) import
   with `gltf/embedded_image_handling=0` (discard textures), so these extracted files no
   longer exist for them -- the rocks render through their `<dir>_material.tres` override.
-  Lesson from the switch: with extraction on (1), the glb *fails to load* if the extracted
+  Lesson from the switch: with extraction on (1), the glb _fails to load_ if the extracted
   files -- or even only their `.import` sidecars -- are deleted (this silently removed
   boulder collision once). Change the import setting + reimport first, then delete.
 - When Blender's glTF exporter writes a `.glb` next to loose companion
@@ -199,7 +199,7 @@ automatically) -- a local copy also lives at
   the first time it imports the `.glb`. **Do not `rename_file` those
   companion textures to a tidier location** -- doing so breaks the
   already-generated `.glb` import (`_load: Failed loading resource:
-  ...glb`, cascading into whatever `Terrain3DMeshAsset`/`terrain_assets.tres`
+...glb`, cascading into whatever `Terrain3DMeshAsset`/`terrain_assets.tres`
   references it, same `Mesh ID out of range` symptom as the DWAA bug
   above) even though nothing about the `.glb` file itself changed. Just
   leave these byproduct files alone entirely -- don't use them for the
@@ -207,22 +207,22 @@ automatically) -- a local copy also lives at
 - **Better fix, found after the fact: don't use the glTF-export byproduct
   textures at all.** They're lossy re-extractions baked out of the
   `.blend` (JPG diffuse, PNG-not-EXR normal/roughness -- lower precision
-  than the originals). The *actual* Poly Haven source textures live in a
+  than the originals). The _actual_ Poly Haven source textures live in a
   sibling `textures/` folder next to each `*_2k.blend` file on the user's
   machine (e.g.
   `D:\...\assets\models\rock_07_2k.blend\textures\rock_07_diff_2k.jpg`
-  + `rock_07_nor_gl_2k.exr` + `rock_07_rough_2k.exr`), one level up from
-  the Godot project entirely (`D:\...\assets\models\`, NOT
-  `herald-of-oblivion\assets\models\`) -- easy to miss. This is the same
-  source `boulder_01` originally used. Always `device_list_dir` on
-  `assets\models\<name>_2k.blend\` first before falling back to the
-  glb-export byproducts -- it's higher quality AND sidesteps the whole
-  don't-rename-these-files problem above, since these proper source files
-  can be freely copied into the project's own `<asset>/textures/`
-  subfolder under clean names with no import-dependency risk (the glTF
-  importer never saw them). `stone_01` specifically was missing a
-  byproduct 2K diffuse entirely from its glb export -- but the proper
-  source `textures/` folder had one all along.
+  - `rock_07_nor_gl_2k.exr` + `rock_07_rough_2k.exr`), one level up from
+    the Godot project entirely (`D:\...\assets\models\`, NOT
+    `herald-of-oblivion\assets\models\`) -- easy to miss. This is the same
+    source `boulder_01` originally used. Always `device_list_dir` on
+    `assets\models\<name>_2k.blend\` first before falling back to the
+    glb-export byproducts -- it's higher quality AND sidesteps the whole
+    don't-rename-these-files problem above, since these proper source files
+    can be freely copied into the project's own `<asset>/textures/`
+    subfolder under clean names with no import-dependency risk (the glTF
+    importer never saw them). `stone_01` specifically was missing a
+    byproduct 2K diffuse entirely from its glb export -- but the proper
+    source `textures/` folder had one all along.
 - These proper source EXRs (normal/roughness) are DWAA-compressed same as
   boulder_01's were -- always check/re-encode per the DWAA section above
   before wiring them in. Confirmed again 2026-09-17 on all 5 cliff-scale
@@ -235,7 +235,7 @@ automatically) -- a local copy also lives at
 - A texture file that's brand new to the project (first time Godot has
   ever seen that exact path) can fail to get a `.import` sidecar generated
   at all on the rescan right after it appears -- `_load: No loader found
-  for resource: ...png` even though the file is a completely valid,
+for resource: ...png` even though the file is a completely valid,
   uncorrupted PNG/JPG (confirmed: sibling textures in the same batch
   imported fine, only some stragglers got stuck, and repeated
   `rescan_filesystem` calls with 10-15s waits did not self-resolve it).
@@ -317,7 +317,7 @@ automatically) -- a local copy also lives at
   assets aren't normalized to each other). The fix has never been a
   per-instance scatter multiplier -- it's baked directly into each
   `.glb.import`'s `nodes/root_scale` param (with `nodes/apply_root_scale
-  =true`), so the imported mesh geometry itself comes out close to
+=true`), so the imported mesh geometry itself comes out close to
   `boulder_01`'s ~1.83-unit longest-axis AABB (each rock's own longest
   axis lands close to 1.0, deliberately a bit smaller so Boulder01 still
   reads as the standout large rock). See `ROCK_BASE_SCALE` in
@@ -350,10 +350,10 @@ automatically) -- a local copy also lives at
 - **Editing a `.glb.import`'s params directly (e.g. `root_scale`) and
   calling `rescan_filesystem` does NOT trigger a reimport** -- same class
   of staleness as the DWAA/PNG `.import`-doesn't-self-heal issues above.
-  `rescan_filesystem`'s scan only reimports when the *source* file's
+  `rescan_filesystem`'s scan only reimports when the _source_ file's
   mtime changed, not when only the sidecar params changed. The correct
   fix is `EditorInterface.get_resource_filesystem().reimport_files
-  (PackedStringArray([...]))`, called from an @tool script method via
+(PackedStringArray([...]))`, called from an @tool script method via
   `call_method(runtime:false)` -- see `force_reimport_rocks()` in
   `setup_rock_assets.gd` for a working example (mirrors
   `assign_flat_textures.gd`'s `force_reimport()` for textures, just for
@@ -395,7 +395,7 @@ automatically) -- a local copy also lives at
   children, comes before `WorldGenerator` as a sibling and must finish
   first; `terrain_assets.tres`; the `Church` GLB).
 - The likely dominant piece of that 2.48s: `res://assets/models/castle-
-  church/source/Untitled.glb` is **90.8 MB** on disk, and several of its
+church/source/Untitled.glb` is **90.8 MB** on disk, and several of its
   33 dependent textures are needlessly high-resolution for a background
   building viewed at normal play distance -- confirmed via
   `get_resource_info`: `walls_Mat_albedo`, `roof_Mat_albedo`,
@@ -419,7 +419,7 @@ automatically) -- a local copy also lives at
   or 2048 for anything the player can walk right up to, like `doors`) in
   the `.import` sidecar for each oversized church texture, then trigger a
   reimport (`EditorInterface.get_resource_filesystem().reimport_files
-  (...)`, same mechanism as the rock/GLB reimport notes below -- called
+(...)`, same mechanism as the rock/GLB reimport notes below -- called
   from an editor-mode `call_method`, NOT a `rescan_filesystem` alone,
   which does not pick up sidecar-only param changes). This is fully
   reversible and touches no source asset -- it only caps what Godot
@@ -477,10 +477,10 @@ automatically) -- a local copy also lives at
   reproduce the same result.
 - Everything from this attempt was cleanly reverted: `main.tscn`'s
   Terrain3DMaterial is back to stock (no `shader_override`), `res://
-  shaders/terrain3d_road_parallax.gdshader` and `res://textures/source/
-  road_height_1k.png` were deleted, and `terrain_gen.gd` has no leftover
+shaders/terrain3d_road_parallax.gdshader` and `res://textures/source/
+road_height_1k.png` were deleted, and `terrain_gen.gd` has no leftover
   `set_shader_param` calls or `ROAD_PARALLAX_SCALE` constant. The LOD-
-  range and detiling-strength fixes from the same session (see terrain_
+  range and detiling-strength fixes from the same session (see terrain\_
   assets.tres) are unrelated and were NOT reverted -- those addressed a
   different, confirmed-working fix.
 
@@ -523,7 +523,7 @@ automatically) -- a local copy also lives at
   `road_*` keys in the `Terrain3DMaterial`'s `_shader_parameters` dict --
   the first attempt's revert had NOT actually fully landed in the saved
   file. This caused a hard crash on scene launch (`resource_format_text.
-  cpp: Method/function failed`, surfaced in-editor as a blocking "Cannot
+cpp: Method/function failed`, surfaced in-editor as a blocking "Cannot
   load shader" dialog) that looked unrelated to road work at first. If a
   road-depth attempt is reverted again in the future, explicitly re-read
   `main.tscn`'s `Terrain3DMaterial` sub_resource afterward and confirm
@@ -546,16 +546,14 @@ automatically) -- a local copy also lives at
   showed no visible difference at subtle settings). The Options menu has a checkbox
   per effect (`POSTFX_EFFECTS` in `scripts/pause_menu.gd`) -- add a row there when adding one to
   `assets/compositor.tres`. The notes below describe the original install.
-- The downloaded compositor_effects asset pack (32 post-processing effects
+- The downloaded compositor*effects asset pack (32 post-processing effects
   under `res://compositor_effects/<name>/`, e.g. crt_monitor, glare,
   chromatic_aberration, vignette, unreal_bloom, etc.) ships with every
-  `post_process_<name>.gd` script hardcoding its shader load path as
-  `res://addons/compositor_effects/<name>/<name>.glsl` -- i.e. it expects
-  to be installed as an addon, NOT dropped at the project root. If it's
-  placed at `res://compositor_effects/` directly, every effect throws
-  "Resource file not found" for its `.glsl` at runtime even though the
-  `.gd` scripts themselves load fine (their own path, wherever it is, is
-  found by the scene; it's the *shader* load inside the script that fails).
+  `post_process*<name>.gd`script hardcoding its shader load path as`res://addons/compositor_effects/<name>/<name>.glsl`-- i.e. it expects
+to be installed as an addon, NOT dropped at the project root. If it's
+placed at`res://compositor_effects/`directly, every effect throws
+"Resource file not found" for its`.glsl`at runtime even though the`.gd` scripts themselves load fine (their own path, wherever it is, is
+  found by the scene; it's the _shader_ load inside the script that fails).
 - Fix: move only the `.glsl` files (not the `.gd` scripts, not `.import`
   sidecars -- see below) from `res://compositor_effects/<name>/<name>.glsl`
   to `res://addons/compositor_effects/<name>/<name>.glsl`, one per effect.
@@ -576,7 +574,7 @@ automatically) -- a local copy also lives at
 - **`write_file`-ing over `res://assets/compositor.tres` while `main.tscn`
   is open in the editor does NOT reliably reach the live, already-running
   scene.** `write_file` reports `cache_evicted: true`, but that only evicts
-  ResourceLoader's cache for *future* `load()` calls -- it does not force
+  ResourceLoader's cache for _future_ `load()` calls -- it does not force
   the WorldEnvironment node's already-in-memory `compositor` resource
   reference (held by the currently open scene tab) to swap to the new
   content. Symptom actually observed: the Inspector checkbox for an effect
@@ -608,7 +606,7 @@ automatically) -- a local copy also lives at
 - A shader-level internal-downsampling rewrite (shrink to a lower-res
   buffer, run Kuwahara there, bilinear-upscale back) was tried and
   reverted: at already-low `stroke_radius`, the extra downsample/upsample
-  passes cost more than they saved (net *slower*), and independent of
+  passes cost more than they saved (net _slower_), and independent of
   performance, the bilinear upscale of an already-flattened/painterly
   image visibly softened the result further -- compounded by Radial Blur
   and Gaussian Blur running right after Painterly in the effect chain.
@@ -617,7 +615,7 @@ automatically) -- a local copy also lives at
   single biggest GPU cost in this project's 6-effect compositor stack --
   toggling it alone swung GPU utilization by ~40 percentage points, far
   more than Painterly ever did. Its shader loops `ray_axes * samples_per_arm`
-  times per pixel (default 2 * 32 = 64 iterations), each iteration doing 6
+  times per pixel (default 2 \* 32 = 64 iterations), each iteration doing 6
   bilinear texture samples (~24 texel reads) for forward/backward
   chromatic-shift sampling -- roughly 1,536 texture fetches per pixel,
   independent of `glare_size` (which only changes sample spacing, not
@@ -699,7 +697,7 @@ automatically) -- a local copy also lives at
 - Corollary: if a generator function (like `_generate_road`'s road-path
   endpoints) needs to hand off a world-space position that depends on the
   heightmap corner, prefer returning it in **pixel/local heightmap space**
-  and doing the pixel-to-world conversion in `_ready()` *after* the import
+  and doing the pixel-to-world conversion in `_ready()` _after_ the import
   call, once the real corner is known -- rather than pre-baking world-space
   coordinates during heightmap generation (before import has even
   happened), which bakes in the wrong corner the moment more than one
@@ -707,11 +705,11 @@ automatically) -- a local copy also lives at
 
 ## Non-destructive per-mesh material tinting (Church node pattern)
 
-- To adjust color/value on an *imported* multi-material mesh (e.g. the
+- To adjust color/value on an _imported_ multi-material mesh (e.g. the
   `castle-church` GLB, 12 child `MeshInstance3D`s each with their own baked
   PBR material) without ever touching the source `.glb` or its textures,
   do NOT try to set `material_override` via the `set_material` MCP tool on
-  an internal child of an *instanced* scene -- see the dedicated gotcha
+  an internal child of an _instanced_ scene -- see the dedicated gotcha
   below, it doesn't persist. Instead, attach a small script to the
   instance's root node (e.g. `res://scripts/church_material_tint.gd` on
   `Church`) that, in `_ready()`, walks the children, calls
@@ -756,7 +754,7 @@ automatically) -- a local copy also lives at
   issue above, even though it's a same-process editor operation -- see the
   dedicated note under "Compositor Effects addon" above.
 - **`set_material` does NOT reliably persist when targeting an internal
-  child node of an *instanced* scene** (e.g. `Church/roof_Mesh_roof_Mat_0`,
+  child node of an _instanced_ scene** (e.g. `Church/roof_Mesh_roof_Mat_0`,
   where `Church` is an instance of `castle-church/.../Untitled.glb`). The
   tool reports `ok: true` and the change is visible in that moment, but it
   only mutates the live in-editor node -- nothing gets written to
@@ -823,6 +821,7 @@ automatically) -- a local copy also lives at
 
 `scripts/debug/perf_bench.gd` (header comment = what it measures). Run it before and after every
 optimisation; never judge by GPU utilisation %.
+
 - Run: F9 in a running game, or from a shell (the editor can stay open):
   `Godot_v4.7.2-stable_win64_console.exe --path herald-of-oblivion --disable-vsync --max-fps 0 -- --bench --bench-label=<name>`
   (~5 min, quits when done). `--bench-only=<text>[,<text>...]` keeps only the ablation toggles whose name
@@ -845,7 +844,11 @@ optimisation; never judge by GPU utilisation %.
   `spawn_sky` so far) -- read its GPU ms instead. In the afternoon runs of 2026-10-05 the limit read
   6.06 ms (165 FPS) instead, and it still did on 2026-10-06 up to the `full_plantfield` run. After
   that run the user raised it to 240 FPS: a station at about 4.17 ms is on the limit from then on. The report flags a capped run (`frame_capped`).
-- Baseline to compare against, since 2026-10-06 12:53: `20261006_125350_627980c4_full_plantfield.json`
+- Baseline for the 384 x 768 map (since 2026-10-08): `20261008_185151_c2454614_valley_384.json`
+  (a FULL run, random seed 3863964574 -- pin that seed in `MASTER_SEED` for a run compared with
+  it). Four stations are CPU-limited in it (frame about 12-13 ms, GPU about 7 ms): see
+  `docs/performance_findings.md` step 10. The baselines below are of the 256 x 512 map.
+- Baseline of the 256 x 512 map, since 2026-10-06 12:53: `20261006_125350_627980c4_full_plantfield.json`
   (a FULL run: flowers and understory drawn by `PlantField`, poppy shadows to 40 m). Every station
   is GPU-limited in it, so its per-layer GPU figures can be trusted at all three ablation stations.
 - Baseline before that, from 11:23 the same day: `20261006_112323_bd39ed6d_full_after_trees.json`
@@ -910,12 +913,245 @@ static-only module under `scripts/terrain/` -- see the table in terrain_gen.gd's
 notes in this file that say "in `terrain_gen.gd`" refer to code that now lives in those modules,
 and functions called across modules lost their leading underscore
 (e.g. `_dress_cliff_faces` -> `CliffInstancer.dress_cliff_faces`).
+
 - New system: new file in `scripts/terrain/` with `class_name`, `extends RefCounted`, static funcs;
   call it from `WorldGenerator._ready()`.
 - Constants used by one module live in it; only shared ones go in `TerrainConfig`.
 - Per-run mutable state (caches, debug buffers) = `static var`, reset in the module's
   `reset_run_state()`, which `_ready()` calls first.
 - Functions that add nodes to the scene take `parent_node: Node` (WorldGenerator passes `get_parent()`).
+- Since 2026-10-08 the generated map is 384 x 768 m (was 256 x 512): a floor about 244 m wide
+  (`VALLEY_FLOOR_WIDTH_FRACTION` 0.637) between walls that rise 30 m over about 70 m each. The
+  walls are only the lower, playable part of the valley's forested slopes; a mountain backdrop
+  mesh is to carry them on beyond the map's edge (Kirill's design, not built yet). The grade
+  eases in over the first 30 m from the floor (`VALLEY_FOOT_LENGTH`), then stays constant (about
+  29 deg, under the trees' 37 deg limit). A 512 x 768 map with 90 / 60 m walls was tried first
+  the same day and dropped: three benchmark stations became CPU-limited at about 14 ms
+  (`docs/performance_findings.md` step 10).
+  - 384 is not a multiple of the 256 m region size: `TerrainHub.join_images` pads every row of
+    the import to 512 px on the +X side with holes (no ground, no collision). Any width works
+    this way; `WorldGenerator._ready()` prints a "padding check" line.
+  - Things tuned on the old 16 m wall are placed in metres from the floor's edge, not as a share
+    of the width: wall knots (`KNOT_WALL_ANCHOR_INSET`), the fixed landmark
+    (`TerrainLandmarks._center()`), the road's goal band and meander.
+  - **The landmark is stamped at `TerrainLandmarks.center()`, not at `CENTER_PX`** (that is where
+    it was captured, on the old map). Anything that keeps clear of it must use `center()`: the
+    knot and outcrop placement still used `CENTER_PX` until 2026-10-09, so a wall knot could be
+    built on the landmark's spot -- the stamp then replaced its ground and left its cliffs over a
+    pit. The stamp also no longer tilts the captured ground (`STAMP_ALLOW_TILT` false): a tilt of
+    up to 5 deg sheared it away from the formation's upright cliffs and starved the top-up.
+  - Debug: `-- --seed=<n>` rebuilds one map from a command line;
+    `--debug-heights=<px0>,<pz0>,<px1>,<pz1>,<step>` prints its ground heights
+    (`WorldGenerator.debug_height_grid`, also callable on a running game).
+  - Generation takes about 10.7 s (was 5.6 s). The notes below that say "256 x 512" predate
+    this, and the hub strip is as wide as the map (384 m).
+- Since 2026-10-08 `MountainWalls` (`scripts/terrain/mountain_walls.gd`) lines mountain segments up
+  beyond the map's edge -- on both long sides since 2026-10-09 (`side` 0 = low X, 1 = high X in
+  every per-side function; the notes below say "left" where both are meant). The import is now
+  128 (apron) + 384 (map) + 128 (apron) = 640 px wide, padded with holes to 768: 15 regions. The
+  south end, behind the village, is still open.
+- Since 2026-10-09 the generated map is 384 x 1024 m: the north 256 m are the valley's end, and
+  the castle (`TerrainCastle`, `scripts/terrain/castle.gd`) is a fixed landmark in it, not a
+  separate block of terrain. (Its first versions the same day were a fixed 640 x 256, then
+  640 x 512 m block north of the map with a bay, a 55 m crag and its own road; Kirill: "I don't
+  think we need an actual separate chunk ... extend the rng terrain to cover that area as well and
+  use the castle as a landmark that just always stays at the same place".)
+  - The mountain closes the valley inside the map: `MountainWalls.raise_foot` has a third side
+    (2 = the north end, one foot-line entry per COLUMN, `NORTH_FOOT_MIN..MAX` m inside the north
+    edge). Call the sides in order 0, 1, 2: in the corners the ground takes the higher of their
+    rises (`_foot_rise`), not the sum. `MountainWalls.mountain_depth(px, pz)` is how far past
+    the nearest foot line a pixel lies; the ground paint, the foot debris and `on_mountain` use it.
+  - **Nothing that grows is placed on the mountain's rock** (Kirill): trees, saplings,
+    understory, flowers and deadfall all test `MountainWalls.on_mountain(px, pz, radius)`, which
+    is also true where the castle stands. A new scatter layer must call it too.
+  - **The valley meanders** (Kirill, 2026-10-09: "the valley is strictly rectangular"):
+    `TerrainHeightmap.build_valley_shape` draws the floor's two edges per row
+    (`valley_floor_lo` / `_hi`; `floor_lo(pz)`, `floor_hi(pz)`, `floor_shift(side, pz)`), each
+    moving up to 75 m toward the middle and 25 m away from it in bends of about 220 m, never
+    leaving less than 120 m of floor. The forested slopes are measured from the edge on each
+    row, and the rock's foot line adds `floor_shift`, so it follows every bend. **Nothing may
+    assume the floor's edges are the same on every row any more**: knots read `floor_lo/hi` at
+    their row; code that picks a column by zone before it knows the row (cliff features,
+    erratics, outcrops) moves it with `TerrainHeightmap.warp_x(px, pz)`; the road's preferred
+    line follows the floor's middle. Both edges are straight near the south end (the hub's
+    walls are straight), and the low-X edge beside the castle and the fixed landmark, which are
+    placed against it. `valley_profile()` is the straight cross-section and is only right for
+    the hub. A first attempt the same day widened only the rock's foot line (4..115 m) over a
+    straight valley: rejected by Kirill, and cliffs and knots held that line back on half its
+    length. On the two seeds tried the floor came out 130..250 and 132..293 m wide and the road needed
+    deeper cuts and fills at narrows (up to 5.7 m, was 1.9 m). `edge_rock_circles` is gone:
+    `MountainWalls.stamp_rock_distance` writes the rock's distance field for the grass bake and
+    the ground paint.
+  - The castle stands at `TerrainCastle.SITE_PX` (heightmap pixels: the low-X corner of the
+    valley's end, at the floor's edge), on the ground as generated -- no pedestal (Kirill).
+    Knots, cliff meshes and outcrops keep `SITE_KEEP_RADIUS` clear of it; its footprint is in the
+    road's obstacle mask. `spawn_placeholder` reads the imported terrain: a plain block
+    250 m tall (fixed: Kirill, "hardcode tower standin height at 150m", then 200 -- before, its top
+    followed the crest of the ridge west of it and changed with the seed, 107..233 m), and a beam for the bridge that will join it to the
+    western ridge, at a fixed 240 m above the castle's base (Kirill: "the drawbridge has to be
+    at the top"). The bridge's far end is a separate piece, not terrain: a village on a rock
+    base (`TerrainCastle._spawn_village`, `VILLAGE_*`), the same on every seed, with only the
+    depth its base is sunk to following the ground (150 and 182 m deep on the two seeds tried).
+    The village is a photo scan (`D:\Downloads\calcata.glb`, 1.4 M triangles, 8K texture,
+    licence unchecked) cut down by `tools/blender/prepare_cliff_village.py` to the houses
+    alone: 90,000 triangles, a 2K texture, 114 x 168 m and 31 m tall, in
+    `assets/models/village/calcata/`. (Its first cut kept 52 m of the scan's own cliff and was
+    wider than the base: Kirill, "the village model is bigger than it so it sticks out, also
+    looks like the original village's cliff is still there". The base is now 5 m wider than
+    the scan all round and has a level top just under street level.) From the valley floor the
+    life-size village did not read as a village (Kirill: "can't really see any buildings from far
+    away"), so it is drawn at `VILLAGE_SCALE` 1.5 x, has 160 lit windows (`_add_village_windows`:
+    camera-facing glowing panes on outward-facing wall vertices, one MultiMesh) and a lighter
+    tint. Enlarging it needed it moved 25 m further west and its base made steeper, or the
+    base's foot reached the castle. More lights of the same kind stand round the base's rim,
+    on its upper face, along the bridge and on the castle (`_add_glow_points`). The base is
+    shaped by `_village_base_point` (`VILLAGE_BASE_BULGE` ...): an outline with lobes, buttresses
+    and ledges down its face, and a foot that flares into the ground it meets, read from the
+    terrain per direction (Kirill: it looked "tacked onto the terrain ridge" and "a perfect
+    circle") -- all of it held back on the castle's side. THAT PILLAR MESH IS GONE (third
+    version, same day): Kirill, "there's still a very obvious seam where the stone pillar
+    connects and it has an obvious texture pattern, let's make it an extension of the terrain
+    instead". What the village stands on is now terrain, a "shoulder" of the ridge: one height
+    function, `TerrainCastle.massif_height(x, z)` in the generated map's pixels (a level top
+    inside a lobed rim, falling away outside it with buttresses and ledges, steepest toward the
+    castle), and three owners of ground take the higher of it and their own -- the map past its
+    foot line (`raise_massif_on_map`, in the heightmap build after `raise_foot`), the low-X
+    apron (`raise_massif_on_apron`, which also cuts the ridge down to `massif_ceiling` where it
+    would stand in the village) and the north apron. **The Terrain3D import is now 768 px wide
+    with no hole padding**: `MountainWalls.WEST_EXTRA` (128) more columns west of the low-X
+    apron, holes except where the shoulder stands (`west_strip_maps`; Kirill: "widen it only
+    where the village is"). So **the generated map's pixel (0, 0) is
+    `MountainWalls.MAP_OFFSET_X` (256) m in +X from the corner Terrain3D reports**, not
+    `APRON_WIDTH`. The west mountain row's mesh is kept under the shoulder (`_seat_lift`). Next
+    to the map's edge the shoulder may rise at most `MASSIF_EDGE_GRADE` (the "largest step onto
+    the mountain strips" check reads up to 3.0 there). The bridge is 119 m; the change costs
+    about 0.8 s of startup. Steep terrain smears its texture unless the Terrain3D material's
+    `enable_projection` is on -- OFF in `main.tscn` (Kirill was told where it is). It is only seen from the valley floor (Kirill): no
+    collision, daylight colours tinted down by `VILLAGE_TINT`, and too rough to walk in. The
+    base uses `MountainWalls.plain_rock_material()`. TRIED AND DROPPED the same day: raising the
+    terrain into a cone under a landing pad (`raise_bridgehead`, removed) -- a heightmap cannot
+    be vertical, the ridge there is 40..225 m high depending on the seed, and it came out as one
+    stretched spire with a 133 m bridge. The span is 77 m now. The mountain area around it is to become playable; Kirill agreed to keep all
+    of it a blockout until that zone is built -- no detailing before then.
+  - The valley's road ends at the castle's foot (`TerrainCastle.road_end()`), no longer on the
+    north edge: `maps.exit_pixel` is that point, with a real pz.
+  - North of the map lie `TerrainCastle.LENGTH` (256) m of "north apron": mountain terrain built
+    like the side aprons (`TerrainCastle.build_maps`), as wide as the whole import. Its rows come
+    FIRST in the import, so **the generated map's pixel (0, 0) is also `TerrainCastle.LENGTH` m
+    in +Z from the corner Terrain3D reports** (as `APRON_WIDTH` is in +X); the import is 21
+    regions (256 + 1024 + 512 = 1792 m long). The first north mountain row (`END_ROWS[0]`) is
+    seated on its north edge like the side rows on their aprons (at a level base it hung about
+    90 m above the ground), and the side rows follow its side edges north of the map.
+    `WorldBounds`' north wall stands 60 m out on it.
+    In front of that row stands a "half-cascade" (Kirill, 2026-10-09: the north mountains looked
+    too far behind the terrain ridge, the height not gradual as on the sides): `END_ROWS[0]`,
+    half the size, with `"seat_at"` -- its foot ON the apron, 105 m north of the map's edge,
+    just behind the ridge's crest. A north row over the apron is draped over the apron's ground
+    (`_north_seat_lift`, `NORTH_DRAPE_*`, reading `TerrainCastle.north_apron_height`), so the
+    terrain behind its foot never shows through it.
+    **All three north rows are pinned** (`"fixed"` in `END_ROWS`: slice and height factor per
+    segment, the same on every seed) -- Kirill, 2026-10-09: "I like the moon between the two
+    peaks, I'd like to make that permanent". It is the range of seed 1541671226; from the hub's
+    plateau the moon stands between the far row's two peaks (`mountain_alpine_style_b`,
+    `mountain_2_b`). The other half of that picture is the DirectionalLight3D's rotation in
+    `main.tscn` (about -37.5, 178.8, 82.0 deg). The side rows are still random per seed. A
+    row's picks for a seed can be replayed without building the world: the loop in
+    `MountainWalls.build` draws, per segment, a pick (and a second number when it repeats the
+    last one) and then a height factor, from an rng seeded `master_seed ^ 0x57414C4C`.
+  - Command-line startup after this change: `_ready()` total 16.9 and 17.4 s on two seeds
+    (heightmap 5.9 and 6.5 s). Notes elsewhere that say "384 x 768" or "about 10.7 s" predate it,
+    and so do the benchmark baselines: every seed's map changed with the size.
+    `MountainWalls` adds `END_ROWS` behind the north apron.
+    The segments are ridge slices cut from a downloaded mountain by
+    `tools/blender/cut_mountain_wall.py` (rectangles listed in its `SEGMENTS`; it also crops the
+    textures to each slice) into `assets/models/mountains/<name>/`. Their count follows the edge's
+    length, so the map can be resized freely; each placed segment is rebuilt as a world-space mesh
+    on a level base. No collision, no shadow casting. Nearest the valley there is no mesh at all:
+    the first 128 m beyond the map's left edge are real terrain, the "apron"
+    (`MountainWalls.apron_maps`, joined onto the low-X side of the import by
+    `TerrainHub.join_images`). It leaves the edge at the terrain's own measured grade
+    (`_ramp_height`), steepens past what the player can walk, and ends in a low noise ridge. So
+    **the generated map's pixel (0, 0) is `APRON_WIDTH` m in +X from the corner Terrain3D reports**
+    (`WorldGenerator` and the benchmark add it; any new code that reads the corner from the regions
+    must too), and 128 + 384 = 512 fills two regions with no hole padding. `WorldBounds`' left wall
+    stands 60 m out on the apron (Kirill, 2026-10-08: no hard invisible wall at the foot of the
+    mountain). Two mesh versions of this strip were tried the same day and dropped: mountain slices
+    (vertices metres apart: the terrain floated above them) and a grid mesh fitted to the edge
+    (exact, but a straight seam between two shaders, and it poked through at distance).
+    **Where the valley ends and the mountain begins is the "foot line", not the map's edge**
+    (Kirill drew this, 2026-10-08, after four attempts at hiding a straight seam): a line wandering
+    0-34 m INSIDE the generated map's left edge (`MountainWalls.raise_foot`, a heightmap stage that
+    runs after all shaping and before the road). Past it the map's own ground steepens and is
+    painted bare rock face with no grass (`edge_rock_circles()` for the grass bake and the ground
+    paint, plus a final override in `TerrainGroundPaint.paint`); the apron beyond the edge is the
+    same bare rock, so the edge lies inside rock on both sides. Do not put soil or mossy textures
+    on the mountain, and no noise-mixed rock types (it "looks like a cow"). The rock texture
+    (rock*face_03) is a warm brown that reads as soil on a mountain: `MOUNTAIN_TINT` is multiplied
+    into it everywhere the ground is mountain. Across the foot line the ground paint lays a band
+    of scree textures, and `scatter_foot_debris` puts boulders (with collision) and scree stones
+    along it. The apron's height varies along the valley (`APRON_ENVELOPE*_`: saddles about 55 m,
+peaks about 220 m); at the peaks it keeps rising to its back edge, where the first mountain
+row is seated on it (`"seat"`in`ROWS`, `*seat_lift`), so foothill and mountain are one mass.
+The rows' mist must reach high up each row to be seen at all: the apron hides their lower
+parts from the valley. Rock structure (Kirill: ground and mountain are separate things; cliff
+models along the foot were rejected as mismatched in colour): `raise_foot` starts the rock as
+a 5-12 m wall at the foot line, and the apron's rise is cut into faces and ledges
+(`APRON_TERRACE*_`). Colour variety comes from the shape only -- darker creases, faint layers,
+turf on low ledges, snow on the apron's tips (terrain texture id 9 "Snow", a noise-built pair from
+`tools/make*snow_texture.py`, registered through `fix_textures()`in the editor) and on the
+rows above`SNOW_LINE`.
+Fog is ON at startup (`FOG_ON_AT_START`; Kirill switched it off on the morning of 2026-10-09
+and back on that afternoon); F7 turns it off / on. Separate from it are the mountains' clouds (2026-10-09,
+`CLOUD_*` in `MountainWalls`, `cloud_*` in the shader): drifting patches of veil in a band of
+heights above each row's mist, cut from one repeating noise texture and moved with `TIME` in the
+shader (no per-frame script work). They are paint on the surface -- the cheapest of three ways
+offered -- and are SWITCHED OFF, not removed (`CLOUDS_ON_ROWS` false; Kirill: "temporarily
+disable approach 1 on clouds, don't remove, and implement approach 2"). The second way is what
+runs: 15 upright see-through sheets (`CLOUD_SHEETS`, five per long side and across the north
+end, `shaders/mountain_cloud.gdshader`) standing between the rows, cut from the same noise, with
+a soft fade toward any mountain just behind them (depth texture) and near the camera. F6
+(`toggle_clouds`) switches both kinds, independently of the fog: F7 is the fog alone (Kirill). Their cost is not measured
+yet. Volumetric fog, the third way, does not reach the mountains' distance.
+What the fog is: `MountainWalls.build` sets distance fog for the WHOLE scene, on the WorldEnvironment (`SCENE_FOG*\*`: depth mode, none nearer than 150 m; set in
+code, not in `main.tscn`). The rows' own haze and mist come on top, fade out near the camera
+and start clear where the seated row meets the terrain -- as a flat per-surface colour they
+looked like grey paint with a hard line along the ridge. PerfDebug F7 switches all of it off /
+on; V is fly mode (no gravity, no collision). Behind the apron, three rows
+(`ROWS`, drawn from `SOURCES`: rugged_mountain seated on the apron, then mountain_alpine_style
+  * rugged, then landscape_sketching + alpine; the last two are shape only, no baked maps), each
+    taller and hazier and rising out of mist, with wide height ranges so passes open onto the row
+    behind. A row must start beyond the back of the one in front (the seated one reaches about
+    630 m out) or it shows that row poking through. Drawn
+    by `shaders/mountain_wall.gdshader` (tiling rock projected from three sides; the segment's baked
+    maps only as large-scale variation -- at 0.6 m per pixel they are too soft up close, Kirill
+    rejected them as the surface). Two mistakes already made once: a mirrored export flips every
+    triangle (the wall is then invisible except from below; the loader warns), and segments with
+    different end shapes leave sky gaps (every segment now ends in one shared cross-section;
+    `END_OVERLAP` / `END_BLEND` / `FOOT_GRADE` must match between the tool and the script). New textures
+    there need an `.import` with VRAM compression + mipmaps (and `compress/normal_map=1` for
+    `_nor_gl`) written BEFORE the editor's first scan -- the game builds the material in code, so
+    the editor's own 3D detection never runs for them. The source models are in
+    `D:\Downloads\mountains\` (batch 1: five Gaea height fields with `.exr` height maps; `2\`:
+    twelve textured glbs); their licences are unchecked.
+    Since 2026-10-09 eight of the seventeen are in use (Kirill: "variety won't hurt"): added
+    `mountain_lakes_211109` ("lakes", with maps, also in the seated row) and `mountain_lake_211106`
+    ("lake", with maps) -- both the same export as rugged_mountain, cut from their mesh
+    `Object_4` only (`ONLY_MESH` in the tool: the other meshes are water surfaces) --
+    `mountain_1` ("massif"), `mountain_2` ("peak") and `Terrain005_1K.obj` ("radial"; the tool
+    reads `.obj` too), all three shape only. A source may carry `"height"` in `SOURCES`: these
+    three came out of the cutter with crests 430-720 m above the foot (the older ones 300-440 m)
+    and are scaled back by it. The two lake models are coarser than rugged_mountain (about 19 m
+    between vertices as placed, against 9.5 m; 800-1,700 triangles a slice). The other nine were
+    surveyed and left out: `terrain.glb` and `backdrop_mountain...` too coarse, `gaea_02` a
+    small diorama, `mountain_lake_part_world_machine` half flat with holes, `tatra...` soft with
+    a 1K texture, `Terrain001`-`004` gentle eroded terrain.
+- Since 2026-10-06 the hub (`TerrainHub`, `scripts/terrain/hub.gd`) is a fixed 256 x 512 m strip
+  south (+Z) of the generated map, built from its own constant seed. Since 2026-10-07 it is a
+  village plateau 30 m above the valley floor whose north edge drops to the map down a 49 deg
+  scarp with a switchback trail cut into it (before that: plateau at floor height + overlook hill). It is a separate height array (`maps.hub_heights`), joined to the generated images only
+  for the Terrain3D import; `maps.heights` and every stage still cover the 256 x 512 generated
+  map alone, so nothing is scattered, painted or grassed on the hub yet. The player starts on the
+  plateau; `maps.spawn_pixel` is still the road's start on the map's south edge.
 - Since 2026-10-06 `PlantField` (`scripts/terrain/plant_field.gd`, a node like `GrassField`) draws
   the plants a scatter module hands to `PlantField.submit()` instead of the instancer: one
   indirect MultiMesh per mesh and LOD, LOD and frustum culling per plant in a compute shader. These

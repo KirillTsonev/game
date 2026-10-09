@@ -19,7 +19,7 @@
 ## need a path of their own: a plant outside the view must still cast into it, and these buffers
 ## hold only what the camera sees.
 ##
-## Compare / switch off: PerfDebug U moves the plants back to Terrain3D and here again in a running
+## Compare / switch off: set_gpu_driven() moves the plants back to Terrain3D and here again in a running
 ## game; the user argument --plants-terrain3d starts the game with everything on Terrain3D (for
 ## benchmark pairs). PerfDebug's J panel and the benchmark's layer toggles call set_layer_shown().
 class_name PlantField
@@ -49,7 +49,7 @@ var _terrain: Terrain3D
 var _sets: Array[Dictionary] = [] # per mesh id: layer, id, name, transforms, count, radius, lods, push, RD rids
 var _layer_shown: Dictionary = {} # layer key -> bool (missing = shown)
 var _lod_hidden: Dictionary = {} # "<layer>:<lod>" -> true, see set_lod_shown()
-var _gpu_driven := true # false = the plants were handed back to Terrain3D (PerfDebug U)
+var _gpu_driven := true # false = the plants were handed back to Terrain3D (set_gpu_driven; its debug key, PerfDebug U, was removed 2026-10-08)
 var _switching := false # set_gpu_driven() is part-way through
 var _restore_reduced_shadows := false # the reduced-shadow trial was on when the plants went back to Terrain3D
 var _rd: RenderingDevice
@@ -224,7 +224,7 @@ func _ready() -> void:
 	if "--plants-debug-toggle" in OS.get_cmdline_user_args():
 		_debug_toggle_test()
 
-## DEBUG (--plants-debug-toggle): what PerfDebug U does, twice, with a line printed after each step
+## DEBUG (--plants-debug-toggle): the set_gpu_driven switch, twice, with a line printed after each step
 ## -- to check from a command-line launch that the switch survives.
 func _debug_toggle_test() -> void:
 	await get_tree().create_timer(3.0).timeout
@@ -373,7 +373,7 @@ func audit_rows() -> Array[Dictionary]:
 		rows.append({"layer": s.layer, "label": "%d %s" % [s.id, s.name], "instances": s.count, "lod_meshes": meshes})
 	return rows
 
-## DEBUG (PerfDebug U): hands every set back to the Terrain3D instancer (on = false) or takes them
+## DEBUG (--plants-debug-toggle; was also PerfDebug U until 2026-10-08): hands every set back to the Terrain3D instancer (on = false) or takes them
 ## again (on = true), to compare the two ways of drawing at the same spot. Causes a short hitch.
 ## Takes about 0.3 s per shadow-casting mesh (Terrain3D rebuilds its nodes each time), one per frame.
 ## `after_rebuild` is called after every rebuild, before the frame is drawn.

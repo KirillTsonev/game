@@ -99,7 +99,7 @@ func _on_layer_toggled(on: bool, key: StringName) -> void:
 	print("[Layers] " + _status.text)
 
 ## Hides the instancer nodes of every layer that is switched off here, again. For after something
-## made Terrain3D rebuild its nodes (PerfDebug U): rebuilt nodes come back visible.
+## made Terrain3D rebuild its nodes (PlantField.set_gpu_driven / set_reduced_shadows): rebuilt nodes come back visible.
 func reapply_hidden() -> void:
 	for key: StringName in _shown:
 		if not _shown[key] and not mesh_ids(key).is_empty():

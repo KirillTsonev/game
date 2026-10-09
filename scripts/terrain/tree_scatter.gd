@@ -222,6 +222,20 @@ static func scatter_trees(parent_node: Node, terrain: Terrain3D, heights: Packed
 			instancer.add_transforms(id, transforms_by_mesh[id], colors_by_mesh[id], true)
 
 	print("TERRAIN_GEN: scattered %d tree(s) across %d stand(s) + %d lone (%d with trunk colliders, %d variant id(s) active)" % [tree_total, stand_count, lone_count, collider_container.get_child_count(), active_ids.size()])
+	# Trees per hectare on each part of the valley's cross-section (a bare slope shows up here).
+	# The floor's edges differ per row since 2026-10-09 (TerrainHeightmap.build_valley_shape);
+	# the walls' areas include the mountain's rock, where nothing grows.
+	var zone_counts := [0, 0, 0] # left wall, floor, right wall
+	for p in tree_points:
+		zone_counts[0 if p.x < TerrainHeightmap.floor_lo(p.y) else (2 if p.x > TerrainHeightmap.floor_hi(p.y) else 1)] += 1
+	var zone_area := [0.0, 0.0, 0.0] # m2
+	for pz in length:
+		var floor_lo := TerrainHeightmap.floor_lo(pz)
+		var floor_hi := TerrainHeightmap.floor_hi(pz)
+		zone_area[0] += floor_lo
+		zone_area[1] += floor_hi - floor_lo
+		zone_area[2] += float(width - 1) - floor_hi
+	print("TERRAIN_GEN: trees per hectare -- left wall %.1f, floor %.1f, right wall %.1f" % [zone_counts[0] / (zone_area[0] / 10000.0), zone_counts[1] / (zone_area[1] / 10000.0), zone_counts[2] / (zone_area[2] / 10000.0)])
 	print("TERRAIN_GEN: closest trunk-to-trunk distance %.2f m (TREE_MIN_SPACING_RADIUS=%.2f -> floor %.2f m at smallest scale)" % [_closest_tree_pair(spacing_grid), TREE_MIN_SPACING_RADIUS, TREE_MIN_SPACING_RADIUS * TREE_SCALE_MIN * 2.0])
 
 ## Places one upright tree at (or near) `target` pixel spot: retries a few times
@@ -249,7 +263,8 @@ static func _place_one_tree(target: Vector2, heights: PackedFloat32Array, width:
 		var sample_idx := clampi(int(round(pz)), 0, length - 1) * width + clampi(int(round(px)), 0, width - 1)
 		var on_road := road_weight[sample_idx] > 0.0
 		if normal.y >= TREE_MAX_SLOPE_NORMAL_Y and not on_road:
-			if not RockScatter.boulder_blocked(px, pz, TREE_KEEPOUT_RADIUS * scale, keep_rects, keep_circles) \
+			if not MountainWalls.on_mountain(px, pz, TREE_KEEPOUT_RADIUS * scale) \
+					and not RockScatter.boulder_blocked(px, pz, TREE_KEEPOUT_RADIUS * scale, keep_rects, keep_circles) \
 					and _tree_spacing_gap(spacing_grid, px, pz, spacing_radius) >= 0.0:
 				found = true
 				break
@@ -342,6 +357,9 @@ static func debug_tree_probe(world_pos: Vector3) -> String:
 	var blocked := RockScatter.boulder_blocked(cpx, cpz, TREE_KEEPOUT_RADIUS, keep_rects, keep_circles)
 	lines.append("  rock keep-outs (cliffs / outcrops / boulders, scale 1.0): %s" % ["FAIL -- inside a keep-out" if blocked else "PASS"])
 	if blocked: fails.append("keep-out")
+	var on_rock := MountainWalls.on_mountain(cpx, cpz, TREE_KEEPOUT_RADIUS)
+	lines.append("  mountain (past the foot line, scale 1.0): %s" % ["FAIL -- on the mountain's rock" if on_rock else "PASS"])
+	if on_rock: fails.append("mountain")
 
 	var spacing_gap := _tree_spacing_gap(d.get("spacing_grid", {}), cpx, cpz, TREE_MIN_SPACING_RADIUS)
 	var spacing_ok := spacing_gap >= 0.0

@@ -263,7 +263,7 @@ func _read_corner() -> void:
 	for loc in _terrain.get_data().get_region_locations():
 		min_x = mini(min_x, loc.x)
 		min_z = mini(min_z, loc.y)
-	_corner = Vector3(min_x * region_size, 0, min_z * region_size)
+	_corner = Vector3(min_x * region_size + MountainWalls.MAP_OFFSET_X, 0, min_z * region_size + TerrainCastle.LENGTH) # past the mountain apron and the castle end
 
 # ---------------------------------------------------------------- station hold (PerfDebug F10)
 

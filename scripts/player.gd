@@ -18,6 +18,12 @@ extends CharacterBody3D
 
 var pitch: float = 0.0
 
+## DEBUG (PerfDebug V): fly mode. No gravity and no collision: WASD moves where the camera
+## looks, Space up, Ctrl down, Shift held = fast. Walls, terrain and the world's edges do not stop it.
+var debug_fly: bool = false
+const FLY_SPEED := 15.0 ## m/s
+const FLY_FAST_MULTIPLIER := 6.0
+
 ## Sprint (Shift) and crouch (Ctrl) are toggles and cancel each other.
 var _sprinting: bool = false
 var _crouching: bool = false
@@ -102,7 +108,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			lantern.visible = not lantern.visible
 
 	# Shift = sprint on/off, Ctrl = crouch on/off, Space while crouched = stand up (no jump).
-	if event is InputEventKey and event.pressed and not event.echo:
+	if event is InputEventKey and event.pressed and not event.echo and not debug_fly:
 		match event.physical_keycode:
 			KEY_SHIFT:
 				_set_crouching(false)
@@ -131,6 +137,9 @@ func _unhandled_input(event: InputEvent) -> void:
 ## collision logic, so the custom machinery was net complexity with no
 ## evidence it helped. Back to the plain baseline.
 func _physics_process(delta: float) -> void:
+	if debug_fly:
+		_fly(delta)
+		return
 	if not is_on_floor():
 		velocity.y -= gravity * delta
 
@@ -191,6 +200,26 @@ func _physics_process(delta: float) -> void:
 		print("FALL: player dropped below y=%.1f (at %s) -- resetting to last safe position %s" % [FALL_RESET_Y, global_position, last_safe_transform.origin])
 		global_transform = last_safe_transform
 		velocity = Vector3.ZERO
+
+## DEBUG fly mode (see debug_fly): moves the body directly, so nothing collides with it.
+func _fly(delta: float) -> void:
+	var move := Vector3.ZERO
+	if Input.is_key_pressed(KEY_W):
+		move -= camera.global_basis.z
+	if Input.is_key_pressed(KEY_S):
+		move += camera.global_basis.z
+	if Input.is_key_pressed(KEY_A):
+		move -= camera.global_basis.x
+	if Input.is_key_pressed(KEY_D):
+		move += camera.global_basis.x
+	if Input.is_key_pressed(KEY_SPACE):
+		move += Vector3.UP
+	if Input.is_key_pressed(KEY_CTRL):
+		move += Vector3.DOWN
+	var fly_speed := FLY_SPEED * (FLY_FAST_MULTIPLIER if Input.is_key_pressed(KEY_SHIFT) else 1.0)
+	if move.length_squared() > 0.0:
+		global_position += move.normalized() * fly_speed * delta
+	velocity = Vector3.ZERO
 
 ## Standing up is refused while something is overhead: the body's current shape is swept up
 ## by the height it still has to grow.

@@ -256,6 +256,12 @@ static func _find_feature_center(rng: RandomNumberGenerator, placed: Array[Dicti
 	for attempt in 30:
 		var center_x := rng.randf_range(x_lo, x_hi) if x_hi > x_lo else (x_lo + x_hi) * 0.5
 		var center_z := rng.randf_range(z_lo, z_hi)
+		# 2026-10-09: the column was drawn for a straight valley's zone; the valley meanders, so it
+		# is moved to where that zone lies on this row (kept `reach` inside the map's edges).
+		var last_px := float(TerrainConfig.AREA_WIDTH - 1)
+		center_x = TerrainHeightmap.warp_x(center_x, center_z)
+		if reach * 2.0 < last_px:
+			center_x = clampf(center_x, reach, last_px - reach)
 		var far_enough := true
 		for p in placed:
 			var required: float = reach + p.reach + FEATURE_MIN_GAP

@@ -69,6 +69,9 @@ const KNOT_TEST_STRIDE := 3 ## pixel stride of the circle-vs-occupancy test (spe
 ## Footprint circles (pixels = metres), centred on each template's centre_u. Sized to contain
 ## every row's flatten zone + raise plateau/fade/side slopes (raise can reach ~35 m).
 const KNOT_WALL_RADIUS := 40.0
+## Wall knots are anchored this far up the wall from the floor's edge, m (2026-10-08: was a share
+## of the wall's run, which came to this distance on the 256 m wide map).
+const KNOT_WALL_ANCHOR_INSET := 20.0
 const KNOT_FLOOR_RADIUS := 42.0
 
 ## Occupancy: pixels cliff dressing / outcrop fitting moved by more than this are "taken".
@@ -143,7 +146,7 @@ static func build_knots(heights: PackedFloat32Array, width: int, length: int, rn
 		if t == KnotType.WALL_LEFT and TerrainLandmarks.is_active():
 			var nearest := 0
 			for i in slots.size():
-				if absf(slots[i] - TerrainLandmarks.CENTER_PX.y) < absf(slots[nearest] - TerrainLandmarks.CENTER_PX.y):
+				if absf(slots[i] - TerrainLandmarks.center().y) < absf(slots[nearest] - TerrainLandmarks.center().y):
 					nearest = i
 			slots.remove_at(nearest) # the fixed landmark is this slot's left-wall knot
 		for pz in slots:
@@ -363,7 +366,19 @@ static func _build_occupancy(heights: PackedFloat32Array, pre: PackedFloat32Arra
 		_fill_circle(occ, width, length, float(o.px), float(o.pz), float(o.radius) + 2.0)
 	# 2026-09-29: the fixed landmark's whole disk (landmarks.gd) is taken.
 	if TerrainLandmarks.is_active():
-		_fill_circle(occ, width, length, TerrainLandmarks.CENTER_PX.x, TerrainLandmarks.CENTER_PX.y, TerrainLandmarks.RADIUS)
+		# Where it is stamped on THIS map (center()), not where it was captured (CENTER_PX): since
+		# the map grew (2026-10-08) the two differ, and a wall knot built on the stamp's spot had its
+		# ground overwritten by the landmark while its cliff meshes stayed, standing over a pit.
+		var landmark_centre := TerrainLandmarks.center()
+		_fill_circle(occ, width, length, landmark_centre.x, landmark_centre.y, TerrainLandmarks.RADIUS)
+	# 2026-10-09: and the castle's site at the valley's north end (TerrainCastle).
+	_fill_circle(occ, width, length, TerrainCastle.SITE_PX.x, TerrainCastle.SITE_PX.y, TerrainCastle.SITE_KEEP_RADIUS)
+	# ... and the ground the village's shoulder comes down onto, along the low-X edge beside it.
+	var shoulder_rows := TerrainCastle.massif_rows()
+	for pz in range(maxi(shoulder_rows.x, 0), mini(shoulder_rows.y, length - 1) + 1):
+		for px in mini(int(TerrainCastle.MASSIF_KEEP) + 2, width):
+			if TerrainCastle.shoulder_keepout(px, pz):
+				occ[pz * width + px] = 1
 	return _dilate(occ, width, length, int(KNOT_OCCUPIED_MARGIN))
 
 static func _fill_circle(grid: PackedByteArray, width: int, length: int, cx: float, cz: float, r: float) -> void:
@@ -536,9 +551,6 @@ static func _px_to_local(knot: Dictionary, p: Vector2) -> Vector2:
 ## along the map (still free space only; placed knots are already marked occupied), score still
 ## prefers spots near the slot.
 static func _place_knot(type: int, slot_pz: float, jitter: float, width: int, length: int, rng: RandomNumberGenerator, occupied: PackedByteArray, cliff_features: Array[Dictionary], full_range: bool = false) -> Dictionary:
-	var floor_half := TerrainConfig.VALLEY_FLOOR_WIDTH_FRACTION * 0.5
-	var floor_lo := (0.5 - floor_half) * width
-	var floor_hi := (0.5 + floor_half) * width
 	var best: Dictionary = {}
 	var best_score := INF
 	for c in (KNOT_CANDIDATES * 2 if full_range else KNOT_CANDIDATES):
@@ -548,15 +560,19 @@ static func _place_knot(type: int, slot_pz: float, jitter: float, width: int, le
 		var az := rng.randf_range(0.0, float(length - 1)) if full_range else slot_pz + rng.randf_range(-1.0, 1.0) * jitter
 		var ax := 0.0
 		var theta := 0.0
+		# 2026-10-09: the floor's edges at this candidate's row -- the valley meanders
+		# (TerrainHeightmap.build_valley_shape), they are no longer the same along the map.
+		var floor_lo := TerrainHeightmap.floor_lo(az)
+		var floor_hi := TerrainHeightmap.floor_hi(az)
 		match type:
 			KnotType.WALL_LEFT:
-				# Anchor ~2/3 of the way from the map edge to the floor: the shelf lands mid-wall
-				# (the reference formation's shelf sat at px ~34), the bench reaches the floor.
+				# Anchor KNOT_WALL_ANCHOR_INSET m up the wall from the floor's edge: the shelf lands
+				# on the wall's foot, the bench reaches the floor.
 				theta = rng.randf_range(-0.2, 0.2)
-				ax = floor_lo * 0.66 + rng.randf_range(-3.0, 3.0)
+				ax = floor_lo - KNOT_WALL_ANCHOR_INSET + rng.randf_range(-3.0, 3.0)
 			KnotType.WALL_RIGHT:
 				theta = PI + rng.randf_range(-0.2, 0.2)
-				ax = floor_hi + (width - floor_hi) * 0.34 + rng.randf_range(-3.0, 3.0)
+				ax = floor_hi + KNOT_WALL_ANCHOR_INSET + rng.randf_range(-3.0, 3.0)
 			_:
 				# Axis runs along the valley; hug one side so the rest of the floor stays open.
 				theta = (PI * 0.5 if rng.randf() < 0.5 else -PI * 0.5) + rng.randf_range(-0.25, 0.25)

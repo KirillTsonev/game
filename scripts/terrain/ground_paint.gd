@@ -192,7 +192,13 @@ const ROCK_NONE := 255 ## rock_of marker: not a rock vertex
 const ROCK_TYPE_MODE_RADIUS := 2 ## majority-filter window half-size (vertices = metres)
 const ROCK_TYPE_MODE_PASSES := 2
 const ROCKY_MIN := 0.03 ## below this a vertex is plain soil
-const STEEP_NY_FULL := 0.62 ## normal.y at/below this -> fully steep (bare rock likely)
+## The band of scree across the mountain's foot line (see paint): m up the rock, m out into the
+## valley, and how far noise moves each pixel's place in it. The mountain's colour fades out
+## across the same band.
+const MOUNTAIN_SCREE_IN := 5.0
+const MOUNTAIN_SCREE_OUT := 7.0
+const MOUNTAIN_SCREE_JITTER := 2.0
+const STEEP_NY_FULL := 0.62## normal.y at/below this -> fully steep (bare rock likely)
 const STEEP_NY_NONE := 0.82 ## at/above this -> not steep
 const FLAT_NY := 0.9 ## CoastSandRocks favours ground flatter than this
 
@@ -243,6 +249,8 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 		GrassScatter._stamp_rect(cliff_d, width, length, kr, CLIFF_REACH)
 	for oc in maps.outcrop_plan:
 		GrassScatter._stamp_circle(cliff_d, width, length, float(oc.px), float(oc.pz), float(oc.radius), CLIFF_REACH)
+	# The rock band along the edge where the mountain wall begins (2026-10-08): painted like a cliff's foot.
+	MountainWalls.stamp_rock_distance(cliff_d, width, length, CLIFF_REACH)
 	var boulder_d := _new_field(n, BOULDER_REACH)
 	for c in RockScatter.rock_keep_circles:
 		GrassScatter._stamp_circle(boulder_d, width, length, c.x, c.y, c.z, BOULDER_REACH)
@@ -468,6 +476,38 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 	# Output checksum: must stay the same across a change that is only meant to be faster.
 	print("GROUND_PAINT v2: checksum control %d, patch shade %d; timing prep %d ms, main loop %d ms, post passes %d ms" % [hash(control), hash(patch_shade), t_prep - t_dist, t_main - t_prep, t_px - t_main])
 
+	# The mountain (2026-10-08): past its foot line (MountainWalls.raise_foot) the ground is the same
+	# bare rock face as the mountain apron beyond the map's edge. Across the line lies a band of
+	# scree, as at the foot of a real face: rock -> scree over MOUNTAIN_SCREE_IN m up the rock,
+	# scree -> scree with grass over MOUNTAIN_SCREE_OUT m into the valley, the positions shaken by
+	# noise so no band edge is a clean line. (Before: rock faded straight into turf.)
+	# Both long sides and the north end: [the side's foot line, m inside its edge per row (per
+	# column for the north end)]. Every pixel within reach of a line is painted by how far past
+	# the NEAREST line it lies (MountainWalls.mountain_depth), so the sides agree in the corners.
+	var mountain_feet: Array[PackedFloat32Array] = [maps.get("mountain_foot", PackedFloat32Array()), maps.get("mountain_foot_right", PackedFloat32Array()), maps.get("mountain_foot_north", PackedFloat32Array())]
+	var mountain_rock := _pack(ROCK_FACE_ID, ROCK_FACE_ID, 0.0)
+	var scree_noise := GrassScatter._noise(hash(mountain_feet[0]), 1.0 / 4.0)
+	for side in 3:
+		var mountain_foot := mountain_feet[side]
+		for along in mini(mountain_foot.size(), width if side == 2 else length):
+			var line := mountain_foot[along]
+			if line <= 0.0: # a cliff or knot stands at the edge here: no mountain foot
+				continue
+			for inside in clampi(int(line + MOUNTAIN_SCREE_OUT) + 2, 0, length if side == 2 else width):
+				var px := inside if side == 0 else (width - 1 - inside if side == 1 else along)
+				var pz := along if side < 2 else inside
+				var t := -MountainWalls.mountain_depth(px, pz) + scree_noise.get_noise_2d(px, pz) * MOUNTAIN_SCREE_JITTER # < 0 on the rock
+				var i := pz * width + px
+				if t < -MOUNTAIN_SCREE_IN:
+					control[i] = mountain_rock
+				elif t < 0.0:
+					control[i] = _pack(ROCK_FACE_ID, ROCKY_TRAIL_ID, (t + MOUNTAIN_SCREE_IN) / MOUNTAIN_SCREE_IN)
+				elif t < MOUNTAIN_SCREE_OUT:
+					# The outer third breaks up into patches before it stops.
+					var outer := (t - MOUNTAIN_SCREE_OUT * 0.66) / (MOUNTAIN_SCREE_OUT * 0.34)
+					if outer <= 0.0 or 0.5 + 0.5 * scree_noise.get_noise_2d(px * 2.7 + 91.0, pz * 2.7) > outer:
+						control[i] = _pack(ROCKY_TRAIL_ID, ROCKY_TERRAIN_ID, t / MOUNTAIN_SCREE_OUT)
+
 	# -- Write into each region's control image, then push to the GPU --
 	var data: Terrain3DData = terrain.get_data()
 	var rs := terrain.get_region_size()
@@ -503,9 +543,12 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 					var si := (pz * width + px) * 4
 					var di := (lz * rs + lx) * 4
 					var s := patch_shade[pz * width + px]
-					cbytes[di] = color_src[si] * s / 255
-					cbytes[di + 1] = color_src[si + 1] * s / 255
-					cbytes[di + 2] = color_src[si + 2] * s / 255
+					# Past the mountain's foot line the ground takes the mountain's colour, fading out
+					# across the scree band.
+					var mountain := smoothstep(-MOUNTAIN_SCREE_OUT, MOUNTAIN_SCREE_IN, MountainWalls.mountain_depth(px, pz))
+					cbytes[di] = int(color_src[si] * s / 255 * lerpf(1.0, MountainWalls.MOUNTAIN_TINT.r, mountain))
+					cbytes[di + 1] = int(color_src[si + 1] * s / 255 * lerpf(1.0, MountainWalls.MOUNTAIN_TINT.g, mountain))
+					cbytes[di + 2] = int(color_src[si + 2] * s / 255 * lerpf(1.0, MountainWalls.MOUNTAIN_TINT.b, mountain))
 		if wrote:
 			region.set_control_map(Image.create_from_data(rs, rs, false, Image.FORMAT_RF, bytes))
 			regions_written += 1

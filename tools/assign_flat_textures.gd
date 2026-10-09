@@ -101,6 +101,9 @@ const TEXTURES_BY_ID := {
 	## (one tile = 1.56 m of real ground -> uv_scale 1 / 1.56). Painted under canopy by ground_paint.gd;
 	## the litter mounds (tools/setup_ground_debris_assets.gd) render with the same two files.
 	8: {"name": "PineLitter", "albedo": "res://textures/source/pine_litter_albedo_height_1k.png", "normal": "res://textures/source/pine_litter_normal_roughness_1k.png", "uv_scale": 0.64, "detiling_rotation": 1.0, "detiling_shift": 1.0},
+	## 2026-10-08: snow, for the tips of the mountain apron (MountainWalls.apron_maps). Built from noise by
+	## tools/make_snow_texture.py (no scan behind it); one tile per 4 m.
+	9: {"name": "Snow", "albedo": "res://textures/source/snow_albedo_height_1k.png", "normal": "res://textures/source/snow_normal_roughness_1k.png", "uv_scale": 0.25, "detiling_rotation": 1.0, "detiling_shift": 1.0},
 }
 
 ## Strips the id=2 ("Rock") Terrain3DTextureAsset entry from the SAME live

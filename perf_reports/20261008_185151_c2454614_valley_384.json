@@ -1,0 +1,6268 @@
+{
+	"ablation": [
+		{
+			"baseline_end": {
+				"buffer_mem_mb": 263.212,
+				"cpu_render_ms": 8.455,
+				"draw_calls": 6465,
+				"frame_ms": 12.236,
+				"frames": 123,
+				"gpu_ms": 6.788,
+				"max_ms": 19.483,
+				"nodes": 25035,
+				"objects": 6625,
+				"p50_ms": 11.798,
+				"p95_ms": 17.478,
+				"p99_ms": 19.32,
+				"physics_ms": 0.087,
+				"primitives": 64590966,
+				"process_ms": 19.375,
+				"static_mem_mb": 649.618,
+				"texture_mem_mb": 852.613,
+				"video_mem_mb": 1257.608
+			},
+			"baseline_start": {
+				"buffer_mem_mb": 263.212,
+				"cpu_render_ms": 8.105,
+				"draw_calls": 6483,
+				"frame_ms": 11.612,
+				"frames": 130,
+				"gpu_ms": 6.665,
+				"max_ms": 20.922,
+				"nodes": 25035,
+				"objects": 6673,
+				"p50_ms": 11.405,
+				"p95_ms": 15.298,
+				"p99_ms": 20.139,
+				"physics_ms": 0.086,
+				"primitives": 64674966,
+				"process_ms": 20.782,
+				"static_mem_mb": 649.229,
+				"texture_mem_mb": 852.613,
+				"video_mem_mb": 1257.608
+			},
+			"post_passes": [
+				{
+					"gpu_ms": 0.046,
+					"name": "painterly_sat/copy"
+				},
+				{
+					"gpu_ms": 0.074,
+					"name": "painterly_sat/sum_h"
+				},
+				{
+					"gpu_ms": 0.107,
+					"name": "painterly_sat/sum_v"
+				},
+				{
+					"gpu_ms": 0.096,
+					"name": "painterly_sat"
+				},
+				{
+					"gpu_ms": 0.145,
+					"name": "radial_blur"
+				},
+				{
+					"gpu_ms": 0.089,
+					"name": "gaussian_blur"
+				},
+				{
+					"gpu_ms": 0.067,
+					"name": "noise"
+				},
+				{
+					"gpu_ms": 0.128,
+					"name": "unreal_bloom"
+				},
+				{
+					"gpu_ms": 0.138,
+					"name": "glare"
+				}
+			],
+			"station": "spawn_ahead",
+			"toggles": [
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.206,
+					"delta_draw_calls": 112,
+					"delta_frame_ms": 0.163,
+					"delta_gpu_ms": 0.148,
+					"delta_primitives": 450307,
+					"draw_calls": 6371,
+					"frame_ms": 11.761,
+					"frames": 128,
+					"gpu_ms": 6.578,
+					"max_ms": 22.589,
+					"name": "layer:cliffs",
+					"nodes": 25035,
+					"objects": 6477,
+					"p50_ms": 10.992,
+					"p95_ms": 20.049,
+					"p99_ms": 21.651,
+					"physics_ms": 0.087,
+					"primitives": 64224659,
+					"process_ms": 20.948,
+					"static_mem_mb": 649.231,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.029,
+					"delta_draw_calls": 35,
+					"delta_frame_ms": 0.373,
+					"delta_gpu_ms": 0.092,
+					"delta_primitives": 184994,
+					"draw_calls": 6448,
+					"frame_ms": 11.551,
+					"frames": 130,
+					"gpu_ms": 6.634,
+					"max_ms": 22.775,
+					"name": "layer:outcrops",
+					"nodes": 25035,
+					"objects": 6626,
+					"p50_ms": 11.21,
+					"p95_ms": 16.085,
+					"p99_ms": 19.329,
+					"physics_ms": 0.087,
+					"primitives": 64489972,
+					"process_ms": 22.633,
+					"static_mem_mb": 649.233,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.633,
+					"delta_draw_calls": 78,
+					"delta_frame_ms": 1.047,
+					"delta_gpu_ms": 0.019,
+					"delta_primitives": 12077030,
+					"draw_calls": 6405,
+					"frame_ms": 10.877,
+					"frames": 138,
+					"gpu_ms": 6.707,
+					"max_ms": 19.104,
+					"name": "layer:flowers",
+					"nodes": 25035,
+					"objects": 6595,
+					"p50_ms": 10.178,
+					"p95_ms": 15.743,
+					"p99_ms": 18.115,
+					"physics_ms": 0.083,
+					"primitives": 52597936,
+					"process_ms": 17.988,
+					"static_mem_mb": 649.235,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 6.1,
+					"delta_draw_calls": 1586,
+					"delta_frame_ms": 2.712,
+					"delta_gpu_ms": -0.41,
+					"delta_primitives": 324284,
+					"draw_calls": 4897,
+					"frame_ms": 9.212,
+					"frames": 163,
+					"gpu_ms": 7.136,
+					"max_ms": 22.935,
+					"name": "layer:saplings",
+					"nodes": 25035,
+					"objects": 5087,
+					"p50_ms": 8.285,
+					"p95_ms": 14.594,
+					"p99_ms": 20.582,
+					"physics_ms": 0.152,
+					"primitives": 64350682,
+					"process_ms": 20.468,
+					"static_mem_mb": 649.238,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.362,
+					"delta_draw_calls": 214,
+					"delta_frame_ms": 1.39,
+					"delta_gpu_ms": 0.593,
+					"delta_primitives": 40645692,
+					"draw_calls": 6269,
+					"frame_ms": 10.534,
+					"frames": 143,
+					"gpu_ms": 6.133,
+					"max_ms": 26.406,
+					"name": "layer:understory",
+					"nodes": 25035,
+					"objects": 6459,
+					"p50_ms": 9.767,
+					"p95_ms": 13.679,
+					"p99_ms": 23.775,
+					"physics_ms": 0.092,
+					"primitives": 24029274,
+					"process_ms": 26.231,
+					"static_mem_mb": 649.24,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.185,
+					"delta_draw_calls": 3,
+					"delta_frame_ms": 0.197,
+					"delta_gpu_ms": 0.041,
+					"delta_primitives": 489,
+					"draw_calls": 6480,
+					"frame_ms": 11.727,
+					"frames": 128,
+					"gpu_ms": 6.685,
+					"max_ms": 22.309,
+					"name": "layer:instanced_other",
+					"nodes": 25035,
+					"objects": 6670,
+					"p50_ms": 10.878,
+					"p95_ms": 16.412,
+					"p99_ms": 20.947,
+					"physics_ms": 0.127,
+					"primitives": 64674477,
+					"process_ms": 15.634,
+					"static_mem_mb": 649.241,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.44,
+					"delta_draw_calls": 354,
+					"delta_frame_ms": 1.124,
+					"delta_gpu_ms": -0.066,
+					"delta_primitives": 139933,
+					"draw_calls": 6129,
+					"frame_ms": 10.8,
+					"frames": 139,
+					"gpu_ms": 6.792,
+					"max_ms": 22.537,
+					"name": "layer:deadfall",
+					"nodes": 25035,
+					"objects": 6319,
+					"p50_ms": 10.128,
+					"p95_ms": 14.117,
+					"p99_ms": 19.721,
+					"physics_ms": 0.077,
+					"primitives": 64535033,
+					"process_ms": 22.404,
+					"static_mem_mb": 649.243,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 3.946,
+					"delta_draw_calls": 3586,
+					"delta_frame_ms": 5.315,
+					"delta_gpu_ms": 1.019,
+					"delta_primitives": 4135719,
+					"draw_calls": 2897,
+					"frame_ms": 6.609,
+					"frames": 227,
+					"gpu_ms": 5.707,
+					"max_ms": 11.049,
+					"name": "layer:trees",
+					"nodes": 25035,
+					"objects": 3087,
+					"p50_ms": 6.321,
+					"p95_ms": 8.524,
+					"p99_ms": 9.366,
+					"physics_ms": 0.083,
+					"primitives": 60539247,
+					"process_ms": 10.964,
+					"static_mem_mb": 649.246,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.953,
+					"delta_draw_calls": 367,
+					"delta_frame_ms": 0.381,
+					"delta_gpu_ms": -0.037,
+					"delta_primitives": 90027,
+					"draw_calls": 6116,
+					"frame_ms": 11.543,
+					"frames": 130,
+					"gpu_ms": 6.763,
+					"max_ms": 29.912,
+					"name": "layer:rocks",
+					"nodes": 25035,
+					"objects": 6306,
+					"p50_ms": 10.772,
+					"p95_ms": 17.886,
+					"p99_ms": 21.536,
+					"physics_ms": 0.119,
+					"primitives": 64584939,
+					"process_ms": 29.717,
+					"static_mem_mb": 649.247,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.722,
+					"delta_draw_calls": 7,
+					"delta_frame_ms": 0.921,
+					"delta_gpu_ms": 1.417,
+					"delta_primitives": 5950067,
+					"draw_calls": 6476,
+					"frame_ms": 11.003,
+					"frames": 137,
+					"gpu_ms": 5.309,
+					"max_ms": 20.268,
+					"name": "layer:grass",
+					"nodes": 25035,
+					"objects": 6666,
+					"p50_ms": 10.347,
+					"p95_ms": 15.807,
+					"p99_ms": 18.488,
+					"physics_ms": 0.06,
+					"primitives": 58724899,
+					"process_ms": 18.314,
+					"static_mem_mb": 649.249,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 0.524,
+					"delta_draw_calls": 6366,
+					"delta_frame_ms": 7.758,
+					"delta_gpu_ms": 4.034,
+					"delta_primitives": 64133230,
+					"draw_calls": 117,
+					"frame_ms": 4.166,
+					"frames": 361,
+					"gpu_ms": 2.693,
+					"max_ms": 4.322,
+					"name": "layer:ALL",
+					"nodes": 25035,
+					"objects": 176,
+					"p50_ms": 4.165,
+					"p95_ms": 4.216,
+					"p99_ms": 4.295,
+					"physics_ms": 0.063,
+					"primitives": 541736,
+					"process_ms": 4.194,
+					"static_mem_mb": 649.258,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.072,
+					"delta_draw_calls": 1,
+					"delta_frame_ms": 0.289,
+					"delta_gpu_ms": 0.829,
+					"delta_primitives": 3156300,
+					"draw_calls": 6482,
+					"frame_ms": 11.635,
+					"frames": 129,
+					"gpu_ms": 5.898,
+					"max_ms": 22.886,
+					"name": "grass:blades_0",
+					"nodes": 25035,
+					"objects": 6672,
+					"p50_ms": 10.647,
+					"p95_ms": 15.166,
+					"p99_ms": 19.542,
+					"physics_ms": 0.101,
+					"primitives": 61518666,
+					"process_ms": 22.726,
+					"static_mem_mb": 649.259,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.106,
+					"delta_draw_calls": 1,
+					"delta_frame_ms": 0.229,
+					"delta_gpu_ms": 0.343,
+					"delta_primitives": 2021040,
+					"draw_calls": 6482,
+					"frame_ms": 11.695,
+					"frames": 129,
+					"gpu_ms": 6.383,
+					"max_ms": 26.053,
+					"name": "grass:blades_1",
+					"nodes": 25035,
+					"objects": 6672,
+					"p50_ms": 10.548,
+					"p95_ms": 16.405,
+					"p99_ms": 23.538,
+					"physics_ms": 0.08,
+					"primitives": 62653926,
+					"process_ms": 25.897,
+					"static_mem_mb": 649.261,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.86,
+					"delta_draw_calls": 1,
+					"delta_frame_ms": 0.575,
+					"delta_gpu_ms": 0.023,
+					"delta_primitives": 126420,
+					"draw_calls": 6482,
+					"frame_ms": 11.349,
+					"frames": 133,
+					"gpu_ms": 6.703,
+					"max_ms": 24.254,
+					"name": "grass:blades_2",
+					"nodes": 25035,
+					"objects": 6672,
+					"p50_ms": 10.401,
+					"p95_ms": 14.551,
+					"p99_ms": 22.584,
+					"physics_ms": 0.078,
+					"primitives": 64548546,
+					"process_ms": 24.12,
+					"static_mem_mb": 649.263,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.651,
+					"delta_draw_calls": 1,
+					"delta_frame_ms": 0.847,
+					"delta_gpu_ms": -0.056,
+					"delta_primitives": 36064,
+					"draw_calls": 6482,
+					"frame_ms": 11.077,
+					"frames": 136,
+					"gpu_ms": 6.782,
+					"max_ms": 16.857,
+					"name": "grass:blades_3",
+					"nodes": 25035,
+					"objects": 6672,
+					"p50_ms": 10.512,
+					"p95_ms": 14.25,
+					"p99_ms": 16.034,
+					"physics_ms": 0.081,
+					"primitives": 64638902,
+					"process_ms": 15.925,
+					"static_mem_mb": 649.265,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.612,
+					"delta_draw_calls": 1,
+					"delta_frame_ms": 0.919,
+					"delta_gpu_ms": -0.064,
+					"delta_primitives": 9878,
+					"draw_calls": 6482,
+					"frame_ms": 11.005,
+					"frames": 137,
+					"gpu_ms": 6.79,
+					"max_ms": 16.06,
+					"name": "grass:blades_4",
+					"nodes": 25035,
+					"objects": 6672,
+					"p50_ms": 10.542,
+					"p95_ms": 13.792,
+					"p99_ms": 15.01,
+					"physics_ms": 0.08,
+					"primitives": 64665088,
+					"process_ms": 16.014,
+					"static_mem_mb": 649.267,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.874,
+					"delta_draw_calls": 1,
+					"delta_frame_ms": -0.748,
+					"delta_gpu_ms": 0.244,
+					"delta_primitives": 402965,
+					"draw_calls": 6482,
+					"frame_ms": 12.672,
+					"frames": 120,
+					"gpu_ms": 6.482,
+					"max_ms": 25.612,
+					"name": "grass:short_0",
+					"nodes": 25035,
+					"objects": 6672,
+					"p50_ms": 12.059,
+					"p95_ms": 20.55,
+					"p99_ms": 22.636,
+					"physics_ms": 0.088,
+					"primitives": 64272001,
+					"process_ms": 25.472,
+					"static_mem_mb": 649.269,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.164,
+					"delta_draw_calls": 1,
+					"delta_frame_ms": 0.08,
+					"delta_gpu_ms": 0.051,
+					"delta_primitives": 197400,
+					"draw_calls": 6482,
+					"frame_ms": 11.844,
+					"frames": 128,
+					"gpu_ms": 6.675,
+					"max_ms": 25.562,
+					"name": "grass:short_1",
+					"nodes": 25035,
+					"objects": 6672,
+					"p50_ms": 10.629,
+					"p95_ms": 17.069,
+					"p99_ms": 20.239,
+					"physics_ms": 0.111,
+					"primitives": 64477566,
+					"process_ms": 25.334,
+					"static_mem_mb": 649.27,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.084,
+					"delta_draw_calls": 16,
+					"delta_frame_ms": 0.323,
+					"delta_gpu_ms": 0.085,
+					"delta_primitives": 34250073,
+					"draw_calls": 6467,
+					"frame_ms": 11.601,
+					"frames": 130,
+					"gpu_ms": 6.641,
+					"max_ms": 23.212,
+					"name": "plants:understory:lod0",
+					"nodes": 25035,
+					"objects": 6657,
+					"p50_ms": 10.502,
+					"p95_ms": 16.47,
+					"p99_ms": 22.393,
+					"physics_ms": 0.111,
+					"primitives": 30424893,
+					"process_ms": 23.024,
+					"static_mem_mb": 649.273,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.273,
+					"delta_draw_calls": 16,
+					"delta_frame_ms": -0.08,
+					"delta_gpu_ms": 0.315,
+					"delta_primitives": 5597937,
+					"draw_calls": 6467,
+					"frame_ms": 12.004,
+					"frames": 125,
+					"gpu_ms": 6.411,
+					"max_ms": 25.244,
+					"name": "plants:understory:lod1",
+					"nodes": 25035,
+					"objects": 6657,
+					"p50_ms": 11.313,
+					"p95_ms": 18.567,
+					"p99_ms": 20.454,
+					"physics_ms": 0.1,
+					"primitives": 59077029,
+					"process_ms": 19.86,
+					"static_mem_mb": 649.275,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.687,
+					"delta_draw_calls": 12,
+					"delta_frame_ms": -0.638,
+					"delta_gpu_ms": 0.108,
+					"delta_primitives": 127980,
+					"draw_calls": 6471,
+					"frame_ms": 12.562,
+					"frames": 120,
+					"gpu_ms": 6.618,
+					"max_ms": 27.737,
+					"name": "plants:understory:lod2",
+					"nodes": 25035,
+					"objects": 6661,
+					"p50_ms": 11.739,
+					"p95_ms": 18.042,
+					"p99_ms": 23.33,
+					"physics_ms": 0.098,
+					"primitives": 64546986,
+					"process_ms": 27.56,
+					"static_mem_mb": 649.276,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.034,
+					"delta_draw_calls": 18,
+					"delta_frame_ms": 0.326,
+					"delta_gpu_ms": -0.07,
+					"delta_primitives": 9836139,
+					"draw_calls": 6465,
+					"frame_ms": 11.598,
+					"frames": 130,
+					"gpu_ms": 6.797,
+					"max_ms": 24.632,
+					"name": "plants:flowers:lod0",
+					"nodes": 25035,
+					"objects": 6655,
+					"p50_ms": 10.805,
+					"p95_ms": 15.714,
+					"p99_ms": 17.952,
+					"physics_ms": 0.088,
+					"primitives": 54838827,
+					"process_ms": 24.531,
+					"static_mem_mb": 649.278,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.574,
+					"delta_draw_calls": 13,
+					"delta_frame_ms": -0.406,
+					"delta_gpu_ms": 0.099,
+					"delta_primitives": 2140375,
+					"draw_calls": 6470,
+					"frame_ms": 12.33,
+					"frames": 122,
+					"gpu_ms": 6.627,
+					"max_ms": 29.007,
+					"name": "plants:flowers:lod1",
+					"nodes": 25035,
+					"objects": 6660,
+					"p50_ms": 11.682,
+					"p95_ms": 17.557,
+					"p99_ms": 20.47,
+					"physics_ms": 0.075,
+					"primitives": 62534591,
+					"process_ms": 28.89,
+					"static_mem_mb": 649.28,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.206,
+					"delta_draw_calls": 5,
+					"delta_frame_ms": 0.14,
+					"delta_gpu_ms": -0.002,
+					"delta_primitives": 7452,
+					"draw_calls": 6478,
+					"frame_ms": 11.784,
+					"frames": 128,
+					"gpu_ms": 6.728,
+					"max_ms": 22.076,
+					"name": "plants:flowers:lod2",
+					"nodes": 25035,
+					"objects": 6668,
+					"p50_ms": 11.413,
+					"p95_ms": 16.587,
+					"p99_ms": 19.741,
+					"physics_ms": 0.084,
+					"primitives": 64667514,
+					"process_ms": 21.973,
+					"static_mem_mb": 649.282,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.828,
+					"delta_draw_calls": 18,
+					"delta_frame_ms": -0.667,
+					"delta_gpu_ms": 0.185,
+					"delta_primitives": 84000,
+					"draw_calls": 6465,
+					"frame_ms": 12.591,
+					"frames": 120,
+					"gpu_ms": 6.541,
+					"max_ms": 23.283,
+					"name": "terrain_texturing",
+					"nodes": 25035,
+					"objects": 6625,
+					"p50_ms": 12.153,
+					"p95_ms": 19.752,
+					"p99_ms": 23.2,
+					"physics_ms": 0.096,
+					"primitives": 64590966,
+					"process_ms": 23.129,
+					"static_mem_mb": 649.545,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.108,
+					"delta_draw_calls": 101,
+					"delta_frame_ms": 0.283,
+					"delta_gpu_ms": 0.042,
+					"delta_primitives": 431632,
+					"draw_calls": 6382,
+					"frame_ms": 11.641,
+					"frames": 129,
+					"gpu_ms": 6.684,
+					"max_ms": 20.575,
+					"name": "terrain_shadows",
+					"nodes": 25035,
+					"objects": 6518,
+					"p50_ms": 11.191,
+					"p95_ms": 16.161,
+					"p99_ms": 19.576,
+					"physics_ms": 0.184,
+					"primitives": 64243334,
+					"process_ms": 19.089,
+					"static_mem_mb": 649.542,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.047,
+					"delta_draw_calls": 18,
+					"delta_frame_ms": 0.362,
+					"delta_gpu_ms": 0.315,
+					"delta_primitives": 84000,
+					"draw_calls": 6465,
+					"frame_ms": 11.562,
+					"frames": 130,
+					"gpu_ms": 6.411,
+					"max_ms": 21.143,
+					"name": "post:painterly_sat",
+					"nodes": 25035,
+					"objects": 6625,
+					"p50_ms": 11.246,
+					"p95_ms": 15.689,
+					"p99_ms": 21.098,
+					"physics_ms": 0.077,
+					"primitives": 64590966,
+					"process_ms": 18.988,
+					"static_mem_mb": 649.545,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.896,
+					"delta_draw_calls": 18,
+					"delta_frame_ms": 0.503,
+					"delta_gpu_ms": 0.064,
+					"delta_primitives": 84000,
+					"draw_calls": 6465,
+					"frame_ms": 11.421,
+					"frames": 132,
+					"gpu_ms": 6.662,
+					"max_ms": 19.244,
+					"name": "post:radial_blur",
+					"nodes": 25035,
+					"objects": 6625,
+					"p50_ms": 11.039,
+					"p95_ms": 14.475,
+					"p99_ms": 18.512,
+					"physics_ms": 0.064,
+					"primitives": 64590966,
+					"process_ms": 16.213,
+					"static_mem_mb": 649.547,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.242,
+					"delta_draw_calls": 18,
+					"delta_frame_ms": 0.067,
+					"delta_gpu_ms": 0.109,
+					"delta_primitives": 84000,
+					"draw_calls": 6465,
+					"frame_ms": 11.857,
+					"frames": 127,
+					"gpu_ms": 6.617,
+					"max_ms": 19.738,
+					"name": "post:gaussian_blur",
+					"nodes": 25035,
+					"objects": 6625,
+					"p50_ms": 11.467,
+					"p95_ms": 16.425,
+					"p99_ms": 18.108,
+					"physics_ms": 0.08,
+					"primitives": 64590966,
+					"process_ms": 19.582,
+					"static_mem_mb": 649.549,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.933,
+					"delta_draw_calls": 18,
+					"delta_frame_ms": 0.513,
+					"delta_gpu_ms": -0.012,
+					"delta_primitives": 84000,
+					"draw_calls": 6465,
+					"frame_ms": 11.411,
+					"frames": 132,
+					"gpu_ms": 6.738,
+					"max_ms": 21.363,
+					"name": "post:noise",
+					"nodes": 25035,
+					"objects": 6625,
+					"p50_ms": 10.489,
+					"p95_ms": 15.947,
+					"p99_ms": 21.043,
+					"physics_ms": 0.083,
+					"primitives": 64590966,
+					"process_ms": 21.232,
+					"static_mem_mb": 649.551,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.062,
+					"delta_draw_calls": 18,
+					"delta_frame_ms": 0.294,
+					"delta_gpu_ms": 0.045,
+					"delta_primitives": 84000,
+					"draw_calls": 6465,
+					"frame_ms": 11.63,
+					"frames": 130,
+					"gpu_ms": 6.681,
+					"max_ms": 22.909,
+					"name": "post:unreal_bloom",
+					"nodes": 25035,
+					"objects": 6625,
+					"p50_ms": 10.549,
+					"p95_ms": 16.441,
+					"p99_ms": 21.5,
+					"physics_ms": 0.09,
+					"primitives": 64590966,
+					"process_ms": 21.372,
+					"static_mem_mb": 649.553,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.392,
+					"delta_draw_calls": 18,
+					"delta_frame_ms": -0.16,
+					"delta_gpu_ms": 0.128,
+					"delta_primitives": 84000,
+					"draw_calls": 6465,
+					"frame_ms": 12.084,
+					"frames": 125,
+					"gpu_ms": 6.598,
+					"max_ms": 29.469,
+					"name": "post:glare",
+					"nodes": 25035,
+					"objects": 6625,
+					"p50_ms": 10.787,
+					"p95_ms": 18.646,
+					"p99_ms": 20.254,
+					"physics_ms": 0.113,
+					"primitives": 64590966,
+					"process_ms": 29.266,
+					"static_mem_mb": 649.555,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.903,
+					"delta_draw_calls": 18,
+					"delta_frame_ms": 0.498,
+					"delta_gpu_ms": 0.982,
+					"delta_primitives": 84000,
+					"draw_calls": 6465,
+					"frame_ms": 11.426,
+					"frames": 132,
+					"gpu_ms": 5.744,
+					"max_ms": 22.038,
+					"name": "post:ALL",
+					"nodes": 25035,
+					"objects": 6625,
+					"p50_ms": 10.333,
+					"p95_ms": 16.251,
+					"p99_ms": 21.721,
+					"physics_ms": 0.077,
+					"primitives": 64590966,
+					"process_ms": 15.565,
+					"static_mem_mb": 649.557,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 5.88,
+					"delta_draw_calls": 3293,
+					"delta_frame_ms": 3.13,
+					"delta_gpu_ms": 1.021,
+					"delta_primitives": 4908332,
+					"draw_calls": 3190,
+					"frame_ms": 8.794,
+					"frames": 171,
+					"gpu_ms": 5.705,
+					"max_ms": 15.001,
+					"name": "sun_shadows",
+					"nodes": 25035,
+					"objects": 3318,
+					"p50_ms": 8.339,
+					"p95_ms": 12.519,
+					"p99_ms": 14.397,
+					"physics_ms": 0.057,
+					"primitives": 59766634,
+					"process_ms": 13.595,
+					"static_mem_mb": 649.565,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.929,
+					"delta_draw_calls": 840,
+					"delta_frame_ms": 0.517,
+					"delta_gpu_ms": -0.175,
+					"delta_primitives": 642799,
+					"draw_calls": 5643,
+					"frame_ms": 11.407,
+					"frames": 132,
+					"gpu_ms": 6.901,
+					"max_ms": 19.279,
+					"name": "sun_shadow_100m",
+					"nodes": 25035,
+					"objects": 5787,
+					"p50_ms": 10.831,
+					"p95_ms": 17.391,
+					"p99_ms": 19.231,
+					"physics_ms": 0.087,
+					"primitives": 64032167,
+					"process_ms": 28.063,
+					"static_mem_mb": 649.567,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.501,
+					"delta_draw_calls": 44,
+					"delta_frame_ms": 1.042,
+					"delta_gpu_ms": 0.241,
+					"delta_primitives": 176556,
+					"draw_calls": 6439,
+					"frame_ms": 10.882,
+					"frames": 139,
+					"gpu_ms": 6.485,
+					"max_ms": 17.897,
+					"name": "lantern",
+					"nodes": 25035,
+					"objects": 6594,
+					"p50_ms": 10.032,
+					"p95_ms": 15.204,
+					"p99_ms": 16.697,
+					"physics_ms": 0.106,
+					"primitives": 64498410,
+					"process_ms": 26.944,
+					"static_mem_mb": 649.569,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.798,
+					"delta_draw_calls": 44,
+					"delta_frame_ms": 0.633,
+					"delta_gpu_ms": 0.023,
+					"delta_primitives": 176556,
+					"draw_calls": 6439,
+					"frame_ms": 11.291,
+					"frames": 133,
+					"gpu_ms": 6.703,
+					"max_ms": 22.975,
+					"name": "lantern_shadow",
+					"nodes": 25035,
+					"objects": 6594,
+					"p50_ms": 10.568,
+					"p95_ms": 15.549,
+					"p99_ms": 22.726,
+					"physics_ms": 0.115,
+					"primitives": 64498410,
+					"process_ms": 22.831,
+					"static_mem_mb": 649.57,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 9.239,
+					"delta_draw_calls": 18,
+					"delta_frame_ms": -1.239,
+					"delta_gpu_ms": 0.198,
+					"delta_primitives": 84000,
+					"draw_calls": 6465,
+					"frame_ms": 13.163,
+					"frames": 120,
+					"gpu_ms": 6.528,
+					"max_ms": 27.339,
+					"name": "lantern_ground_pool",
+					"nodes": 25035,
+					"objects": 6625,
+					"p50_ms": 12.149,
+					"p95_ms": 22.416,
+					"p99_ms": 26.909,
+					"physics_ms": 0.103,
+					"primitives": 64590966,
+					"process_ms": 20.988,
+					"static_mem_mb": 649.572,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.806,
+					"delta_draw_calls": 18,
+					"delta_frame_ms": 0.644,
+					"delta_gpu_ms": 0.568,
+					"delta_primitives": 84000,
+					"draw_calls": 6465,
+					"frame_ms": 11.28,
+					"frames": 133,
+					"gpu_ms": 6.158,
+					"max_ms": 16.076,
+					"name": "msaa_3d",
+					"nodes": 25035,
+					"objects": 6625,
+					"p50_ms": 11.035,
+					"p95_ms": 13.972,
+					"p99_ms": 15.678,
+					"physics_ms": 0.058,
+					"primitives": 64590966,
+					"process_ms": 15.98,
+					"static_mem_mb": 649.605,
+					"texture_mem_mb": 813.84,
+					"video_mem_mb": 1218.835
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.843,
+					"delta_draw_calls": 18,
+					"delta_frame_ms": -0.788,
+					"delta_gpu_ms": 0.09,
+					"delta_primitives": 84000,
+					"draw_calls": 6465,
+					"frame_ms": 12.712,
+					"frames": 120,
+					"gpu_ms": 6.636,
+					"max_ms": 25.076,
+					"name": "screen_space_aa",
+					"nodes": 25035,
+					"objects": 6625,
+					"p50_ms": 11.781,
+					"p95_ms": 19.177,
+					"p99_ms": 20.765,
+					"physics_ms": 0.087,
+					"primitives": 64590966,
+					"process_ms": 24.951,
+					"static_mem_mb": 649.61,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 252.917,
+					"cpu_render_ms": 8.094,
+					"delta_draw_calls": 18,
+					"delta_frame_ms": 0.174,
+					"delta_gpu_ms": 1.874,
+					"delta_primitives": 84000,
+					"draw_calls": 6465,
+					"frame_ms": 11.75,
+					"frames": 128,
+					"gpu_ms": 4.852,
+					"max_ms": 37.11,
+					"name": "render_scale_50",
+					"nodes": 25035,
+					"objects": 6625,
+					"p50_ms": 11.017,
+					"p95_ms": 14.441,
+					"p99_ms": 17.993,
+					"physics_ms": 0.077,
+					"primitives": 64590966,
+					"process_ms": 18.697,
+					"static_mem_mb": 649.617,
+					"texture_mem_mb": 737.438,
+					"video_mem_mb": 1132.138
+				}
+			]
+		},
+		{
+			"baseline_end": {
+				"buffer_mem_mb": 263.212,
+				"cpu_render_ms": 8.61,
+				"draw_calls": 7914,
+				"frame_ms": 12.41,
+				"frames": 121,
+				"gpu_ms": 8.126,
+				"max_ms": 24.78,
+				"nodes": 25035,
+				"objects": 8079,
+				"p50_ms": 11.608,
+				"p95_ms": 18.366,
+				"p99_ms": 23.148,
+				"physics_ms": 0.106,
+				"primitives": 70186228,
+				"process_ms": 18.538,
+				"static_mem_mb": 649.78,
+				"texture_mem_mb": 852.613,
+				"video_mem_mb": 1257.608
+			},
+			"baseline_start": {
+				"buffer_mem_mb": 263.212,
+				"cpu_render_ms": 8.89,
+				"draw_calls": 7934,
+				"frame_ms": 12.762,
+				"frames": 120,
+				"gpu_ms": 7.927,
+				"max_ms": 25.609,
+				"nodes": 25035,
+				"objects": 8133,
+				"p50_ms": 11.95,
+				"p95_ms": 17.305,
+				"p99_ms": 19.142,
+				"physics_ms": 0.085,
+				"primitives": 70289378,
+				"process_ms": 17.581,
+				"static_mem_mb": 649.637,
+				"texture_mem_mb": 852.613,
+				"video_mem_mb": 1257.608
+			},
+			"post_passes": [
+				{
+					"gpu_ms": 0.05,
+					"name": "painterly_sat/copy"
+				},
+				{
+					"gpu_ms": 0.076,
+					"name": "painterly_sat/sum_h"
+				},
+				{
+					"gpu_ms": 0.108,
+					"name": "painterly_sat/sum_v"
+				},
+				{
+					"gpu_ms": 0.101,
+					"name": "painterly_sat"
+				},
+				{
+					"gpu_ms": 0.152,
+					"name": "radial_blur"
+				},
+				{
+					"gpu_ms": 0.094,
+					"name": "gaussian_blur"
+				},
+				{
+					"gpu_ms": 0.07,
+					"name": "noise"
+				},
+				{
+					"gpu_ms": 0.137,
+					"name": "unreal_bloom"
+				},
+				{
+					"gpu_ms": 0.151,
+					"name": "glare"
+				}
+			],
+			"station": "exit_look_back",
+			"toggles": [
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 9.443,
+					"delta_draw_calls": 67,
+					"delta_frame_ms": -0.793,
+					"delta_gpu_ms": -0.139,
+					"delta_primitives": 308577,
+					"draw_calls": 7867,
+					"frame_ms": 13.379,
+					"frames": 120,
+					"gpu_ms": 8.166,
+					"max_ms": 24.099,
+					"name": "layer:cliffs",
+					"nodes": 25035,
+					"objects": 7995,
+					"p50_ms": 12.902,
+					"p95_ms": 17.559,
+					"p99_ms": 21.324,
+					"physics_ms": 0.077,
+					"primitives": 69980801,
+					"process_ms": 19.293,
+					"static_mem_mb": 649.701,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.168,
+					"delta_draw_calls": 28,
+					"delta_frame_ms": 0.787,
+					"delta_gpu_ms": 0.017,
+					"delta_primitives": 183865,
+					"draw_calls": 7906,
+					"frame_ms": 11.799,
+					"frames": 128,
+					"gpu_ms": 8.01,
+					"max_ms": 20.728,
+					"name": "layer:outcrops",
+					"nodes": 25035,
+					"objects": 8092,
+					"p50_ms": 11.475,
+					"p95_ms": 15.497,
+					"p99_ms": 17.224,
+					"physics_ms": 0.109,
+					"primitives": 70105513,
+					"process_ms": 15.678,
+					"static_mem_mb": 649.703,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.9,
+					"delta_draw_calls": 43,
+					"delta_frame_ms": 0.072,
+					"delta_gpu_ms": 0.054,
+					"delta_primitives": 12006574,
+					"draw_calls": 7891,
+					"frame_ms": 12.514,
+					"frames": 120,
+					"gpu_ms": 7.972,
+					"max_ms": 27.554,
+					"name": "layer:flowers",
+					"nodes": 25035,
+					"objects": 8086,
+					"p50_ms": 11.82,
+					"p95_ms": 16.682,
+					"p99_ms": 19.511,
+					"physics_ms": 0.083,
+					"primitives": 58282804,
+					"process_ms": 19.425,
+					"static_mem_mb": 649.705,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.769,
+					"delta_draw_calls": 1538,
+					"delta_frame_ms": 1.083,
+					"delta_gpu_ms": -0.169,
+					"delta_primitives": 993704,
+					"draw_calls": 6396,
+					"frame_ms": 11.503,
+					"frames": 131,
+					"gpu_ms": 8.196,
+					"max_ms": 25.857,
+					"name": "layer:saplings",
+					"nodes": 25035,
+					"objects": 6591,
+					"p50_ms": 9.964,
+					"p95_ms": 18.963,
+					"p99_ms": 25.719,
+					"physics_ms": 0.21,
+					"primitives": 69295674,
+					"process_ms": 25.636,
+					"static_mem_mb": 649.707,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.869,
+					"delta_draw_calls": 747,
+					"delta_frame_ms": -0.083,
+					"delta_gpu_ms": 1.535,
+					"delta_primitives": 43615273,
+					"draw_calls": 7187,
+					"frame_ms": 12.669,
+					"frames": 120,
+					"gpu_ms": 6.491,
+					"max_ms": 22.355,
+					"name": "layer:understory",
+					"nodes": 25035,
+					"objects": 7382,
+					"p50_ms": 11.807,
+					"p95_ms": 18.719,
+					"p99_ms": 21.501,
+					"physics_ms": 0.123,
+					"primitives": 26674105,
+					"process_ms": 18.635,
+					"static_mem_mb": 649.708,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 10.927,
+					"delta_draw_calls": 10,
+					"delta_frame_ms": -2.724,
+					"delta_gpu_ms": -0.117,
+					"delta_primitives": 28574,
+					"draw_calls": 7924,
+					"frame_ms": 15.31,
+					"frames": 120,
+					"gpu_ms": 8.143,
+					"max_ms": 30.3,
+					"name": "layer:instanced_other",
+					"nodes": 25035,
+					"objects": 8119,
+					"p50_ms": 14.286,
+					"p95_ms": 24.89,
+					"p99_ms": 29.247,
+					"physics_ms": 0.111,
+					"primitives": 70260804,
+					"process_ms": 30.147,
+					"static_mem_mb": 649.71,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 9.354,
+					"delta_draw_calls": 536,
+					"delta_frame_ms": -0.756,
+					"delta_gpu_ms": -0.705,
+					"delta_primitives": 274503,
+					"draw_calls": 7398,
+					"frame_ms": 13.342,
+					"frames": 120,
+					"gpu_ms": 8.732,
+					"max_ms": 26.096,
+					"name": "layer:deadfall",
+					"nodes": 25035,
+					"objects": 7593,
+					"p50_ms": 12.276,
+					"p95_ms": 19.368,
+					"p99_ms": 25.299,
+					"physics_ms": 0.134,
+					"primitives": 70014875,
+					"process_ms": 25.933,
+					"static_mem_mb": 649.712,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 5.523,
+					"delta_draw_calls": 4602,
+					"delta_frame_ms": 3.949,
+					"delta_gpu_ms": 1.761,
+					"delta_primitives": 6186711,
+					"draw_calls": 3332,
+					"frame_ms": 8.637,
+					"frames": 174,
+					"gpu_ms": 6.265,
+					"max_ms": 20.257,
+					"name": "layer:trees",
+					"nodes": 25035,
+					"objects": 3527,
+					"p50_ms": 8.141,
+					"p95_ms": 13.156,
+					"p99_ms": 19.993,
+					"physics_ms": 0.091,
+					"primitives": 64102667,
+					"process_ms": 13.818,
+					"static_mem_mb": 649.714,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.996,
+					"delta_draw_calls": 225,
+					"delta_frame_ms": -0.275,
+					"delta_gpu_ms": -0.562,
+					"delta_primitives": 69099,
+					"draw_calls": 7709,
+					"frame_ms": 12.861,
+					"frames": 120,
+					"gpu_ms": 8.589,
+					"max_ms": 20.708,
+					"name": "layer:rocks",
+					"nodes": 25035,
+					"objects": 7904,
+					"p50_ms": 12.015,
+					"p95_ms": 17.5,
+					"p99_ms": 20.212,
+					"physics_ms": 0.089,
+					"primitives": 70220279,
+					"process_ms": 20.596,
+					"static_mem_mb": 649.716,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 9.455,
+					"delta_draw_calls": 9,
+					"delta_frame_ms": -0.724,
+					"delta_gpu_ms": 1.271,
+					"delta_primitives": 5969217,
+					"draw_calls": 7925,
+					"frame_ms": 13.31,
+					"frames": 120,
+					"gpu_ms": 6.756,
+					"max_ms": 24.511,
+					"name": "layer:grass",
+					"nodes": 25035,
+					"objects": 8120,
+					"p50_ms": 12.773,
+					"p95_ms": 19.734,
+					"p99_ms": 23.898,
+					"physics_ms": 0.151,
+					"primitives": 64320161,
+					"process_ms": 24.339,
+					"static_mem_mb": 649.718,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 0.673,
+					"delta_draw_calls": 7811,
+					"delta_frame_ms": 8.42,
+					"delta_gpu_ms": 5.246,
+					"delta_primitives": 69596762,
+					"draw_calls": 123,
+					"frame_ms": 4.166,
+					"frames": 361,
+					"gpu_ms": 2.781,
+					"max_ms": 4.342,
+					"name": "layer:ALL",
+					"nodes": 25035,
+					"objects": 207,
+					"p50_ms": 4.164,
+					"p95_ms": 4.24,
+					"p99_ms": 4.299,
+					"physics_ms": 0.093,
+					"primitives": 692616,
+					"process_ms": 4.219,
+					"static_mem_mb": 649.727,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 9.888,
+					"delta_draw_calls": 3,
+					"delta_frame_ms": -1.38,
+					"delta_gpu_ms": 0.166,
+					"delta_primitives": 3175450,
+					"draw_calls": 7931,
+					"frame_ms": 13.966,
+					"frames": 120,
+					"gpu_ms": 7.861,
+					"max_ms": 33.954,
+					"name": "grass:blades_0",
+					"nodes": 25035,
+					"objects": 8126,
+					"p50_ms": 12.686,
+					"p95_ms": 22.412,
+					"p99_ms": 29.947,
+					"physics_ms": 0.106,
+					"primitives": 67113928,
+					"process_ms": 33.79,
+					"static_mem_mb": 649.728,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 9.165,
+					"delta_draw_calls": 3,
+					"delta_frame_ms": -0.497,
+					"delta_gpu_ms": -0.006,
+					"delta_primitives": 2040190,
+					"draw_calls": 7931,
+					"frame_ms": 13.083,
+					"frames": 120,
+					"gpu_ms": 8.033,
+					"max_ms": 25.571,
+					"name": "grass:blades_1",
+					"nodes": 25035,
+					"objects": 8126,
+					"p50_ms": 12.358,
+					"p95_ms": 17.577,
+					"p99_ms": 18.951,
+					"physics_ms": 0.089,
+					"primitives": 68249188,
+					"process_ms": 25.411,
+					"static_mem_mb": 649.73,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 9.079,
+					"delta_draw_calls": 3,
+					"delta_frame_ms": -0.302,
+					"delta_gpu_ms": -0.418,
+					"delta_primitives": 145570,
+					"draw_calls": 7931,
+					"frame_ms": 12.888,
+					"frames": 120,
+					"gpu_ms": 8.445,
+					"max_ms": 25.383,
+					"name": "grass:blades_2",
+					"nodes": 25035,
+					"objects": 8126,
+					"p50_ms": 12.031,
+					"p95_ms": 18.531,
+					"p99_ms": 22.761,
+					"physics_ms": 0.128,
+					"primitives": 70143808,
+					"process_ms": 22.64,
+					"static_mem_mb": 649.732,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 9.542,
+					"delta_draw_calls": 3,
+					"delta_frame_ms": -0.938,
+					"delta_gpu_ms": -0.173,
+					"delta_primitives": 55214,
+					"draw_calls": 7931,
+					"frame_ms": 13.524,
+					"frames": 120,
+					"gpu_ms": 8.2,
+					"max_ms": 30.202,
+					"name": "grass:blades_3",
+					"nodes": 25035,
+					"objects": 8126,
+					"p50_ms": 12.635,
+					"p95_ms": 19.541,
+					"p99_ms": 23.394,
+					"physics_ms": 0.159,
+					"primitives": 70234164,
+					"process_ms": 30.098,
+					"static_mem_mb": 649.734,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 9.099,
+					"delta_draw_calls": 3,
+					"delta_frame_ms": -0.465,
+					"delta_gpu_ms": -0.453,
+					"delta_primitives": 29028,
+					"draw_calls": 7931,
+					"frame_ms": 13.051,
+					"frames": 120,
+					"gpu_ms": 8.48,
+					"max_ms": 30.368,
+					"name": "grass:blades_4",
+					"nodes": 25035,
+					"objects": 8126,
+					"p50_ms": 11.82,
+					"p95_ms": 21.578,
+					"p99_ms": 30.278,
+					"physics_ms": 0.149,
+					"primitives": 70260350,
+					"process_ms": 19.356,
+					"static_mem_mb": 649.735,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 10.075,
+					"delta_draw_calls": 3,
+					"delta_frame_ms": -1.693,
+					"delta_gpu_ms": 0.112,
+					"delta_primitives": 422115,
+					"draw_calls": 7931,
+					"frame_ms": 14.279,
+					"frames": 120,
+					"gpu_ms": 7.914,
+					"max_ms": 23.777,
+					"name": "grass:short_0",
+					"nodes": 25035,
+					"objects": 8126,
+					"p50_ms": 13.205,
+					"p95_ms": 19.7,
+					"p99_ms": 22.734,
+					"physics_ms": 0.126,
+					"primitives": 69867263,
+					"process_ms": 23.555,
+					"static_mem_mb": 649.737,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.692,
+					"delta_draw_calls": 3,
+					"delta_frame_ms": -0.177,
+					"delta_gpu_ms": -0.413,
+					"delta_primitives": 216550,
+					"draw_calls": 7931,
+					"frame_ms": 12.763,
+					"frames": 120,
+					"gpu_ms": 8.44,
+					"max_ms": 58.841,
+					"name": "grass:short_1",
+					"nodes": 25035,
+					"objects": 8126,
+					"p50_ms": 11.814,
+					"p95_ms": 17.544,
+					"p99_ms": 22.033,
+					"physics_ms": 0.125,
+					"primitives": 70072828,
+					"process_ms": 58.687,
+					"static_mem_mb": 649.739,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 9.968,
+					"delta_draw_calls": 18,
+					"delta_frame_ms": -1.627,
+					"delta_gpu_ms": -0.069,
+					"delta_primitives": 34269223,
+					"draw_calls": 7916,
+					"frame_ms": 14.213,
+					"frames": 120,
+					"gpu_ms": 8.096,
+					"max_ms": 31.335,
+					"name": "plants:understory:lod0",
+					"nodes": 25035,
+					"objects": 8111,
+					"p50_ms": 13.674,
+					"p95_ms": 18.338,
+					"p99_ms": 21.16,
+					"physics_ms": 0.091,
+					"primitives": 36020155,
+					"process_ms": 19.341,
+					"static_mem_mb": 649.741,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 10.822,
+					"delta_draw_calls": 18,
+					"delta_frame_ms": -2.642,
+					"delta_gpu_ms": -0.316,
+					"delta_primitives": 5617087,
+					"draw_calls": 7916,
+					"frame_ms": 15.228,
+					"frames": 120,
+					"gpu_ms": 8.343,
+					"max_ms": 33.578,
+					"name": "plants:understory:lod1",
+					"nodes": 25035,
+					"objects": 8111,
+					"p50_ms": 13.625,
+					"p95_ms": 27.218,
+					"p99_ms": 31.738,
+					"physics_ms": 0.134,
+					"primitives": 64672291,
+					"process_ms": 22.423,
+					"static_mem_mb": 649.743,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 9.281,
+					"delta_draw_calls": 14,
+					"delta_frame_ms": -0.668,
+					"delta_gpu_ms": -0.328,
+					"delta_primitives": 147130,
+					"draw_calls": 7920,
+					"frame_ms": 13.254,
+					"frames": 120,
+					"gpu_ms": 8.354,
+					"max_ms": 25.148,
+					"name": "plants:understory:lod2",
+					"nodes": 25035,
+					"objects": 8115,
+					"p50_ms": 12.156,
+					"p95_ms": 18.867,
+					"p99_ms": 23.714,
+					"physics_ms": 0.087,
+					"primitives": 70142248,
+					"process_ms": 23.55,
+					"static_mem_mb": 649.745,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.222,
+					"delta_draw_calls": 20,
+					"delta_frame_ms": 0.697,
+					"delta_gpu_ms": -0.095,
+					"delta_primitives": 9855289,
+					"draw_calls": 7914,
+					"frame_ms": 11.889,
+					"frames": 127,
+					"gpu_ms": 8.122,
+					"max_ms": 21.503,
+					"name": "plants:flowers:lod0",
+					"nodes": 25035,
+					"objects": 8109,
+					"p50_ms": 11.417,
+					"p95_ms": 14.458,
+					"p99_ms": 19.431,
+					"physics_ms": 0.183,
+					"primitives": 60434089,
+					"process_ms": 21.398,
+					"static_mem_mb": 649.747,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.928,
+					"delta_draw_calls": 15,
+					"delta_frame_ms": 1.089,
+					"delta_gpu_ms": -0.208,
+					"delta_primitives": 2159525,
+					"draw_calls": 7919,
+					"frame_ms": 11.497,
+					"frames": 131,
+					"gpu_ms": 8.235,
+					"max_ms": 19.327,
+					"name": "plants:flowers:lod1",
+					"nodes": 25035,
+					"objects": 8114,
+					"p50_ms": 11.085,
+					"p95_ms": 13.879,
+					"p99_ms": 15.972,
+					"physics_ms": 0.067,
+					"primitives": 68129853,
+					"process_ms": 19.237,
+					"static_mem_mb": 649.748,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.695,
+					"delta_draw_calls": 7,
+					"delta_frame_ms": -0.015,
+					"delta_gpu_ms": -0.024,
+					"delta_primitives": 26602,
+					"draw_calls": 7927,
+					"frame_ms": 12.601,
+					"frames": 120,
+					"gpu_ms": 8.05,
+					"max_ms": 21.892,
+					"name": "plants:flowers:lod2",
+					"nodes": 25035,
+					"objects": 8122,
+					"p50_ms": 12.041,
+					"p95_ms": 17.598,
+					"p99_ms": 19.746,
+					"physics_ms": 0.09,
+					"primitives": 70262776,
+					"process_ms": 21.752,
+					"static_mem_mb": 649.75,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.902,
+					"delta_draw_calls": 20,
+					"delta_frame_ms": -0.102,
+					"delta_gpu_ms": -0.149,
+					"delta_primitives": 103150,
+					"draw_calls": 7914,
+					"frame_ms": 12.688,
+					"frames": 120,
+					"gpu_ms": 8.176,
+					"max_ms": 22.228,
+					"name": "terrain_texturing",
+					"nodes": 25035,
+					"objects": 8079,
+					"p50_ms": 12.108,
+					"p95_ms": 16.508,
+					"p99_ms": 20.068,
+					"physics_ms": 0.09,
+					"primitives": 70186228,
+					"process_ms": 20.219,
+					"static_mem_mb": 649.754,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 9.789,
+					"delta_draw_calls": 111,
+					"delta_frame_ms": -1.324,
+					"delta_gpu_ms": 0.229,
+					"delta_primitives": 597838,
+					"draw_calls": 7823,
+					"frame_ms": 13.91,
+					"frames": 120,
+					"gpu_ms": 7.798,
+					"max_ms": 23.082,
+					"name": "terrain_shadows",
+					"nodes": 25035,
+					"objects": 7941,
+					"p50_ms": 13.321,
+					"p95_ms": 19.12,
+					"p99_ms": 22.365,
+					"physics_ms": 0.137,
+					"primitives": 69691540,
+					"process_ms": 22.282,
+					"static_mem_mb": 649.752,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.271,
+					"delta_draw_calls": 20,
+					"delta_frame_ms": 0.654,
+					"delta_gpu_ms": 0.192,
+					"delta_primitives": 103150,
+					"draw_calls": 7914,
+					"frame_ms": 11.932,
+					"frames": 126,
+					"gpu_ms": 7.835,
+					"max_ms": 22.751,
+					"name": "post:painterly_sat",
+					"nodes": 25035,
+					"objects": 8079,
+					"p50_ms": 11.222,
+					"p95_ms": 16.88,
+					"p99_ms": 19.791,
+					"physics_ms": 0.109,
+					"primitives": 70186228,
+					"process_ms": 22.611,
+					"static_mem_mb": 649.755,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.645,
+					"delta_draw_calls": 20,
+					"delta_frame_ms": 0.063,
+					"delta_gpu_ms": 0.067,
+					"delta_primitives": 103150,
+					"draw_calls": 7914,
+					"frame_ms": 12.523,
+					"frames": 120,
+					"gpu_ms": 7.96,
+					"max_ms": 22.419,
+					"name": "post:radial_blur",
+					"nodes": 25035,
+					"objects": 8079,
+					"p50_ms": 11.755,
+					"p95_ms": 19.504,
+					"p99_ms": 22.259,
+					"physics_ms": 0.08,
+					"primitives": 70186228,
+					"process_ms": 22.332,
+					"static_mem_mb": 649.757,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.537,
+					"delta_draw_calls": 20,
+					"delta_frame_ms": 0.295,
+					"delta_gpu_ms": -0.034,
+					"delta_primitives": 103150,
+					"draw_calls": 7914,
+					"frame_ms": 12.291,
+					"frames": 123,
+					"gpu_ms": 8.061,
+					"max_ms": 24.75,
+					"name": "post:gaussian_blur",
+					"nodes": 25035,
+					"objects": 8079,
+					"p50_ms": 11.487,
+					"p95_ms": 17.631,
+					"p99_ms": 19.392,
+					"physics_ms": 0.072,
+					"primitives": 70186228,
+					"process_ms": 19.27,
+					"static_mem_mb": 649.759,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.7,
+					"delta_draw_calls": 20,
+					"delta_frame_ms": -0.072,
+					"delta_gpu_ms": -0.207,
+					"delta_primitives": 103150,
+					"draw_calls": 7914,
+					"frame_ms": 12.658,
+					"frames": 120,
+					"gpu_ms": 8.234,
+					"max_ms": 27.881,
+					"name": "post:noise",
+					"nodes": 25035,
+					"objects": 8079,
+					"p50_ms": 11.717,
+					"p95_ms": 18.259,
+					"p99_ms": 24.24,
+					"physics_ms": 0.084,
+					"primitives": 70186228,
+					"process_ms": 22.229,
+					"static_mem_mb": 649.761,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 9.434,
+					"delta_draw_calls": 20,
+					"delta_frame_ms": -1.018,
+					"delta_gpu_ms": 0.018,
+					"delta_primitives": 103150,
+					"draw_calls": 7914,
+					"frame_ms": 13.604,
+					"frames": 120,
+					"gpu_ms": 8.009,
+					"max_ms": 39.527,
+					"name": "post:unreal_bloom",
+					"nodes": 25035,
+					"objects": 8079,
+					"p50_ms": 12.237,
+					"p95_ms": 27.541,
+					"p99_ms": 33.719,
+					"physics_ms": 0.096,
+					"primitives": 70186228,
+					"process_ms": 22.538,
+					"static_mem_mb": 649.762,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.177,
+					"delta_draw_calls": 20,
+					"delta_frame_ms": 0.754,
+					"delta_gpu_ms": -0.018,
+					"delta_primitives": 103150,
+					"draw_calls": 7914,
+					"frame_ms": 11.832,
+					"frames": 127,
+					"gpu_ms": 8.044,
+					"max_ms": 17.902,
+					"name": "post:glare",
+					"nodes": 25035,
+					"objects": 8079,
+					"p50_ms": 11.516,
+					"p95_ms": 15.415,
+					"p99_ms": 17.188,
+					"physics_ms": 0.084,
+					"primitives": 70186228,
+					"process_ms": 17.067,
+					"static_mem_mb": 649.764,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.505,
+					"delta_draw_calls": 20,
+					"delta_frame_ms": 0.342,
+					"delta_gpu_ms": 1.006,
+					"delta_primitives": 103150,
+					"draw_calls": 7914,
+					"frame_ms": 12.244,
+					"frames": 123,
+					"gpu_ms": 7.02,
+					"max_ms": 22.085,
+					"name": "post:ALL",
+					"nodes": 25035,
+					"objects": 8079,
+					"p50_ms": 11.601,
+					"p95_ms": 18.034,
+					"p99_ms": 21.396,
+					"physics_ms": 0.078,
+					"primitives": 70186228,
+					"process_ms": 19.679,
+					"static_mem_mb": 649.766,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 6.348,
+					"delta_draw_calls": 4613,
+					"delta_frame_ms": 3.209,
+					"delta_gpu_ms": 2.111,
+					"delta_primitives": 9637031,
+					"draw_calls": 3321,
+					"frame_ms": 9.377,
+					"frames": 160,
+					"gpu_ms": 5.916,
+					"max_ms": 18.954,
+					"name": "sun_shadows",
+					"nodes": 25035,
+					"objects": 3443,
+					"p50_ms": 9.02,
+					"p95_ms": 13.455,
+					"p99_ms": 15.7,
+					"physics_ms": 0.102,
+					"primitives": 60652347,
+					"process_ms": 18.814,
+					"static_mem_mb": 649.775,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.047,
+					"delta_draw_calls": 1554,
+					"delta_frame_ms": 0.951,
+					"delta_gpu_ms": 0.163,
+					"delta_primitives": 2626912,
+					"draw_calls": 6380,
+					"frame_ms": 11.635,
+					"frames": 129,
+					"gpu_ms": 7.863,
+					"max_ms": 16.951,
+					"name": "sun_shadow_100m",
+					"nodes": 25035,
+					"objects": 6530,
+					"p50_ms": 11.234,
+					"p95_ms": 15.866,
+					"p99_ms": 16.943,
+					"physics_ms": 0.085,
+					"primitives": 67662466,
+					"process_ms": 16.831,
+					"static_mem_mb": 649.776,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.857,
+					"delta_draw_calls": 195,
+					"delta_frame_ms": 1.126,
+					"delta_gpu_ms": 0.309,
+					"delta_primitives": 793695,
+					"draw_calls": 7739,
+					"frame_ms": 11.46,
+					"frames": 131,
+					"gpu_ms": 7.718,
+					"max_ms": 17.173,
+					"name": "lantern",
+					"nodes": 25035,
+					"objects": 7900,
+					"p50_ms": 10.979,
+					"p95_ms": 14.664,
+					"p99_ms": 16.519,
+					"physics_ms": 0.077,
+					"primitives": 69495683,
+					"process_ms": 15.096,
+					"static_mem_mb": 649.778,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.193,
+					"delta_draw_calls": 195,
+					"delta_frame_ms": 0.697,
+					"delta_gpu_ms": 0.074,
+					"delta_primitives": 793695,
+					"draw_calls": 7739,
+					"frame_ms": 11.889,
+					"frames": 127,
+					"gpu_ms": 7.953,
+					"max_ms": 22.88,
+					"name": "lantern_shadow",
+					"nodes": 25035,
+					"objects": 7900,
+					"p50_ms": 11.023,
+					"p95_ms": 17.176,
+					"p99_ms": 20.894,
+					"physics_ms": 0.157,
+					"primitives": 69495683,
+					"process_ms": 22.608,
+					"static_mem_mb": 649.78,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 9.022,
+					"delta_draw_calls": 20,
+					"delta_frame_ms": -0.333,
+					"delta_gpu_ms": 0.199,
+					"delta_primitives": 103150,
+					"draw_calls": 7914,
+					"frame_ms": 12.919,
+					"frames": 120,
+					"gpu_ms": 7.828,
+					"max_ms": 19.617,
+					"name": "lantern_ground_pool",
+					"nodes": 25035,
+					"objects": 8079,
+					"p50_ms": 12.624,
+					"p95_ms": 17.437,
+					"p99_ms": 18.6,
+					"physics_ms": 0.072,
+					"primitives": 70186228,
+					"process_ms": 18.187,
+					"static_mem_mb": 649.782,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.681,
+					"delta_draw_calls": 20,
+					"delta_frame_ms": 0.13,
+					"delta_gpu_ms": 0.502,
+					"delta_primitives": 103150,
+					"draw_calls": 7914,
+					"frame_ms": 12.456,
+					"frames": 121,
+					"gpu_ms": 7.525,
+					"max_ms": 19.092,
+					"name": "msaa_3d",
+					"nodes": 25035,
+					"objects": 8079,
+					"p50_ms": 11.986,
+					"p95_ms": 17.116,
+					"p99_ms": 18.281,
+					"physics_ms": 0.097,
+					"primitives": 70186228,
+					"process_ms": 18.175,
+					"static_mem_mb": 649.771,
+					"texture_mem_mb": 813.84,
+					"video_mem_mb": 1218.835
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.948,
+					"delta_draw_calls": 20,
+					"delta_frame_ms": 1.09,
+					"delta_gpu_ms": -0.159,
+					"delta_primitives": 103150,
+					"draw_calls": 7914,
+					"frame_ms": 11.496,
+					"frames": 131,
+					"gpu_ms": 8.185,
+					"max_ms": 19.198,
+					"name": "screen_space_aa",
+					"nodes": 25035,
+					"objects": 8079,
+					"p50_ms": 11.256,
+					"p95_ms": 14.198,
+					"p99_ms": 15.706,
+					"physics_ms": 0.096,
+					"primitives": 70186228,
+					"process_ms": 24.763,
+					"static_mem_mb": 649.776,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 252.917,
+					"cpu_render_ms": 8.074,
+					"delta_draw_calls": 20,
+					"delta_frame_ms": 0.866,
+					"delta_gpu_ms": 2.075,
+					"delta_primitives": 103150,
+					"draw_calls": 7914,
+					"frame_ms": 11.72,
+					"frames": 128,
+					"gpu_ms": 5.952,
+					"max_ms": 18.794,
+					"name": "render_scale_50",
+					"nodes": 25035,
+					"objects": 8079,
+					"p50_ms": 11.304,
+					"p95_ms": 15.22,
+					"p99_ms": 18.612,
+					"physics_ms": 0.079,
+					"primitives": 70186228,
+					"process_ms": 18.708,
+					"static_mem_mb": 649.778,
+					"texture_mem_mb": 737.438,
+					"video_mem_mb": 1132.138
+				}
+			]
+		},
+		{
+			"baseline_end": {
+				"buffer_mem_mb": 263.212,
+				"cpu_render_ms": 7.582,
+				"draw_calls": 6347,
+				"frame_ms": 11.081,
+				"frames": 136,
+				"gpu_ms": 7.736,
+				"max_ms": 21.463,
+				"nodes": 25035,
+				"objects": 6475,
+				"p50_ms": 10.784,
+				"p95_ms": 13.561,
+				"p99_ms": 16.958,
+				"physics_ms": 0.071,
+				"primitives": 68590685,
+				"process_ms": 16.91,
+				"static_mem_mb": 649.877,
+				"texture_mem_mb": 852.613,
+				"video_mem_mb": 1257.608
+			},
+			"baseline_start": {
+				"buffer_mem_mb": 263.212,
+				"cpu_render_ms": 7.959,
+				"draw_calls": 6356,
+				"frame_ms": 11.568,
+				"frames": 130,
+				"gpu_ms": 7.622,
+				"max_ms": 22.443,
+				"nodes": 25035,
+				"objects": 6486,
+				"p50_ms": 11.145,
+				"p95_ms": 16.189,
+				"p99_ms": 19.381,
+				"physics_ms": 0.079,
+				"primitives": 68605191,
+				"process_ms": 22.301,
+				"static_mem_mb": 649.798,
+				"texture_mem_mb": 852.613,
+				"video_mem_mb": 1257.608
+			},
+			"post_passes": [
+				{
+					"gpu_ms": 0.049,
+					"name": "painterly_sat/copy"
+				},
+				{
+					"gpu_ms": 0.077,
+					"name": "painterly_sat/sum_h"
+				},
+				{
+					"gpu_ms": 0.106,
+					"name": "painterly_sat/sum_v"
+				},
+				{
+					"gpu_ms": 0.097,
+					"name": "painterly_sat"
+				},
+				{
+					"gpu_ms": 0.175,
+					"name": "radial_blur"
+				},
+				{
+					"gpu_ms": 0.091,
+					"name": "gaussian_blur"
+				},
+				{
+					"gpu_ms": 0.07,
+					"name": "noise"
+				},
+				{
+					"gpu_ms": 0.139,
+					"name": "unreal_bloom"
+				},
+				{
+					"gpu_ms": 0.151,
+					"name": "glare"
+				}
+			],
+			"station": "forest_dense",
+			"toggles": [
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.01,
+					"delta_draw_calls": 78,
+					"delta_frame_ms": 0.946,
+					"delta_gpu_ms": -0.005,
+					"delta_primitives": 761334,
+					"draw_calls": 6278,
+					"frame_ms": 10.379,
+					"frames": 145,
+					"gpu_ms": 7.684,
+					"max_ms": 19.269,
+					"name": "layer:cliffs",
+					"nodes": 25035,
+					"objects": 6348,
+					"p50_ms": 9.86,
+					"p95_ms": 14.684,
+					"p99_ms": 18.357,
+					"physics_ms": 0.079,
+					"primitives": 67843857,
+					"process_ms": 15.433,
+					"static_mem_mb": 649.8,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.081,
+					"delta_draw_calls": 31,
+					"delta_frame_ms": 0.957,
+					"delta_gpu_ms": -0.13,
+					"delta_primitives": 180604,
+					"draw_calls": 6325,
+					"frame_ms": 10.368,
+					"frames": 145,
+					"gpu_ms": 7.809,
+					"max_ms": 14.962,
+					"name": "layer:outcrops",
+					"nodes": 25035,
+					"objects": 6450,
+					"p50_ms": 9.961,
+					"p95_ms": 13.24,
+					"p99_ms": 14.116,
+					"physics_ms": 0.076,
+					"primitives": 68424587,
+					"process_ms": 14.013,
+					"static_mem_mb": 649.802,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.973,
+					"delta_draw_calls": 40,
+					"delta_frame_ms": -0.114,
+					"delta_gpu_ms": 0.172,
+					"delta_primitives": 11996654,
+					"draw_calls": 6316,
+					"frame_ms": 11.438,
+					"frames": 132,
+					"gpu_ms": 7.507,
+					"max_ms": 18.634,
+					"name": "layer:flowers",
+					"nodes": 25035,
+					"objects": 6444,
+					"p50_ms": 11.072,
+					"p95_ms": 15.221,
+					"p99_ms": 18.003,
+					"physics_ms": 0.083,
+					"primitives": 56608537,
+					"process_ms": 18.482,
+					"static_mem_mb": 649.803,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 6.018,
+					"delta_draw_calls": 1277,
+					"delta_frame_ms": 2.047,
+					"delta_gpu_ms": -0.25,
+					"delta_primitives": 829668,
+					"draw_calls": 5079,
+					"frame_ms": 9.278,
+					"frames": 162,
+					"gpu_ms": 7.929,
+					"max_ms": 18.072,
+					"name": "layer:saplings",
+					"nodes": 25035,
+					"objects": 5207,
+					"p50_ms": 8.851,
+					"p95_ms": 11.477,
+					"p99_ms": 13.883,
+					"physics_ms": 0.07,
+					"primitives": 67775523,
+					"process_ms": 13.767,
+					"static_mem_mb": 649.805,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.164,
+					"delta_draw_calls": 630,
+					"delta_frame_ms": 0.938,
+					"delta_gpu_ms": 1.52,
+					"delta_primitives": 43584302,
+					"draw_calls": 5726,
+					"frame_ms": 10.387,
+					"frames": 145,
+					"gpu_ms": 6.159,
+					"max_ms": 17.876,
+					"name": "layer:understory",
+					"nodes": 25035,
+					"objects": 5854,
+					"p50_ms": 9.662,
+					"p95_ms": 15.003,
+					"p99_ms": 17.833,
+					"physics_ms": 0.062,
+					"primitives": 25020889,
+					"process_ms": 16.027,
+					"static_mem_mb": 649.807,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.322,
+					"delta_draw_calls": 11,
+					"delta_frame_ms": 0.61,
+					"delta_gpu_ms": -0.069,
+					"delta_primitives": 24317,
+					"draw_calls": 6345,
+					"frame_ms": 10.715,
+					"frames": 141,
+					"gpu_ms": 7.748,
+					"max_ms": 19.282,
+					"name": "layer:instanced_other",
+					"nodes": 25035,
+					"objects": 6473,
+					"p50_ms": 10.238,
+					"p95_ms": 13.701,
+					"p99_ms": 16.253,
+					"physics_ms": 0.095,
+					"primitives": 68580874,
+					"process_ms": 18.036,
+					"static_mem_mb": 649.809,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.022,
+					"delta_draw_calls": 380,
+					"delta_frame_ms": 1.005,
+					"delta_gpu_ms": -0.182,
+					"delta_primitives": 210661,
+					"draw_calls": 5976,
+					"frame_ms": 10.32,
+					"frames": 146,
+					"gpu_ms": 7.861,
+					"max_ms": 21.487,
+					"name": "layer:deadfall",
+					"nodes": 25035,
+					"objects": 6104,
+					"p50_ms": 9.908,
+					"p95_ms": 12.967,
+					"p99_ms": 20.974,
+					"physics_ms": 0.093,
+					"primitives": 68394530,
+					"process_ms": 21.351,
+					"static_mem_mb": 649.811,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 4.39,
+					"delta_draw_calls": 3454,
+					"delta_frame_ms": 3.895,
+					"delta_gpu_ms": 1.289,
+					"delta_primitives": 4386330,
+					"draw_calls": 2902,
+					"frame_ms": 7.43,
+					"frames": 202,
+					"gpu_ms": 6.39,
+					"max_ms": 12.115,
+					"name": "layer:trees",
+					"nodes": 25035,
+					"objects": 3030,
+					"p50_ms": 7.089,
+					"p95_ms": 9.706,
+					"p99_ms": 11.895,
+					"physics_ms": 0.081,
+					"primitives": 64218861,
+					"process_ms": 11.979,
+					"static_mem_mb": 649.813,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 6.801,
+					"delta_draw_calls": 330,
+					"delta_frame_ms": 1.172,
+					"delta_gpu_ms": -0.345,
+					"delta_primitives": 109988,
+					"draw_calls": 6026,
+					"frame_ms": 10.153,
+					"frames": 148,
+					"gpu_ms": 8.024,
+					"max_ms": 23.63,
+					"name": "layer:rocks",
+					"nodes": 25035,
+					"objects": 6154,
+					"p50_ms": 9.281,
+					"p95_ms": 13.584,
+					"p99_ms": 21.259,
+					"physics_ms": 0.091,
+					"primitives": 68495203,
+					"process_ms": 23.487,
+					"static_mem_mb": 649.815,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.426,
+					"delta_draw_calls": 8,
+					"delta_frame_ms": 0.527,
+					"delta_gpu_ms": 0.929,
+					"delta_primitives": 5958333,
+					"draw_calls": 6348,
+					"frame_ms": 10.798,
+					"frames": 139,
+					"gpu_ms": 6.75,
+					"max_ms": 20.577,
+					"name": "layer:grass",
+					"nodes": 25035,
+					"objects": 6476,
+					"p50_ms": 10.266,
+					"p95_ms": 16.234,
+					"p99_ms": 19.553,
+					"physics_ms": 0.081,
+					"primitives": 62646858,
+					"process_ms": 19.462,
+					"static_mem_mb": 649.816,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 0.627,
+					"delta_draw_calls": 6245,
+					"delta_frame_ms": 7.081,
+					"delta_gpu_ms": 4.591,
+					"delta_primitives": 68051423,
+					"draw_calls": 111,
+					"frame_ms": 4.244,
+					"frames": 354,
+					"gpu_ms": 3.088,
+					"max_ms": 29.297,
+					"name": "layer:ALL",
+					"nodes": 25035,
+					"objects": 167,
+					"p50_ms": 4.164,
+					"p95_ms": 4.285,
+					"p99_ms": 4.843,
+					"physics_ms": 0.243,
+					"primitives": 553768,
+					"process_ms": 4.224,
+					"static_mem_mb": 649.826,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.721,
+					"delta_draw_calls": 2,
+					"delta_frame_ms": -0.152,
+					"delta_gpu_ms": -0.138,
+					"delta_primitives": 3164566,
+					"draw_calls": 6354,
+					"frame_ms": 11.476,
+					"frames": 131,
+					"gpu_ms": 7.817,
+					"max_ms": 30.873,
+					"name": "grass:blades_0",
+					"nodes": 25035,
+					"objects": 6482,
+					"p50_ms": 10.81,
+					"p95_ms": 16.11,
+					"p99_ms": 19.514,
+					"physics_ms": 0.11,
+					"primitives": 65440625,
+					"process_ms": 17.051,
+					"static_mem_mb": 649.827,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.032,
+					"delta_draw_calls": 2,
+					"delta_frame_ms": -0.422,
+					"delta_gpu_ms": 0.116,
+					"delta_primitives": 2029306,
+					"draw_calls": 6354,
+					"frame_ms": 11.747,
+					"frames": 128,
+					"gpu_ms": 7.563,
+					"max_ms": 24.46,
+					"name": "grass:blades_1",
+					"nodes": 25035,
+					"objects": 6482,
+					"p50_ms": 10.931,
+					"p95_ms": 18.722,
+					"p99_ms": 21.979,
+					"physics_ms": 0.113,
+					"primitives": 66575885,
+					"process_ms": 24.288,
+					"static_mem_mb": 649.829,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 9.553,
+					"delta_draw_calls": 2,
+					"delta_frame_ms": -2.422,
+					"delta_gpu_ms": -0.014,
+					"delta_primitives": 134686,
+					"draw_calls": 6354,
+					"frame_ms": 13.747,
+					"frames": 120,
+					"gpu_ms": 7.693,
+					"max_ms": 28.8,
+					"name": "grass:blades_2",
+					"nodes": 25035,
+					"objects": 6482,
+					"p50_ms": 12.321,
+					"p95_ms": 22.661,
+					"p99_ms": 25.738,
+					"physics_ms": 0.152,
+					"primitives": 68470505,
+					"process_ms": 25.493,
+					"static_mem_mb": 649.83,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 9.694,
+					"delta_draw_calls": 2,
+					"delta_frame_ms": -2.661,
+					"delta_gpu_ms": 0.21,
+					"delta_primitives": 44330,
+					"draw_calls": 6354,
+					"frame_ms": 13.986,
+					"frames": 120,
+					"gpu_ms": 7.469,
+					"max_ms": 25.038,
+					"name": "grass:blades_3",
+					"nodes": 25035,
+					"objects": 6482,
+					"p50_ms": 13.437,
+					"p95_ms": 19.6,
+					"p99_ms": 21.575,
+					"physics_ms": 0.101,
+					"primitives": 68560861,
+					"process_ms": 20.05,
+					"static_mem_mb": 649.832,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 9.491,
+					"delta_draw_calls": 2,
+					"delta_frame_ms": -2.393,
+					"delta_gpu_ms": 0.003,
+					"delta_primitives": 18144,
+					"draw_calls": 6354,
+					"frame_ms": 13.718,
+					"frames": 120,
+					"gpu_ms": 7.676,
+					"max_ms": 22.817,
+					"name": "grass:blades_4",
+					"nodes": 25035,
+					"objects": 6482,
+					"p50_ms": 13.213,
+					"p95_ms": 19.571,
+					"p99_ms": 22.223,
+					"physics_ms": 0.115,
+					"primitives": 68587047,
+					"process_ms": 22.622,
+					"static_mem_mb": 649.834,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.076,
+					"delta_draw_calls": 2,
+					"delta_frame_ms": -0.383,
+					"delta_gpu_ms": -0.078,
+					"delta_primitives": 411231,
+					"draw_calls": 6354,
+					"frame_ms": 11.708,
+					"frames": 129,
+					"gpu_ms": 7.757,
+					"max_ms": 21.53,
+					"name": "grass:short_0",
+					"nodes": 25035,
+					"objects": 6482,
+					"p50_ms": 10.932,
+					"p95_ms": 16.281,
+					"p99_ms": 19.916,
+					"physics_ms": 0.096,
+					"primitives": 68193960,
+					"process_ms": 21.395,
+					"static_mem_mb": 649.836,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.134,
+					"delta_draw_calls": 2,
+					"delta_frame_ms": -0.457,
+					"delta_gpu_ms": -0.194,
+					"delta_primitives": 205666,
+					"draw_calls": 6354,
+					"frame_ms": 11.781,
+					"frames": 128,
+					"gpu_ms": 7.873,
+					"max_ms": 24.069,
+					"name": "grass:short_1",
+					"nodes": 25035,
+					"objects": 6482,
+					"p50_ms": 11.419,
+					"p95_ms": 16.117,
+					"p99_ms": 18.673,
+					"physics_ms": 0.077,
+					"primitives": 68399525,
+					"process_ms": 18.566,
+					"static_mem_mb": 649.838,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.66,
+					"delta_draw_calls": 17,
+					"delta_frame_ms": 0.155,
+					"delta_gpu_ms": -0.028,
+					"delta_primitives": 34258339,
+					"draw_calls": 6339,
+					"frame_ms": 11.169,
+					"frames": 135,
+					"gpu_ms": 7.707,
+					"max_ms": 20.16,
+					"name": "plants:understory:lod0",
+					"nodes": 25035,
+					"objects": 6467,
+					"p50_ms": 10.427,
+					"p95_ms": 15.002,
+					"p99_ms": 18.267,
+					"physics_ms": 0.105,
+					"primitives": 34346852,
+					"process_ms": 22.5,
+					"static_mem_mb": 649.84,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 9.875,
+					"delta_draw_calls": 17,
+					"delta_frame_ms": -2.833,
+					"delta_gpu_ms": 0.23,
+					"delta_primitives": 5606203,
+					"draw_calls": 6339,
+					"frame_ms": 14.158,
+					"frames": 120,
+					"gpu_ms": 7.449,
+					"max_ms": 23.962,
+					"name": "plants:understory:lod1",
+					"nodes": 25035,
+					"objects": 6467,
+					"p50_ms": 12.878,
+					"p95_ms": 21.527,
+					"p99_ms": 23.872,
+					"physics_ms": 0.123,
+					"primitives": 62998988,
+					"process_ms": 23.835,
+					"static_mem_mb": 649.842,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.221,
+					"delta_draw_calls": 13,
+					"delta_frame_ms": -0.565,
+					"delta_gpu_ms": -0.217,
+					"delta_primitives": 136246,
+					"draw_calls": 6343,
+					"frame_ms": 11.889,
+					"frames": 127,
+					"gpu_ms": 7.896,
+					"max_ms": 23.876,
+					"name": "plants:understory:lod2",
+					"nodes": 25035,
+					"objects": 6471,
+					"p50_ms": 11.16,
+					"p95_ms": 18.148,
+					"p99_ms": 21.811,
+					"physics_ms": 0.093,
+					"primitives": 68468945,
+					"process_ms": 21.655,
+					"static_mem_mb": 649.844,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.035,
+					"delta_draw_calls": 19,
+					"delta_frame_ms": -0.367,
+					"delta_gpu_ms": -0.167,
+					"delta_primitives": 9844405,
+					"draw_calls": 6337,
+					"frame_ms": 11.692,
+					"frames": 129,
+					"gpu_ms": 7.846,
+					"max_ms": 29.231,
+					"name": "plants:flowers:lod0",
+					"nodes": 25035,
+					"objects": 6465,
+					"p50_ms": 10.262,
+					"p95_ms": 18.203,
+					"p99_ms": 22.249,
+					"physics_ms": 0.121,
+					"primitives": 58760786,
+					"process_ms": 29.06,
+					"static_mem_mb": 649.845,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 8.364,
+					"delta_draw_calls": 14,
+					"delta_frame_ms": -0.783,
+					"delta_gpu_ms": 0.017,
+					"delta_primitives": 2148641,
+					"draw_calls": 6342,
+					"frame_ms": 12.107,
+					"frames": 124,
+					"gpu_ms": 7.662,
+					"max_ms": 20.703,
+					"name": "plants:flowers:lod1",
+					"nodes": 25035,
+					"objects": 6470,
+					"p50_ms": 11.537,
+					"p95_ms": 17.04,
+					"p99_ms": 19.906,
+					"physics_ms": 0.199,
+					"primitives": 66456550,
+					"process_ms": 19.753,
+					"static_mem_mb": 649.847,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.727,
+					"delta_draw_calls": 6,
+					"delta_frame_ms": -0.008,
+					"delta_gpu_ms": -0.014,
+					"delta_primitives": 15718,
+					"draw_calls": 6350,
+					"frame_ms": 11.332,
+					"frames": 133,
+					"gpu_ms": 7.693,
+					"max_ms": 19.134,
+					"name": "plants:flowers:lod2",
+					"nodes": 25035,
+					"objects": 6478,
+					"p50_ms": 10.699,
+					"p95_ms": 16.715,
+					"p99_ms": 18.945,
+					"physics_ms": 0.09,
+					"primitives": 68589473,
+					"process_ms": 19.022,
+					"static_mem_mb": 649.849,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.008,
+					"delta_draw_calls": 9,
+					"delta_frame_ms": 1.031,
+					"delta_gpu_ms": 0.185,
+					"delta_primitives": 14506,
+					"draw_calls": 6347,
+					"frame_ms": 10.294,
+					"frames": 146,
+					"gpu_ms": 7.494,
+					"max_ms": 20.28,
+					"name": "terrain_texturing",
+					"nodes": 25035,
+					"objects": 6475,
+					"p50_ms": 9.747,
+					"p95_ms": 12.863,
+					"p99_ms": 19.772,
+					"physics_ms": 0.093,
+					"primitives": 68590685,
+					"process_ms": 18.412,
+					"static_mem_mb": 649.853,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.483,
+					"delta_draw_calls": 96,
+					"delta_frame_ms": 0.345,
+					"delta_gpu_ms": 0.067,
+					"delta_primitives": 433938,
+					"draw_calls": 6260,
+					"frame_ms": 10.979,
+					"frames": 137,
+					"gpu_ms": 7.612,
+					"max_ms": 21.573,
+					"name": "terrain_shadows",
+					"nodes": 25035,
+					"objects": 6351,
+					"p50_ms": 10.748,
+					"p95_ms": 14.763,
+					"p99_ms": 16.625,
+					"physics_ms": 0.118,
+					"primitives": 68171253,
+					"process_ms": 25.12,
+					"static_mem_mb": 649.85,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.476,
+					"delta_draw_calls": 9,
+					"delta_frame_ms": 0.434,
+					"delta_gpu_ms": 0.313,
+					"delta_primitives": 14506,
+					"draw_calls": 6347,
+					"frame_ms": 10.89,
+					"frames": 138,
+					"gpu_ms": 7.366,
+					"max_ms": 18.737,
+					"name": "post:painterly_sat",
+					"nodes": 25035,
+					"objects": 6475,
+					"p50_ms": 10.816,
+					"p95_ms": 13.908,
+					"p99_ms": 16.555,
+					"physics_ms": 0.071,
+					"primitives": 68590685,
+					"process_ms": 16.451,
+					"static_mem_mb": 649.854,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.298,
+					"delta_draw_calls": 9,
+					"delta_frame_ms": 0.6,
+					"delta_gpu_ms": 0.053,
+					"delta_primitives": 14506,
+					"draw_calls": 6347,
+					"frame_ms": 10.725,
+					"frames": 140,
+					"gpu_ms": 7.626,
+					"max_ms": 18.556,
+					"name": "post:radial_blur",
+					"nodes": 25035,
+					"objects": 6475,
+					"p50_ms": 10.072,
+					"p95_ms": 15.638,
+					"p99_ms": 18.446,
+					"physics_ms": 0.096,
+					"primitives": 68590685,
+					"process_ms": 18.41,
+					"static_mem_mb": 649.855,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.485,
+					"delta_draw_calls": 9,
+					"delta_frame_ms": 0.364,
+					"delta_gpu_ms": -0.018,
+					"delta_primitives": 14506,
+					"draw_calls": 6347,
+					"frame_ms": 10.96,
+					"frames": 137,
+					"gpu_ms": 7.697,
+					"max_ms": 20.258,
+					"name": "post:gaussian_blur",
+					"nodes": 25035,
+					"objects": 6475,
+					"p50_ms": 10.307,
+					"p95_ms": 15.868,
+					"p99_ms": 19.609,
+					"physics_ms": 0.092,
+					"primitives": 68590685,
+					"process_ms": 20.091,
+					"static_mem_mb": 649.857,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.498,
+					"delta_draw_calls": 9,
+					"delta_frame_ms": 0.309,
+					"delta_gpu_ms": 0.115,
+					"delta_primitives": 14506,
+					"draw_calls": 6347,
+					"frame_ms": 11.015,
+					"frames": 137,
+					"gpu_ms": 7.564,
+					"max_ms": 19.66,
+					"name": "post:noise",
+					"nodes": 25035,
+					"objects": 6475,
+					"p50_ms": 10.505,
+					"p95_ms": 15.168,
+					"p99_ms": 16.263,
+					"physics_ms": 0.089,
+					"primitives": 68590685,
+					"process_ms": 16.107,
+					"static_mem_mb": 649.859,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.044,
+					"delta_draw_calls": 9,
+					"delta_frame_ms": 1.01,
+					"delta_gpu_ms": -0.056,
+					"delta_primitives": 14506,
+					"draw_calls": 6347,
+					"frame_ms": 10.315,
+					"frames": 146,
+					"gpu_ms": 7.735,
+					"max_ms": 15.033,
+					"name": "post:unreal_bloom",
+					"nodes": 25035,
+					"objects": 6475,
+					"p50_ms": 9.861,
+					"p95_ms": 13.264,
+					"p99_ms": 14.311,
+					"physics_ms": 0.111,
+					"primitives": 68590685,
+					"process_ms": 14.108,
+					"static_mem_mb": 649.861,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.512,
+					"delta_draw_calls": 9,
+					"delta_frame_ms": 0.39,
+					"delta_gpu_ms": 0.104,
+					"delta_primitives": 14506,
+					"draw_calls": 6347,
+					"frame_ms": 10.934,
+					"frames": 138,
+					"gpu_ms": 7.575,
+					"max_ms": 18.242,
+					"name": "post:glare",
+					"nodes": 25035,
+					"objects": 6475,
+					"p50_ms": 10.574,
+					"p95_ms": 13.778,
+					"p99_ms": 17.469,
+					"physics_ms": 0.083,
+					"primitives": 68590685,
+					"process_ms": 17.933,
+					"static_mem_mb": 649.863,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.299,
+					"delta_draw_calls": 9,
+					"delta_frame_ms": 0.588,
+					"delta_gpu_ms": 1.025,
+					"delta_primitives": 14506,
+					"draw_calls": 6347,
+					"frame_ms": 10.736,
+					"frames": 140,
+					"gpu_ms": 6.654,
+					"max_ms": 22.288,
+					"name": "post:ALL",
+					"nodes": 25035,
+					"objects": 6475,
+					"p50_ms": 10.024,
+					"p95_ms": 16.963,
+					"p99_ms": 19.928,
+					"physics_ms": 0.116,
+					"primitives": 68590685,
+					"process_ms": 22.14,
+					"static_mem_mb": 649.865,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 5.087,
+					"delta_draw_calls": 3524,
+					"delta_frame_ms": 3.561,
+					"delta_gpu_ms": 1.773,
+					"delta_primitives": 7898613,
+					"draw_calls": 2832,
+					"frame_ms": 7.764,
+					"frames": 194,
+					"gpu_ms": 5.906,
+					"max_ms": 12.775,
+					"name": "sun_shadows",
+					"nodes": 25035,
+					"objects": 2928,
+					"p50_ms": 7.466,
+					"p95_ms": 10.206,
+					"p99_ms": 12.684,
+					"physics_ms": 0.06,
+					"primitives": 60706578,
+					"process_ms": 12.003,
+					"static_mem_mb": 649.873,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 6.808,
+					"delta_draw_calls": 982,
+					"delta_frame_ms": 1.247,
+					"delta_gpu_ms": -0.312,
+					"delta_primitives": 1516362,
+					"draw_calls": 5374,
+					"frame_ms": 10.078,
+					"frames": 149,
+					"gpu_ms": 7.991,
+					"max_ms": 20.073,
+					"name": "sun_shadow_100m",
+					"nodes": 25035,
+					"objects": 5489,
+					"p50_ms": 9.639,
+					"p95_ms": 12.853,
+					"p99_ms": 17.725,
+					"physics_ms": 0.088,
+					"primitives": 67088829,
+					"process_ms": 19.721,
+					"static_mem_mb": 649.875,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 6.908,
+					"delta_draw_calls": 290,
+					"delta_frame_ms": 1.085,
+					"delta_gpu_ms": 0.576,
+					"delta_primitives": 1162582,
+					"draw_calls": 6066,
+					"frame_ms": 10.24,
+					"frames": 147,
+					"gpu_ms": 7.103,
+					"max_ms": 17.497,
+					"name": "lantern",
+					"nodes": 25035,
+					"objects": 6185,
+					"p50_ms": 9.879,
+					"p95_ms": 13.503,
+					"p99_ms": 15.697,
+					"physics_ms": 0.087,
+					"primitives": 67442609,
+					"process_ms": 15.54,
+					"static_mem_mb": 649.877,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 6.972,
+					"delta_draw_calls": 290,
+					"delta_frame_ms": 0.986,
+					"delta_gpu_ms": 0.178,
+					"delta_primitives": 1162582,
+					"draw_calls": 6066,
+					"frame_ms": 10.339,
+					"frames": 146,
+					"gpu_ms": 7.501,
+					"max_ms": 22.548,
+					"name": "lantern_shadow",
+					"nodes": 25035,
+					"objects": 6185,
+					"p50_ms": 9.948,
+					"p95_ms": 14.079,
+					"p99_ms": 17.505,
+					"physics_ms": 0.081,
+					"primitives": 67442609,
+					"process_ms": 17.457,
+					"static_mem_mb": 649.879,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.739,
+					"delta_draw_calls": 9,
+					"delta_frame_ms": 0.065,
+					"delta_gpu_ms": 0.077,
+					"delta_primitives": 14506,
+					"draw_calls": 6347,
+					"frame_ms": 11.26,
+					"frames": 134,
+					"gpu_ms": 7.602,
+					"max_ms": 20.515,
+					"name": "lantern_ground_pool",
+					"nodes": 25035,
+					"objects": 6475,
+					"p50_ms": 10.506,
+					"p95_ms": 16.096,
+					"p99_ms": 19.829,
+					"physics_ms": 0.175,
+					"primitives": 68590685,
+					"process_ms": 20.332,
+					"static_mem_mb": 649.88,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.027,
+					"delta_draw_calls": 9,
+					"delta_frame_ms": 1.011,
+					"delta_gpu_ms": 0.114,
+					"delta_primitives": 14506,
+					"draw_calls": 6347,
+					"frame_ms": 10.313,
+					"frames": 146,
+					"gpu_ms": 7.565,
+					"max_ms": 20.918,
+					"name": "msaa_3d",
+					"nodes": 25035,
+					"objects": 6475,
+					"p50_ms": 9.868,
+					"p95_ms": 14.046,
+					"p99_ms": 18.061,
+					"physics_ms": 0.062,
+					"primitives": 68590685,
+					"process_ms": 13.575,
+					"static_mem_mb": 649.869,
+					"texture_mem_mb": 813.84,
+					"video_mem_mb": 1218.835
+				},
+				{
+					"buffer_mem_mb": 263.212,
+					"cpu_render_ms": 7.337,
+					"delta_draw_calls": 9,
+					"delta_frame_ms": 0.558,
+					"delta_gpu_ms": -0.102,
+					"delta_primitives": 14506,
+					"draw_calls": 6347,
+					"frame_ms": 10.767,
+					"frames": 140,
+					"gpu_ms": 7.781,
+					"max_ms": 19.687,
+					"name": "screen_space_aa",
+					"nodes": 25035,
+					"objects": 6475,
+					"p50_ms": 10.033,
+					"p95_ms": 14.839,
+					"p99_ms": 19.202,
+					"physics_ms": 0.082,
+					"primitives": 68590685,
+					"process_ms": 18.027,
+					"static_mem_mb": 649.874,
+					"texture_mem_mb": 852.613,
+					"video_mem_mb": 1257.608
+				},
+				{
+					"buffer_mem_mb": 252.917,
+					"cpu_render_ms": 6.941,
+					"delta_draw_calls": 9,
+					"delta_frame_ms": 1.104,
+					"delta_gpu_ms": 2.197,
+					"delta_primitives": 14506,
+					"draw_calls": 6347,
+					"frame_ms": 10.22,
+					"frames": 148,
+					"gpu_ms": 5.482,
+					"max_ms": 15.563,
+					"name": "render_scale_50",
+					"nodes": 25035,
+					"objects": 6475,
+					"p50_ms": 9.696,
+					"p95_ms": 13.56,
+					"p99_ms": 14.809,
+					"physics_ms": 0.085,
+					"primitives": 68590685,
+					"process_ms": 15.451,
+					"static_mem_mb": 649.876,
+					"texture_mem_mb": 737.438,
+					"video_mem_mb": 1132.138
+				}
+			]
+		}
+	],
+	"audit": {
+		"layers": [
+			{
+				"assets": [
+					{
+						"asset": "9 ScreeStoneA",
+						"instances": 358,
+						"lod0_total_tris": 8670760,
+						"lod_tris": [
+							24220,
+							4974,
+							2486,
+							316
+						],
+						"nodes": 300,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					},
+					{
+						"asset": "11 ScreeStoneC",
+						"instances": 357,
+						"lod0_total_tris": 7066458,
+						"lod_tris": [
+							19794,
+							4064,
+							2032,
+							480
+						],
+						"nodes": 288,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					},
+					{
+						"asset": "8 ScreeRockD",
+						"instances": 190,
+						"lod0_total_tris": 4732900,
+						"lod_tris": [
+							24910,
+							13192,
+							6258,
+							2836
+						],
+						"nodes": 264,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					},
+					{
+						"asset": "6 ScreeRockB",
+						"instances": 167,
+						"lod0_total_tris": 4140264,
+						"lod_tris": [
+							24792,
+							11678,
+							5616,
+							2678
+						],
+						"nodes": 252,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					},
+					{
+						"asset": "13 ScreeStoneE",
+						"instances": 341,
+						"lod0_total_tris": 3805560,
+						"lod_tris": [
+							11160,
+							5580,
+							2790,
+							680
+						],
+						"nodes": 292,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					},
+					{
+						"asset": "7 ScreeRockC",
+						"instances": 169,
+						"lod0_total_tris": 3791008,
+						"lod_tris": [
+							22432,
+							9362,
+							4274,
+							2044
+						],
+						"nodes": 248,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					},
+					{
+						"asset": "37 NamaBoulder06",
+						"instances": 33,
+						"lod0_total_tris": 3600762,
+						"lod_tris": [
+							109114,
+							54554,
+							27278,
+							13638
+						],
+						"nodes": 116,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					},
+					{
+						"asset": "10 ScreeStoneB",
+						"instances": 369,
+						"lod0_total_tris": 3352734,
+						"lod_tris": [
+							9086,
+							4542,
+							2270,
+							1134
+						],
+						"nodes": 292,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					},
+					{
+						"asset": "36 NamaBoulder05",
+						"instances": 35,
+						"lod0_total_tris": 3136630,
+						"lod_tris": [
+							89618,
+							22404,
+							5600
+						],
+						"nodes": 78,
+						"shadow_lods": [
+							0,
+							1,
+							2
+						]
+					},
+					{
+						"asset": "33 NamaBoulder02",
+						"instances": 27,
+						"lod0_total_tris": 2645028,
+						"lod_tris": [
+							97964,
+							48982,
+							24490,
+							12245
+						],
+						"nodes": 96,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					},
+					{
+						"asset": "5 ScreeRockA",
+						"instances": 170,
+						"lod0_total_tris": 2308940,
+						"lod_tris": [
+							13582,
+							8626,
+							5280,
+							3156
+						],
+						"nodes": 252,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					},
+					{
+						"asset": "12 ScreeStoneD",
+						"instances": 321,
+						"lod0_total_tris": 1882344,
+						"lod_tris": [
+							5864,
+							2932,
+							1466,
+							732
+						],
+						"nodes": 288,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					},
+					{
+						"asset": "34 NamaBoulder03",
+						"instances": 29,
+						"lod0_total_tris": 1879954,
+						"lod_tris": [
+							64826,
+							32412,
+							16206,
+							8102
+						],
+						"nodes": 96,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					},
+					{
+						"asset": "35 NamaBoulder04",
+						"instances": 30,
+						"lod0_total_tris": 1771980,
+						"lod_tris": [
+							59066,
+							29532,
+							14766,
+							7382
+						],
+						"nodes": 100,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					},
+					{
+						"asset": "2 Stone01",
+						"instances": 31,
+						"lod0_total_tris": 1659120,
+						"lod_tris": [
+							53520,
+							13380,
+							3344,
+							1672
+						],
+						"nodes": 112,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					},
+					{
+						"asset": "1 Boulder01",
+						"instances": 21,
+						"lod0_total_tris": 1388562,
+						"lod_tris": [
+							66122,
+							33060,
+							16530,
+							8264
+						],
+						"nodes": 80,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					},
+					{
+						"asset": "3 Rock07",
+						"instances": 32,
+						"lod0_total_tris": 475008,
+						"lod_tris": [
+							14844,
+							7422,
+							3710,
+							1854
+						],
+						"nodes": 100,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					},
+					{
+						"asset": "4 Rock09",
+						"instances": 31,
+						"lod0_total_tris": 384896,
+						"lod_tris": [
+							12416,
+							6208,
+							3104,
+							1552
+						],
+						"nodes": 100,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					}
+				],
+				"instances": 2711,
+				"layer": "rocks",
+				"lod0_total_tris": 56692908,
+				"nodes": 3354
+			},
+			{
+				"assets": [
+					{
+						"asset": "32 Bush05",
+						"instances": 4978,
+						"lod0_total_tris": 4380640,
+						"lod_tris": [
+							880
+						],
+						"nodes": 288,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "28 Fern02",
+						"instances": 8958,
+						"lod0_total_tris": 3941520,
+						"lod_tris": [
+							440,
+							88,
+							4
+						],
+						"nodes": 3,
+						"shadow_lods": []
+					},
+					{
+						"asset": "55 LadyFernA",
+						"instances": 2844,
+						"lod0_total_tris": 3210876,
+						"lod_tris": [
+							1129,
+							282,
+							4
+						],
+						"nodes": 3,
+						"shadow_lods": []
+					},
+					{
+						"asset": "69 ElderberryA",
+						"instances": 993,
+						"lod0_total_tris": 3127950,
+						"lod_tris": [
+							3150,
+							787,
+							4
+						],
+						"nodes": 3,
+						"shadow_lods": []
+					},
+					{
+						"asset": "29 Bush01",
+						"instances": 5500,
+						"lod0_total_tris": 3058000,
+						"lod_tris": [
+							556
+						],
+						"nodes": 283,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "59 LadyFernE",
+						"instances": 2841,
+						"lod0_total_tris": 2991573,
+						"lod_tris": [
+							1053,
+							263,
+							4
+						],
+						"nodes": 3,
+						"shadow_lods": []
+					},
+					{
+						"asset": "70 ElderberryB",
+						"instances": 718,
+						"lod0_total_tris": 2849024,
+						"lod_tris": [
+							3968,
+							992,
+							4
+						],
+						"nodes": 3,
+						"shadow_lods": []
+					},
+					{
+						"asset": "31 Bush04",
+						"instances": 5656,
+						"lod0_total_tris": 2828000,
+						"lod_tris": [
+							500
+						],
+						"nodes": 288,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "60 LadyFernF",
+						"instances": 2916,
+						"lod0_total_tris": 2382372,
+						"lod_tris": [
+							817,
+							204,
+							4
+						],
+						"nodes": 3,
+						"shadow_lods": []
+					},
+					{
+						"asset": "61 LadyFernG",
+						"instances": 2924,
+						"lod0_total_tris": 1663756,
+						"lod_tris": [
+							569,
+							142,
+							4
+						],
+						"nodes": 3,
+						"shadow_lods": []
+					},
+					{
+						"asset": "30 Bush02Green",
+						"instances": 3512,
+						"lod0_total_tris": 1348608,
+						"lod_tris": [
+							384
+						],
+						"nodes": 286,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "62 LadyFernH",
+						"instances": 2780,
+						"lod0_total_tris": 1239880,
+						"lod_tris": [
+							446,
+							111,
+							4
+						],
+						"nodes": 3,
+						"shadow_lods": []
+					},
+					{
+						"asset": "92 LadyFernAShadow",
+						"instances": 2844,
+						"lod0_total_tris": 802008,
+						"lod_tris": [
+							282
+						],
+						"nodes": 273,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "89 Fern02Shadow",
+						"instances": 8958,
+						"lod0_total_tris": 788304,
+						"lod_tris": [
+							88
+						],
+						"nodes": 283,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "90 ElderberryAShadow",
+						"instances": 993,
+						"lod0_total_tris": 781491,
+						"lod_tris": [
+							787
+						],
+						"nodes": 266,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "96 LadyFernEShadow",
+						"instances": 2841,
+						"lod0_total_tris": 747183,
+						"lod_tris": [
+							263
+						],
+						"nodes": 280,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "91 ElderberryBShadow",
+						"instances": 718,
+						"lod0_total_tris": 712256,
+						"lod_tris": [
+							992
+						],
+						"nodes": 259,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "97 LadyFernFShadow",
+						"instances": 2916,
+						"lod0_total_tris": 594864,
+						"lod_tris": [
+							204
+						],
+						"nodes": 279,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "63 LadyFernI",
+						"instances": 2116,
+						"lod0_total_tris": 537464,
+						"lod_tris": [
+							254,
+							63,
+							4
+						],
+						"nodes": 3,
+						"shadow_lods": []
+					},
+					{
+						"asset": "56 LadyFernB",
+						"instances": 2120,
+						"lod0_total_tris": 415520,
+						"lod_tris": [
+							196,
+							49,
+							4
+						],
+						"nodes": 3,
+						"shadow_lods": []
+					},
+					{
+						"asset": "98 LadyFernGShadow",
+						"instances": 2924,
+						"lod0_total_tris": 415208,
+						"lod_tris": [
+							142
+						],
+						"nodes": 277,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "99 LadyFernHShadow",
+						"instances": 2780,
+						"lod0_total_tris": 308580,
+						"lod_tris": [
+							111
+						],
+						"nodes": 273,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "57 LadyFernC",
+						"instances": 1376,
+						"lod0_total_tris": 170624,
+						"lod_tris": [
+							124,
+							48,
+							4
+						],
+						"nodes": 3,
+						"shadow_lods": []
+					},
+					{
+						"asset": "100 LadyFernIShadow",
+						"instances": 2116,
+						"lod0_total_tris": 133308,
+						"lod_tris": [
+							63
+						],
+						"nodes": 272,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "58 LadyFernD",
+						"instances": 1409,
+						"lod0_total_tris": 104266,
+						"lod_tris": [
+							74,
+							47,
+							4
+						],
+						"nodes": 3,
+						"shadow_lods": []
+					},
+					{
+						"asset": "93 LadyFernBShadow",
+						"instances": 2120,
+						"lod0_total_tris": 103880,
+						"lod_tris": [
+							49
+						],
+						"nodes": 272,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "95 LadyFernDShadow",
+						"instances": 1409,
+						"lod0_total_tris": 66223,
+						"lod_tris": [
+							47
+						],
+						"nodes": 262,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "94 LadyFernCShadow",
+						"instances": 1376,
+						"lod0_total_tris": 66048,
+						"lod_tris": [
+							48
+						],
+						"nodes": 263,
+						"shadow_lods": [
+							0
+						]
+					}
+				],
+				"instances": 83636,
+				"layer": "understory",
+				"lod0_total_tris": 39769426,
+				"nodes": 4440
+			},
+			{
+				"assets": [
+					{
+						"asset": "78 WoodSorrelH",
+						"instances": 3768,
+						"lod0_total_tris": 2381376,
+						"lod_tris": [
+							632,
+							158
+						],
+						"nodes": 2,
+						"shadow_lods": []
+					},
+					{
+						"asset": "72 WoodSorrelB",
+						"instances": 3474,
+						"lod0_total_tris": 1132524,
+						"lod_tris": [
+							326,
+							81
+						],
+						"nodes": 2,
+						"shadow_lods": []
+					},
+					{
+						"asset": "77 WoodSorrelG",
+						"instances": 3733,
+						"lod0_total_tris": 1030308,
+						"lod_tris": [
+							276,
+							69
+						],
+						"nodes": 2,
+						"shadow_lods": []
+					},
+					{
+						"asset": "84 Dandelion",
+						"instances": 2352,
+						"lod0_total_tris": 867888,
+						"lod_tris": [
+							369
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "74 WoodSorrelD",
+						"instances": 3464,
+						"lod0_total_tris": 859072,
+						"lod_tris": [
+							248,
+							62
+						],
+						"nodes": 2,
+						"shadow_lods": []
+					},
+					{
+						"asset": "73 WoodSorrelC",
+						"instances": 2930,
+						"lod0_total_tris": 668040,
+						"lod_tris": [
+							228,
+							57
+						],
+						"nodes": 2,
+						"shadow_lods": []
+					},
+					{
+						"asset": "76 WoodSorrelF",
+						"instances": 3011,
+						"lod0_total_tris": 611233,
+						"lod_tris": [
+							203,
+							50
+						],
+						"nodes": 2,
+						"shadow_lods": []
+					},
+					{
+						"asset": "81 PoppyC",
+						"instances": 265,
+						"lod0_total_tris": 390610,
+						"lod_tris": [
+							1474
+						],
+						"nodes": 122,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "75 WoodSorrelE",
+						"instances": 2394,
+						"lod0_total_tris": 363888,
+						"lod_tris": [
+							152,
+							48
+						],
+						"nodes": 2,
+						"shadow_lods": []
+					},
+					{
+						"asset": "82 PoppyD",
+						"instances": 386,
+						"lod0_total_tris": 270972,
+						"lod_tris": [
+							702
+						],
+						"nodes": 132,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "85 CloverA",
+						"instances": 291,
+						"lod0_total_tris": 226107,
+						"lod_tris": [
+							777
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "87 CloverC",
+						"instances": 273,
+						"lod0_total_tris": 211575,
+						"lod_tris": [
+							775
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "80 PoppyB",
+						"instances": 338,
+						"lod0_total_tris": 201448,
+						"lod_tris": [
+							596
+						],
+						"nodes": 117,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "88 CloverD",
+						"instances": 260,
+						"lod0_total_tris": 158080,
+						"lod_tris": [
+							608
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "86 CloverB",
+						"instances": 250,
+						"lod0_total_tris": 145250,
+						"lod_tris": [
+							581
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "71 WoodSorrelA",
+						"instances": 1996,
+						"lod0_total_tris": 139720,
+						"lod_tris": [
+							70,
+							48
+						],
+						"nodes": 2,
+						"shadow_lods": []
+					},
+					{
+						"asset": "83 PoppyH",
+						"instances": 402,
+						"lod0_total_tris": 99696,
+						"lod_tris": [
+							248
+						],
+						"nodes": 134,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "79 PoppyA",
+						"instances": 472,
+						"lod0_total_tris": 78352,
+						"lod_tris": [
+							166
+						],
+						"nodes": 143,
+						"shadow_lods": [
+							0
+						]
+					}
+				],
+				"instances": 30059,
+				"layer": "flowers",
+				"lod0_total_tris": 9836139,
+				"nodes": 669
+			},
+			{
+				"assets": [
+					{
+						"asset": "53 ConeOpen",
+						"instances": 3867,
+						"lod0_total_tris": 5727027,
+						"lod_tris": [
+							1481,
+							589,
+							313
+						],
+						"nodes": 771,
+						"shadow_lods": []
+					},
+					{
+						"asset": "54 ConeLong",
+						"instances": 2060,
+						"lod0_total_tris": 3598820,
+						"lod_tris": [
+							1747,
+							582,
+							201
+						],
+						"nodes": 735,
+						"shadow_lods": []
+					},
+					{
+						"asset": "51 LitterMoundB",
+						"instances": 299,
+						"lod0_total_tris": 142324,
+						"lod_tris": [
+							476
+						],
+						"nodes": 164,
+						"shadow_lods": []
+					},
+					{
+						"asset": "50 LitterMoundA",
+						"instances": 282,
+						"lod0_total_tris": 134232,
+						"lod_tris": [
+							476
+						],
+						"nodes": 152,
+						"shadow_lods": []
+					},
+					{
+						"asset": "52 LitterMoundC",
+						"instances": 273,
+						"lod0_total_tris": 129948,
+						"lod_tris": [
+							476
+						],
+						"nodes": 155,
+						"shadow_lods": []
+					}
+				],
+				"instances": 6781,
+				"layer": "instanced_other",
+				"lod0_total_tris": 9732351,
+				"nodes": 1977
+			},
+			{
+				"assets": [
+					{
+						"asset": "17 PackPineD",
+						"instances": 180,
+						"lod0_total_tris": 1190160,
+						"lod_tris": [
+							6612,
+							8
+						],
+						"nodes": 242,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "21 PackPineD2",
+						"instances": 134,
+						"lod0_total_tris": 886008,
+						"lod_tris": [
+							6612,
+							8
+						],
+						"nodes": 214,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "25 PackDecidB2",
+						"instances": 141,
+						"lod0_total_tris": 692733,
+						"lod_tris": [
+							4913,
+							8
+						],
+						"nodes": 214,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "24 PackDecidB",
+						"instances": 133,
+						"lod0_total_tris": 653429,
+						"lod_tris": [
+							4913,
+							8
+						],
+						"nodes": 222,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "23 PackDecidA2",
+						"instances": 146,
+						"lod0_total_tris": 598016,
+						"lod_tris": [
+							4096,
+							8
+						],
+						"nodes": 224,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "26 PackDecidC",
+						"instances": 149,
+						"lod0_total_tris": 493637,
+						"lod_tris": [
+							3313,
+							8
+						],
+						"nodes": 222,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "22 PackDecidA",
+						"instances": 119,
+						"lod0_total_tris": 487424,
+						"lod_tris": [
+							4096,
+							8
+						],
+						"nodes": 184,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "27 PackDecidC2",
+						"instances": 142,
+						"lod0_total_tris": 470446,
+						"lod_tris": [
+							3313,
+							8
+						],
+						"nodes": 206,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "20 PackPineC2",
+						"instances": 155,
+						"lod0_total_tris": 445160,
+						"lod_tris": [
+							2872,
+							8
+						],
+						"nodes": 228,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "16 PackPineC",
+						"instances": 152,
+						"lod0_total_tris": 436544,
+						"lod_tris": [
+							2872,
+							8
+						],
+						"nodes": 234,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "18 PackPineA2",
+						"instances": 143,
+						"lod0_total_tris": 226941,
+						"lod_tris": [
+							1587,
+							8
+						],
+						"nodes": 230,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "14 PackPineA",
+						"instances": 141,
+						"lod0_total_tris": 223767,
+						"lod_tris": [
+							1587,
+							8
+						],
+						"nodes": 216,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "19 PackPineB2",
+						"instances": 156,
+						"lod0_total_tris": 180648,
+						"lod_tris": [
+							1158,
+							8
+						],
+						"nodes": 232,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "15 PackPineB",
+						"instances": 126,
+						"lod0_total_tris": 145908,
+						"lod_tris": [
+							1158,
+							8
+						],
+						"nodes": 204,
+						"shadow_lods": [
+							0
+						]
+					}
+				],
+				"instances": 2017,
+				"layer": "trees",
+				"lod0_total_tris": 7130821,
+				"nodes": 3072
+			},
+			{
+				"assets": [
+					{
+						"asset": "blades_0",
+						"instances": 350700,
+						"lod0_total_tris": 3156300,
+						"lod_tris": [
+							9
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "blades_1",
+						"instances": 224560,
+						"lod0_total_tris": 2021040,
+						"lod_tris": [
+							9
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "short_0",
+						"instances": 402965,
+						"lod0_total_tris": 402965,
+						"lod_tris": [
+							1
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "short_1",
+						"instances": 197400,
+						"lod0_total_tris": 197400,
+						"lod_tris": [
+							1
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "blades_2",
+						"instances": 126420,
+						"lod0_total_tris": 126420,
+						"lod_tris": [
+							1
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "blades_3",
+						"instances": 36064,
+						"lod0_total_tris": 36064,
+						"lod_tris": [
+							1
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "blades_4",
+						"instances": 9878,
+						"lod0_total_tris": 9878,
+						"lod_tris": [
+							1
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					}
+				],
+				"instances": 1347987,
+				"layer": "grass",
+				"lod0_total_tris": 5950067,
+				"nodes": 7
+			},
+			{
+				"assets": [
+					{
+						"asset": "namaqualand_cliff_02",
+						"instances": 13,
+						"lod0_total_tris": 2523040,
+						"lod_tris": [
+							194080,
+							97039,
+							48519,
+							24258
+						],
+						"nodes": 52,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					},
+					{
+						"asset": "namaqualand_cliff_01",
+						"instances": 14,
+						"lod0_total_tris": 1321166,
+						"lod_tris": [
+							94369,
+							47184,
+							23591,
+							11794
+						],
+						"nodes": 56,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					},
+					{
+						"asset": "icelandic_lava_cliff_huge",
+						"instances": 10,
+						"lod0_total_tris": 347830,
+						"lod_tris": [
+							34783,
+							17390,
+							8695,
+							4172
+						],
+						"nodes": 40,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					},
+					{
+						"asset": "nordic_coastal_cliff_large",
+						"instances": 11,
+						"lod0_total_tris": 297275,
+						"lod_tris": [
+							27025,
+							13512,
+							6755,
+							3243
+						],
+						"nodes": 44,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					},
+					{
+						"asset": "nordic_coastal_cliff_huge",
+						"instances": 8,
+						"lod0_total_tris": 220104,
+						"lod_tris": [
+							27513,
+							13756,
+							6878,
+							3301
+						],
+						"nodes": 32,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					},
+					{
+						"asset": "namaqualand_cliff_02_FILL",
+						"instances": 13,
+						"lod0_total_tris": 169910,
+						"lod_tris": [
+							13070
+						],
+						"nodes": 13,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "namaqualand_cliff_02_PATCH",
+						"instances": 13,
+						"lod0_total_tris": 46410,
+						"lod_tris": [
+							3570
+						],
+						"nodes": 13,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "namaqualand_cliff_01_PATCH",
+						"instances": 14,
+						"lod0_total_tris": 45164,
+						"lod_tris": [
+							3226
+						],
+						"nodes": 14,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "namaqualand_cliff_01_PATCH2",
+						"instances": 14,
+						"lod0_total_tris": 13146,
+						"lod_tris": [
+							939
+						],
+						"nodes": 14,
+						"shadow_lods": [
+							0
+						]
+					}
+				],
+				"instances": 110,
+				"layer": "cliffs",
+				"lod0_total_tris": 4984045,
+				"nodes": 278
+			},
+			{
+				"assets": [
+					{
+						"asset": "42 LogFallenNordic",
+						"instances": 153,
+						"lod0_total_tris": 847161,
+						"lod_tris": [
+							5537,
+							1936,
+							552
+						],
+						"nodes": 336,
+						"shadow_lods": [
+							0,
+							1,
+							2
+						]
+					},
+					{
+						"asset": "38 StumpBroken",
+						"instances": 94,
+						"lod0_total_tris": 676424,
+						"lod_tris": [
+							7196,
+							2056,
+							616
+						],
+						"nodes": 228,
+						"shadow_lods": [
+							0,
+							1,
+							2
+						]
+					},
+					{
+						"asset": "45 StickArbem",
+						"instances": 256,
+						"lod0_total_tris": 513792,
+						"lod_tris": [
+							2007,
+							601,
+							199
+						],
+						"nodes": 402,
+						"shadow_lods": [
+							0,
+							1,
+							2
+						]
+					},
+					{
+						"asset": "44 BranchFallen",
+						"instances": 148,
+						"lod0_total_tris": 436008,
+						"lod_tris": [
+							2946,
+							1031,
+							294
+						],
+						"nodes": 336,
+						"shadow_lods": [
+							0,
+							1,
+							2
+						]
+					},
+					{
+						"asset": "43 LogFallenLarge",
+						"instances": 92,
+						"lod0_total_tris": 435620,
+						"lod_tris": [
+							4735,
+							1656,
+							473
+						],
+						"nodes": 234,
+						"shadow_lods": [
+							0,
+							1,
+							2
+						]
+					},
+					{
+						"asset": "39 StumpOld",
+						"instances": 84,
+						"lod0_total_tris": 410340,
+						"lod_tris": [
+							4885,
+							1709,
+							488
+						],
+						"nodes": 213,
+						"shadow_lods": [
+							0,
+							1,
+							2
+						]
+					},
+					{
+						"asset": "47 StickDebrisB",
+						"instances": 212,
+						"lod0_total_tris": 215604,
+						"lod_tris": [
+							1017,
+							305,
+							150
+						],
+						"nodes": 357,
+						"shadow_lods": [
+							0,
+							1,
+							2
+						]
+					},
+					{
+						"asset": "40 StumpRottenLarge",
+						"instances": 31,
+						"lod0_total_tris": 204197,
+						"lod_tris": [
+							6587,
+							2305,
+							658
+						],
+						"nodes": 84,
+						"shadow_lods": [
+							0,
+							1,
+							2
+						]
+					},
+					{
+						"asset": "41 StumpRottenTall",
+						"instances": 77,
+						"lod0_total_tris": 166166,
+						"lod_tris": [
+							2158,
+							755,
+							215
+						],
+						"nodes": 189,
+						"shadow_lods": [
+							0,
+							1,
+							2
+						]
+					},
+					{
+						"asset": "48 StickDebrisC",
+						"instances": 165,
+						"lod0_total_tris": 151470,
+						"lod_tris": [
+							918,
+							275,
+							150
+						],
+						"nodes": 324,
+						"shadow_lods": [
+							0,
+							1,
+							2
+						]
+					},
+					{
+						"asset": "46 StickDebrisA",
+						"instances": 197,
+						"lod0_total_tris": 145189,
+						"lod_tris": [
+							737,
+							221,
+							150
+						],
+						"nodes": 342,
+						"shadow_lods": [
+							0,
+							1,
+							2
+						]
+					},
+					{
+						"asset": "49 StickDebrisD",
+						"instances": 169,
+						"lod0_total_tris": 115596,
+						"lod_tris": [
+							684,
+							205,
+							150
+						],
+						"nodes": 288,
+						"shadow_lods": [
+							0,
+							1,
+							2
+						]
+					}
+				],
+				"instances": 1678,
+				"layer": "deadfall",
+				"lod0_total_tris": 4317567,
+				"nodes": 3333
+			},
+			{
+				"assets": [
+					{
+						"asset": "67 SaplingDecidC2",
+						"instances": 457,
+						"lod0_total_tris": 1514041,
+						"lod_tris": [
+							3313,
+							8
+						],
+						"nodes": 420,
+						"shadow_lods": [
+							0,
+							1
+						]
+					},
+					{
+						"asset": "68 SaplingDecidA2",
+						"instances": 291,
+						"lod0_total_tris": 1191936,
+						"lod_tris": [
+							4096,
+							8
+						],
+						"nodes": 340,
+						"shadow_lods": [
+							0,
+							1
+						]
+					},
+					{
+						"asset": "66 SaplingPineC2",
+						"instances": 206,
+						"lod0_total_tris": 591632,
+						"lod_tris": [
+							2872,
+							8
+						],
+						"nodes": 270,
+						"shadow_lods": [
+							0,
+							1
+						]
+					},
+					{
+						"asset": "65 SaplingPineA2",
+						"instances": 339,
+						"lod0_total_tris": 537993,
+						"lod_tris": [
+							1587,
+							8
+						],
+						"nodes": 364,
+						"shadow_lods": [
+							0,
+							1
+						]
+					},
+					{
+						"asset": "64 SaplingPineB",
+						"instances": 392,
+						"lod0_total_tris": 453936,
+						"lod_tris": [
+							1158,
+							8
+						],
+						"nodes": 390,
+						"shadow_lods": [
+							0,
+							1
+						]
+					}
+				],
+				"instances": 1685,
+				"layer": "saplings",
+				"lod0_total_tris": 4289538,
+				"nodes": 1784
+			},
+			{
+				"assets": [
+					{
+						"asset": "mountainside",
+						"instances": 5,
+						"lod0_total_tris": 767360,
+						"lod_tris": [
+							153472,
+							76735,
+							38366,
+							19182
+						],
+						"nodes": 20,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					},
+					{
+						"asset": "beach_rock_tower",
+						"instances": 6,
+						"lod0_total_tris": 178920,
+						"lod_tris": [
+							29820,
+							14910,
+							7454,
+							3578
+						],
+						"nodes": 24,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					},
+					{
+						"asset": "beach_rock_formation",
+						"instances": 5,
+						"lod0_total_tris": 148110,
+						"lod_tris": [
+							29622,
+							14811,
+							7404,
+							3554
+						],
+						"nodes": 20,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					},
+					{
+						"asset": "beach_rock_ridge",
+						"instances": 6,
+						"lod0_total_tris": 146832,
+						"lod_tris": [
+							24472,
+							12235,
+							6118,
+							2935
+						],
+						"nodes": 24,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					},
+					{
+						"asset": "beach_rock_slabs",
+						"instances": 5,
+						"lod0_total_tris": 128450,
+						"lod_tris": [
+							25690,
+							12844,
+							6422,
+							3082
+						],
+						"nodes": 20,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					}
+				],
+				"instances": 27,
+				"layer": "outcrops",
+				"lod0_total_tris": 1369672,
+				"nodes": 108
+			},
+			{
+				"assets": [
+					{
+						"asset": "RoadMesh",
+						"instances": 1,
+						"lod0_total_tris": 19200,
+						"lod_tris": [
+							19200
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					}
+				],
+				"instances": 1,
+				"layer": "road",
+				"lod0_total_tris": 19200,
+				"nodes": 1
+			},
+			{
+				"assets": [
+					{
+						"asset": "MouseQuad",
+						"instances": 1,
+						"lod0_total_tris": 2,
+						"lod_tris": [
+							2
+						],
+						"nodes": 1,
+						"shadow_lods": [
+							0
+						]
+					}
+				],
+				"instances": 1,
+				"layer": "terrain_other",
+				"lod0_total_tris": 2,
+				"nodes": 1
+			}
+		],
+		"meshes": {
+			"instances": 95774,
+			"mesh_nodes": 18960,
+			"shadow_casting_tris": 142258937,
+			"top": [
+				{
+					"instances": 358,
+					"mesh": "namaqualand_stones_01_a_EXPORT_TMP_realCap_Model_2_005",
+					"nodes": 75,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C01_05_M9_L0",
+					"shadow_instances": 358,
+					"surfaces": 1,
+					"total_tris": 8670760,
+					"tris": 24220,
+					"visibility_range_end": 32.015998840332
+				},
+				{
+					"instances": 357,
+					"mesh": "namaqualand_stones_01_c_EXPORT_TMP_realCap_Model_2_002",
+					"nodes": 72,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C01_05_M11_L0",
+					"shadow_instances": 357,
+					"surfaces": 1,
+					"total_tris": 7066458,
+					"tris": 19794,
+					"visibility_range_end": 32.015998840332
+				},
+				{
+					"instances": 3867,
+					"mesh": "cone_open_cone_open_LOD0",
+					"nodes": 257,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C03_02_M53_L0",
+					"shadow_instances": 0,
+					"surfaces": 1,
+					"total_tris": 5727027,
+					"tris": 1481,
+					"visibility_range_end": 12.0059995651245
+				},
+				{
+					"instances": 190,
+					"mesh": "namaqualand_rocks_01_d_EXPORT_TMP_realCap_Model_2_002",
+					"nodes": 66,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C00_05_M8_L0",
+					"shadow_instances": 190,
+					"surfaces": 1,
+					"total_tris": 4732900,
+					"tris": 24910,
+					"visibility_range_end": 32.015998840332
+				},
+				{
+					"instances": 4978,
+					"mesh": "MMI3D_C01_07_M32_L0",
+					"nodes": 288,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C01_07_M32_L0",
+					"shadow_instances": 4978,
+					"surfaces": 1,
+					"total_tris": 4380640,
+					"tris": 880,
+					"visibility_range_end": 80.1920013427734
+				},
+				{
+					"instances": 167,
+					"mesh": "namaqualand_rocks_01_b_EXPORT_TMP_realCap_Model_2_009",
+					"nodes": 63,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C00_05_M6_L0",
+					"shadow_instances": 167,
+					"surfaces": 1,
+					"total_tris": 4140264,
+					"tris": 24792,
+					"visibility_range_end": 32.015998840332
+				},
+				{
+					"instances": 341,
+					"mesh": "namaqualand_stones_01_e_EXPORT_TMP_realCap_Model_2_001",
+					"nodes": 73,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C01_05_M13_L0",
+					"shadow_instances": 341,
+					"surfaces": 1,
+					"total_tris": 3805560,
+					"tris": 11160,
+					"visibility_range_end": 32.015998840332
+				},
+				{
+					"instances": 169,
+					"mesh": "namaqualand_rocks_01_c_EXPORT_TMP_realCap_Model_2_014",
+					"nodes": 62,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C00_05_M7_L0",
+					"shadow_instances": 169,
+					"surfaces": 1,
+					"total_tris": 3791008,
+					"tris": 22432,
+					"visibility_range_end": 32.015998840332
+				},
+				{
+					"instances": 33,
+					"mesh": "namaqualand_boulder_06_2k_mesh_boulder_01_5m",
+					"nodes": 29,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C01_02_M37_L0",
+					"shadow_instances": 33,
+					"surfaces": 1,
+					"total_tris": 3600762,
+					"tris": 109114,
+					"visibility_range_end": 22.0109996795654
+				},
+				{
+					"instances": 2060,
+					"mesh": "cone_long_cone_long_LOD0",
+					"nodes": 245,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C03_02_M54_L0",
+					"shadow_instances": 0,
+					"surfaces": 1,
+					"total_tris": 3598820,
+					"tris": 1747,
+					"visibility_range_end": 12.0059995651245
+				},
+				{
+					"instances": 369,
+					"mesh": "namaqualand_stones_01_b_EXPORT_TMP_realCap_Model_2_003",
+					"nodes": 73,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C01_05_M10_L0",
+					"shadow_instances": 369,
+					"surfaces": 1,
+					"total_tris": 3352734,
+					"tris": 9086,
+					"visibility_range_end": 32.015998840332
+				},
+				{
+					"instances": 35,
+					"mesh": "namaqualand_boulder_05_2k_Boulder",
+					"nodes": 26,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C03_03_M36_L0",
+					"shadow_instances": 35,
+					"surfaces": 1,
+					"total_tris": 3136630,
+					"tris": 89618,
+					"visibility_range_end": 22.0109996795654
+				},
+				{
+					"instances": 5500,
+					"mesh": "MMI3D_C00_07_M29_L0",
+					"nodes": 283,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C00_07_M29_L0",
+					"shadow_instances": 5500,
+					"surfaces": 1,
+					"total_tris": 3058000,
+					"tris": 556,
+					"visibility_range_end": 80.1920013427734
+				},
+				{
+					"instances": 5656,
+					"mesh": "MMI3D_C03_07_M31_L0",
+					"nodes": 288,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C03_07_M31_L0",
+					"shadow_instances": 5656,
+					"surfaces": 1,
+					"total_tris": 2828000,
+					"tris": 500,
+					"visibility_range_end": 80.1920013427734
+				},
+				{
+					"instances": 27,
+					"mesh": "namaqualand_boulder_02_2k_boulder_02_5m",
+					"nodes": 24,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C00_05_M33_L0",
+					"shadow_instances": 27,
+					"surfaces": 1,
+					"total_tris": 2645028,
+					"tris": 97964,
+					"visibility_range_end": 22.0109996795654
+				},
+				{
+					"instances": 13,
+					"mesh": "res://assets/models/cliffs/namaqualand_cliff_02/namaqualand_cliff_02_2k.glb::ArrayMesh_3bxqe",
+					"nodes": 13,
+					"sample_node": "/root/Main/CliffDressing/@Node3D@72/namaqualand_cliff_02_LOD0",
+					"shadow_instances": 13,
+					"surfaces": 1,
+					"total_tris": 2523040,
+					"tris": 194080,
+					"visibility_range_end": 40.0
+				},
+				{
+					"instances": 190,
+					"mesh": "namaqualand_rocks_01_d_EXPORT_TMP_realCap_Model_2_001",
+					"nodes": 66,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C00_05_M8_L1",
+					"shadow_instances": 190,
+					"surfaces": 1,
+					"total_tris": 2506480,
+					"tris": 13192,
+					"visibility_range_end": 64.0319976806641
+				},
+				{
+					"instances": 170,
+					"mesh": "namaqualand_rocks_01_a_EXPORT_TMP_realCap_Model_2_006",
+					"nodes": 63,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C00_05_M5_L0",
+					"shadow_instances": 170,
+					"surfaces": 1,
+					"total_tris": 2308940,
+					"tris": 13582,
+					"visibility_range_end": 32.015998840332
+				},
+				{
+					"instances": 3867,
+					"mesh": "cone_open_cone_open_LOD1",
+					"nodes": 257,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C03_02_M53_L1",
+					"shadow_instances": 0,
+					"surfaces": 1,
+					"total_tris": 2277663,
+					"tris": 589,
+					"visibility_range_end": 24.0576019287109
+				},
+				{
+					"instances": 167,
+					"mesh": "namaqualand_rocks_01_b_EXPORT_TMP_realCap_Model_2_010",
+					"nodes": 63,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C00_05_M6_L1",
+					"shadow_instances": 167,
+					"surfaces": 1,
+					"total_tris": 1950226,
+					"tris": 11678,
+					"visibility_range_end": 64.0319976806641
+				},
+				{
+					"instances": 341,
+					"mesh": "namaqualand_stones_01_e_EXPORT_TMP_realCap_Model_2_010",
+					"nodes": 73,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C01_05_M13_L1",
+					"shadow_instances": 341,
+					"surfaces": 1,
+					"total_tris": 1902780,
+					"tris": 5580,
+					"visibility_range_end": 64.0319976806641
+				},
+				{
+					"instances": 321,
+					"mesh": "namaqualand_stones_01_d_EXPORT_TMP_realCap_Model_2_004",
+					"nodes": 72,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C00_05_M12_L0",
+					"shadow_instances": 321,
+					"surfaces": 1,
+					"total_tris": 1882344,
+					"tris": 5864,
+					"visibility_range_end": 32.015998840332
+				},
+				{
+					"instances": 29,
+					"mesh": "namaqualand_boulder_03_2k_realCap_Model_2",
+					"nodes": 24,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C02_01_M34_L0",
+					"shadow_instances": 29,
+					"surfaces": 1,
+					"total_tris": 1879954,
+					"tris": 64826,
+					"visibility_range_end": 22.0109996795654
+				},
+				{
+					"instances": 33,
+					"mesh": "namaqualand_boulder_06_2k_mesh_boulder_01_5m_001",
+					"nodes": 29,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C01_02_M37_L1",
+					"shadow_instances": 33,
+					"surfaces": 1,
+					"total_tris": 1800282,
+					"tris": 54554,
+					"visibility_range_end": 50.0249977111816
+				},
+				{
+					"instances": 358,
+					"mesh": "namaqualand_stones_01_a_EXPORT_TMP_realCap_Model_2_006",
+					"nodes": 75,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C01_05_M9_L1",
+					"shadow_instances": 358,
+					"surfaces": 1,
+					"total_tris": 1780692,
+					"tris": 4974,
+					"visibility_range_end": 64.0319976806641
+				},
+				{
+					"instances": 30,
+					"mesh": "namaqualand_boulder_04_2k_realCap_Model_2",
+					"nodes": 25,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C00_05_M35_L0",
+					"shadow_instances": 30,
+					"surfaces": 1,
+					"total_tris": 1771980,
+					"tris": 59066,
+					"visibility_range_end": 22.0109996795654
+				},
+				{
+					"instances": 369,
+					"mesh": "namaqualand_stones_01_b_EXPORT_TMP_realCap_Model_2_007",
+					"nodes": 73,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C01_05_M10_L1",
+					"shadow_instances": 369,
+					"surfaces": 1,
+					"total_tris": 1675998,
+					"tris": 4542,
+					"visibility_range_end": 64.0319976806641
+				},
+				{
+					"instances": 31,
+					"mesh": "stone_01_2k_Plane_002",
+					"nodes": 28,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C00_05_M2_L0",
+					"shadow_instances": 31,
+					"surfaces": 1,
+					"total_tris": 1659120,
+					"tris": 53520,
+					"visibility_range_end": 22.0109996795654
+				},
+				{
+					"instances": 169,
+					"mesh": "namaqualand_rocks_01_c_EXPORT_TMP_realCap_Model_2_015",
+					"nodes": 62,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C00_05_M7_L1",
+					"shadow_instances": 169,
+					"surfaces": 1,
+					"total_tris": 1582178,
+					"tris": 9362,
+					"visibility_range_end": 64.0319976806641
+				},
+				{
+					"instances": 457,
+					"mesh": "MMI3D_C01_07_M67_L0",
+					"nodes": 210,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C01_07_M67_L0",
+					"shadow_instances": 457,
+					"surfaces": 2,
+					"total_tris": 1514041,
+					"tris": 3313,
+					"visibility_range_end": 80.1920013427734
+				},
+				{
+					"instances": 170,
+					"mesh": "namaqualand_rocks_01_a_EXPORT_TMP_realCap_Model_2_007",
+					"nodes": 63,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C00_05_M5_L1",
+					"shadow_instances": 170,
+					"surfaces": 1,
+					"total_tris": 1466420,
+					"tris": 8626,
+					"visibility_range_end": 64.0319976806641
+				},
+				{
+					"instances": 357,
+					"mesh": "namaqualand_stones_01_c_EXPORT_TMP_realCap_Model_2_008",
+					"nodes": 72,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C01_05_M11_L1",
+					"shadow_instances": 357,
+					"surfaces": 1,
+					"total_tris": 1450848,
+					"tris": 4064,
+					"visibility_range_end": 64.0319976806641
+				},
+				{
+					"instances": 21,
+					"mesh": "boulder_01_2k_rock_PROXY_5m_002",
+					"nodes": 20,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C00_05_M1_L0",
+					"shadow_instances": 21,
+					"surfaces": 1,
+					"total_tris": 1388562,
+					"tris": 66122,
+					"visibility_range_end": 22.0109996795654
+				},
+				{
+					"instances": 3512,
+					"mesh": "MMI3D_C00_07_M30_L0",
+					"nodes": 286,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C00_07_M30_L0",
+					"shadow_instances": 3512,
+					"surfaces": 1,
+					"total_tris": 1348608,
+					"tris": 384,
+					"visibility_range_end": 80.1920013427734
+				},
+				{
+					"instances": 27,
+					"mesh": "namaqualand_boulder_02_2k_boulder_02_5m_001",
+					"nodes": 24,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C00_05_M33_L1",
+					"shadow_instances": 27,
+					"surfaces": 1,
+					"total_tris": 1322514,
+					"tris": 48982,
+					"visibility_range_end": 50.0249977111816
+				},
+				{
+					"instances": 14,
+					"mesh": "res://assets/models/cliffs/namaqualand_cliff_01/namaqualand_cliff_01_2k.glb::ArrayMesh_vb72n",
+					"nodes": 14,
+					"sample_node": "/root/Main/CliffDressing/@Node3D@74/namaqualand_cliff_01_LOD0",
+					"shadow_instances": 14,
+					"surfaces": 1,
+					"total_tris": 1321166,
+					"tris": 94369,
+					"visibility_range_end": 40.0
+				},
+				{
+					"instances": 13,
+					"mesh": "res://assets/models/cliffs/namaqualand_cliff_02/namaqualand_cliff_02_2k.glb::ArrayMesh_30tle",
+					"nodes": 13,
+					"sample_node": "/root/Main/CliffDressing/@Node3D@72/namaqualand_cliff_02_LOD1",
+					"shadow_instances": 13,
+					"surfaces": 1,
+					"total_tris": 1261507,
+					"tris": 97039,
+					"visibility_range_end": 90.0
+				},
+				{
+					"instances": 3867,
+					"mesh": "cone_open_cone_open_LOD2",
+					"nodes": 257,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C03_02_M53_L2",
+					"shadow_instances": 0,
+					"surfaces": 1,
+					"total_tris": 1210371,
+					"tris": 313,
+					"visibility_range_end": 40.0960006713867
+				},
+				{
+					"instances": 2060,
+					"mesh": "cone_long_cone_long_LOD1",
+					"nodes": 245,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C03_02_M54_L1",
+					"shadow_instances": 0,
+					"surfaces": 1,
+					"total_tris": 1198920,
+					"tris": 582,
+					"visibility_range_end": 24.0576019287109
+				},
+				{
+					"instances": 291,
+					"mesh": "MMI3D_C02_07_M68_L0",
+					"nodes": 170,
+					"sample_node": "/root/Main/Terrain3D/MMI/Region_00-01/MMI3D_C02_07_M68_L0",
+					"shadow_instances": 291,
+					"surfaces": 3,
+					"total_tris": 1191936,
+					"tris": 4096,
+					"visibility_range_end": 80.1920013427734
+				}
+			],
+			"total_tris": 157127638,
+			"unique_meshes": 221
+		},
+		"textures": {
+			"by_dir": [
+				{
+					"dir": "res://textures/source",
+					"mb": 41.333
+				},
+				{
+					"dir": "res://assets/models/scree/textures",
+					"mb": 26.667
+				},
+				{
+					"dir": "res://assets/models/cliffs/namaqualand_cliff_02/textures",
+					"mb": 22.167
+				},
+				{
+					"dir": "res://assets/models/cliffs/namaqualand_cliff_01/textures",
+					"mb": 16.866
+				},
+				{
+					"dir": "res://assets/models/rocks/stone_01/textures",
+					"mb": 16.0
+				},
+				{
+					"dir": "res://assets/models/candidates/vegetation/bark",
+					"mb": 16.0
+				},
+				{
+					"dir": "res://assets/models/rocks/namaqualand_boulder_06/textures",
+					"mb": 13.333
+				},
+				{
+					"dir": "res://assets/models/rocks/namaqualand_boulder_05/textures",
+					"mb": 13.333
+				},
+				{
+					"dir": "res://assets/models/cliffs/mountainside/textures",
+					"mb": 13.333
+				},
+				{
+					"dir": "res://assets/models/rocks/namaqualand_boulder_04/textures",
+					"mb": 13.333
+				},
+				{
+					"dir": "res://assets/models/rocks/namaqualand_boulder_03/textures",
+					"mb": 13.333
+				},
+				{
+					"dir": "res://assets/models/rocks/namaqualand_boulder_02/textures",
+					"mb": 13.333
+				},
+				{
+					"dir": "res://assets/models/rocks/rock_09/textures",
+					"mb": 13.333
+				},
+				{
+					"dir": "res://assets/models/rocks/rock_07/textures",
+					"mb": 13.333
+				},
+				{
+					"dir": "res://assets/models/rocks/boulder_01/textures",
+					"mb": 13.333
+				},
+				{
+					"dir": "res://assets/models/candidates/vegetation/trees",
+					"mb": 11.51
+				},
+				{
+					"dir": "res://assets/models/ground_debris/stump_broken/textures",
+					"mb": 10.667
+				},
+				{
+					"dir": "res://assets/models/ground_debris/stump_old/textures",
+					"mb": 10.667
+				},
+				{
+					"dir": "res://assets/models/ground_debris/stump_rotten_large/textures",
+					"mb": 10.667
+				},
+				{
+					"dir": "res://assets/models/ground_debris/stump_rotten_tall/textures",
+					"mb": 10.667
+				},
+				{
+					"dir": "res://assets/models/ground_debris/log_fallen_nordic/textures",
+					"mb": 10.667
+				},
+				{
+					"dir": "res://assets/models/ground_debris/log_fallen_large/textures",
+					"mb": 10.667
+				},
+				{
+					"dir": "res://assets/models/ground_debris/branch_fallen/textures",
+					"mb": 10.667
+				},
+				{
+					"dir": "res://assets/models/ground_debris/stick_arbem/textures",
+					"mb": 10.667
+				},
+				{
+					"dir": "res://assets/models/ground_debris/sticks_debris/textures",
+					"mb": 10.667
+				},
+				{
+					"dir": "res://assets/models/cliffs/icelandic_lava_cliff_huge/textures",
+					"mb": 10.667
+				},
+				{
+					"dir": "res://assets/models/cliffs/nordic_coastal_cliff_large/textures",
+					"mb": 10.667
+				},
+				{
+					"dir": "res://assets/models/cliffs/nordic_coastal_cliff_huge/textures",
+					"mb": 10.667
+				},
+				{
+					"dir": "res://assets/models/outcrops/beach_rock_tower/textures",
+					"mb": 10.667
+				},
+				{
+					"dir": "res://assets/models/outcrops/beach_rock_ridge/textures",
+					"mb": 10.667
+				},
+				{
+					"dir": "res://assets/models/outcrops/beach_rock_slabs/textures",
+					"mb": 10.667
+				},
+				{
+					"dir": "res://assets/models/outcrops/beach_rock_formation/textures",
+					"mb": 10.667
+				},
+				{
+					"dir": "res://assets/models/understory/lady_fern/textures",
+					"mb": 10.667
+				},
+				{
+					"dir": "res://assets/models/understory/elderberry/textures",
+					"mb": 10.667
+				},
+				{
+					"dir": "res://assets/models/understory/poppy/textures",
+					"mb": 10.667
+				},
+				{
+					"dir": "res://assets/models/candidates/vegetation/Textures",
+					"mb": 5.885
+				},
+				{
+					"dir": "res://assets/models/understory/bush_05/textures",
+					"mb": 3.333
+				},
+				{
+					"dir": "res://assets/models/understory/bush_04/textures",
+					"mb": 3.333
+				},
+				{
+					"dir": "res://assets/models/understory/bush_01/textures",
+					"mb": 3.333
+				},
+				{
+					"dir": "res://assets/models/understory/bush_02/textures",
+					"mb": 2.667
+				}
+			],
+			"count": 180,
+			"top": [
+				{
+					"format": 4,
+					"height": 1024,
+					"mb": 8.0,
+					"path": "res://assets/models/cliffs/namaqualand_cliff_02/textures/namaqualand_cliff_02_fill_diff.png",
+					"width": 1536
+				},
+				{
+					"format": 24,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/rocks/namaqualand_boulder_03/textures/namaqualand_boulder_03_nor_gl_2k.exr",
+					"width": 2048
+				},
+				{
+					"format": 21,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/outcrops/beach_rock_formation/textures/beach_rock_formation_nor_gl_2k.jpg",
+					"width": 2048
+				},
+				{
+					"format": 24,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/rocks/namaqualand_boulder_04/textures/namaqualand_boulder_04_rough_2k.exr",
+					"width": 2048
+				},
+				{
+					"format": 24,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/cliffs/mountainside/textures/mountainside_rough_2k.exr",
+					"width": 2048
+				},
+				{
+					"format": 24,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/cliffs/mountainside/textures/mountainside_nor_gl_2k.exr",
+					"width": 2048
+				},
+				{
+					"format": 19,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/understory/poppy/textures/poppy_diffuse.png",
+					"width": 2048
+				},
+				{
+					"format": 21,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/understory/poppy/textures/poppy_normal.png",
+					"width": 2048
+				},
+				{
+					"format": 24,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/rocks/namaqualand_boulder_04/textures/namaqualand_boulder_04_nor_gl_2k.exr",
+					"width": 2048
+				},
+				{
+					"format": 24,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/rocks/namaqualand_boulder_05/textures/namaqualand_boulder_05_rough_2k.exr",
+					"width": 2048
+				},
+				{
+					"format": 24,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/rocks/namaqualand_boulder_05/textures/namaqualand_boulder_05_nor_gl_2k.exr",
+					"width": 2048
+				},
+				{
+					"format": 24,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/rocks/namaqualand_boulder_06/textures/namaqualand_boulder_06_rough_2k.exr",
+					"width": 2048
+				},
+				{
+					"format": 24,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/rocks/namaqualand_boulder_06/textures/namaqualand_boulder_06_nor_gl_2k.exr",
+					"width": 2048
+				},
+				{
+					"format": 24,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/scree/textures/namaqualand_rocks_01_rough_2k.exr",
+					"width": 2048
+				},
+				{
+					"format": 24,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/scree/textures/namaqualand_rocks_01_nor_gl_2k.exr",
+					"width": 2048
+				},
+				{
+					"format": 24,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/scree/textures/namaqualand_stones_01_rough_2k.exr",
+					"width": 2048
+				},
+				{
+					"format": 21,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/candidates/vegetation/bark/pine_bark_nor_gl_2k.png",
+					"width": 2048
+				},
+				{
+					"format": 24,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/scree/textures/namaqualand_stones_01_nor_gl_2k.exr",
+					"width": 2048
+				},
+				{
+					"format": 21,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/ground_debris/stump_broken/textures/stump_broken_nor_gl_2k.jpg",
+					"width": 2048
+				},
+				{
+					"format": 21,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/ground_debris/stump_old/textures/stump_old_nor_gl_2k.jpg",
+					"width": 2048
+				},
+				{
+					"format": 19,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/understory/elderberry/textures/elderberry_diffuse.png",
+					"width": 2048
+				},
+				{
+					"format": 21,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/understory/elderberry/textures/elderberry_normal.png",
+					"width": 2048
+				},
+				{
+					"format": 19,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/understory/lady_fern/textures/lady_fern_diffuse.png",
+					"width": 2048
+				},
+				{
+					"format": 21,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/understory/lady_fern/textures/lady_fern_normal.png",
+					"width": 2048
+				},
+				{
+					"format": 21,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/ground_debris/stump_rotten_large/textures/stump_rotten_large_nor_gl_2k.jpg",
+					"width": 2048
+				},
+				{
+					"format": 21,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/ground_debris/stump_rotten_tall/textures/stump_rotten_tall_nor_gl_2k.jpg",
+					"width": 2048
+				},
+				{
+					"format": 21,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/ground_debris/log_fallen_nordic/textures/log_fallen_nordic_nor_gl_2k.jpg",
+					"width": 2048
+				},
+				{
+					"format": 21,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/ground_debris/log_fallen_large/textures/log_fallen_large_nor_gl_2k.jpg",
+					"width": 2048
+				},
+				{
+					"format": 21,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/ground_debris/branch_fallen/textures/branch_fallen_nor_gl_2k.jpg",
+					"width": 2048
+				},
+				{
+					"format": 21,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/ground_debris/stick_arbem/textures/stick_arbem_nor_gl_2k.png",
+					"width": 2048
+				},
+				{
+					"format": 21,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/ground_debris/sticks_debris/textures/sticks_debris_nor_gl_2k.jpg",
+					"width": 2048
+				},
+				{
+					"format": 24,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/rocks/boulder_01/textures/boulder_01_rough_2k.exr",
+					"width": 2048
+				},
+				{
+					"format": 24,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/rocks/boulder_01/textures/boulder_01_nor_gl_2k.exr",
+					"width": 2048
+				},
+				{
+					"format": 21,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/cliffs/icelandic_lava_cliff_huge/textures/icelandic_lava_cliff_huge_nor_gl_2k.jpg",
+					"width": 2048
+				},
+				{
+					"format": 21,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/cliffs/nordic_coastal_cliff_large/textures/nordic_coastal_cliff_large_nor_gl_2k.jpg",
+					"width": 2048
+				},
+				{
+					"format": 24,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/rocks/stone_01/textures/stone_01_rough_2k.exr",
+					"width": 2048
+				},
+				{
+					"format": 24,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/rocks/stone_01/textures/stone_01_nor_gl_2k.exr",
+					"width": 2048
+				},
+				{
+					"format": 24,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/cliffs/namaqualand_cliff_01/textures/namaqualand_cliff_01_rough_2k.exr",
+					"width": 2048
+				},
+				{
+					"format": 24,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/cliffs/namaqualand_cliff_01/textures/namaqualand_cliff_01_nor_gl_2k.exr",
+					"width": 2048
+				},
+				{
+					"format": 24,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/rocks/rock_07/textures/rock_07_rough_2k.exr",
+					"width": 2048
+				}
+			],
+			"total_mb": 497.428
+		}
+	},
+	"meta": {
+		"adapter": "NVIDIA GeForce RTX 3070 Laptop GPU",
+		"frame_capped": false,
+		"git": "c2454614",
+		"godot": "4.7.2-stable (official)",
+		"hidden_layers": [],
+		"label": "valley_384",
+		"lantern_shadow": true,
+		"msaa_3d": 1,
+		"post_effects_on": 6,
+		"scaling_3d_mode": 1,
+		"scaling_3d_scale": 0.850000023841858,
+		"screen_space_aa": 1,
+		"seed": 3863964574,
+		"ssao": false,
+		"sun_shadows": true,
+		"time": "2026-10-08T18:51:51",
+		"viewport": [
+			1906,
+			942
+		]
+	},
+	"startup": {
+		"first_frame_at_ms": 14277,
+		"pipelines_at_settle": "canvas=2 mesh=31 surface=40 draw=3 specialization=48",
+		"ready_started_at_ms": 3642,
+		"ready_total_ms": 10280,
+		"settled_at_ms": 14472,
+		"stage_ms": {
+			"Terrain3D import+height_range": 135,
+			"boulder scattering": 188,
+			"cliff face dressing": 65,
+			"deadfall scattering": 1055,
+			"flower scattering": 423,
+			"grass density bake": 313,
+			"ground painting": 953,
+			"heightmap build": 4829,
+			"outcrop placement": 56,
+			"player placement": 11,
+			"road mesh build": 178,
+			"sapling scattering": 203,
+			"scree scattering": 132,
+			"tree scattering": 263,
+			"understory scattering": 861
+		}
+	},
+	"stations": [
+		{
+			"buffer_mem_mb": 263.212,
+			"cpu_render_ms": 8.942,
+			"draw_calls": 6483,
+			"frame_ms": 12.572,
+			"frames": 120,
+			"gpu_ms": 6.612,
+			"max_ms": 25.844,
+			"name": "spawn_ahead",
+			"nodes": 25035,
+			"objects": 6673,
+			"p50_ms": 11.418,
+			"p95_ms": 20.984,
+			"p99_ms": 22.692,
+			"physics_ms": 0.095,
+			"pos": [
+				-64.0,
+				4.894,
+				255.0
+			],
+			"primitives": 64674966,
+			"process_ms": 25.758,
+			"static_mem_mb": 649.181,
+			"texture_mem_mb": 852.613,
+			"video_mem_mb": 1257.608
+		},
+		{
+			"buffer_mem_mb": 263.212,
+			"cpu_render_ms": 3.124,
+			"draw_calls": 3000,
+			"frame_ms": 5.177,
+			"frames": 290,
+			"gpu_ms": 4.073,
+			"max_ms": 9.838,
+			"name": "spawn_ground",
+			"nodes": 25035,
+			"objects": 3045,
+			"p50_ms": 4.912,
+			"p95_ms": 6.625,
+			"p99_ms": 8.128,
+			"physics_ms": 0.091,
+			"pos": [
+				-64.0,
+				4.894,
+				255.0
+			],
+			"primitives": 62366970,
+			"process_ms": 10.387,
+			"static_mem_mb": 649.184,
+			"texture_mem_mb": 852.613,
+			"video_mem_mb": 1257.608
+		},
+		{
+			"buffer_mem_mb": 263.212,
+			"cpu_render_ms": 1.406,
+			"draw_calls": 242,
+			"frame_ms": 4.18,
+			"frames": 359,
+			"gpu_ms": 1.947,
+			"max_ms": 5.19,
+			"name": "spawn_sky",
+			"nodes": 25035,
+			"objects": 370,
+			"p50_ms": 4.166,
+			"p95_ms": 4.24,
+			"p99_ms": 4.776,
+			"physics_ms": 0.078,
+			"pos": [
+				-64.0,
+				4.894,
+				255.0
+			],
+			"primitives": 58706247,
+			"process_ms": 5.123,
+			"static_mem_mb": 649.186,
+			"texture_mem_mb": 852.613,
+			"video_mem_mb": 1257.608
+		},
+		{
+			"buffer_mem_mb": 263.212,
+			"cpu_render_ms": 5.805,
+			"draw_calls": 4970,
+			"frame_ms": 8.912,
+			"frames": 169,
+			"gpu_ms": 6.706,
+			"max_ms": 15.09,
+			"name": "road_mid",
+			"nodes": 25035,
+			"objects": 5164,
+			"p50_ms": 8.093,
+			"p95_ms": 12.984,
+			"p99_ms": 14.953,
+			"physics_ms": 0.072,
+			"pos": [
+				-52.0,
+				3.823,
+				-112.0
+			],
+			"primitives": 64999721,
+			"process_ms": 15.034,
+			"static_mem_mb": 649.188,
+			"texture_mem_mb": 852.613,
+			"video_mem_mb": 1257.608
+		},
+		{
+			"buffer_mem_mb": 263.212,
+			"cpu_render_ms": 9.094,
+			"draw_calls": 7952,
+			"frame_ms": 13.142,
+			"frames": 120,
+			"gpu_ms": 7.719,
+			"max_ms": 24.475,
+			"name": "exit_look_back",
+			"nodes": 25035,
+			"objects": 8175,
+			"p50_ms": 12.177,
+			"p95_ms": 19.714,
+			"p99_ms": 23.18,
+			"physics_ms": 0.093,
+			"pos": [
+				-64.0,
+				4.936,
+				-472.0
+			],
+			"primitives": 70388786,
+			"process_ms": 24.319,
+			"static_mem_mb": 649.189,
+			"texture_mem_mb": 852.613,
+			"video_mem_mb": 1257.608
+		},
+		{
+			"buffer_mem_mb": 263.212,
+			"cpu_render_ms": 8.223,
+			"draw_calls": 6356,
+			"frame_ms": 11.92,
+			"frames": 126,
+			"gpu_ms": 7.629,
+			"max_ms": 24.745,
+			"name": "forest_dense",
+			"nodes": 25035,
+			"objects": 6486,
+			"p50_ms": 11.146,
+			"p95_ms": 18.501,
+			"p99_ms": 22.54,
+			"physics_ms": 0.103,
+			"pos": [
+				-178.0,
+				2.841,
+				-270.0
+			],
+			"primitives": 68605191,
+			"process_ms": 24.638,
+			"static_mem_mb": 649.191,
+			"texture_mem_mb": 852.613,
+			"video_mem_mb": 1257.608
+		},
+		{
+			"buffer_mem_mb": 263.212,
+			"cpu_render_ms": 8.451,
+			"draw_calls": 6684,
+			"frame_ms": 12.197,
+			"frames": 123,
+			"gpu_ms": 6.743,
+			"max_ms": 29.791,
+			"name": "road_open",
+			"nodes": 25035,
+			"objects": 6845,
+			"p50_ms": 10.887,
+			"p95_ms": 19.291,
+			"p99_ms": 24.463,
+			"physics_ms": 0.079,
+			"pos": [
+				-84.135,
+				4.79,
+				149.526
+			],
+			"primitives": 66071991,
+			"process_ms": 19.65,
+			"static_mem_mb": 649.193,
+			"texture_mem_mb": 852.613,
+			"video_mem_mb": 1257.608
+		},
+		{
+			"buffer_mem_mb": 263.212,
+			"cpu_render_ms": 4.711,
+			"draw_calls": 3828,
+			"frame_ms": 8.47,
+			"frames": 178,
+			"gpu_ms": 7.365,
+			"max_ms": 14.777,
+			"name": "cliff_face",
+			"nodes": 25035,
+			"objects": 3890,
+			"p50_ms": 7.954,
+			"p95_ms": 11.167,
+			"p99_ms": 14.364,
+			"physics_ms": 0.096,
+			"pos": [
+				-44.0,
+				6.539,
+				-376.0
+			],
+			"primitives": 64965119,
+			"process_ms": 14.614,
+			"static_mem_mb": 649.196,
+			"texture_mem_mb": 852.613,
+			"video_mem_mb": 1257.608
+		}
+	],
+	"walk": {
+		"frame_ms": 11.612,
+		"frames": 1723,
+		"frames_over_16_7_ms": 64,
+		"gpu_ms": 7.006,
+		"hitches_over_2x_median": 11,
+		"max_ms": 32.852,
+		"metres": 200.071,
+		"p50_ms": 11.042,
+		"p95_ms": 15.586,
+		"p99_ms": 20.731,
+		"seconds": 20.007
+	}
+}

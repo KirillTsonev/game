@@ -12,8 +12,6 @@ extends Node
 ##   J = layer panel (scripts/debug/layer_toggle_panel.gd): checkboxes to show/hide the grass,
 ##       tree, rock, fern/shrub and deadfall layers -- A/B their FPS cost. Same cursor handling as Y.
 ##   K = grass culling readback: tufts actually drawn per variant vs buffer capacity.
-##   U = plant renderer A/B (scripts/terrain/plant_field.gd): moves the GPU-culled plants back to
-##       Terrain3D's instancer and here again, and prints how many are drawn. A short hitch each time.
 ##   O = fern / lady fern / elderberry shadows from their reduced mesh (the default) or their full
 ##       mesh (not saved).
 ##   Y = grass tuning panel (scripts/debug/grass_tuning_panel.gd): distance bands + widening.
@@ -28,6 +26,12 @@ extends Node
 ##       size with VSync and the FPS cap off -- for a profiler capture of the view the reports
 ##       measure (editor: Debugger > Visual Profiler).
 ##   F11 = sun shadows on / off (not saved).
+##   F7 = the scene's distance fog and the mountain rows' haze and mist off / on
+##       (MountainWalls.toggle_fog; not saved). Not the clouds: those are F6.
+##   F6 = the mountains' clouds off / on (MountainWalls.toggle_clouds; not saved).
+##   V = fly mode on / off (Player.debug_fly): no gravity, no collision. WASD moves where the
+##       camera looks, Space up, Ctrl down, hold Shift for 6x speed. Switching it off drops the
+##       player from where they are.
 ##   M = church preview: places the church model in front of the player; M again removes it.
 
 const TIMING_FRAMES := 120
@@ -125,22 +129,6 @@ func _input(event: InputEvent) -> void:
 		var field := get_tree().current_scene.get_node_or_null("GrassField")
 		if field:
 			field.request_debug_counts() # prints "[Grass] drawn tufts ..." from the render thread
-	elif event.physical_keycode == KEY_U:
-		var plants := get_tree().current_scene.get_node_or_null(PlantField.NODE_NAME) as PlantField
-		if plants:
-			# The switch makes Terrain3D rebuild its nodes, all visible, once per shadow-casting
-			# mesh: the J panel re-hides what it has switched off after every rebuild.
-			var rehide := func() -> void:
-				if is_instance_valid(_layer_panel):
-					_layer_panel.reapply_hidden()
-			print("[Plants] switching -- about 5 s at a few FPS while Terrain3D rebuilds its nodes...")
-			print(await plants.set_gpu_driven(not plants.is_gpu_driven(), rehide))
-			await get_tree().process_frame
-			rehide.call()
-			if is_instance_valid(plants):
-				plants.request_debug_counts()
-		else:
-			print("[Plants] no PlantField in this run (started with --plants-terrain3d?)")
 	elif event.physical_keycode == KEY_O:
 		var plants := get_tree().current_scene.get_node_or_null(PlantField.NODE_NAME) as PlantField
 		if plants:
@@ -157,6 +145,15 @@ func _input(event: InputEvent) -> void:
 			print(GrassScatter.debug_probe(player.global_position))
 	elif event.physical_keycode == KEY_M:
 		_toggle_church_preview()
+	elif event.physical_keycode == KEY_F7:
+		print(MountainWalls.toggle_fog())
+	elif event.physical_keycode == KEY_F6:
+		print(MountainWalls.toggle_clouds())
+	elif event.physical_keycode == KEY_V:
+		var player := get_tree().current_scene.get_node_or_null("Player")
+		if player:
+			player.set("debug_fly", not player.get("debug_fly"))
+			print("[PerfDebug] fly mode %s -- WASD where the camera looks, Space up, Ctrl down, hold Shift = fast; no collision" % ("ON" if player.get("debug_fly") else "off (falling from here)"))
 	elif event.physical_keycode == KEY_R:
 		var player := get_tree().current_scene.get_node_or_null("Player") as Node3D
 		if player:

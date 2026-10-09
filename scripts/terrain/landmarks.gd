@@ -15,7 +15,8 @@
 ##   1. filter_cliff_plan() right after plan_cliff_dressing, BEFORE flatten/raise: planned meshes
 ##      in the disk are dropped (so nothing gets built there only to be overwritten).
 ##   2. filter_outcrops() right after plan_outcrops, before they're fitted.
-##   3. stamp() after outcrops, before knots + road: fits a plane (offset + tilt) between this
+##   3. stamp() after outcrops, before knots + road: fits a plane (an offset; a tilt too only with
+##      STAMP_ALLOW_TILT, off since 2026-10-09) between this
 ##      map's terrain and the captured heights on the outer FEATHER ring, writes captured heights
 ##      + plane inside, feathered over the ring; appends the captured meshes (heights shifted by
 ##      the same plane); marks the inner disk in the road obstacle mask. Knots then see the area as
@@ -48,7 +49,13 @@ const DATA_PATH := "res://terrain_data/landmarks/verticality_knot_01.json"
 ## everything sits inside the fully-copied inner 45 m.
 const CENTER_PX := Vector2(35.0, 430.0)
 const RADIUS := 55.0
-const FEATHER := 10.0 ## outer ring: blend captured -> this map's terrain, and where the plane is fitted
+## Outer ring: blend captured -> this map's terrain, and where the offset is fitted. 2026-10-09:
+## 10 -> 12, the widest the captured square allows around the saved polygon (it reaches 42.9 m
+## from the centre; the square's half size is 55) -- the band now also has to take up the
+## difference in slope between the formation and the valley wall around it.
+const FEATHER := 12.0
+## false = the stamp only shifts the captured heights up or down to meet this map (see stamp()).
+const STAMP_ALLOW_TILT := false
 const ENABLED := true
 
 static var _cache: Dictionary = {}
@@ -69,11 +76,24 @@ static func _load() -> Dictionary:
 static func is_active() -> bool:
 	return ENABLED and not _load().is_empty()
 
+## The map the data file was captured on: where its floor met the left wall (px) and its length.
+## Update both after a new capture() on a map of another size or floor width.
+const CAPTURE_FLOOR_EDGE_PX := 57.4
+const CAPTURE_MAP_LENGTH := 512
+
+## Where the landmark is stamped on this map: the captured centre, moved (whole pixels) so that it
+## keeps its distance to the foot of the left wall and to the map's south edge (2026-10-08, when
+## the map grew from 256 x 512).
+static func center() -> Vector2:
+	return _center()
+
 static func _center() -> Vector2:
 	var d := _load()
+	var captured := CENTER_PX
 	if d.has("center"):
-		return Vector2(float(d.center[0]), float(d.center[1]))
-	return CENTER_PX
+		captured = Vector2(float(d.center[0]), float(d.center[1]))
+	var floor_edge := (0.5 - TerrainConfig.VALLEY_FLOOR_WIDTH_FRACTION * 0.5) * float(TerrainConfig.AREA_WIDTH - 1)
+	return captured + Vector2(roundf(floor_edge - CAPTURE_FLOOR_EDGE_PX), float(TerrainConfig.AREA_LENGTH - CAPTURE_MAP_LENGTH))
 
 static func _radius() -> float:
 	return float(_load().get("radius", RADIUS))
@@ -218,7 +238,13 @@ static func stamp(heights: PackedFloat32Array, width: int, length: int, cliff_pl
 			s[0] += 1.0; s[1] += dx; s[2] += dz; s[3] += dx * dx; s[4] += dx * dz; s[5] += dz * dz
 			s[6] += f; s[7] += dx * f; s[8] += dz * f
 			ring_px += 1
-	var plane := _solve3(s)
+	# 2026-10-09: a height offset only, no tilt (STAMP_ALLOW_TILT). The formation's cliff meshes stay
+	# upright and level whatever the plane does, so a tilted plane shears the ground away from
+	# them: on seed 538572580 it came out at (-0.088, 0.055) per m -- about 5 and 3 deg -- and
+	# cliff_02 stood 2.5-4 m clear of the shelf behind it, its open back showing. The tilt grew
+	# when the valley's wall became steeper than the one the formation was captured on (a fit on
+	# ground of another slope answers with a tilt). The slope difference is now left to the blend band.
+	var plane := _solve3(s) if STAMP_ALLOW_TILT else Vector3(s[6] / s[0] if s[0] > 0.0 else 0.0, 0.0, 0.0)
 	var pa: float = plane.x
 	var pb: float = plane.y
 	var pc: float = plane.z

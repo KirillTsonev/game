@@ -17,7 +17,10 @@
 ##   FlowerScatter   flower_scatter.gd   wood sorrel under canopy; poppies, dandelions, clover in the open
 ##   PlantField      plant_field.gd      (a node, like GrassField) GPU-culled drawing of plants handed over by the scatter modules
 ##   FoliageWind     foliage_wind.gd     the wind noise shared by grass and plants; switches the understory / flower sway on
-##   WorldBounds     world_bounds.gd     invisible walls just inside the map's edges
+##   TerrainHub      hub.gd              the fixed strip south of the map: raised village plateau + scarp with a trail down
+##   TerrainCastle   castle.gd           the fixed block north of the map: the bay the valley ends in, with the castle in its far corner
+##   WorldBounds     world_bounds.gd     invisible walls just inside the edges of map + hub
+##   MountainWalls   mountain_walls.gd   mountain meshes beyond the map's edge, carrying the valley's slopes on up
 ##   TerrainUtil     terrain_util.gd     height/normal sampling, zone ranges, mesh helpers
 ## New system -> new module there (class_name + extends RefCounted + static funcs), called from
 ## _ready() below. Per-run mutable state = static vars reset in the module's reset_run_state().
@@ -59,6 +62,11 @@ func _ready() -> void:
 	# came out (random or pinned) is copy-pasteable back into MASTER_SEED to
 	# reproduce this exact map later.
 	var resolved_seed := randi() if TerrainConfig.MASTER_SEED < 0 else TerrainConfig.MASTER_SEED
+	# DEBUG: --seed=<n> (user argument) builds that map, whatever MASTER_SEED says -- to look again
+	# at something found on a random run, from a command line.
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--seed="):
+			resolved_seed = int(arg.trim_prefix("--seed="))
 	print("TERRAIN_GEN: building %dx%d heightmap (master_seed=%d)..." % [TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, resolved_seed])
 	var terrain: Terrain3D = get_parent().get_node_or_null("Terrain3D")
 	if terrain == null:
@@ -111,7 +119,10 @@ func _ready() -> void:
 	var half_width := TerrainConfig.AREA_WIDTH * 0.5
 	var half_length := TerrainConfig.AREA_LENGTH * 0.5
 	var import_position := Vector3(-half_width, 0, -half_length)
-	var images: Array[Image] = [maps.height, maps.control, maps.color] # [HEIGHT, CONTROL, COLOR]
+	# The hub's fixed strip of ground goes in with the generated map, south (+Z) of it: Terrain3D
+	# adds the extra regions toward +Z, so the generated map's corner stays where it was.
+	maps["hub_heights"] = TerrainHub.build_heights(maps.heights)
+	var images: Array[Image] = TerrainHub.join_images(maps, maps.hub_heights, terrain.get_region_size(), resolved_seed) # [HEIGHT, CONTROL, COLOR]
 	data.import_images(images, import_position, 0.0, 1.0)
 	data.calc_height_range(true)
 
@@ -155,7 +166,18 @@ func _ready() -> void:
 	for loc in region_locations:
 		min_region_x = mini(min_region_x, loc.x)
 		min_region_z = mini(min_region_z, loc.y)
-	var heightmap_corner := Vector3(min_region_x * region_size, 0, min_region_z * region_size)
+	# The generated map's pixel (0, 0): past the mountain apron, which takes the import's first
+	# APRON_WIDTH columns (MountainWalls.apron_maps), and past the castle end, which takes its first
+	# TerrainCastle.LENGTH rows (TerrainCastle.build_maps).
+	# 2026-10-09: and past MountainWalls.WEST_EXTRA more columns west of that apron (MAP_OFFSET_X
+	# in all): holes, except where the village's shoulder stands.
+	var heightmap_corner := Vector3(min_region_x * region_size + MountainWalls.MAP_OFFSET_X, 0, min_region_z * region_size + TerrainCastle.LENGTH)
+	# The west strip must be a hole away from the village and ground under it.
+	var strip_x := -float(MountainWalls.APRON_WIDTH) - float(MountainWalls.WEST_EXTRA) * 0.5
+	print("TERRAIN_GEN: west strip check -- hole in it far from the village: %s (must be true), under the village: %s (must be false), just inside the map: %s (must be false)" % [
+		data.get_control_hole(heightmap_corner + Vector3(strip_x, 0.0, TerrainConfig.AREA_LENGTH * 0.75)),
+		data.get_control_hole(heightmap_corner + Vector3(TerrainCastle.VILLAGE_PX.x, 0.0, TerrainCastle.VILLAGE_PX.y)),
+		data.get_control_hole(heightmap_corner + Vector3(TerrainConfig.AREA_WIDTH - 2.0, 0.0, 10.0))])
 
 	# 2026-09-28: world coordinates of each verticality knot (knots.gd), so they can be found in-game.
 	for knot in maps.knots:
@@ -197,6 +219,13 @@ func _ready() -> void:
 	scree_rng.seed = resolved_seed ^ 0x53435245 # 'SCRE' salt -- own cosmetic stream
 	RockScatter.scatter_scree(terrain, maps.heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, maps.cliff_features, heightmap_corner, scree_rng, maps.road_weight, maps.cliff_dressing_plan, maps.cliff_dressing_top_profiles, maps.outcrop_plan, maps.knots)
 	_log_stage("scree scattering", t_ready_stage)
+	t_ready_stage = Time.get_ticks_msec()
+
+	# Boulders and scree along the mountain's foot line -- before the trees, which keep clear of rocks.
+	var foot_rng := RandomNumberGenerator.new()
+	foot_rng.seed = resolved_seed ^ 0x464F4F54 # 'FOOT' salt -- own cosmetic stream
+	MountainWalls.scatter_foot_debris(get_parent(), terrain, maps, heightmap_corner, foot_rng)
+	_log_stage("mountain foot debris", t_ready_stage)
 	t_ready_stage = Time.get_ticks_msec()
 
 	var tree_rng := RandomNumberGenerator.new()
@@ -288,6 +317,25 @@ func _ready() -> void:
 
 	# Invisible walls just inside the map's edges, so the player cannot walk off it.
 	WorldBounds.build(get_parent(), heightmap_corner)
+	# The stand-ins for the castle and its bridge, at the valley's north end.
+	TerrainCastle.spawn_placeholder(get_parent(), terrain, heightmap_corner)
+	# The mountain walls that carry the valley's slopes on beyond the map's edge (scenery only).
+	t_ready_stage = Time.get_ticks_msec()
+	MountainWalls.build(get_parent(), maps, heightmap_corner, resolved_seed)
+	# The mountain strips are fitted to maps.heights: the terrain actually drawn must agree with it
+	# along both long edges, and step on smoothly 1 m outside them (the first metre of a strip
+	# continues the map's own grade, so the step there is at most that grade's 1.3 m).
+	var edge_mismatch := 0.0
+	var edge_step := 0.0
+	var last_px := TerrainConfig.AREA_WIDTH - 1
+	for row in range(0, TerrainConfig.AREA_LENGTH, 8):
+		for edge: Array in [[0, -1.0], [last_px, 1.0]]:
+			var at_edge := float(maps.heights[row * TerrainConfig.AREA_WIDTH + int(edge[0])])
+			edge_mismatch = maxf(edge_mismatch, absf(data.get_height(heightmap_corner + Vector3(float(edge[0]), 0.0, row)) - at_edge))
+			edge_step = maxf(edge_step, absf(data.get_height(heightmap_corner + Vector3(float(edge[0]) + float(edge[1]), 0.0, row)) - at_edge))
+	print("TERRAIN_GEN: mountain walls -- drawn terrain vs generated heights along both long edges: largest difference %.3f m (must be ~0); largest step onto the mountain strips %.2f m (must be under 1.4; up to TerrainCastle.MASSIF_EDGE_GRADE beside the village's shoulder)" % [edge_mismatch, edge_step])
+	_log_stage("mountain walls", t_ready_stage)
+	t_ready_stage = Time.get_ticks_msec()
 
 	# Move the Player to this run's actual generated spawn point and face it
 	# toward the exit -- a scene-baked Player transform (main.tscn's old
@@ -303,9 +351,10 @@ func _ready() -> void:
 		# spawn_pixel/exit_pixel are (px, height, pz) in heightmap-pixel space --
 		# only heightmap_corner (now read back from Terrain3D's real region
 		# placement, see above) can correctly turn those into world positions.
-		var spawn_world: Vector3 = heightmap_corner + Vector3(maps.spawn_pixel.x, maps.spawn_pixel.y, maps.spawn_pixel.z)
-		var exit_world: Vector3 = heightmap_corner + Vector3(maps.exit_pixel.x, maps.exit_pixel.y, maps.exit_pixel.z)
-		# The road starts on the very edge of the map: the player starts just inside the walls.
+		# 2026-10-06: the player starts on the hub's plateau, facing its drop-off and, beyond it, the
+		# road's start (maps.spawn_pixel, the old start position on the generated map's south edge).
+		var spawn_world: Vector3 = heightmap_corner + TerrainHub.spawn_pixel(maps.hub_heights)
+		var exit_world: Vector3 = heightmap_corner + Vector3(maps.spawn_pixel.x, maps.spawn_pixel.y, maps.spawn_pixel.z)
 		spawn_world = WorldBounds.clamp_inside(spawn_world, heightmap_corner)
 		player.global_position = spawn_world
 		var facing: Vector3 = exit_world - spawn_world
@@ -317,10 +366,15 @@ func _ready() -> void:
 		if player.has_method("_snap_to_ground"):
 			player.call("_snap_to_ground")
 			player.set("last_safe_transform", player.global_transform)
-		print("TERRAIN_GEN: player spawned at %s facing exit at %s" % [player.global_position, exit_world])
+		print("TERRAIN_GEN: player spawned at %s facing the road's start at %s" % [player.global_position, exit_world])
 	_log_stage("player placement", t_ready_stage)
 	TerrainPreload.finish()
 
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--debug-heights="):
+			var box := arg.trim_prefix("--debug-heights=").split(",")
+			if box.size() >= 4:
+				print("TERRAIN_GEN_DEBUG " + debug_height_grid(int(box[0]), int(box[1]), int(box[2]), int(box[3]), int(box[4]) if box.size() > 4 else 1))
 	print("TERRAIN_GEN: done (runtime -- nothing written to disk)")
 	print("TERRAIN_GEN: _ready() TOTAL (%.2fs) -- this is the actual splash-to-playable gap this script controls" % ((Time.get_ticks_msec() - t_ready_start) / 1000.0))
 
@@ -410,6 +464,21 @@ func _pipeline_counts_str() -> String:
 ## TreeScatter alongside the placement checks it re-runs.
 func debug_tree_probe(world_pos: Vector3) -> String:
 	return TreeScatter.debug_tree_probe(world_pos)
+
+## DEBUG: the generated heights (m) on a grid of heightmap pixels, one line per row -- for a spot
+## where the ground and a mesh do not meet. Also printed at startup for the user argument
+## --debug-heights=<px0>,<pz0>,<px1>,<pz1>,<step>.
+func debug_height_grid(px0: int, pz0: int, px1: int, pz1: int, step: int = 1) -> String:
+	var heights: PackedFloat32Array = _debug_maps.get("heights", PackedFloat32Array())
+	var foot: PackedFloat32Array = _debug_maps.get("mountain_foot", PackedFloat32Array())
+	var lines: Array[String] = ["heights, px %d..%d step %d (columns), pz %d..%d (rows); last column = the mountain's foot line" % [px0, px1, step, pz0, pz1]]
+	for pz in range(clampi(pz0, 0, TerrainConfig.AREA_LENGTH - 1), clampi(pz1, 0, TerrainConfig.AREA_LENGTH - 1) + 1, step):
+		var cells: Array[String] = []
+		for px in range(clampi(px0, 0, TerrainConfig.AREA_WIDTH - 1), clampi(px1, 0, TerrainConfig.AREA_WIDTH - 1) + 1, step):
+			cells.append("%5.1f" % heights[pz * TerrainConfig.AREA_WIDTH + px])
+		lines.append("pz %4d: %s | foot %.1f" % [pz, " ".join(cells), foot[pz] if pz < foot.size() else -1.0])
+	return "
+".join(lines)
 
 ## 2026-10-01 DEBUG: deadfall pieces near a world position (which model, scale, lean).
 func debug_deadfall_probe(world_pos: Vector3, radius: float = 6.0) -> String:

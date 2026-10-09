@@ -612,7 +612,8 @@ static func _try_place(ctx: Dictionary, id: int, p: Vector2, angle: float, scale
 	var length: int = ctx.length
 	var counts: Dictionary = ctx.counts
 	var reach := hl + r + ROAD_MARGIN
-	if p.x < EDGE_MARGIN + reach or p.y < EDGE_MARGIN + reach or p.x > width - 1 - EDGE_MARGIN - reach or p.y > length - 1 - EDGE_MARGIN - reach:
+	if p.x < EDGE_MARGIN + reach or p.y < EDGE_MARGIN + reach or p.x > width - 1 - EDGE_MARGIN - reach or p.y > length - 1 - EDGE_MARGIN - reach \
+			or MountainWalls.on_mountain(p.x, p.y, reach): # nothing fallen on the mountain's rock
 		counts.rej_edge += 1
 		return false
 

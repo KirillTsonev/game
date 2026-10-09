@@ -266,6 +266,7 @@ static func _add(ctx: Dictionary, row: Array, px: float, pz: float, hug: bool, m
 	var road: PackedFloat32Array = ctx.road
 	if normal.y < min_normal_y \
 			or road[clampi(int(round(pz)), 0, length - 1) * width + clampi(int(round(px)), 0, width - 1)] > 0.0 \
+			or MountainWalls.on_mountain(px, pz, keepout) \
 			or RockScatter.boulder_blocked(px, pz, keepout, ctx.rects, ctx.circles) \
 			or DeadfallScatter.keep_blocked(px, pz, keepout):
 		ctx.counts.rejected += 1

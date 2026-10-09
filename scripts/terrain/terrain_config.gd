@@ -25,6 +25,7 @@ extends RefCounted
 const MASTER_SEED := -1
 
 #master_seed=858829582 main testing done here
+#master_seed=508666034 end to the left
 
 ## World-space size of the area to (re)generate, in world units --
 ## independent X (width) and Z (length) so it doesn't have to be square.
@@ -35,8 +36,13 @@ const MASTER_SEED := -1
 ## with AREA_WIDTH*AREA_LENGTH, so no other retuning is needed when you
 ## resize either axis. When either axis exceeds the region size, Terrain3D
 ## spans multiple regions -- see the heightmap_corner gotcha in _ready().
-const AREA_WIDTH := 256 ## X axis -- one region's worth of real generated terrain, no flat filler
-const AREA_LENGTH := 512 ## Z axis -- spans two regions (see note above)
+## 2026-10-08: 256 x 512 -> 384 x 768 (a wider floor and longer walk). The width is not a multiple of
+## the region size: TerrainHub.join_images pads the import to whole regions with holes.
+const AREA_WIDTH := 384 ## X axis -- one and a half regions (see the note on padding above)
+## 2026-10-09: 768 -> 1024 long. The north 256 m are the valley's end: the mountain closes it
+## there (MountainWalls.raise_foot, side 2) and the castle stands in its low-X corner
+## (TerrainCastle) -- before, that end was a separate fixed block of terrain.
+const AREA_LENGTH := 1024 ## Z axis -- four regions (see note above)
 
 ## -- Macro valley shape --
 ## The playable area reads as a U-shaped glacial valley: a flat-ish floor in
@@ -56,7 +62,9 @@ const AREA_LENGTH := 512 ## Z axis -- spans two regions (see note above)
 ## RIGHT wall (high X) is the smaller one -- both are geometry-only for now
 ## (no distinct meshes/textures/snow/fog yet -- that's an explicitly later
 ## pass, not part of this macro-shape work).
-const VALLEY_FLOOR_WIDTH_FRACTION := 0.55 ## fraction of AREA_WIDTH that's floor (flat-ish, walkable, room for nooks/crannies/snaking paths/structures/ruins/woods/glades/meadow/caves later) -- the remaining (1-this)/2 on each side is wall
+## 2026-10-08: 0.55 -> 0.637 with AREA_WIDTH 384: the floor is about 244 m wide (was 141 m) and
+## each wall gets about 70 m of run.
+const VALLEY_FLOOR_WIDTH_FRACTION := 0.637 ## fraction of AREA_WIDTH that's floor (flat-ish, walkable, room for nooks/crannies/snaking paths/structures/ruins/woods/glades/meadow/caves later) -- the remaining (1-this)/2 on each side is wall
 const BOULDER_END_INSET_FRACTION := 0.15 ## keep boulders off the very tapering tips of the cliff line
 ## "real_size" is each model's own AABB width (X); "height"/"depth" are its AABB height (Y)
 ## and depth (Z) -- all three measured directly off the imported GLBs on 2026-09-17 (see the

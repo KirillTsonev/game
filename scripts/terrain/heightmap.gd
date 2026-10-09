@@ -26,8 +26,17 @@ const MID_AMPLITUDE := 4.2
 const RIDGE_AMPLITUDE := 2.8
 const DETAIL_AMPLITUDE := 0.4
 const BASE_LEVEL := 4.0 ## overall lift so most of the area sits above 0
-const VALLEY_LEFT_WALL_HEIGHT := 16.0 ## world units, floor-to-rim rise on the low-X (left/tall mountain) side
-const VALLEY_RIGHT_WALL_HEIGHT := 8.0 ## world units, floor-to-rim rise on the high-X (right/smaller) side
+## 2026-10-08: 16 / 8 -> 30 / 30. The walls are the lower, playable part of the valley's forested
+## slopes: they rise just above the tallest trees (about 27 m), and a backdrop mesh carries the
+## slope on beyond the map's edge (planned, not built yet).
+const VALLEY_LEFT_WALL_HEIGHT := 30.0 ## world units, floor-to-rim rise on the low-X (left) side
+const VALLEY_RIGHT_WALL_HEIGHT := 30.0 ## world units, floor-to-rim rise on the high-X (right) side
+## The first metres of each wall, counted from the floor's edge, where the slope eases in from flat
+## to the wall's full grade (see _wall_rise). The gentle foot is where the wall knots, the fixed
+## landmark and most cliff features sit -- they were tuned on the old 16 m wall. Above it the grade
+## is constant: about 29 deg with the values here (30 m over a 70 m run), under the trees'
+## 37 deg limit (TreeScatter.TREE_MAX_SLOPE_NORMAL_Y).
+const VALLEY_FOOT_LENGTH := 30.0
 const VALLEY_WALL_NOISE_DAMPING := 0.35 ## fraction of full noise amplitude that still applies right at the rim (1.0 = no damping, in effect on the floor) -- keeps the wall reading as the macro shape rather than getting broken up by BASE_AMPLITUDE-scale noise, while still leaving some texture so it isn't a dead-smooth ramp
 
 ## -- Hydraulic erosion (simplified droplet simulation) --
@@ -134,25 +143,143 @@ static func _derive_seeds(master_seed: int) -> Dictionary:
 ## valley's cross-section only depends on X, since its axis runs straight
 ## along Z (see the VALLEY_* consts' comment above). `height` is the macro
 ## valley elevation at this X, BEFORE any noise is added. `wall_t` is 0.0
-## anywhere on the flat floor and smoothly ramps to 1.0 at the rim; callers
+## anywhere on the flat floor and rises to 1.0 at the rim (the share of the
+## wall's height reached, see _wall_rise); callers
 ## use it to damp down noise amplitude on the steep walls (VALLEY_WALL_
 ## NOISE_DAMPING) so noise reads as texture riding on the wall rather than
 ## fighting the shape that's supposed to define the map.
-static func _valley_profile(px: float, width: int) -> Dictionary:
-	var x_norm := px / float(maxi(width - 1, 1))
+static func valley_profile(px: float, width: int) -> Dictionary:
+	var span := float(maxi(width - 1, 1))
+	var x_norm := px / span
 	var floor_half := TerrainConfig.VALLEY_FLOOR_WIDTH_FRACTION * 0.5
 	var floor_lo := 0.5 - floor_half
 	var floor_hi := 0.5 + floor_half
 	if x_norm >= floor_lo and x_norm <= floor_hi:
 		return {"height": BASE_LEVEL, "wall_t": 0.0}
 	if x_norm < floor_lo:
-		var t := clampf((floor_lo - x_norm) / floor_lo, 0.0, 1.0)
-		var wall_t := smoothstep(0.0, 1.0, t)
+		var wall_t := _wall_rise((floor_lo - x_norm) * span, floor_lo * span)
 		return {"height": BASE_LEVEL + VALLEY_LEFT_WALL_HEIGHT * wall_t, "wall_t": wall_t}
 	else:
-		var t := clampf((x_norm - floor_hi) / (1.0 - floor_hi), 0.0, 1.0)
-		var wall_t := smoothstep(0.0, 1.0, t)
+		var wall_t := _wall_rise((x_norm - floor_hi) * span, (1.0 - floor_hi) * span)
 		return {"height": BASE_LEVEL + VALLEY_RIGHT_WALL_HEIGHT * wall_t, "wall_t": wall_t}
+
+## Share of a wall's height reached `dist` m from the floor's edge, on a wall `run` m wide: the
+## grade grows evenly from zero over VALLEY_FOOT_LENGTH, then stays constant up to the rim (no
+## easing at the top -- the ground keeps rising beyond the map's edge).
+static func _wall_rise(dist: float, run: float) -> float:
+	var foot := minf(VALLEY_FOOT_LENGTH, run)
+	var d := clampf(dist, 0.0, run)
+	var full_grade_run := run - foot * 0.5 # the run that would give the same rise at full grade
+	if d < foot:
+		return d * d / (2.0 * foot) / full_grade_run
+	return (d - foot * 0.5) / full_grade_run
+
+## -- The valley's plan (2026-10-09) --
+## Kirill: "the valley is strictly rectangular" -- the floor's two edges now wander along the
+## valley, each on its own, and the forested slopes follow them (the mountain's rock foot follows
+## too: MountainWalls.raise_foot adds floor_shift to its line). A first attempt the same day let
+## only the rock outline wander (4..115 m) over a straight valley; rejected, and the existing
+## cliffs and knots held that line back on half of its length anyway.
+## An edge moves up to VALLEY_MEANDER_IN m toward the valley's middle and VALLEY_MEANDER_OUT m
+## away from it, in bends of about 1 / VALLEY_MEANDER_FREQUENCY m. TUNING.
+const VALLEY_MEANDER_IN := 75.0
+const VALLEY_MEANDER_OUT := 25.0
+const VALLEY_MEANDER_FREQUENCY := 1.0 / 220.0
+const VALLEY_MIN_FLOOR := 120.0 ## the floor is never narrower than this, m
+## Both edges are straight (as valley_profile has them) for the last VALLEY_SOUTH_HOLD m before
+## the map's south edge, where the hub's straight walls take over, and reach their full wander
+## VALLEY_SOUTH_TAPER m further north.
+const VALLEY_SOUTH_HOLD := 40.0
+const VALLEY_SOUTH_TAPER := 120.0
+## The low-X edge is also straight beside the two things placed against it -- the castle
+## (TerrainCastle.SITE_PX) and the fixed landmark (TerrainLandmarks) -- for VALLEY_SITE_HOLD m
+## along the valley beyond each, full wander VALLEY_SITE_TAPER m further.
+const VALLEY_SITE_HOLD := 60.0
+const VALLEY_SITE_TAPER := 120.0
+
+## The floor's low-X and high-X edges per row of the generated map, in heightmap pixels. Set by
+## build_valley_shape at the start of every build_heightmap; read-only afterwards (worker threads
+## may read them).
+static var valley_floor_lo := PackedFloat32Array()
+static var valley_floor_hi := PackedFloat32Array()
+
+## The floor's edges on a straight valley (valley_profile's), in heightmap pixels.
+static func base_floor_lo() -> float:
+	return (0.5 - TerrainConfig.VALLEY_FLOOR_WIDTH_FRACTION * 0.5) * float(TerrainConfig.AREA_WIDTH - 1)
+
+static func base_floor_hi() -> float:
+	return (0.5 + TerrainConfig.VALLEY_FLOOR_WIDTH_FRACTION * 0.5) * float(TerrainConfig.AREA_WIDTH - 1)
+
+## The floor's low-X / high-X edge at row `pz` of the generated map (clamped to the map).
+static func floor_lo(pz: float) -> float:
+	if valley_floor_lo.is_empty():
+		return base_floor_lo()
+	return valley_floor_lo[clampi(int(pz), 0, valley_floor_lo.size() - 1)]
+
+static func floor_hi(pz: float) -> float:
+	if valley_floor_hi.is_empty():
+		return base_floor_hi()
+	return valley_floor_hi[clampi(int(pz), 0, valley_floor_hi.size() - 1)]
+
+## How far the floor's edge on `side` (0 = low X, 1 = high X) has moved toward the valley's
+## middle at row `pz`, m (negative = away from it).
+static func floor_shift(side: int, pz: float) -> float:
+	return floor_lo(pz) - base_floor_lo() if side == 0 else base_floor_hi() - floor_hi(pz)
+
+## Column `px` of a straight valley moved to where the same part of the cross-section lies at
+## row `pz`: a point on a wall keeps its distance from the floor's edge, a point on the floor its
+## share of the floor's width. For placement code that picks a column by zone before it knows the row.
+static func warp_x(px: float, pz: float) -> float:
+	var straight_lo := base_floor_lo()
+	var straight_hi := base_floor_hi()
+	var lo := floor_lo(pz)
+	var hi := floor_hi(pz)
+	if px < straight_lo:
+		return maxf(px + lo - straight_lo, 4.0)
+	if px > straight_hi:
+		return minf(px + hi - straight_hi, float(TerrainConfig.AREA_WIDTH) - 5.0)
+	return lo + (px - straight_lo) / (straight_hi - straight_lo) * (hi - lo)
+
+## Draws this run's floor edges (valley_floor_lo / valley_floor_hi).
+static func build_valley_shape(master_seed: int) -> void:
+	var length := TerrainConfig.AREA_LENGTH
+	var straight_lo := base_floor_lo()
+	var straight_hi := base_floor_hi()
+	valley_floor_lo = PackedFloat32Array()
+	valley_floor_lo.resize(length)
+	valley_floor_hi = PackedFloat32Array()
+	valley_floor_hi.resize(length)
+	var noises: Array[FastNoiseLite] = []
+	for side in 2:
+		var noise := FastNoiseLite.new()
+		noise.seed = (master_seed ^ 0x56414C4C) + side * 7919 # 'VALL' salt
+		noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+		noise.fractal_type = FastNoiseLite.FRACTAL_FBM
+		noise.fractal_octaves = 3
+		noise.fractal_gain = 0.4
+		noise.frequency = VALLEY_MEANDER_FREQUENCY
+		noises.append(noise)
+	var castle_end := TerrainCastle.SITE_PX.y + TerrainCastle.PLACEHOLDER_SIZE.z * 0.5
+	var narrowest := INF
+	var widest := 0.0
+	for pz in length:
+		var south := smoothstep(VALLEY_SOUTH_HOLD, VALLEY_SOUTH_HOLD + VALLEY_SOUTH_TAPER, float(length - 1 - pz))
+		# The low-X edge: also straight beside the castle and the landmark.
+		var held := south * smoothstep(VALLEY_SITE_HOLD, VALLEY_SITE_HOLD + VALLEY_SITE_TAPER, float(pz) - castle_end)
+		if TerrainLandmarks.is_active():
+			held *= smoothstep(VALLEY_SITE_HOLD, VALLEY_SITE_HOLD + VALLEY_SITE_TAPER, absf(float(pz) - TerrainLandmarks.center().y) - TerrainLandmarks.RADIUS)
+		# Stretched so an edge spends time at both ends of its range: bays and narrows, not a wobble.
+		var lo := straight_lo + held * lerpf(-VALLEY_MEANDER_OUT, VALLEY_MEANDER_IN, smoothstep(-0.35, 0.35, noises[0].get_noise_1d(float(pz))))
+		var hi := straight_hi - south * lerpf(-VALLEY_MEANDER_OUT, VALLEY_MEANDER_IN, smoothstep(-0.35, 0.35, noises[1].get_noise_1d(float(pz))))
+		if hi - lo < VALLEY_MIN_FLOOR:
+			var middle := (lo + hi) * 0.5
+			lo = middle - VALLEY_MIN_FLOOR * 0.5
+			hi = middle + VALLEY_MIN_FLOOR * 0.5
+		valley_floor_lo[pz] = lo
+		valley_floor_hi[pz] = hi
+		narrowest = minf(narrowest, hi - lo)
+		widest = maxf(widest, hi - lo)
+	print("TERRAIN_GEN: valley plan -- floor %.0f..%.0f m wide along the valley (%.0f m on a straight one)" % [narrowest, widest, straight_hi - straight_lo])
 
 ## 2026-09-29 despike after the post-feature erosion (see the call in build_heightmap): a pixel may
 ## stick out above / dip below ALL 4 of its direct neighbours by at most this much (metres).
@@ -203,6 +330,7 @@ static func build_heightmap(master_seed: int = TerrainConfig.MASTER_SEED) -> Dic
 	var t_start := Time.get_ticks_msec()
 	var t_stage := t_start
 	var seeds := _derive_seeds(master_seed)
+	build_valley_shape(master_seed)
 
 	var base_noise := FastNoiseLite.new()
 	base_noise.seed = seeds.base
@@ -305,16 +433,34 @@ static func build_heightmap(master_seed: int = TerrainConfig.MASTER_SEED) -> Dic
 	valley_height.resize(TerrainConfig.AREA_WIDTH)
 	valley_noise_scale.resize(TerrainConfig.AREA_WIDTH)
 	for px in TerrainConfig.AREA_WIDTH:
-		var valley := _valley_profile(px, TerrainConfig.AREA_WIDTH)
+		var valley := valley_profile(px, TerrainConfig.AREA_WIDTH)
 		valley_height[px] = valley.height
 		valley_noise_scale[px] = lerpf(1.0, VALLEY_WALL_NOISE_DAMPING, valley.wall_t)
 	print("TERRAIN_GEN: valley cross-section (pre-noise) left_rim=%.2f floor=%.2f right_rim=%.2f" \
 		% [valley_height[0], valley_height[int(TerrainConfig.AREA_WIDTH * 0.5)], valley_height[TerrainConfig.AREA_WIDTH - 1]])
 
+	# 2026-10-09: the cross-section is no longer the same on every row -- the floor's edges
+	# wander (build_valley_shape). The per-column tables above are the straight valley's and
+	# only feed the print; each wall is still as wide as on the straight valley, measured from
+	# the floor's edge on this row (beyond that it stays at rim height, under the mountain's rock).
+	var wall_run_lo := base_floor_lo()
+	var wall_run_hi := float(TerrainConfig.AREA_WIDTH - 1) - base_floor_hi()
 	var heights := PackedFloat32Array()
 	heights.resize(TerrainConfig.AREA_WIDTH * TerrainConfig.AREA_LENGTH)
 	for pz in TerrainConfig.AREA_LENGTH:
+		var row_lo := valley_floor_lo[pz]
+		var row_hi := valley_floor_hi[pz]
 		for px in TerrainConfig.AREA_WIDTH:
+			var row_valley_height := BASE_LEVEL
+			var row_noise_scale := 1.0
+			if float(px) < row_lo:
+				var wall_t := _wall_rise(row_lo - float(px), wall_run_lo)
+				row_valley_height += VALLEY_LEFT_WALL_HEIGHT * wall_t
+				row_noise_scale = lerpf(1.0, VALLEY_WALL_NOISE_DAMPING, wall_t)
+			elif float(px) > row_hi:
+				var wall_t := _wall_rise(float(px) - row_hi, wall_run_hi)
+				row_valley_height += VALLEY_RIGHT_WALL_HEIGHT * wall_t
+				row_noise_scale = lerpf(1.0, VALLEY_WALL_NOISE_DAMPING, wall_t)
 			var warp_x := px + warp_noise.get_noise_2d(px, pz) * WARP_STRENGTH
 			var warp_z := pz + warp_noise.get_noise_2d(pz, px) * WARP_STRENGTH
 
@@ -338,11 +484,11 @@ static func build_heightmap(master_seed: int = TerrainConfig.MASTER_SEED) -> Dic
 			# amplitude is damped on the walls (valley_noise_scale, full
 			# strength on the floor) so the wall still reads as the macro
 			# shape underneath its own texture instead of getting broken up.
-			var height := valley_height[px] \
+			var height := row_valley_height \
 				+ (base * BASE_AMPLITUDE \
 					+ mid * MID_AMPLITUDE \
 					+ ridge_shaped * RIDGE_AMPLITUDE \
-					+ detail * DETAIL_AMPLITUDE) * valley_noise_scale[px]
+					+ detail * DETAIL_AMPLITUDE) * row_noise_scale
 			heights[pz * TerrainConfig.AREA_WIDTH + px] = height
 	print("TERRAIN_GEN: base noise+valley heightmap done (%.2fs)" % ((Time.get_ticks_msec() - t_stage) / 1000.0))
 	t_stage = Time.get_ticks_msec()
@@ -428,6 +574,8 @@ static func build_heightmap(master_seed: int = TerrainConfig.MASTER_SEED) -> Dic
 	# 2026-09-29: fixed landmark (landmarks.gd) -- drop planned meshes in its disk BEFORE they
 	# shape the terrain (the landmark is stamped over that area further down). No-op without data.
 	var lm_meshes_removed := TerrainLandmarks.filter_cliff_plan(cliff_dressing_plan)
+	# 2026-10-09: the same around the castle's site (TerrainCastle), which is not stamped: its ground stays as generated.
+	var castle_meshes_removed := TerrainCastle.filter_plan(cliff_dressing_plan, func(e: Dictionary) -> float: return TerrainLandmarks._entry_half_size(e))
 	# 2026-09-29 knots-first: planned meshes reaching into a knot circle are dropped (knots.gd).
 	var knot_meshes_removed := TerrainKnots.filter_cliff_plan(cliff_dressing_plan, knots)
 	CliffDressing.flatten_terrain_for_cliff_dressing(cliff_dressing_plan, heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH)
@@ -447,6 +595,8 @@ static func build_heightmap(master_seed: int = TerrainConfig.MASTER_SEED) -> Dic
 	outcrop_rng.seed = master_seed ^ 0x4F555443 # 'OUTC' salt
 	var outcrop_plan := TerrainOutcrops.plan_outcrops(outcrop_models, heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, outcrop_rng, cliff_dressing_plan, knots)
 	var lm_outcrops_removed := TerrainLandmarks.filter_outcrops(outcrop_plan) # 2026-09-29 landmark disk
+	var castle_outcrops_removed := TerrainCastle.filter_plan(outcrop_plan, func(o: Dictionary) -> float: return float(o.radius))
+	print("TERRAIN_GEN: castle site cleared: %d planned cliff mesh(es), %d outcrop(s) dropped" % [castle_meshes_removed, castle_outcrops_removed])
 	var knot_outcrops_removed := TerrainKnots.filter_outcrops(outcrop_plan, knots) # 2026-09-29 knots-first
 	TerrainOutcrops.fit_terrain_to_outcrops(outcrop_plan, outcrop_models, heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH)
 	TerrainOutcrops.add_outcrops_to_obstacle_mask(outcrop_plan, cliff_obstacle_mask, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH)
@@ -485,6 +635,17 @@ static func build_heightmap(master_seed: int = TerrainConfig.MASTER_SEED) -> Dic
 	print("TERRAIN_GEN: knot ground restore + landmark stamp done (%.2fs)" % ((Time.get_ticks_msec() - t_stage) / 1000.0))
 	t_stage = Time.get_ticks_msec()
 
+	# 2026-10-08: the mountain's foot. Along a wandering line a few metres to a few tens of metres
+	# inside each long edge the ground steepens into the mountain wall (MountainWalls), so the
+	# valley gives way to rock on that line and not on the map's straight edge. After every shaping
+	# stage (it stays clear of their footprints), before the road and all scattering.
+	var mountain_foot := MountainWalls.raise_foot(heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, cliff_obstacle_mask, master_seed, 0)
+	var mountain_foot_right := MountainWalls.raise_foot(heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, cliff_obstacle_mask, master_seed, 1)
+	# 2026-10-09: and across the north end, where the mountain closes the valley (one entry per column).
+	var mountain_foot_north := MountainWalls.raise_foot(heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, cliff_obstacle_mask, master_seed, 2)
+	# The village's shoulder (TerrainCastle): where it reaches onto the map's rock, beside the castle.
+	TerrainCastle.raise_massif_on_map(heights)
+
 	# Control map: defaults to ground everywhere; the road step below paints
 	# over it where it runs. Built as plain ints (packed base/overlay/blend)
 	# rather than floats, since that's what the road step naturally produces --
@@ -501,6 +662,12 @@ static func build_heightmap(master_seed: int = TerrainConfig.MASTER_SEED) -> Dic
 	edge_noise.fractal_type = FastNoiseLite.FRACTAL_FBM
 	edge_noise.fractal_octaves = 2
 	edge_noise.frequency = EDGE_NOISE_FREQUENCY
+
+	# 2026-10-09: the castle's footprint is solid to the road, which ends beside it (after
+	# raise_foot, which pulls the mountain's foot back from anything in this mask).
+	for pz in range(maxi(int(TerrainCastle.SITE_PX.y - TerrainCastle.PLACEHOLDER_SIZE.z * 0.5), 0), mini(int(TerrainCastle.SITE_PX.y + TerrainCastle.PLACEHOLDER_SIZE.z * 0.5) + 1, TerrainConfig.AREA_LENGTH)):
+		for px in range(maxi(int(TerrainCastle.SITE_PX.x - TerrainCastle.PLACEHOLDER_SIZE.x * 0.5), 0), mini(int(TerrainCastle.SITE_PX.x + TerrainCastle.PLACEHOLDER_SIZE.x * 0.5) + 1, TerrainConfig.AREA_WIDTH)):
+			cliff_obstacle_mask[pz * TerrainConfig.AREA_WIDTH + px] = 1
 
 	print("TERRAIN_GEN: routing road...")
 	var road_rng := RandomNumberGenerator.new()
@@ -538,7 +705,7 @@ static func build_heightmap(master_seed: int = TerrainConfig.MASTER_SEED) -> Dic
 	var color_image := _build_color_map(seeds, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH)
 	print("TERRAIN_GEN: color map done (%.2fs)" % ((Time.get_ticks_msec() - t_stage) / 1000.0))
 	print("TERRAIN_GEN: _build_heightmap TOTAL (%.2fs)" % ((Time.get_ticks_msec() - t_start) / 1000.0))
-	return {"height": height_image, "control": control_image, "color": color_image, "cliff_features": cliff_features, "cliff_dressing_plan": cliff_dressing_plan, "cliff_dressing_top_profiles": cliff_dressing_top_profiles, "outcrop_plan": outcrop_plan, "outcrop_models": outcrop_models, "heights": heights, "road_weight": road_weight, "spawn_pixel": road_result.spawn_pixel, "exit_pixel": road_result.exit_pixel, "road_path": road_result.path, "knots": knot_result.knots}
+	return {"height": height_image, "control": control_image, "color": color_image, "cliff_features": cliff_features, "cliff_dressing_plan": cliff_dressing_plan, "cliff_dressing_top_profiles": cliff_dressing_top_profiles, "outcrop_plan": outcrop_plan, "outcrop_models": outcrop_models, "heights": heights, "road_weight": road_weight, "spawn_pixel": road_result.spawn_pixel, "exit_pixel": road_result.exit_pixel, "road_path": road_result.path, "knots": knot_result.knots, "mountain_foot": mountain_foot, "mountain_foot_right": mountain_foot_right, "mountain_foot_north": mountain_foot_north}
 
 ## Builds the terrain's color map: a full-resolution RGBA image Terrain3D
 ## multiplies directly into every pixel's albedo (alpha nudges roughness

@@ -89,7 +89,7 @@ const ROAD_TEXTURE_TILE_LENGTH := 4.0 ## world units one texture tile covers, bo
 const ROAD_BUMP_AMPLITUDE := 0.035 ## small real vertex-height variation (2026-09-17) -- parallax alone reads as flat from a near-overhead FPS angle (its apparent offset scales with view angle from the surface normal, which is small looking mostly straight down), so real geometry is what actually gives a visible silhouette. Kept small, and shadow casting is disabled on this mesh (see _build_road_mesh) specifically so this doesn't repeat the second attempt's harsh self-shadowing.
 const ROAD_BUMP_FREQUENCY := 0.35
 
-const ROAD_GOAL_BAND_FRACTION := 0.33 ## (2026-09-16) the road's start stays pinned to the exact center of the north edge, but the south-edge exit is no longer forced to that same X column -- pinning both ends to the same column makes a straight line the crow-flies shortest path, so A* had no reason to bend the route unless real terrain slope forced it, which rarely happened. The exit X is instead picked randomly within this fraction of AREA_WIDTH, centered on the map's midline (0.33 => the exit lands somewhere in the central 33% of the south edge). This forces genuine diagonal travel across the grid even on a flat map, which the Catmull-Rom smoothing then turns into a natural-looking curve rather than a jittered straight line.
+const ROAD_GOAL_BAND_FRACTION := 0.22 ## (2026-10-08: 0.33 -> 0.22 with AREA_WIDTH 384, about the same band in metres) (2026-09-16) the road's start stays pinned to the exact center of the north edge, but the south-edge exit is no longer forced to that same X column -- pinning both ends to the same column makes a straight line the crow-flies shortest path, so A* had no reason to bend the route unless real terrain slope forced it, which rarely happened. The exit X is instead picked randomly within this fraction of AREA_WIDTH, centered on the map's midline (0.33 => the exit lands somewhere in the central 33% of the south edge). This forces genuine diagonal travel across the grid even on a flat map, which the Catmull-Rom smoothing then turns into a natural-looking curve rather than a jittered straight line.
 
 ## -- Road "meander" (cosmetic S-curve pull, 2026-09-16) --
 ## Even at aggressive ROAD_SLOPE_PENALTY/ROAD_SLOPE_HARD_LIMIT/FEATURE_DENSITY
@@ -107,7 +107,7 @@ const ROAD_GOAL_BAND_FRACTION := 0.33 ## (2026-09-16) the road's start stays pin
 ## genuine cliff still hard-blocks a step (ROAD_SLOPE_HARD_LIMIT) regardless
 ## of what the preferred centerline wants; this only shapes the pathfinder's
 ## preference among still-viable cells. See _find_road_path's `preferred_x`.
-const ROAD_MEANDER_AMPLITUDE_FRACTION := 0.18 ## how far, as a fraction of AREA_WIDTH, the preferred centerline can wander from the straight line between the fixed start/exit columns. Purely cosmetic -- real terrain can still push the actual route further than this.
+const ROAD_MEANDER_AMPLITUDE_FRACTION := 0.12 ## (2026-10-08: 0.18 -> 0.12 with AREA_WIDTH 384, about the same reach in metres -- it must stay well inside the floor's half width, 122 m) how far, as a fraction of AREA_WIDTH, the preferred centerline can wander from the straight line between the fixed start/exit columns. Purely cosmetic -- real terrain can still push the actual route further than this.
 const ROAD_MEANDER_CYCLES := 2.2 ## how many full left-right wander cycles the preferred centerline completes over the road's full north-to-south length. Fractional on purpose, so the wander pattern doesn't land symmetrically with the map's own north/south layout.
 const ROAD_MEANDER_COST_WEIGHT := 0.35 ## how strongly the pathfinder is pulled toward the wandering preferred centerline, relative to the distance-based cost each grid step already has. Too high overrides genuine slope avoidance (defeats ROAD_SLOPE_PENALTY entirely); too low and flat terrain wins again, which is the whole problem this exists to work around.
 
@@ -372,14 +372,17 @@ static func generate_road(heights: PackedFloat32Array, control: PackedInt32Array
 	# randf_range(-0.5, 0.5) * band_width spans the full band symmetrically
 	# around the midline.
 	var t_road_stage := Time.get_ticks_msec() ## fine-grained sub-timing (2026-09-16) -- see _build_heightmap's coarser per-stage prints
-	var start_x := width * 0.5 + rng.randf_range(-0.5, 0.5) * (width * ROAD_GOAL_BAND_FRACTION)
+	# 2026-10-09: the far end is no longer a random column on the north edge but the castle's foot
+	# (TerrainCastle.road_end, a fixed point inside the map) -- the road ends there.
+	var road_end := TerrainCastle.road_end()
+	var start_x := road_end.x
 	# Per-seed phase for the cosmetic meander wave (see ROAD_MEANDER_* above) --
 	# without this, every playthrough's S-curve would wander through the exact
 	# same left-right pattern, just with a different start_x.
 	var meander_phase := rng.randf_range(0.0, TAU)
 	# Distance to the obstacle mask, shared by routing clearance and the bed/bank levelling.
 	var obst_dist := _obstacle_distance(cliff_obstacle_mask, width, length, maxf(ROAD_OBSTACLE_SOFT_CLEARANCE, ROAD_BANK_OBSTACLE_FADE) + 1.0)
-	var raw_path := _find_road_path(heights, width, length, start_x, meander_phase, cliff_obstacle_mask, obst_dist)
+	var raw_path := _find_road_path(heights, width, length, road_end, meander_phase, cliff_obstacle_mask, obst_dist)
 	print("TERRAIN_GEN:   pathfinding (%.3fs)" % ((Time.get_ticks_msec() - t_road_stage) / 1000.0))
 	t_road_stage = Time.get_ticks_msec()
 	if raw_path.size() < 2:
@@ -391,11 +394,11 @@ static func generate_road(heights: PackedFloat32Array, control: PackedInt32Array
 		# rather than leaving the caller (which repositions the Player) with
 		# nothing to work with.
 		var fallback_spawn_height: float = heights[(length - 1) * width + int(width * 0.5)]
-		var fallback_exit_height: float = heights[0 * width + int(width * 0.5)]
+		var fallback_exit_height: float = heights[int(road_end.y) * width + int(road_end.x)]
 		return {
 			"weight": empty_weight,
 			"spawn_pixel": Vector3(width * 0.5, fallback_spawn_height, length - 1),
-			"exit_pixel": Vector3(width * 0.5, fallback_exit_height, 0),
+			"exit_pixel": Vector3(road_end.x, fallback_exit_height, road_end.y),
 			"path": PackedVector2Array(),
 		}
 
@@ -404,7 +407,7 @@ static func generate_road(heights: PackedFloat32Array, control: PackedInt32Array
 	# true target column, and the route itself should start/end exactly there
 	# regardless. The exit (north) uses the same start_x that drove the
 	# pathfinding above; the spawn (south) is always dead-center.
-	raw_path[0] = Vector2(start_x, 0.0)
+	raw_path[0] = road_end
 	raw_path[raw_path.size() - 1] = Vector2(width * 0.5, length - 1.0)
 
 	var path := _catmull_rom_smooth(raw_path, ROAD_PATH_SUBDIVISIONS)
@@ -517,10 +520,11 @@ static func generate_road(heights: PackedFloat32Array, control: PackedInt32Array
 	var spawn_height: float = heights[(length - 1) * width + spawn_px]
 	var spawn_pixel := Vector3(spawn_px, spawn_height, length - 1)
 
-	# The exit (north edge, pz = 0) moves per-seed within ROAD_GOAL_BAND_FRACTION.
+	# The far end: the castle's foot (was a per-seed column on the north edge, pz = 0, until 2026-10-09).
 	var exit_px := clampi(int(round(start_x)), 0, width - 1)
-	var exit_height: float = heights[0 * width + exit_px]
-	var exit_pixel := Vector3(exit_px, exit_height, 0)
+	var exit_pz := clampi(int(round(road_end.y)), 0, length - 1)
+	var exit_height: float = heights[exit_pz * width + exit_px]
+	var exit_pixel := Vector3(exit_px, exit_height, exit_pz)
 	# `path` (the smoothed centerline, pixel/heightmap-space XZ) is handed
 	# back so _build_road_mesh can walk the exact same curve the texture
 	# painting above rasterized -- see that function's own comment for why a
@@ -722,7 +726,7 @@ static func _obstacle_distance(mask: PackedByteArray, width: int, length: int, c
 ## anything about where the cliff features specifically were placed (their
 ## own steepness is enough). Returns grid-resolution waypoints in heightmap
 ## pixel coordinates; _catmull_rom_smooth turns those into an actual curve.
-static func _find_road_path(heights: PackedFloat32Array, width: int, length: int, start_x: float, meander_phase: float, cliff_obstacle_mask: PackedByteArray, obst_dist: PackedFloat32Array) -> PackedVector2Array:
+static func _find_road_path(heights: PackedFloat32Array, width: int, length: int, far_end: Vector2, meander_phase: float, cliff_obstacle_mask: PackedByteArray, obst_dist: PackedFloat32Array) -> PackedVector2Array:
 	var cols := int(ceil(width / ROAD_PATH_GRID_STEP)) + 1
 	var rows := int(ceil(length / ROAD_PATH_GRID_STEP)) + 1
 
@@ -756,8 +760,11 @@ static func _find_road_path(heights: PackedFloat32Array, width: int, length: int
 	# so the two ends don't share a column -- that's what actually forces the
 	# route to travel diagonally instead of straight down the map.
 	var mid_col := int(round((cols - 1) * 0.5))
-	var start_col := clampi(int(round(start_x / ROAD_PATH_GRID_STEP)), 0, cols - 1)
-	var start := Vector2i(start_col, 0)
+	# 2026-10-09: the start is `far_end`, a point inside the map (the castle's foot), not a
+	# column on the north edge.
+	var start_col := clampi(int(round(far_end.x / ROAD_PATH_GRID_STEP)), 0, cols - 1)
+	var start_row := clampi(int(round(far_end.y / ROAD_PATH_GRID_STEP)), 0, rows - 2)
+	var start := Vector2i(start_col, start_row)
 	var goal := Vector2i(mid_col, rows - 1)
 
 	# Cosmetic meander (see ROAD_MEANDER_* consts' comment): a wandering
@@ -768,11 +775,18 @@ static func _find_road_path(heights: PackedFloat32Array, width: int, length: int
 	# ROAD_MEANDER_AMPLITUDE_FRACTION*cols so it stays proportional to the
 	# grid regardless of map size.
 	var preferred_col := func(gz: int) -> float:
-		var t := float(gz) / float(maxi(rows - 1, 1))
+		var t := clampf(float(gz - start_row) / float(maxi(rows - 1 - start_row, 1)), 0.0, 1.0)
 		var baseline := lerpf(float(start_col), float(mid_col), t)
 		var envelope := sin(PI * t) # 0 at t=0 and t=1, peaks at the midpoint
 		var wander := ROAD_MEANDER_AMPLITUDE_FRACTION * cols * envelope * sin(t * TAU * ROAD_MEANDER_CYCLES + meander_phase)
-		return baseline + wander
+		# 2026-10-09: the valley meanders (TerrainHeightmap.build_valley_shape) -- the preferred
+		# line follows the floor's middle at this row, and wanders less where the floor is narrow.
+		var pz := float(gz) * ROAD_PATH_GRID_STEP
+		var floor_lo := TerrainHeightmap.floor_lo(pz)
+		var floor_hi := TerrainHeightmap.floor_hi(pz)
+		var middle_shift := ((floor_lo + floor_hi) * 0.5 - float(width - 1) * 0.5) / ROAD_PATH_GRID_STEP
+		var narrowing := (floor_hi - floor_lo) / (TerrainHeightmap.base_floor_hi() - TerrainHeightmap.base_floor_lo())
+		return baseline + middle_shift * minf(envelope * 3.0, 1.0) + wander * minf(narrowing, 1.0)
 
 	var neighbor_offsets := [
 		Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
@@ -912,7 +926,7 @@ static func _find_road_path(heights: PackedFloat32Array, width: int, length: int
 	# spans the whole map) -- fall back to a straight line rather than no road.
 	push_warning("TERRAIN_GEN: road pathfinding found no route from north to south edge -- falling back to a straight line")
 	var fallback := PackedVector2Array()
-	fallback.append(Vector2(start_col * ROAD_PATH_GRID_STEP, 0.0))
+	fallback.append(Vector2(start_col * ROAD_PATH_GRID_STEP, start_row * ROAD_PATH_GRID_STEP))
 	fallback.append(Vector2(mid_col * ROAD_PATH_GRID_STEP, (rows - 1) * ROAD_PATH_GRID_STEP))
 	return fallback
 

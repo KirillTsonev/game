@@ -262,7 +262,8 @@ static func plan_outcrops(models: Array[Dictionary], heights: PackedFloat32Array
 	for k in knots:
 		keep_out.append(Vector3(float(k.cx), float(k.cz), float(k.reach)))
 	if TerrainLandmarks.is_active():
-		keep_out.append(Vector3(TerrainLandmarks.CENTER_PX.x, TerrainLandmarks.CENTER_PX.y, TerrainLandmarks.RADIUS))
+		keep_out.append(Vector3(TerrainLandmarks.center().x, TerrainLandmarks.center().y, TerrainLandmarks.RADIUS))
+	keep_out.append(Vector3(TerrainCastle.SITE_PX.x, TerrainCastle.SITE_PX.y, TerrainCastle.SITE_KEEP_RADIUS)) # 2026-10-09: the castle's site
 
 	var area_scale := (float(width) * float(length)) / TerrainConfig.ERRATIC_DENSITY_BASE_AREA
 	var count_min := maxi(1, int(round(OUTCROP_COUNT_MIN_BASE * area_scale)))
@@ -297,6 +298,7 @@ static func plan_outcrops(models: Array[Dictionary], heights: PackedFloat32Array
 			var fz := TerrainUtil.clamp_range_for_reach(float(length) * 0.1, float(length) * 0.9, radius + bank, float(length - 1))
 			var px := rng.randf_range(minf(fx.x, fx.y), maxf(fx.x, fx.y))
 			var pz := rng.randf_range(minf(fz.x, fz.y), maxf(fz.x, fz.y))
+			px = TerrainHeightmap.warp_x(px, pz) # the floor at this row (the valley meanders, 2026-10-09)
 
 			var blocked := false
 			for k in keep_out:

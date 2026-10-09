@@ -1,9 +1,9 @@
-## Invisible walls around the generated map (2026-10-06), so the player cannot walk off its edges.
+## Invisible walls around the generated map and the hub strip south of it (TerrainHub), so the
+## player cannot walk off the edges (2026-10-06).
 ##
 ## Four endless vertical planes (WorldBoundaryShape3D) on one StaticBody3D, EDGE_INSET m inside the
-## map's outermost height samples -- no height to jump or climb over, nothing drawn. The road's
-## spawn and exit points sit on the very edge (road.gd), so WorldGenerator moves the player's start
-## position inside the walls with clamp_inside().
+## outermost height samples -- no height to jump or climb over, nothing drawn. WorldGenerator
+## keeps the player's start position inside the walls with clamp_inside().
 class_name WorldBounds
 extends RefCounted
 
@@ -12,12 +12,19 @@ const NODE_NAME := "WorldBounds"
 const EDGE_INSET := 1.0
 ## How far inside the walls the player's start position is kept, m (the capsule's radius is 0.4).
 const SPAWN_CLEARANCE := 0.75
+## The north wall stands this far out on the north apron (TerrainCastle), m beyond the map's
+## north edge -- like the side walls on theirs (the mountain is too steep to walk before it).
+const NORTH_WALK_DEPTH := 60.0
 
 ## The walled area in world x / z: position = low corner, size = extent.
 static func inner_rect(heightmap_corner: Vector3) -> Rect2:
 	var low := Vector2(heightmap_corner.x + EDGE_INSET, heightmap_corner.z + EDGE_INSET)
-	var size := Vector2(TerrainConfig.AREA_WIDTH - 1.0 - 2.0 * EDGE_INSET, TerrainConfig.AREA_LENGTH - 1.0 - 2.0 * EDGE_INSET)
-	return Rect2(low, size)
+	var size := Vector2(TerrainConfig.AREA_WIDTH - 1.0 - 2.0 * EDGE_INSET, TerrainConfig.AREA_LENGTH + TerrainHub.STRIP_LENGTH - 1.0 - 2.0 * EDGE_INSET)
+	# The two long sides have no wall at the map's edge: the mountain's terrain there can be walked
+	# onto (MountainWalls), and the invisible walls stand WALK_DEPTH m out on it.
+	# The north (low Z) wall likewise stands NORTH_WALK_DEPTH m out on the north apron.
+	return Rect2(low, size).grow_side(SIDE_LEFT, EDGE_INSET + MountainWalls.WALK_DEPTH).grow_side(SIDE_RIGHT, EDGE_INSET + MountainWalls.WALK_DEPTH) \
+		.grow_side(SIDE_TOP, EDGE_INSET + NORTH_WALK_DEPTH)
 
 ## Adds the walls to `parent_node` (deferred, like the other generated bodies).
 static func build(parent_node: Node, heightmap_corner: Vector3) -> void:

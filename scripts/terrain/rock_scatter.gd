@@ -479,6 +479,7 @@ static func scatter_boulders(parent_node: Node, terrain: Terrain3D, heights: Pac
 		for attempt in ERRATIC_MAX_PLACEMENT_ATTEMPTS:
 			px = rng.randf_range(minf(floor_x.x, floor_x.y), maxf(floor_x.x, floor_x.y))
 			pz = rng.randf_range(minf(floor_z.x, floor_z.y), maxf(floor_z.x, floor_z.y))
+			px = TerrainHeightmap.warp_x(px, pz) # the floor at this row (the valley meanders, 2026-10-09)
 			height = TerrainUtil.sample_height_bilinear(heights, width, length, px, pz)
 			normal = TerrainUtil.sample_normal(heights, width, length, px, pz)
 			var sample_idx := clampi(int(round(pz)), 0, length - 1) * width + clampi(int(round(px)), 0, width - 1)

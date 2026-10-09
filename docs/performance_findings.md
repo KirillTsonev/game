@@ -1049,6 +1049,33 @@ earlier (8.97 -> 8.56 s). In `tex_old_3` five of the 46 textures were still in t
 - `git gc` (2026-10-06) packed the history: 1.08 -> 1.07 GiB, so no gain; the assets in it are
   already compressed. Only rewriting history would shrink it.
 
+### 10. The map grew to 512 x 768 (2026-10-08) -- the CPU is now the limit (open)
+
+Run `20261008_172956_c2454614_wide_valley.json` (full run, random seed 1637213708; the stations
+are on another map than every earlier run, so compare kinds of view, not exact figures).
+
+- GPU: unchanged, 7.3-8.8 ms at the heavy stations (was 6.5-8.1 ms).
+- CPU: frame 13.8-15.0 ms at `spawn_ahead`, `exit_look_back` and `forest_dense` (was 8.3-8.7 ms),
+  `cpu_render` about 10 ms (was about 5 ms), draws 8,700-11,000 (was 5,000-6,000). The road walk:
+  14.6 ms average, p95 20.2 ms, 240 of 1,367 frames over 16.7 ms.
+- Where the draws are (ablation at `spawn_ahead`, frame ms saved): trees 8.3 ms / 4,829 draws,
+  saplings 4.2 ms / 2,099 draws, understory 2.2 ms, deadfall 2.0 ms, rocks 1.7 ms. The slopes
+  face the player, so far more instancer cells are in view than on the old flat-sided map.
+- Startup: generation 13.4-14.9 s (was 5.6 s). Largest stages: knots 1.3-1.8 s, deadfall 1.5 s,
+  understory 1.4 s, erosion 1.3 s, ground paint 1.3 s, road 1.1 s.
+- **384 x 768 with 30 m walls instead (same day, the size kept):** run
+  `20261008_185151_c2454614_valley_384.json` (full run, random seed 3863964574). GPU 6.6-7.7 ms.
+  Still CPU-limited at four stations: frame 11.9-13.1 ms at `spawn_ahead`, `exit_look_back`,
+  `forest_dense` and `road_open`, `cpu_render` 8.2-9.1 ms, draws 6,400-8,000. Road walk 11.6 ms
+  average, p95 15.6 ms, 64 of 1,723 frames over 16.7 ms. Trees 5.3 ms / 3,586 draws, saplings
+  2.7 ms / 1,586 draws at `spawn_ahead`. Generation 10.3-10.7 s.
+- `cpu_render` at `spawn_ahead` is 8.9 ms for 6,483 draws; the 256 x 512 map had 5.4 ms for 6,007
+  draws. So the CPU cost is not only the draws in view. Not yet separated: the larger number of
+  instancer nodes to cull (10 regions, was 4), and the start position, which the last 256 x 512
+  run still had at floor height (the plateau was raised a day later, and it overlooks the valley).
+- Not done yet: fewer draws for trees and saplings (the remedy that fits is the one step 8 used
+  for the understory, or larger instancer cells), and the startup stages above.
+
 ## Research (2026-10-05)
 
 A web search for optimisation guidance, read against the findings above.
