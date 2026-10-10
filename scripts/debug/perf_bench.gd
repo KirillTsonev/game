@@ -624,7 +624,7 @@ func _build_toggles() -> Array[Dictionary]:
 		toggles.append({"name": "terrain_texturing", "apply":func(on: bool) -> void: _terrain.show_grey = not on})
 		var terrain_shadows: int = _terrain.cast_shadows
 		if terrain_shadows != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF:
-			toggles.append({"name": "terrain_shadows", "apply":func(on: bool) -> void: _terrain.cast_shadows = terrain_shadows if on else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF})
+			toggles.append({"name": "terrain_shadows", "apply":func(on: bool) -> void: _terrain.cast_shadows = terrain_shadows if on else RenderingServer.SHADOW_CASTING_SETTING_OFF})
 
 	var world_env := _scene.get_node_or_null("WorldEnvironment") as WorldEnvironment
 	if world_env and world_env.compositor:
@@ -699,6 +699,8 @@ func _set_layer_shown(on: bool, key: StringName) -> void:
 		node.visible = on
 		if node is GrassField: # hidden grass must also stop its GPU cull pass
 			node.process_mode = Node.PROCESS_MODE_INHERIT if on else Node.PROCESS_MODE_DISABLED
+	# Terrain3D 1.1's instancer has no nodes: its meshes are switched through their assets.
+	LayerTogglePanel.set_mesh_assets_enabled(_terrain, LayerTogglePanel.mesh_ids(key), on)
 	var plants := _scene.get_node_or_null(PlantField.NODE_NAME) as PlantField
 	if plants: # the layer's GPU-culled meshes are not nodes (2026-10-06)
 		plants.set_layer_shown(key, on)
@@ -753,6 +755,9 @@ func _audit_layers() -> Array:
 		var container := _scene.get_node_or_null(container_name)
 		if container and _layer_nodes.has(key):
 			_layer_nodes[key] = [container]
+	for spec in LayerTogglePanel.LAYERS: # instancer layers have no nodes on Terrain3D 1.1, but can still be switched off
+		if not LayerTogglePanel.mesh_ids(spec[0]).is_empty() and not _layer_nodes.has(spec[0]):
+			_layer_nodes[spec[0]] = []
 	for key: StringName in _layer_nodes.keys():
 		if not (key in [&"grass", &"cliffs", &"outcrops", &"instanced_other"] or not LayerTogglePanel.mesh_ids(key).is_empty()):
 			_layer_nodes.erase(key) # player, road, ...: listed in the audit, not switched off
@@ -894,7 +899,7 @@ func _audit_textures() -> Dictionary:
 					textures[tex] = true
 	var assets: Terrain3DAssets = _terrain.get_assets()
 	for i in assets.get_texture_count():
-		var asset: Terrain3DTextureAsset = assets.get_texture(i)
+		var asset: Terrain3DTextureAsset = assets.get_texture_asset(i)
 		for tex in [asset.albedo_texture, asset.normal_texture] if asset else []:
 			if tex:
 				textures[tex] = true

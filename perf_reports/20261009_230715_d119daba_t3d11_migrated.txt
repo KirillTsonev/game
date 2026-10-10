@@ -1,0 +1,145 @@
+==== PERF BENCH t3d11_migrated  git d119daba  2026-10-09T23:07:15 ====
+viewport 1906x942, 3D scale 0.850, sun shadows OFF, SSAO OFF, 0 post effects | NVIDIA GeForce RTX 3070 Laptop GPU | Godot 4.7.2-stable (official) | seed 1541671226
+
+STATIONS (ms)       frame    p95    p99  worst    GPU  CPUrender   draws  tris(M)  VRAM MB
+spawn_ahead          8.54   9.86  10.63  10.78   4.97       5.81    3858    65.63     1180
+spawn_ground         4.17   4.24   4.28   4.40   1.66       0.79      99    63.46     1180
+spawn_sky            4.17   4.24   4.28   4.59   1.25       0.85     192    63.78     1180
+road_mid             5.82   6.94   7.29   7.57   4.78       3.65    2252    66.10     1180
+exit_look_back       8.51   9.77  10.21  10.48   4.18       5.75    3636    66.46     1180
+forest_dense         8.77  10.07  10.34  10.69   4.97       5.96    3801    67.19     1180
+road_open            7.38   8.98   9.61  11.56   5.04       4.84    2909    66.16     1180
+cliff_face           6.09   6.86   7.73   8.78   5.47       3.33    1939    66.59     1180
+
+ABLATION at spawn_ahead -- baseline 8.80 ms frame / 5.00 ms GPU (end of pass: 8.68 / 4.99)
+switched off          frame saved  GPU saved  draws saved  tris saved(M)
+
+ABLATION at exit_look_back -- baseline 8.53 ms frame / 4.13 ms GPU (end of pass: 8.71 / 4.12)
+switched off          frame saved  GPU saved  draws saved  tris saved(M)
+
+ABLATION at forest_dense -- baseline 8.67 ms frame / 5.02 ms GPU (end of pass: 8.93 / 4.96)
+switched off          frame saved  GPU saved  draws saved  tris saved(M)
+
+WALK 200 m in 20.0 s: frame 7.84 ms, p95 9.95, p99 10.80, worst 12.56 | GPU 4.90 | 0 frames over 2x median, 0 over 16.7 ms (of 2552)
+
+STARTUP: _ready() began at 3.70 s, took 18.07 s, first frame at 22.15 s, settled at 22.28 s
+  heightmap build                    7699 ms
+  Terrain3D import+height_range      2309 ms
+  boulder scattering                  218 ms
+  scree scattering                    133 ms
+  mountain foot debris                 48 ms
+  tree scattering                     348 ms
+  deadfall scattering                1239 ms
+  understory scattering              1157 ms
+  sapling scattering                  255 ms
+  grass density bake                  412 ms
+  flower scattering                   574 ms
+  ground painting                    2037 ms
+  outcrop placement                    45 ms
+  road mesh build                     182 ms
+  cliff face dressing                  63 ms
+  mountain walls                      295 ms
+  player placement                      3 ms
+
+MESHES: 100 unique, 532 nodes, 872 instances, 13.9 M tris at LOD 0 (13.6 M cast shadows). Top by total tris:
+      2.52 M =  194080 tris x     13 inst (13 shadow)  res://assets/models/cliffs/namaqualand_cliff_02/namaqualand_cliff_02_2k.glb::ArrayMesh_3bxqe
+      1.60 M =   94369 tris x     17 inst (17 shadow)  res://assets/models/cliffs/namaqualand_cliff_01/namaqualand_cliff_01_2k.glb::ArrayMesh_vb72n
+      1.26 M =   97039 tris x     13 inst (13 shadow)  res://assets/models/cliffs/namaqualand_cliff_02/namaqualand_cliff_02_2k.glb::ArrayMesh_30tle
+      1.07 M =  153472 tris x      7 inst (7 shadow)  res://assets/models/cliffs/mountainside/mountainside_2k.glb::ArrayMesh_tpy5y
+      0.80 M =   47184 tris x     17 inst (17 shadow)  res://assets/models/cliffs/namaqualand_cliff_01/namaqualand_cliff_01_2k.glb::ArrayMesh_e6pop
+      0.63 M =   48519 tris x     13 inst (13 shadow)  res://assets/models/cliffs/namaqualand_cliff_02/namaqualand_cliff_02_2k.glb::ArrayMesh_bfp45
+      0.54 M =   76735 tris x      7 inst (7 shadow)  res://assets/models/cliffs/mountainside/mountainside_2k.glb::ArrayMesh_58a1k
+      0.42 M =   34783 tris x     12 inst (12 shadow)  res://assets/models/cliffs/icelandic_lava_cliff_huge/icelandic_lava_cliff_huge.glb::ArrayMesh_g1dj1
+      0.40 M =   23591 tris x     17 inst (17 shadow)  res://assets/models/cliffs/namaqualand_cliff_01/namaqualand_cliff_01_2k.glb::ArrayMesh_ddyu1
+      0.39 M =   27513 tris x     14 inst (14 shadow)  res://assets/models/cliffs/nordic_coastal_cliff_huge/nordic_coastal_cliff_huge.glb::ArrayMesh_awxsc
+      0.32 M =   27025 tris x     12 inst (12 shadow)  res://assets/models/cliffs/nordic_coastal_cliff_large/nordic_coastal_cliff_large.glb::ArrayMesh_ffvfj
+      0.32 M =   24258 tris x     13 inst (13 shadow)  res://assets/models/cliffs/namaqualand_cliff_02/namaqualand_cliff_02_2k.glb::ArrayMesh_574xp
+      0.27 M =   38366 tris x      7 inst (7 shadow)  res://assets/models/cliffs/mountainside/mountainside_2k.glb::ArrayMesh_n02l1
+      0.21 M =   29820 tris x      7 inst (7 shadow)  res://assets/models/outcrops/beach_rock_tower/beach_rock_tower.glb::ArrayMesh_mh5gi
+      0.21 M =   17390 tris x     12 inst (12 shadow)  res://assets/models/cliffs/icelandic_lava_cliff_huge/icelandic_lava_cliff_huge.glb::ArrayMesh_frcja
+
+LAYERS -- instances x LOD 0 triangles (an upper bound: LODs and culling draw fewer; the ablation's "tris saved" is what is really drawn)
+understory          38.32 M tris    58480 instances     44 nodes
+        4.61 M =  10466 inst x     440 tris  LODs 440/88/4  shadow LODs []  28 Fern02
+        4.52 M =   5139 inst x     880 tris  LODs 880/4  shadow LODs []  32 Bush05
+        3.80 M =   3364 inst x    1129 tris  LODs 1129/282/4  shadow LODs []  55 LadyFernA
+        3.64 M =   3456 inst x    1053 tris  LODs 1053/263/4  shadow LODs []  59 LadyFernE
+        3.43 M =   6168 inst x     556 tris  LODs 556/4  shadow LODs []  29 Bush01
+        3.26 M =   1036 inst x    3150 tris  LODs 3150/787/4  shadow LODs []  69 ElderberryA
+        3.13 M =    790 inst x    3968 tris  LODs 3968/992/4  shadow LODs []  70 ElderberryB
+        2.94 M =   5882 inst x     500 tris  LODs 500/4  shadow LODs []  31 Bush04
+    ... 8 more in the .json
+flowers             10.16 M tris    32261 instances     36 nodes
+        2.72 M =   4311 inst x     632 tris  LODs 632/158  shadow LODs []  78 WoodSorrelH
+        1.35 M =   4153 inst x     326 tris  LODs 326/81  shadow LODs []  72 WoodSorrelB
+        1.13 M =   4097 inst x     276 tris  LODs 276/69  shadow LODs []  77 WoodSorrelG
+        0.98 M =   3969 inst x     248 tris  LODs 248/62  shadow LODs []  74 WoodSorrelD
+        0.79 M =   3446 inst x     228 tris  LODs 228/57  shadow LODs []  73 WoodSorrelC
+        0.69 M =   3393 inst x     203 tris  LODs 203/50  shadow LODs []  76 WoodSorrelF
+        0.65 M =   1766 inst x     369 tris  LODs 369  shadow LODs []  84 Dandelion
+        0.44 M =   2897 inst x     152 tris  LODs 152/48  shadow LODs []  75 WoodSorrelE
+    ... 10 more in the .json
+grass                5.95 M tris  1347987 instances      7 nodes
+        3.16 M = 350700 inst x       9 tris  LODs 9  shadow LODs []  blades_0
+        2.02 M = 224560 inst x       9 tris  LODs 9  shadow LODs []  blades_1
+        0.40 M = 402965 inst x       1 tris  LODs 1  shadow LODs []  short_0
+        0.20 M = 197400 inst x       1 tris  LODs 1  shadow LODs []  short_1
+        0.13 M = 126420 inst x       1 tris  LODs 1  shadow LODs []  blades_2
+        0.04 M =  36064 inst x       1 tris  LODs 1  shadow LODs []  blades_3
+        0.01 M =   9878 inst x       1 tris  LODs 1  shadow LODs []  blades_4
+cliffs               5.54 M tris      128 instances    332 nodes
+        2.52 M =     13 inst x  194080 tris  LODs 194080/97039/48519/24258  shadow LODs [0, 1, 2, 3]  namaqualand_cliff_02
+        1.60 M =     17 inst x   94369 tris  LODs 94369/47184/23591/11794  shadow LODs [0, 1, 2, 3]  namaqualand_cliff_01
+        0.42 M =     12 inst x   34783 tris  LODs 34783/17390/8695/4172  shadow LODs [0, 1, 2, 3]  icelandic_lava_cliff_huge
+        0.39 M =     14 inst x   27513 tris  LODs 27513/13756/6878/3301  shadow LODs [0, 1, 2, 3]  nordic_coastal_cliff_huge
+        0.32 M =     12 inst x   27025 tris  LODs 27025/13512/6755/3243  shadow LODs [0, 1, 2, 3]  nordic_coastal_cliff_large
+        0.17 M =     13 inst x   13070 tris  LODs 13070  shadow LODs [0]  namaqualand_cliff_02_FILL
+        0.05 M =     17 inst x    3226 tris  LODs 3226  shadow LODs [0]  namaqualand_cliff_01_PATCH
+        0.05 M =     13 inst x    3570 tris  LODs 3570  shadow LODs [0]  namaqualand_cliff_02_PATCH
+    ... 1 more in the .json
+outcrops             1.87 M tris       36 instances    144 nodes
+        1.07 M =      7 inst x  153472 tris  LODs 153472/76735/38366/19182  shadow LODs [0, 1, 2, 3]  mountainside
+        0.21 M =      7 inst x   29820 tris  LODs 29820/14910/7454/3578  shadow LODs [0, 1, 2, 3]  beach_rock_tower
+        0.21 M =      7 inst x   29622 tris  LODs 29622/14811/7404/3554  shadow LODs [0, 1, 2, 3]  beach_rock_formation
+        0.21 M =      8 inst x   25690 tris  LODs 25690/12844/6422/3082  shadow LODs [0, 1, 2, 3]  beach_rock_slabs
+        0.17 M =      7 inst x   24472 tris  LODs 24472/12235/6118/2935  shadow LODs [0, 1, 2, 3]  beach_rock_ridge
+MountainWalls        0.11 M tris       47 instances     47 nodes
+        0.01 M =      1 inst x    6000 tris  LODs 6000  shadow LODs []  Right_row2_02_terrain005_a
+        0.01 M =      1 inst x    6000 tris  LODs 6000  shadow LODs []  Left_row2_00_landscape_sketching_c
+        0.01 M =      1 inst x    6000 tris  LODs 6000  shadow LODs []  Left_row2_01_terrain005_a
+        0.01 M =      1 inst x    6000 tris  LODs 6000  shadow LODs []  Left_row2_02_terrain005_b
+        0.01 M =      1 inst x    5999 tris  LODs 5999  shadow LODs []  Left_row1_02_mountain_alpine_style_b
+        0.01 M =      1 inst x    5999 tris  LODs 5999  shadow LODs []  North_row2_00_mountain_alpine_style_b
+        0.01 M =      1 inst x    5999 tris  LODs 5999  shadow LODs []  Right_row2_01_landscape_sketching_a
+        0.00 M =      1 inst x    4194 tris  LODs 4194  shadow LODs []  Left_row0_00_rugged_mountain_b
+    ... 39 more in the .json
+CliffVillage         0.09 M tris      205 instances      3 nodes
+        0.09 M =      1 inst x   90000 tris  LODs 90000  shadow LODs []  calcata_village
+        0.00 M =    160 inst x       2 tris  LODs 2  shadow LODs []  Windows
+        0.00 M =     44 inst x       2 tris  LODs 2  shadow LODs []  RimLights
+road                 0.03 M tris        1 instances      1 nodes
+        0.03 M =      1 inst x   25512 tris  LODs 25512  shadow LODs []  RoadMesh
+CastlePlaceholder     0.00 M tris      142 instances      4 nodes
+        0.00 M =    110 inst x       2 tris  LODs 2  shadow LODs []  CastleLights
+        0.00 M =     30 inst x       2 tris  LODs 2  shadow LODs []  BridgeLights
+        0.00 M =      1 inst x      12 tris  LODs 12  shadow LODs [0]  Bridge
+        0.00 M =      1 inst x      12 tris  LODs 12  shadow LODs [0]  Castle
+terrain_other        0.00 M tris        1 instances      1 nodes
+        0.00 M =      1 inst x       2 tris  LODs 2  shadow LODs [0]  MouseQuad
+
+TEXTURES: 80 used by mesh materials + terrain, ~181 MB estimated. Top folders:
+      45.3 MB  res://textures/source
+      22.2 MB  res://assets/models/cliffs/namaqualand_cliff_02/textures
+      16.9 MB  res://assets/models/cliffs/namaqualand_cliff_01/textures
+      13.3 MB  res://assets/models/cliffs/mountainside/textures
+      10.7 MB  res://assets/models/cliffs/nordic_coastal_cliff_large/textures
+      10.7 MB  res://assets/models/cliffs/icelandic_lava_cliff_huge/textures
+      10.7 MB  res://assets/models/cliffs/nordic_coastal_cliff_huge/textures
+      10.7 MB  res://assets/models/outcrops/beach_rock_slabs/textures
+      10.7 MB  res://assets/models/outcrops/beach_rock_formation/textures
+      10.7 MB  res://assets/models/outcrops/beach_rock_ridge/textures
+      10.7 MB  res://assets/models/outcrops/beach_rock_tower/textures
+       4.2 MB  res://assets/models/mountains/rugged_mountain/textures
+       2.7 MB  res://assets/models/village/calcata
+       1.0 MB  res://assets/models/mountains/mountain_lakes_211109/textures
+       0.9 MB  res://assets/models/mountains/mountain_lake_211106/textures

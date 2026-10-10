@@ -150,16 +150,19 @@ static func parse_mmi_name(node_name: String) -> Vector2i:
 		return Vector2i(-1, -1)
 	return Vector2i(parts[3].substr(1).to_int(), parts[4].substr(1).to_int())
 
-## Shows / hides the instancer's nodes of these mesh ids. Not Terrain3DMeshAsset.enabled: switching
-## that off closes the game one frame later with no error printed (stack overflow, exit code
-## 0xC00000FD, found 2026-10-04; cause inside Terrain3D not investigated).
+## Shows / hides the instancer's meshes of these ids, shadows included, through
+## Terrain3DMeshAsset.enabled. Terrain3D 1.1 draws its instances straight on the RenderingServer:
+## there are no MMI3D_* nodes to hide any more (hiding those was the way on 1.0.2, where switching
+## `enabled` off closed the game a frame later with a stack overflow, 0xC00000FD). 1.1 queues the
+## rebuild and does it once per frame.
 func _set_meshes_shown(ids: Array[int], on: bool) -> void:
-	var terrain := get_tree().current_scene.get_node_or_null("Terrain3D")
-	if terrain == null:
+	set_mesh_assets_enabled(get_tree().current_scene.get_node_or_null("Terrain3D") as Terrain3D, ids, on)
+
+## Also used by the benchmark (scripts/debug/perf_bench.gd).
+static func set_mesh_assets_enabled(terrain: Terrain3D, ids: Array[int], on: bool) -> void:
+	if terrain == null or terrain.get_assets() == null:
 		return
-	var stack: Array[Node] = [terrain]
-	while not stack.is_empty():
-		var node: Node = stack.pop_back()
-		stack.append_array(node.get_children(true))
-		if node is MultiMeshInstance3D and parse_mmi_name(node.name).x in ids:
-			node.visible = on
+	for id in ids:
+		var asset: Terrain3DMeshAsset = terrain.get_assets().get_mesh_asset(id)
+		if asset:
+			asset.enabled = on

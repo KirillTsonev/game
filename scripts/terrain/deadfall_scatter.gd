@@ -72,6 +72,10 @@ const STICK_MIX :=[[STICK_ARBEM_ID, 0.28], [STICK_DEBRIS_A_ID, 0.2], [STICK_DEBR
 ## logs. Rim below ground, no collision, no shadows, no keep-out; overlaps allowed. They use the
 ## PineLitter terrain texture, so they read as the ground swelling up. Placed by _scatter_mounds --
 ## NOT through _try_place (its linear scan of ctx.placed is too slow for this many pieces).
+## SWITCHED OFF 2026-10-09 (Kirill: "drop the mounds"): the PineLitter texture is displaced now
+## (WorldGenerator.DISPLACEMENT_LITTER_SCALE), and a rigid dome fitted to the undisplaced ground
+## is buried or left hanging by it. The meshes, their ids and this code stay.
+const MOUNDS_ENABLED := false
 const MOUND_MESH_IDS: Array[int] = [50, 51, 52] ## LitterMoundA-C, radius 1.1 / 0.95 / 1.25 m at scale 1
 const MOUND_TRUNK_P := 0.4 ## chance per tree
 const MOUND_DEADFALL_P := 0.6 ## chance per stump / log
@@ -290,7 +294,8 @@ static func scatter_deadfall(parent_node: Node, terrain: Terrain3D, heights: Pac
 					break
 
 	# 3. Litter mounds -- last, so the rolls above are unchanged by them.
-	_scatter_mounds(ctx, instancer, assets, rng)
+	if MOUNDS_ENABLED:
+		_scatter_mounds(ctx, instancer, assets, rng)
 
 	# Emit: instances, colliders, keep-out circles.
 	var collider_count := 0

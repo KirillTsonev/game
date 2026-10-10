@@ -167,7 +167,7 @@ func setup_mesh_assets(only_ids: Array = []) -> String:
 			a.set_lod_range(i, ranges[i])
 		a.set_last_lod(mini(ranges.size(), a.get_lod_count()) - 1)
 		a.set_last_shadow_lod(a.get_last_lod())
-		a.set_cast_shadows(GeometryInstance3D.SHADOW_CASTING_SETTING_ON if e.get("shadows", true) else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+		a.set_cast_shadows(RenderingServer.SHADOW_CASTING_SETTING_ON if e.get("shadows", true) else RenderingServer.SHADOW_CASTING_SETTING_OFF)
 		a.set_fade_margin(0.0)
 		var got: Array[String] = []
 		for i in a.get_lod_count():

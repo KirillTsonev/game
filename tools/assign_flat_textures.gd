@@ -280,14 +280,14 @@ func fix_textures() -> String:
 	# Iterate the desired id->paths mapping (not the existing texture_list),
 	# so an id with no Terrain3DTextureAsset yet (e.g. Rock, id=2, added
 	# after Ground/Road already existed) gets CREATED here rather than
-	# silently skipped -- get_texture(id) returns null for an id that isn't
+	# silently skipped -- get_texture_asset(id) returns null for an id that isn't
 	# in the list yet, in which case we make a new Terrain3DTextureAsset,
-	# set its id, and hand it to assets.set_texture(id, ...), which is what
+	# set its id, and hand it to assets.set_texture_asset(id, ...), which is what
 	# actually inserts it into the live list (assigning into get_texture_list()
 	# results directly would not, since that Array is a copy).
 	for id in TEXTURES_BY_ID.keys():
 		var paths: Dictionary = TEXTURES_BY_ID[id]
-		var tex_asset: Terrain3DTextureAsset = assets.get_texture(id)
+		var tex_asset: Terrain3DTextureAsset = assets.get_texture_asset(id)
 		var is_new := tex_asset == null
 		if is_new:
 			tex_asset = Terrain3DTextureAsset.new()
@@ -332,7 +332,7 @@ func fix_textures() -> String:
 			# This is what actually inserts a brand-new Terrain3DTextureAsset
 			# into the live list -- setting properties on a freshly-constructed
 			# tex_asset alone does nothing until it's handed to the container.
-			assets.set_texture(id, tex_asset)
+			assets.set_texture_asset(id, tex_asset)
 		log_lines.append("id=%d name=%s %s albedo=%s (%s) normal=%s (%s) albedo_color=white" % [id, tex_asset.get_name(), "(created)" if is_new else "(updated)", paths["albedo"], albedo_tex.get_size(), paths["normal"], normal_tex.get_size()])
 
 	assets.update_texture_list()

@@ -672,11 +672,32 @@ static func _build_rows(knot: Dictionary, heights: PackedFloat32Array, width: in
 			})
 			t += w + KNOT_ROW_GAP
 		var prev := heights.duplicate()
-		CliffDressing.flatten_terrain_for_cliff_dressing(entries, heights, width, length)
+		var scan := total * 0.5 + 50.0
+		# 2026-10-10 (Kirill: "cliff mesh directly above me has missing terrain under a small portion
+		# of it"): each mesh has its own foot, and along a slope a row's two feet can be 10-15 m
+		# apart; flatten levels up to 10 m around a footprint, so the lower mesh's pass cut a trench
+		# under the higher one's end. Highest foot first, its footprint locked before the next
+		# (the lower mesh's near end is partly buried in the bank instead).
+		var by_foot: Array[Dictionary] = entries.duplicate()
+		by_foot.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a.height) > float(b.height))
+		var row_lock := PackedFloat32Array()
+		for n in by_foot.size():
+			var one: Array[Dictionary] = [by_foot[n]]
+			var before_one := heights.duplicate() if n > 0 else PackedFloat32Array()
+			CliffDressing.flatten_terrain_for_cliff_dressing(one, heights, width, length)
+			if n > 0:
+				for pz in range(clampi(int(floor(origin.y - scan)), 0, length - 1), clampi(int(ceil(origin.y + scan)), 0, length - 1) + 1):
+					for px in range(clampi(int(floor(origin.x - scan)), 0, width - 1), clampi(int(ceil(origin.x + scan)), 0, width - 1) + 1):
+						var i := pz * width + px
+						if row_lock[i] > 0.0:
+							heights[i] = lerpf(heights[i], before_one[i], row_lock[i])
+			if n < by_foot.size() - 1:
+				if row_lock.is_empty():
+					row_lock.resize(width * length)
+				_protect_entries(one, row_lock, width, length, defs, 0.0, 0.0, KNOT_ROW_LOCK_FEATHER)
 		CliffDressing.raise_terrain_behind_cliff_dressing(entries, heights, width, length, top_profiles, rng.randi())
 		# Earlier rows' surroundings win over this row's flatten/raise: blend the old ground back
 		# by their protection weight (scan covers this row's whole flatten + raise reach).
-		var scan := total * 0.5 + 50.0
 		for pz in range(clampi(int(floor(origin.y - scan)), 0, length - 1), clampi(int(ceil(origin.y + scan)), 0, length - 1) + 1):
 			for px in range(clampi(int(floor(origin.x - scan)), 0, width - 1), clampi(int(ceil(origin.x + scan)), 0, width - 1) + 1):
 				var i := pz * width + px
@@ -698,8 +719,10 @@ static func _build_rows(knot: Dictionary, heights: PackedFloat32Array, width: in
 const KNOT_LOCK_BEHIND := 4.0
 const KNOT_LOCK_FRONT := 1.0
 const KNOT_LOCK_FEATHER := 5.0
+## The lock between two meshes of ONE row (see _build_rows): the footprint alone, a short feather.
+const KNOT_ROW_LOCK_FEATHER := 2.0
 
-static func _protect_entries(entries: Array[Dictionary], protect: PackedFloat32Array, width: int, length: int, defs: Dictionary) -> void:
+static func _protect_entries(entries: Array[Dictionary], protect: PackedFloat32Array, width: int, length: int, defs: Dictionary, lock_behind := KNOT_LOCK_BEHIND, lock_front := KNOT_LOCK_FRONT, feather := KNOT_LOCK_FEATHER) -> void:
 	for e in entries:
 		var def: Dictionary = defs[e.def_name]
 		var sc: float = e.scale_jitter
@@ -709,9 +732,9 @@ static func _protect_entries(entries: Array[Dictionary], protect: PackedFloat32A
 		# Same local basis as CliffDressing's passes: +z = face direction (front), -z = behind.
 		var axis_x := Vector2(cos(a), -sin(a))
 		var axis_z := Vector2(sin(a), cos(a))
-		var z_lo := -half_z - KNOT_LOCK_BEHIND
-		var z_hi := half_z + KNOT_LOCK_FRONT
-		var reach := Vector2(half_x, maxf(-z_lo, z_hi)).length() + KNOT_LOCK_FEATHER
+		var z_lo := -half_z - lock_behind
+		var z_hi := half_z + lock_front
+		var reach := Vector2(half_x, maxf(-z_lo, z_hi)).length() + feather
 		var cx: float = e.px
 		var cz: float = e.pz
 		for pz in range(clampi(int(floor(cz - reach)), 0, length - 1), clampi(int(ceil(cz + reach)), 0, length - 1) + 1):
@@ -721,7 +744,7 @@ static func _protect_entries(entries: Array[Dictionary], protect: PackedFloat32A
 				var lz := d.dot(axis_z)
 				var ox := maxf(0.0, absf(lx) - half_x)
 				var oz := maxf(0.0, maxf(z_lo - lz, lz - z_hi))
-				var w := 1.0 - smoothstep(0.0, KNOT_LOCK_FEATHER, Vector2(ox, oz).length())
+				var w := 1.0 - smoothstep(0.0, feather, Vector2(ox, oz).length())
 				var i := pz * width + px
 				protect[i] = maxf(protect[i], w)
 

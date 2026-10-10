@@ -85,10 +85,10 @@ static func claim_shadow_casters(assets: Terrain3DAssets, ids: Array[int]) -> vo
 		if asset == null or asset.get_material_override() != null:
 			continue
 		var mode := asset.get_cast_shadows()
-		if mode == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF or mode == GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY:
+		if mode == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF or mode == RenderingServer.SHADOW_CASTING_SETTING_SHADOWS_ONLY:
 			continue
 		_claimed_shadow_modes[id] = mode
-		asset.set_cast_shadows(GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY)
+		asset.set_cast_shadows(RenderingServer.SHADOW_CASTING_SETTING_SHADOWS_ONLY)
 
 ## Casts these plants' sun shadows from their second, reduced mesh (LOD 1, about a quarter of the
 ## triangles) instead of the near mesh (2026-10-06; on by default since Kirill saw no significant
@@ -135,7 +135,7 @@ static func declare_reduced_shadows(terrain: Terrain3D, ids: Array[int], on: boo
 		twin.set_last_shadow_lod(0)
 		twin.set_shadow_impostor(0)
 		twin.set_fade_margin(0.0)
-		twin.set_cast_shadows(GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY)
+		twin.set_cast_shadows(RenderingServer.SHADOW_CASTING_SETTING_SHADOWS_ONLY)
 		assets.set_mesh_asset(twin_id, twin)
 		_shadow_twins[id] = twin_id
 		reduced_shadow_ids.append(id)
@@ -396,7 +396,7 @@ func set_gpu_driven(on: bool, after_rebuild: Callable = Callable()) -> String:
 			# ONE asset per frame: Terrain3D rebuilds its nodes on each change, and 21 changes in one
 			# frame closed the game a frame later with a stack overflow (0xC00000FD, no error printed).
 			shadow_sets += 1
-			(s.asset as Terrain3DMeshAsset).set_cast_shadows(GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY if on else s.shadow_mode)
+			(s.asset as Terrain3DMeshAsset).set_cast_shadows(RenderingServer.SHADOW_CASTING_SETTING_SHADOWS_ONLY if on else s.shadow_mode)
 			if after_rebuild.is_valid():
 				after_rebuild.call() # the rebuilt nodes are all visible: let the caller re-hide its layers
 			await get_tree().process_frame

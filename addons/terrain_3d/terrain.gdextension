@@ -1,7 +1,7 @@
 [configuration]
 
 entry_symbol = "terrain_3d_init"
-compatibility_minimum = 4.4
+compatibility_minimum = 4.5
 
 [icons]
 
@@ -11,6 +11,8 @@ Terrain3D = "res://addons/terrain_3d/icons/terrain3d.svg"
 
 windows.debug.x86_64 = "res://addons/terrain_3d/bin/libterrain.windows.debug.x86_64.dll"
 windows.release.x86_64 = "res://addons/terrain_3d/bin/libterrain.windows.release.x86_64.dll"
+windows.debug.arm64 = "res://addons/terrain_3d/bin/libterrain.windows.debug.arm64.dll"
+windows.release.arm64 = "res://addons/terrain_3d/bin/libterrain.windows.release.arm64.dll"
 
 linux.debug.x86_64 = "res://addons/terrain_3d/bin/libterrain.linux.debug.x86_64.so"
 linux.release.x86_64 = "res://addons/terrain_3d/bin/libterrain.linux.release.x86_64.so"
@@ -28,5 +30,6 @@ android.release.arm64 = "res://addons/terrain_3d/bin/libterrain.android.release.
 ios.debug = "res://addons/terrain_3d/bin/libterrain.ios.debug.universal.dylib"
 ios.release = "res://addons/terrain_3d/bin/libterrain.ios.release.universal.dylib"
 
-web.debug = "res://addons/terrain_3d/bin/libterrain.web.debug.wasm32.wasm"
-web.release = "res://addons/terrain_3d/bin/libterrain.web.release.wasm32.wasm"
+web.release.wasm32.nothreads = "res://addons/terrain_3d/bin/libterrain.web.release.wasm32.nothreads.wasm"
+web.release.wasm32.threads = "res://addons/terrain_3d/bin/libterrain.web.release.wasm32.threads.wasm"
+web.release.wasm64.threads = "res://addons/terrain_3d/bin/libterrain.web.release.wasm64.threads.wasm"

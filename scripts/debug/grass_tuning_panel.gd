@@ -224,7 +224,7 @@ func _ground_tint() -> Color:
 
 func _apply_ground_tint() -> void:
 	var terrain := get_tree().current_scene.get_node_or_null("Terrain3D") as Terrain3D
-	var asset: Terrain3DTextureAsset = terrain.get_assets().get_texture(TerrainGroundPaint.GRASS_ID) if terrain and terrain.get_assets() else null
+	var asset: Terrain3DTextureAsset = terrain.get_assets().get_texture_asset(TerrainGroundPaint.GRASS_ID) if terrain and terrain.get_assets() else null
 	if asset:
 		asset.set_albedo_color(_ground_tint())
 	_refresh_labels()

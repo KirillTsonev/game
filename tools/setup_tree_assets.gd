@@ -1047,7 +1047,7 @@ func build_sapling_assets() -> String:
 		a.set_lod_range(1, 0.0)  # impostor: never culled
 		a.set_last_lod(1)
 		a.set_last_shadow_lod(1)
-		a.set_cast_shadows(GeometryInstance3D.SHADOW_CASTING_SETTING_ON)
+		a.set_cast_shadows(RenderingServer.SHADOW_CASTING_SETTING_ON)
 		a.set_shadow_impostor(0)
 		a.set_fade_margin(0.0)
 		out.append("id=%d %s (%s) <- %s: lod_count=%d last_lod=%d last_shadow_lod=%d, impostor gain %.2f, material err=%d, impostor mesh err=%d" % [

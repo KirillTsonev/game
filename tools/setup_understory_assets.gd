@@ -218,7 +218,7 @@ func build_understory_assets(only: Array = []) -> String:
 			a.set_lod_range(i, e.ranges[i])
 		a.set_last_lod((e.lods as Array).size() - 1)
 		a.set_last_shadow_lod(e.last_shadow_lod)
-		a.set_cast_shadows(GeometryInstance3D.SHADOW_CASTING_SETTING_ON if e.get("shadows", true) else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+		a.set_cast_shadows(RenderingServer.SHADOW_CASTING_SETTING_ON if e.get("shadows", true) else RenderingServer.SHADOW_CASTING_SETTING_OFF)
 		a.set_shadow_impostor(0)
 		a.set_fade_margin(e.get("fade", UNDERSTORY_FADE_MARGIN))
 		out.append("id=%d %s (%s): lod_count=%d last_lod=%d last_shadow_lod=%d | %s" % [

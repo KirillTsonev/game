@@ -1,0 +1,2545 @@
+{
+	"ablation": [
+		{
+			"baseline_end": {
+				"buffer_mem_mb": 276.969,
+				"cpu_render_ms": 5.915,
+				"draw_calls": 3858,
+				"frame_ms": 8.678,
+				"frames": 174,
+				"gpu_ms": 4.985,
+				"max_ms": 10.641,
+				"nodes": 8540,
+				"objects": 4042,
+				"p50_ms": 8.57,
+				"p95_ms": 10.254,
+				"p99_ms": 10.634,
+				"physics_ms": 0.097,
+				"primitives": 65628470,
+				"process_ms": 10.519,
+				"static_mem_mb": 699.762,
+				"texture_mem_mb": 792.323,
+				"video_mem_mb": 1180.139
+			},
+			"baseline_start": {
+				"buffer_mem_mb": 276.969,
+				"cpu_render_ms": 6.007,
+				"draw_calls": 3858,
+				"frame_ms": 8.798,
+				"frames": 171,
+				"gpu_ms": 4.996,
+				"max_ms": 10.935,
+				"nodes": 8540,
+				"objects": 4042,
+				"p50_ms": 8.534,
+				"p95_ms": 10.356,
+				"p99_ms": 10.821,
+				"physics_ms": 0.227,
+				"primitives": 65628470,
+				"process_ms": 10.812,
+				"static_mem_mb": 699.76,
+				"texture_mem_mb": 792.323,
+				"video_mem_mb": 1180.139
+			},
+			"post_passes": [],
+			"station": "spawn_ahead",
+			"toggles": []
+		},
+		{
+			"baseline_end": {
+				"buffer_mem_mb": 276.969,
+				"cpu_render_ms": 5.911,
+				"draw_calls": 3606,
+				"frame_ms": 8.707,
+				"frames": 173,
+				"gpu_ms": 4.124,
+				"max_ms": 11.899,
+				"nodes": 8540,
+				"objects": 3741,
+				"p50_ms": 8.531,
+				"p95_ms": 10.301,
+				"p99_ms": 11.766,
+				"physics_ms": 0.145,
+				"primitives": 66119515,
+				"process_ms": 11.76,
+				"static_mem_mb": 699.767,
+				"texture_mem_mb": 792.323,
+				"video_mem_mb": 1180.139
+			},
+			"baseline_start": {
+				"buffer_mem_mb": 276.969,
+				"cpu_render_ms": 5.776,
+				"draw_calls": 3606,
+				"frame_ms": 8.527,
+				"frames": 176,
+				"gpu_ms": 4.125,
+				"max_ms": 10.512,
+				"nodes": 8540,
+				"objects": 3741,
+				"p50_ms": 8.426,
+				"p95_ms": 9.54,
+				"p99_ms": 10.317,
+				"physics_ms": 0.15,
+				"primitives": 66119515,
+				"process_ms": 10.389,
+				"static_mem_mb": 699.765,
+				"texture_mem_mb": 792.323,
+				"video_mem_mb": 1180.139
+			},
+			"post_passes": [],
+			"station": "exit_look_back",
+			"toggles": []
+		},
+		{
+			"baseline_end": {
+				"buffer_mem_mb": 276.969,
+				"cpu_render_ms": 6.086,
+				"draw_calls": 3801,
+				"frame_ms": 8.931,
+				"frames": 168,
+				"gpu_ms": 4.96,
+				"max_ms": 12.072,
+				"nodes": 8540,
+				"objects": 4000,
+				"p50_ms": 8.822,
+				"p95_ms": 10.199,
+				"p99_ms": 10.967,
+				"physics_ms": 0.117,
+				"primitives": 67185455,
+				"process_ms": 12.021,
+				"static_mem_mb": 699.771,
+				"texture_mem_mb": 792.323,
+				"video_mem_mb": 1180.139
+			},
+			"baseline_start": {
+				"buffer_mem_mb": 276.969,
+				"cpu_render_ms": 5.88,
+				"draw_calls": 3801,
+				"frame_ms": 8.669,
+				"frames": 174,
+				"gpu_ms": 5.018,
+				"max_ms": 10.4,
+				"nodes": 8540,
+				"objects": 4000,
+				"p50_ms": 8.524,
+				"p95_ms": 10.064,
+				"p99_ms": 10.388,
+				"physics_ms": 0.126,
+				"primitives": 67185455,
+				"process_ms": 10.355,
+				"static_mem_mb": 699.769,
+				"texture_mem_mb": 792.323,
+				"video_mem_mb": 1180.139
+			},
+			"post_passes": [],
+			"station": "forest_dense",
+			"toggles": []
+		}
+	],
+	"audit": {
+		"layers": [
+			{
+				"assets": [
+					{
+						"asset": "28 Fern02",
+						"instances": 10466,
+						"lod0_total_tris": 4605040,
+						"lod_tris": [
+							440,
+							88,
+							4
+						],
+						"nodes": 3,
+						"shadow_lods": []
+					},
+					{
+						"asset": "32 Bush05",
+						"instances": 5139,
+						"lod0_total_tris": 4522320,
+						"lod_tris": [
+							880,
+							4
+						],
+						"nodes": 2,
+						"shadow_lods": []
+					},
+					{
+						"asset": "55 LadyFernA",
+						"instances": 3364,
+						"lod0_total_tris": 3797956,
+						"lod_tris": [
+							1129,
+							282,
+							4
+						],
+						"nodes": 3,
+						"shadow_lods": []
+					},
+					{
+						"asset": "59 LadyFernE",
+						"instances": 3456,
+						"lod0_total_tris": 3639168,
+						"lod_tris": [
+							1053,
+							263,
+							4
+						],
+						"nodes": 3,
+						"shadow_lods": []
+					},
+					{
+						"asset": "29 Bush01",
+						"instances": 6168,
+						"lod0_total_tris": 3429408,
+						"lod_tris": [
+							556,
+							4
+						],
+						"nodes": 2,
+						"shadow_lods": []
+					},
+					{
+						"asset": "69 ElderberryA",
+						"instances": 1036,
+						"lod0_total_tris": 3263400,
+						"lod_tris": [
+							3150,
+							787,
+							4
+						],
+						"nodes": 3,
+						"shadow_lods": []
+					},
+					{
+						"asset": "70 ElderberryB",
+						"instances": 790,
+						"lod0_total_tris": 3134720,
+						"lod_tris": [
+							3968,
+							992,
+							4
+						],
+						"nodes": 3,
+						"shadow_lods": []
+					},
+					{
+						"asset": "31 Bush04",
+						"instances": 5882,
+						"lod0_total_tris": 2941000,
+						"lod_tris": [
+							500,
+							4
+						],
+						"nodes": 2,
+						"shadow_lods": []
+					},
+					{
+						"asset": "60 LadyFernF",
+						"instances": 3250,
+						"lod0_total_tris": 2655250,
+						"lod_tris": [
+							817,
+							204,
+							4
+						],
+						"nodes": 3,
+						"shadow_lods": []
+					},
+					{
+						"asset": "61 LadyFernG",
+						"instances": 3419,
+						"lod0_total_tris": 1945411,
+						"lod_tris": [
+							569,
+							142,
+							4
+						],
+						"nodes": 3,
+						"shadow_lods": []
+					},
+					{
+						"asset": "62 LadyFernH",
+						"instances": 3395,
+						"lod0_total_tris": 1514170,
+						"lod_tris": [
+							446,
+							111,
+							4
+						],
+						"nodes": 3,
+						"shadow_lods": []
+					},
+					{
+						"asset": "30 Bush02Green",
+						"instances": 3653,
+						"lod0_total_tris": 1402752,
+						"lod_tris": [
+							384,
+							4
+						],
+						"nodes": 2,
+						"shadow_lods": []
+					},
+					{
+						"asset": "63 LadyFernI",
+						"instances": 2463,
+						"lod0_total_tris": 625602,
+						"lod_tris": [
+							254,
+							63,
+							4
+						],
+						"nodes": 3,
+						"shadow_lods": []
+					},
+					{
+						"asset": "56 LadyFernB",
+						"instances": 2573,
+						"lod0_total_tris": 504308,
+						"lod_tris": [
+							196,
+							49,
+							4
+						],
+						"nodes": 3,
+						"shadow_lods": []
+					},
+					{
+						"asset": "57 LadyFernC",
+						"instances": 1722,
+						"lod0_total_tris": 213528,
+						"lod_tris": [
+							124,
+							48,
+							4
+						],
+						"nodes": 3,
+						"shadow_lods": []
+					},
+					{
+						"asset": "58 LadyFernD",
+						"instances": 1704,
+						"lod0_total_tris": 126096,
+						"lod_tris": [
+							74,
+							47,
+							4
+						],
+						"nodes": 3,
+						"shadow_lods": []
+					}
+				],
+				"instances": 58480,
+				"layer": "understory",
+				"lod0_total_tris": 38320129,
+				"nodes": 44
+			},
+			{
+				"assets": [
+					{
+						"asset": "78 WoodSorrelH",
+						"instances": 4311,
+						"lod0_total_tris": 2724552,
+						"lod_tris": [
+							632,
+							158
+						],
+						"nodes": 2,
+						"shadow_lods": []
+					},
+					{
+						"asset": "72 WoodSorrelB",
+						"instances": 4153,
+						"lod0_total_tris": 1353878,
+						"lod_tris": [
+							326,
+							81
+						],
+						"nodes": 2,
+						"shadow_lods": []
+					},
+					{
+						"asset": "77 WoodSorrelG",
+						"instances": 4097,
+						"lod0_total_tris": 1130772,
+						"lod_tris": [
+							276,
+							69
+						],
+						"nodes": 2,
+						"shadow_lods": []
+					},
+					{
+						"asset": "74 WoodSorrelD",
+						"instances": 3969,
+						"lod0_total_tris": 984312,
+						"lod_tris": [
+							248,
+							62
+						],
+						"nodes": 2,
+						"shadow_lods": []
+					},
+					{
+						"asset": "73 WoodSorrelC",
+						"instances": 3446,
+						"lod0_total_tris": 785688,
+						"lod_tris": [
+							228,
+							57
+						],
+						"nodes": 2,
+						"shadow_lods": []
+					},
+					{
+						"asset": "76 WoodSorrelF",
+						"instances": 3393,
+						"lod0_total_tris": 688779,
+						"lod_tris": [
+							203,
+							50
+						],
+						"nodes": 2,
+						"shadow_lods": []
+					},
+					{
+						"asset": "84 Dandelion",
+						"instances": 1766,
+						"lod0_total_tris": 651654,
+						"lod_tris": [
+							369
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "75 WoodSorrelE",
+						"instances": 2897,
+						"lod0_total_tris": 440344,
+						"lod_tris": [
+							152,
+							48
+						],
+						"nodes": 2,
+						"shadow_lods": []
+					},
+					{
+						"asset": "81 PoppyC",
+						"instances": 147,
+						"lod0_total_tris": 216678,
+						"lod_tris": [
+							1474,
+							368,
+							4
+						],
+						"nodes": 3,
+						"shadow_lods": []
+					},
+					{
+						"asset": "87 CloverC",
+						"instances": 237,
+						"lod0_total_tris": 183675,
+						"lod_tris": [
+							775
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "85 CloverA",
+						"instances": 224,
+						"lod0_total_tris": 174048,
+						"lod_tris": [
+							777
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "71 WoodSorrelA",
+						"instances": 2231,
+						"lod0_total_tris": 156170,
+						"lod_tris": [
+							70,
+							48
+						],
+						"nodes": 2,
+						"shadow_lods": []
+					},
+					{
+						"asset": "82 PoppyD",
+						"instances": 220,
+						"lod0_total_tris": 154440,
+						"lod_tris": [
+							702,
+							175,
+							4
+						],
+						"nodes": 3,
+						"shadow_lods": []
+					},
+					{
+						"asset": "88 CloverD",
+						"instances": 232,
+						"lod0_total_tris": 141056,
+						"lod_tris": [
+							608
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "86 CloverB",
+						"instances": 238,
+						"lod0_total_tris": 138278,
+						"lod_tris": [
+							581
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "80 PoppyB",
+						"instances": 229,
+						"lod0_total_tris": 136484,
+						"lod_tris": [
+							596,
+							149,
+							4
+						],
+						"nodes": 3,
+						"shadow_lods": []
+					},
+					{
+						"asset": "83 PoppyH",
+						"instances": 208,
+						"lod0_total_tris": 51584,
+						"lod_tris": [
+							248,
+							62,
+							4
+						],
+						"nodes": 3,
+						"shadow_lods": []
+					},
+					{
+						"asset": "79 PoppyA",
+						"instances": 263,
+						"lod0_total_tris": 43658,
+						"lod_tris": [
+							166,
+							48,
+							4
+						],
+						"nodes": 3,
+						"shadow_lods": []
+					}
+				],
+				"instances": 32261,
+				"layer": "flowers",
+				"lod0_total_tris": 10156050,
+				"nodes": 36
+			},
+			{
+				"assets": [
+					{
+						"asset": "blades_0",
+						"instances": 350700,
+						"lod0_total_tris": 3156300,
+						"lod_tris": [
+							9
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "blades_1",
+						"instances": 224560,
+						"lod0_total_tris": 2021040,
+						"lod_tris": [
+							9
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "short_0",
+						"instances": 402965,
+						"lod0_total_tris": 402965,
+						"lod_tris": [
+							1
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "short_1",
+						"instances": 197400,
+						"lod0_total_tris": 197400,
+						"lod_tris": [
+							1
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "blades_2",
+						"instances": 126420,
+						"lod0_total_tris": 126420,
+						"lod_tris": [
+							1
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "blades_3",
+						"instances": 36064,
+						"lod0_total_tris": 36064,
+						"lod_tris": [
+							1
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "blades_4",
+						"instances": 9878,
+						"lod0_total_tris": 9878,
+						"lod_tris": [
+							1
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					}
+				],
+				"instances": 1347987,
+				"layer": "grass",
+				"lod0_total_tris": 5950067,
+				"nodes": 7
+			},
+			{
+				"assets": [
+					{
+						"asset": "namaqualand_cliff_02",
+						"instances": 13,
+						"lod0_total_tris": 2523040,
+						"lod_tris": [
+							194080,
+							97039,
+							48519,
+							24258
+						],
+						"nodes": 52,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					},
+					{
+						"asset": "namaqualand_cliff_01",
+						"instances": 17,
+						"lod0_total_tris": 1604273,
+						"lod_tris": [
+							94369,
+							47184,
+							23591,
+							11794
+						],
+						"nodes": 68,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					},
+					{
+						"asset": "icelandic_lava_cliff_huge",
+						"instances": 12,
+						"lod0_total_tris": 417396,
+						"lod_tris": [
+							34783,
+							17390,
+							8695,
+							4172
+						],
+						"nodes": 48,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					},
+					{
+						"asset": "nordic_coastal_cliff_huge",
+						"instances": 14,
+						"lod0_total_tris": 385182,
+						"lod_tris": [
+							27513,
+							13756,
+							6878,
+							3301
+						],
+						"nodes": 56,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					},
+					{
+						"asset": "nordic_coastal_cliff_large",
+						"instances": 12,
+						"lod0_total_tris": 324300,
+						"lod_tris": [
+							27025,
+							13512,
+							6755,
+							3243
+						],
+						"nodes": 48,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					},
+					{
+						"asset": "namaqualand_cliff_02_FILL",
+						"instances": 13,
+						"lod0_total_tris": 169910,
+						"lod_tris": [
+							13070
+						],
+						"nodes": 13,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "namaqualand_cliff_01_PATCH",
+						"instances": 17,
+						"lod0_total_tris": 54842,
+						"lod_tris": [
+							3226
+						],
+						"nodes": 17,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "namaqualand_cliff_02_PATCH",
+						"instances": 13,
+						"lod0_total_tris": 46410,
+						"lod_tris": [
+							3570
+						],
+						"nodes": 13,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "namaqualand_cliff_01_PATCH2",
+						"instances": 17,
+						"lod0_total_tris": 15963,
+						"lod_tris": [
+							939
+						],
+						"nodes": 17,
+						"shadow_lods": [
+							0
+						]
+					}
+				],
+				"instances": 128,
+				"layer": "cliffs",
+				"lod0_total_tris": 5541316,
+				"nodes": 332
+			},
+			{
+				"assets": [
+					{
+						"asset": "mountainside",
+						"instances": 7,
+						"lod0_total_tris": 1074304,
+						"lod_tris": [
+							153472,
+							76735,
+							38366,
+							19182
+						],
+						"nodes": 28,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					},
+					{
+						"asset": "beach_rock_tower",
+						"instances": 7,
+						"lod0_total_tris": 208740,
+						"lod_tris": [
+							29820,
+							14910,
+							7454,
+							3578
+						],
+						"nodes": 28,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					},
+					{
+						"asset": "beach_rock_formation",
+						"instances": 7,
+						"lod0_total_tris": 207354,
+						"lod_tris": [
+							29622,
+							14811,
+							7404,
+							3554
+						],
+						"nodes": 28,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					},
+					{
+						"asset": "beach_rock_slabs",
+						"instances": 8,
+						"lod0_total_tris": 205520,
+						"lod_tris": [
+							25690,
+							12844,
+							6422,
+							3082
+						],
+						"nodes": 32,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					},
+					{
+						"asset": "beach_rock_ridge",
+						"instances": 7,
+						"lod0_total_tris": 171304,
+						"lod_tris": [
+							24472,
+							12235,
+							6118,
+							2935
+						],
+						"nodes": 28,
+						"shadow_lods": [
+							0,
+							1,
+							2,
+							3
+						]
+					}
+				],
+				"instances": 36,
+				"layer": "outcrops",
+				"lod0_total_tris": 1867222,
+				"nodes": 144
+			},
+			{
+				"assets": [
+					{
+						"asset": "Right_row2_02_terrain005_a",
+						"instances": 1,
+						"lod0_total_tris": 6000,
+						"lod_tris": [
+							6000
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Left_row2_00_landscape_sketching_c",
+						"instances": 1,
+						"lod0_total_tris": 6000,
+						"lod_tris": [
+							6000
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Left_row2_01_terrain005_a",
+						"instances": 1,
+						"lod0_total_tris": 6000,
+						"lod_tris": [
+							6000
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Left_row2_02_terrain005_b",
+						"instances": 1,
+						"lod0_total_tris": 6000,
+						"lod_tris": [
+							6000
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Left_row1_02_mountain_alpine_style_b",
+						"instances": 1,
+						"lod0_total_tris": 5999,
+						"lod_tris": [
+							5999
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "North_row2_00_mountain_alpine_style_b",
+						"instances": 1,
+						"lod0_total_tris": 5999,
+						"lod_tris": [
+							5999
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Right_row2_01_landscape_sketching_a",
+						"instances": 1,
+						"lod0_total_tris": 5999,
+						"lod_tris": [
+							5999
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Left_row0_00_rugged_mountain_b",
+						"instances": 1,
+						"lod0_total_tris": 4194,
+						"lod_tris": [
+							4194
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "North_row0_00_rugged_mountain_b",
+						"instances": 1,
+						"lod0_total_tris": 4194,
+						"lod_tris": [
+							4194
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Left_row0_03_rugged_mountain_b",
+						"instances": 1,
+						"lod0_total_tris": 4194,
+						"lod_tris": [
+							4194
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "North_row0_04_rugged_mountain_b",
+						"instances": 1,
+						"lod0_total_tris": 4194,
+						"lod_tris": [
+							4194
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Right_row0_01_rugged_mountain_b",
+						"instances": 1,
+						"lod0_total_tris": 4194,
+						"lod_tris": [
+							4194
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Right_row0_03_rugged_mountain_a",
+						"instances": 1,
+						"lod0_total_tris": 3525,
+						"lod_tris": [
+							3525
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Left_row1_01_rugged_mountain_a",
+						"instances": 1,
+						"lod0_total_tris": 3525,
+						"lod_tris": [
+							3525
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Right_row1_02_mountain_1_a",
+						"instances": 1,
+						"lod0_total_tris": 3054,
+						"lod_tris": [
+							3054
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Right_row2_00_mountain_2_a",
+						"instances": 1,
+						"lod0_total_tris": 3054,
+						"lod_tris": [
+							3054
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "North_row1_01_mountain_1_c",
+						"instances": 1,
+						"lod0_total_tris": 3054,
+						"lod_tris": [
+							3054
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "North_row2_01_mountain_2_b",
+						"instances": 1,
+						"lod0_total_tris": 3050,
+						"lod_tris": [
+							3050
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "North_row1_00_mountain_1_b",
+						"instances": 1,
+						"lod0_total_tris": 3050,
+						"lod_tris": [
+							3050
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Right_row0_00_rugged_mountain_c",
+						"instances": 1,
+						"lod0_total_tris": 2810,
+						"lod_tris": [
+							2810
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Left_row0_04_rugged_mountain_c",
+						"instances": 1,
+						"lod0_total_tris": 2810,
+						"lod_tris": [
+							2810
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Left_row0_02_rugged_mountain_c",
+						"instances": 1,
+						"lod0_total_tris": 2810,
+						"lod_tris": [
+							2810
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "North_row0_01_rugged_mountain_c",
+						"instances": 1,
+						"lod0_total_tris": 2810,
+						"lod_tris": [
+							2810
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Right_row1_01_mountain_lake_211106_b",
+						"instances": 1,
+						"lod0_total_tris": 1719,
+						"lod_tris": [
+							1719
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Right_row1_00_mountain_lake_211106_c",
+						"instances": 1,
+						"lod0_total_tris": 1575,
+						"lod_tris": [
+							1575
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Left_row1_00_mountain_lake_211106_a",
+						"instances": 1,
+						"lod0_total_tris": 1553,
+						"lod_tris": [
+							1553
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "North_row0_02_mountain_lakes_211109_c",
+						"instances": 1,
+						"lod0_total_tris": 1362,
+						"lod_tris": [
+							1362
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Left_row0_01_mountain_lakes_211109_c",
+						"instances": 1,
+						"lod0_total_tris": 1362,
+						"lod_tris": [
+							1362
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Right_row0_02_mountain_lakes_211109_c",
+						"instances": 1,
+						"lod0_total_tris": 1362,
+						"lod_tris": [
+							1362
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "North_row1_02_mountain_lakes_211109_a",
+						"instances": 1,
+						"lod0_total_tris": 1236,
+						"lod_tris": [
+							1236
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "North_row0_03_mountain_lakes_211109_b",
+						"instances": 1,
+						"lod0_total_tris": 836,
+						"lod_tris": [
+							836
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Right_row0_04_mountain_lakes_211109_b",
+						"instances": 1,
+						"lod0_total_tris": 836,
+						"lod_tris": [
+							836
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Cloud_North_4",
+						"instances": 1,
+						"lod0_total_tris": 2,
+						"lod_tris": [
+							2
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Cloud_North_3",
+						"instances": 1,
+						"lod0_total_tris": 2,
+						"lod_tris": [
+							2
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Cloud_North_2",
+						"instances": 1,
+						"lod0_total_tris": 2,
+						"lod_tris": [
+							2
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Cloud_North_1",
+						"instances": 1,
+						"lod0_total_tris": 2,
+						"lod_tris": [
+							2
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Cloud_North_0",
+						"instances": 1,
+						"lod0_total_tris": 2,
+						"lod_tris": [
+							2
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Cloud_Right_4",
+						"instances": 1,
+						"lod0_total_tris": 2,
+						"lod_tris": [
+							2
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Cloud_Right_3",
+						"instances": 1,
+						"lod0_total_tris": 2,
+						"lod_tris": [
+							2
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Cloud_Right_2",
+						"instances": 1,
+						"lod0_total_tris": 2,
+						"lod_tris": [
+							2
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Cloud_Right_1",
+						"instances": 1,
+						"lod0_total_tris": 2,
+						"lod_tris": [
+							2
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Cloud_Right_0",
+						"instances": 1,
+						"lod0_total_tris": 2,
+						"lod_tris": [
+							2
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Cloud_Left_4",
+						"instances": 1,
+						"lod0_total_tris": 2,
+						"lod_tris": [
+							2
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Cloud_Left_3",
+						"instances": 1,
+						"lod0_total_tris": 2,
+						"lod_tris": [
+							2
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Cloud_Left_2",
+						"instances": 1,
+						"lod0_total_tris": 2,
+						"lod_tris": [
+							2
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Cloud_Left_1",
+						"instances": 1,
+						"lod0_total_tris": 2,
+						"lod_tris": [
+							2
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Cloud_Left_0",
+						"instances": 1,
+						"lod0_total_tris": 2,
+						"lod_tris": [
+							2
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					}
+				],
+				"instances": 47,
+				"layer": "MountainWalls",
+				"lod0_total_tris": 108390,
+				"nodes": 47
+			},
+			{
+				"assets": [
+					{
+						"asset": "calcata_village",
+						"instances": 1,
+						"lod0_total_tris": 90000,
+						"lod_tris": [
+							90000
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Windows",
+						"instances": 160,
+						"lod0_total_tris": 320,
+						"lod_tris": [
+							2
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "RimLights",
+						"instances": 44,
+						"lod0_total_tris": 88,
+						"lod_tris": [
+							2
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					}
+				],
+				"instances": 205,
+				"layer": "CliffVillage",
+				"lod0_total_tris": 90408,
+				"nodes": 3
+			},
+			{
+				"assets": [
+					{
+						"asset": "RoadMesh",
+						"instances": 1,
+						"lod0_total_tris": 25512,
+						"lod_tris": [
+							25512
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					}
+				],
+				"instances": 1,
+				"layer": "road",
+				"lod0_total_tris": 25512,
+				"nodes": 1
+			},
+			{
+				"assets": [
+					{
+						"asset": "CastleLights",
+						"instances": 110,
+						"lod0_total_tris": 220,
+						"lod_tris": [
+							2
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "BridgeLights",
+						"instances": 30,
+						"lod0_total_tris": 60,
+						"lod_tris": [
+							2
+						],
+						"nodes": 1,
+						"shadow_lods": []
+					},
+					{
+						"asset": "Bridge",
+						"instances": 1,
+						"lod0_total_tris": 12,
+						"lod_tris": [
+							12
+						],
+						"nodes": 1,
+						"shadow_lods": [
+							0
+						]
+					},
+					{
+						"asset": "Castle",
+						"instances": 1,
+						"lod0_total_tris": 12,
+						"lod_tris": [
+							12
+						],
+						"nodes": 1,
+						"shadow_lods": [
+							0
+						]
+					}
+				],
+				"instances": 142,
+				"layer": "CastlePlaceholder",
+				"lod0_total_tris": 304,
+				"nodes": 4
+			},
+			{
+				"assets": [
+					{
+						"asset": "MouseQuad",
+						"instances": 1,
+						"lod0_total_tris": 2,
+						"lod_tris": [
+							2
+						],
+						"nodes": 1,
+						"shadow_lods": [
+							0
+						]
+					}
+				],
+				"instances": 1,
+				"layer": "terrain_other",
+				"lod0_total_tris": 2,
+				"nodes": 1
+			}
+		],
+		"meshes": {
+			"instances": 872,
+			"mesh_nodes": 532,
+			"shadow_casting_tris": 13629897,
+			"top": [
+				{
+					"instances": 13,
+					"mesh": "res://assets/models/cliffs/namaqualand_cliff_02/namaqualand_cliff_02_2k.glb::ArrayMesh_3bxqe",
+					"nodes": 13,
+					"sample_node": "/root/Main/CliffDressing/@Node3D@89/namaqualand_cliff_02_LOD0",
+					"shadow_instances": 13,
+					"surfaces": 1,
+					"total_tris": 2523040,
+					"tris": 194080,
+					"visibility_range_end": 40.0
+				},
+				{
+					"instances": 17,
+					"mesh": "res://assets/models/cliffs/namaqualand_cliff_01/namaqualand_cliff_01_2k.glb::ArrayMesh_vb72n",
+					"nodes": 17,
+					"sample_node": "/root/Main/CliffDressing/@Node3D@84/namaqualand_cliff_01_LOD0",
+					"shadow_instances": 17,
+					"surfaces": 1,
+					"total_tris": 1604273,
+					"tris": 94369,
+					"visibility_range_end": 40.0
+				},
+				{
+					"instances": 13,
+					"mesh": "res://assets/models/cliffs/namaqualand_cliff_02/namaqualand_cliff_02_2k.glb::ArrayMesh_30tle",
+					"nodes": 13,
+					"sample_node": "/root/Main/CliffDressing/@Node3D@89/namaqualand_cliff_02_LOD1",
+					"shadow_instances": 13,
+					"surfaces": 1,
+					"total_tris": 1261507,
+					"tris": 97039,
+					"visibility_range_end": 90.0
+				},
+				{
+					"instances": 7,
+					"mesh": "res://assets/models/cliffs/mountainside/mountainside_2k.glb::ArrayMesh_tpy5y",
+					"nodes": 7,
+					"sample_node": "/root/Main/RockOutcrops/mountainside_34/mountainside_LOD0",
+					"shadow_instances": 7,
+					"surfaces": 1,
+					"total_tris": 1074304,
+					"tris": 153472,
+					"visibility_range_end": 40.0
+				},
+				{
+					"instances": 17,
+					"mesh": "res://assets/models/cliffs/namaqualand_cliff_01/namaqualand_cliff_01_2k.glb::ArrayMesh_e6pop",
+					"nodes": 17,
+					"sample_node": "/root/Main/CliffDressing/@Node3D@84/namaqualand_cliff_01_LOD1",
+					"shadow_instances": 17,
+					"surfaces": 1,
+					"total_tris": 802128,
+					"tris": 47184,
+					"visibility_range_end": 90.0
+				},
+				{
+					"instances": 13,
+					"mesh": "res://assets/models/cliffs/namaqualand_cliff_02/namaqualand_cliff_02_2k.glb::ArrayMesh_bfp45",
+					"nodes": 13,
+					"sample_node": "/root/Main/CliffDressing/@Node3D@89/namaqualand_cliff_02_LOD2",
+					"shadow_instances": 13,
+					"surfaces": 1,
+					"total_tris": 630747,
+					"tris": 48519,
+					"visibility_range_end": 180.0
+				},
+				{
+					"instances": 7,
+					"mesh": "res://assets/models/cliffs/mountainside/mountainside_2k.glb::ArrayMesh_58a1k",
+					"nodes": 7,
+					"sample_node": "/root/Main/RockOutcrops/mountainside_34/mountainside_LOD1",
+					"shadow_instances": 7,
+					"surfaces": 1,
+					"total_tris": 537145,
+					"tris": 76735,
+					"visibility_range_end": 90.0
+				},
+				{
+					"instances": 12,
+					"mesh": "res://assets/models/cliffs/icelandic_lava_cliff_huge/icelandic_lava_cliff_huge.glb::ArrayMesh_g1dj1",
+					"nodes": 12,
+					"sample_node": "/root/Main/CliffDressing/@Node3D@86/icelandic_lava_cliff_huge_LOD0",
+					"shadow_instances": 12,
+					"surfaces": 1,
+					"total_tris": 417396,
+					"tris": 34783,
+					"visibility_range_end": 40.0
+				},
+				{
+					"instances": 17,
+					"mesh": "res://assets/models/cliffs/namaqualand_cliff_01/namaqualand_cliff_01_2k.glb::ArrayMesh_ddyu1",
+					"nodes": 17,
+					"sample_node": "/root/Main/CliffDressing/@Node3D@84/namaqualand_cliff_01_LOD2",
+					"shadow_instances": 17,
+					"surfaces": 1,
+					"total_tris": 401047,
+					"tris": 23591,
+					"visibility_range_end": 180.0
+				},
+				{
+					"instances": 14,
+					"mesh": "res://assets/models/cliffs/nordic_coastal_cliff_huge/nordic_coastal_cliff_huge.glb::ArrayMesh_awxsc",
+					"nodes": 14,
+					"sample_node": "/root/Main/CliffDressing/@Node3D@81/nordic_coastal_cliff_huge_LOD0",
+					"shadow_instances": 14,
+					"surfaces": 1,
+					"total_tris": 385182,
+					"tris": 27513,
+					"visibility_range_end": 40.0
+				},
+				{
+					"instances": 12,
+					"mesh": "res://assets/models/cliffs/nordic_coastal_cliff_large/nordic_coastal_cliff_large.glb::ArrayMesh_ffvfj",
+					"nodes": 12,
+					"sample_node": "/root/Main/CliffDressing/@Node3D@88/nordic_coastal_cliff_large_LOD0",
+					"shadow_instances": 12,
+					"surfaces": 1,
+					"total_tris": 324300,
+					"tris": 27025,
+					"visibility_range_end": 40.0
+				},
+				{
+					"instances": 13,
+					"mesh": "res://assets/models/cliffs/namaqualand_cliff_02/namaqualand_cliff_02_2k.glb::ArrayMesh_574xp",
+					"nodes": 13,
+					"sample_node": "/root/Main/CliffDressing/@Node3D@89/namaqualand_cliff_02_LOD3",
+					"shadow_instances": 13,
+					"surfaces": 1,
+					"total_tris": 315354,
+					"tris": 24258,
+					"visibility_range_end": 0.0
+				},
+				{
+					"instances": 7,
+					"mesh": "res://assets/models/cliffs/mountainside/mountainside_2k.glb::ArrayMesh_n02l1",
+					"nodes": 7,
+					"sample_node": "/root/Main/RockOutcrops/mountainside_34/mountainside_LOD2",
+					"shadow_instances": 7,
+					"surfaces": 1,
+					"total_tris": 268562,
+					"tris": 38366,
+					"visibility_range_end": 180.0
+				},
+				{
+					"instances": 7,
+					"mesh": "res://assets/models/outcrops/beach_rock_tower/beach_rock_tower.glb::ArrayMesh_mh5gi",
+					"nodes": 7,
+					"sample_node": "/root/Main/RockOutcrops/beach_rock_tower_30/beach_rock_tower_LOD0",
+					"shadow_instances": 7,
+					"surfaces": 1,
+					"total_tris": 208740,
+					"tris": 29820,
+					"visibility_range_end": 40.0
+				},
+				{
+					"instances": 12,
+					"mesh": "res://assets/models/cliffs/icelandic_lava_cliff_huge/icelandic_lava_cliff_huge.glb::ArrayMesh_frcja",
+					"nodes": 12,
+					"sample_node": "/root/Main/CliffDressing/@Node3D@86/icelandic_lava_cliff_huge_LOD1",
+					"shadow_instances": 12,
+					"surfaces": 1,
+					"total_tris": 208680,
+					"tris": 17390,
+					"visibility_range_end": 90.0
+				},
+				{
+					"instances": 7,
+					"mesh": "res://assets/models/outcrops/beach_rock_formation/beach_rock_formation.glb::ArrayMesh_i6xlp",
+					"nodes": 7,
+					"sample_node": "/root/Main/RockOutcrops/beach_rock_formation_33/beach_rock_formation_LOD0",
+					"shadow_instances": 7,
+					"surfaces": 1,
+					"total_tris": 207354,
+					"tris": 29622,
+					"visibility_range_end": 40.0
+				},
+				{
+					"instances": 8,
+					"mesh": "res://assets/models/outcrops/beach_rock_slabs/beach_rock_slabs.glb::ArrayMesh_n200s",
+					"nodes": 8,
+					"sample_node": "/root/Main/RockOutcrops/beach_rock_slabs_35/beach_rock_slabs_LOD0",
+					"shadow_instances": 8,
+					"surfaces": 1,
+					"total_tris": 205520,
+					"tris": 25690,
+					"visibility_range_end": 40.0
+				},
+				{
+					"instances": 17,
+					"mesh": "res://assets/models/cliffs/namaqualand_cliff_01/namaqualand_cliff_01_2k.glb::ArrayMesh_bd6yw",
+					"nodes": 17,
+					"sample_node": "/root/Main/CliffDressing/@Node3D@84/namaqualand_cliff_01_LOD3",
+					"shadow_instances": 17,
+					"surfaces": 1,
+					"total_tris": 200498,
+					"tris": 11794,
+					"visibility_range_end": 0.0
+				},
+				{
+					"instances": 14,
+					"mesh": "res://assets/models/cliffs/nordic_coastal_cliff_huge/nordic_coastal_cliff_huge.glb::ArrayMesh_p4tu1",
+					"nodes": 14,
+					"sample_node": "/root/Main/CliffDressing/@Node3D@81/nordic_coastal_cliff_huge_LOD1",
+					"shadow_instances": 14,
+					"surfaces": 1,
+					"total_tris": 192584,
+					"tris": 13756,
+					"visibility_range_end": 90.0
+				},
+				{
+					"instances": 7,
+					"mesh": "res://assets/models/outcrops/beach_rock_ridge/beach_rock_ridge.glb::ArrayMesh_4153k",
+					"nodes": 7,
+					"sample_node": "/root/Main/RockOutcrops/beach_rock_ridge_32/beach_rock_ridge_LOD0",
+					"shadow_instances": 7,
+					"surfaces": 1,
+					"total_tris": 171304,
+					"tris": 24472,
+					"visibility_range_end": 40.0
+				},
+				{
+					"instances": 13,
+					"mesh": "res://assets/models/cliffs/namaqualand_cliff_02/namaqualand_cliff_02_2k.glb::ArrayMesh_y7hj7",
+					"nodes": 13,
+					"sample_node": "/root/Main/CliffDressing/@Node3D@89/namaqualand_cliff_02_FILL",
+					"shadow_instances": 13,
+					"surfaces": 1,
+					"total_tris": 169910,
+					"tris": 13070,
+					"visibility_range_end": 0.0
+				},
+				{
+					"instances": 12,
+					"mesh": "res://assets/models/cliffs/nordic_coastal_cliff_large/nordic_coastal_cliff_large.glb::ArrayMesh_r582o",
+					"nodes": 12,
+					"sample_node": "/root/Main/CliffDressing/@Node3D@88/nordic_coastal_cliff_large_LOD1",
+					"shadow_instances": 12,
+					"surfaces": 1,
+					"total_tris": 162144,
+					"tris": 13512,
+					"visibility_range_end": 90.0
+				},
+				{
+					"instances": 7,
+					"mesh": "res://assets/models/cliffs/mountainside/mountainside_2k.glb::ArrayMesh_e0fh2",
+					"nodes": 7,
+					"sample_node": "/root/Main/RockOutcrops/mountainside_34/mountainside_LOD3",
+					"shadow_instances": 7,
+					"surfaces": 1,
+					"total_tris": 134274,
+					"tris": 19182,
+					"visibility_range_end": 0.0
+				},
+				{
+					"instances": 7,
+					"mesh": "res://assets/models/outcrops/beach_rock_tower/beach_rock_tower.glb::ArrayMesh_pstiw",
+					"nodes": 7,
+					"sample_node": "/root/Main/RockOutcrops/beach_rock_tower_30/beach_rock_tower_LOD1",
+					"shadow_instances": 7,
+					"surfaces": 1,
+					"total_tris": 104370,
+					"tris": 14910,
+					"visibility_range_end": 90.0
+				},
+				{
+					"instances": 12,
+					"mesh": "res://assets/models/cliffs/icelandic_lava_cliff_huge/icelandic_lava_cliff_huge.glb::ArrayMesh_e0sxi",
+					"nodes": 12,
+					"sample_node": "/root/Main/CliffDressing/@Node3D@86/icelandic_lava_cliff_huge_LOD2",
+					"shadow_instances": 12,
+					"surfaces": 1,
+					"total_tris": 104340,
+					"tris": 8695,
+					"visibility_range_end": 180.0
+				},
+				{
+					"instances": 7,
+					"mesh": "res://assets/models/outcrops/beach_rock_formation/beach_rock_formation.glb::ArrayMesh_f8k7j",
+					"nodes": 7,
+					"sample_node": "/root/Main/RockOutcrops/beach_rock_formation_33/beach_rock_formation_LOD1",
+					"shadow_instances": 7,
+					"surfaces": 1,
+					"total_tris": 103677,
+					"tris": 14811,
+					"visibility_range_end": 90.0
+				},
+				{
+					"instances": 8,
+					"mesh": "res://assets/models/outcrops/beach_rock_slabs/beach_rock_slabs.glb::ArrayMesh_5i7ro",
+					"nodes": 8,
+					"sample_node": "/root/Main/RockOutcrops/beach_rock_slabs_35/beach_rock_slabs_LOD1",
+					"shadow_instances": 8,
+					"surfaces": 1,
+					"total_tris": 102752,
+					"tris": 12844,
+					"visibility_range_end": 90.0
+				},
+				{
+					"instances": 14,
+					"mesh": "res://assets/models/cliffs/nordic_coastal_cliff_huge/nordic_coastal_cliff_huge.glb::ArrayMesh_4vsks",
+					"nodes": 14,
+					"sample_node": "/root/Main/CliffDressing/@Node3D@81/nordic_coastal_cliff_huge_LOD2",
+					"shadow_instances": 14,
+					"surfaces": 1,
+					"total_tris": 96292,
+					"tris": 6878,
+					"visibility_range_end": 180.0
+				},
+				{
+					"instances": 1,
+					"mesh": "res://assets/models/village/calcata/calcata_village.glb::ArrayMesh_87o7v",
+					"nodes": 1,
+					"sample_node": "/root/Main/CliffVillage/Scan/calcata_village",
+					"shadow_instances": 0,
+					"surfaces": 1,
+					"total_tris": 90000,
+					"tris": 90000,
+					"visibility_range_end": 0.0
+				},
+				{
+					"instances": 7,
+					"mesh": "res://assets/models/outcrops/beach_rock_ridge/beach_rock_ridge.glb::ArrayMesh_q8im2",
+					"nodes": 7,
+					"sample_node": "/root/Main/RockOutcrops/beach_rock_ridge_32/beach_rock_ridge_LOD1",
+					"shadow_instances": 7,
+					"surfaces": 1,
+					"total_tris": 85645,
+					"tris": 12235,
+					"visibility_range_end": 90.0
+				},
+				{
+					"instances": 12,
+					"mesh": "res://assets/models/cliffs/nordic_coastal_cliff_large/nordic_coastal_cliff_large.glb::ArrayMesh_hnij4",
+					"nodes": 12,
+					"sample_node": "/root/Main/CliffDressing/@Node3D@88/nordic_coastal_cliff_large_LOD2",
+					"shadow_instances": 12,
+					"surfaces": 1,
+					"total_tris": 81060,
+					"tris": 6755,
+					"visibility_range_end": 180.0
+				},
+				{
+					"instances": 17,
+					"mesh": "res://assets/models/cliffs/namaqualand_cliff_01/namaqualand_cliff_01_2k.glb::ArrayMesh_pfv25",
+					"nodes": 17,
+					"sample_node": "/root/Main/CliffDressing/@Node3D@84/namaqualand_cliff_01_PATCH",
+					"shadow_instances": 17,
+					"surfaces": 1,
+					"total_tris": 54842,
+					"tris": 3226,
+					"visibility_range_end": 0.0
+				},
+				{
+					"instances": 7,
+					"mesh": "res://assets/models/outcrops/beach_rock_tower/beach_rock_tower.glb::ArrayMesh_4dw4t",
+					"nodes": 7,
+					"sample_node": "/root/Main/RockOutcrops/beach_rock_tower_30/beach_rock_tower_LOD2",
+					"shadow_instances": 7,
+					"surfaces": 1,
+					"total_tris": 52178,
+					"tris": 7454,
+					"visibility_range_end": 180.0
+				},
+				{
+					"instances": 7,
+					"mesh": "res://assets/models/outcrops/beach_rock_formation/beach_rock_formation.glb::ArrayMesh_5rna3",
+					"nodes": 7,
+					"sample_node": "/root/Main/RockOutcrops/beach_rock_formation_33/beach_rock_formation_LOD2",
+					"shadow_instances": 7,
+					"surfaces": 1,
+					"total_tris": 51828,
+					"tris": 7404,
+					"visibility_range_end": 180.0
+				},
+				{
+					"instances": 8,
+					"mesh": "res://assets/models/outcrops/beach_rock_slabs/beach_rock_slabs.glb::ArrayMesh_lwch5",
+					"nodes": 8,
+					"sample_node": "/root/Main/RockOutcrops/beach_rock_slabs_35/beach_rock_slabs_LOD2",
+					"shadow_instances": 8,
+					"surfaces": 1,
+					"total_tris": 51376,
+					"tris": 6422,
+					"visibility_range_end": 180.0
+				},
+				{
+					"instances": 12,
+					"mesh": "res://assets/models/cliffs/icelandic_lava_cliff_huge/icelandic_lava_cliff_huge.glb::ArrayMesh_4w2ll",
+					"nodes": 12,
+					"sample_node": "/root/Main/CliffDressing/@Node3D@86/icelandic_lava_cliff_huge_LOD3",
+					"shadow_instances": 12,
+					"surfaces": 1,
+					"total_tris": 50064,
+					"tris": 4172,
+					"visibility_range_end": 0.0
+				},
+				{
+					"instances": 13,
+					"mesh": "res://assets/models/cliffs/namaqualand_cliff_02/namaqualand_cliff_02_2k.glb::ArrayMesh_ycvs5",
+					"nodes": 13,
+					"sample_node": "/root/Main/CliffDressing/@Node3D@89/namaqualand_cliff_02_PATCH",
+					"shadow_instances": 13,
+					"surfaces": 1,
+					"total_tris": 46410,
+					"tris": 3570,
+					"visibility_range_end": 0.0
+				},
+				{
+					"instances": 14,
+					"mesh": "res://assets/models/cliffs/nordic_coastal_cliff_huge/nordic_coastal_cliff_huge.glb::ArrayMesh_5idlj",
+					"nodes": 14,
+					"sample_node": "/root/Main/CliffDressing/@Node3D@81/nordic_coastal_cliff_huge_LOD3",
+					"shadow_instances": 14,
+					"surfaces": 1,
+					"total_tris": 46214,
+					"tris": 3301,
+					"visibility_range_end": 0.0
+				},
+				{
+					"instances": 7,
+					"mesh": "res://assets/models/outcrops/beach_rock_ridge/beach_rock_ridge.glb::ArrayMesh_pcls8",
+					"nodes": 7,
+					"sample_node": "/root/Main/RockOutcrops/beach_rock_ridge_32/beach_rock_ridge_LOD2",
+					"shadow_instances": 7,
+					"surfaces": 1,
+					"total_tris": 42826,
+					"tris": 6118,
+					"visibility_range_end": 180.0
+				},
+				{
+					"instances": 12,
+					"mesh": "res://assets/models/cliffs/nordic_coastal_cliff_large/nordic_coastal_cliff_large.glb::ArrayMesh_ldvor",
+					"nodes": 12,
+					"sample_node": "/root/Main/CliffDressing/@Node3D@88/nordic_coastal_cliff_large_LOD3",
+					"shadow_instances": 12,
+					"surfaces": 1,
+					"total_tris": 38916,
+					"tris": 3243,
+					"visibility_range_end": 0.0
+				}
+			],
+			"total_tris": 13854487,
+			"unique_meshes": 100
+		},
+		"textures": {
+			"by_dir": [
+				{
+					"dir": "res://textures/source",
+					"mb": 45.333
+				},
+				{
+					"dir": "res://assets/models/cliffs/namaqualand_cliff_02/textures",
+					"mb": 22.167
+				},
+				{
+					"dir": "res://assets/models/cliffs/namaqualand_cliff_01/textures",
+					"mb": 16.866
+				},
+				{
+					"dir": "res://assets/models/cliffs/mountainside/textures",
+					"mb": 13.333
+				},
+				{
+					"dir": "res://assets/models/cliffs/nordic_coastal_cliff_large/textures",
+					"mb": 10.667
+				},
+				{
+					"dir": "res://assets/models/cliffs/icelandic_lava_cliff_huge/textures",
+					"mb": 10.667
+				},
+				{
+					"dir": "res://assets/models/cliffs/nordic_coastal_cliff_huge/textures",
+					"mb": 10.667
+				},
+				{
+					"dir": "res://assets/models/outcrops/beach_rock_slabs/textures",
+					"mb": 10.667
+				},
+				{
+					"dir": "res://assets/models/outcrops/beach_rock_formation/textures",
+					"mb": 10.667
+				},
+				{
+					"dir": "res://assets/models/outcrops/beach_rock_ridge/textures",
+					"mb": 10.667
+				},
+				{
+					"dir": "res://assets/models/outcrops/beach_rock_tower/textures",
+					"mb": 10.667
+				},
+				{
+					"dir": "res://assets/models/mountains/rugged_mountain/textures",
+					"mb": 4.188
+				},
+				{
+					"dir": "res://assets/models/village/calcata",
+					"mb": 2.667
+				},
+				{
+					"dir": "res://assets/models/mountains/mountain_lakes_211109/textures",
+					"mb": 1.044
+				},
+				{
+					"dir": "res://assets/models/mountains/mountain_lake_211106/textures",
+					"mb": 0.948
+				},
+				{
+					"dir": "(generated at runtime)",
+					"mb": 0.083
+				}
+			],
+			"count": 80,
+			"top": [
+				{
+					"format": 4,
+					"height": 1024,
+					"mb": 8.0,
+					"path": "res://assets/models/cliffs/namaqualand_cliff_02/textures/namaqualand_cliff_02_fill_diff.png",
+					"width": 1536
+				},
+				{
+					"format": 21,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/cliffs/nordic_coastal_cliff_large/textures/nordic_coastal_cliff_large_nor_gl_2k.jpg",
+					"width": 2048
+				},
+				{
+					"format": 21,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/cliffs/icelandic_lava_cliff_huge/textures/icelandic_lava_cliff_huge_nor_gl_2k.jpg",
+					"width": 2048
+				},
+				{
+					"format": 24,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/cliffs/namaqualand_cliff_02/textures/namaqualand_cliff_02_nor_gl_2k.exr",
+					"width": 2048
+				},
+				{
+					"format": 24,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/cliffs/namaqualand_cliff_02/textures/namaqualand_cliff_02_rough_2k.exr",
+					"width": 2048
+				},
+				{
+					"format": 21,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/outcrops/beach_rock_tower/textures/beach_rock_tower_nor_gl_2k.jpg",
+					"width": 2048
+				},
+				{
+					"format": 24,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/cliffs/namaqualand_cliff_01/textures/namaqualand_cliff_01_rough_2k.exr",
+					"width": 2048
+				},
+				{
+					"format": 24,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/cliffs/namaqualand_cliff_01/textures/namaqualand_cliff_01_nor_gl_2k.exr",
+					"width": 2048
+				},
+				{
+					"format": 21,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/cliffs/nordic_coastal_cliff_huge/textures/nordic_coastal_cliff_huge_nor_gl_2k.jpg",
+					"width": 2048
+				},
+				{
+					"format": 5,
+					"height": 1024,
+					"mb": 5.333,
+					"path": "res://textures/source/road_px_diff_1k.png",
+					"width": 1024
+				},
+				{
+					"format": 4,
+					"height": 1024,
+					"mb": 5.333,
+					"path": "res://textures/source/road_px_arm_1k.png",
+					"width": 1024
+				},
+				{
+					"format": 5,
+					"height": 1024,
+					"mb": 5.333,
+					"path": "res://textures/source/road_px_nor_gl_1k.png",
+					"width": 1024
+				},
+				{
+					"format": 21,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/outcrops/beach_rock_ridge/textures/beach_rock_ridge_nor_gl_2k.jpg",
+					"width": 2048
+				},
+				{
+					"format": 21,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/outcrops/beach_rock_slabs/textures/beach_rock_slabs_nor_gl_2k.jpg",
+					"width": 2048
+				},
+				{
+					"format": 21,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/outcrops/beach_rock_formation/textures/beach_rock_formation_nor_gl_2k.jpg",
+					"width": 2048
+				},
+				{
+					"format": 24,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/cliffs/mountainside/textures/mountainside_rough_2k.exr",
+					"width": 2048
+				},
+				{
+					"format": 24,
+					"height": 2048,
+					"mb": 5.333,
+					"path": "res://assets/models/cliffs/mountainside/textures/mountainside_nor_gl_2k.exr",
+					"width": 2048
+				},
+				{
+					"format": 4,
+					"height": 640,
+					"mb": 3.333,
+					"path": "res://assets/models/cliffs/namaqualand_cliff_01/textures/namaqualand_cliff_01_patch_diff.png",
+					"width": 1024
+				},
+				{
+					"format": 17,
+					"height": 2048,
+					"mb": 2.667,
+					"path": "res://assets/models/outcrops/beach_rock_ridge/textures/beach_rock_ridge_orm_2k.png",
+					"width": 2048
+				},
+				{
+					"format": 17,
+					"height": 2048,
+					"mb": 2.667,
+					"path": "res://assets/models/cliffs/icelandic_lava_cliff_huge/textures/icelandic_lava_cliff_huge_orm_2k.png",
+					"width": 2048
+				},
+				{
+					"format": 17,
+					"height": 2048,
+					"mb": 2.667,
+					"path": "res://assets/models/outcrops/beach_rock_ridge/textures/beach_rock_ridge_diff_2k.jpg",
+					"width": 2048
+				},
+				{
+					"format": 17,
+					"height": 2048,
+					"mb": 2.667,
+					"path": "res://assets/models/outcrops/beach_rock_formation/textures/beach_rock_formation_orm_2k.png",
+					"width": 2048
+				},
+				{
+					"format": 17,
+					"height": 2048,
+					"mb": 2.667,
+					"path": "res://assets/models/outcrops/beach_rock_formation/textures/beach_rock_formation_diff_2k.jpg",
+					"width": 2048
+				},
+				{
+					"format": 17,
+					"height": 2048,
+					"mb": 2.667,
+					"path": "res://assets/models/outcrops/beach_rock_tower/textures/beach_rock_tower_diff_2k.jpg",
+					"width": 2048
+				},
+				{
+					"format": 17,
+					"height": 2048,
+					"mb": 2.667,
+					"path": "res://assets/models/cliffs/namaqualand_cliff_01/textures/namaqualand_cliff_01_diff_2k.jpg",
+					"width": 2048
+				},
+				{
+					"format": 17,
+					"height": 2048,
+					"mb": 2.667,
+					"path": "res://assets/models/cliffs/mountainside/textures/mountainside_diff_2k.jpg",
+					"width": 2048
+				},
+				{
+					"format": 17,
+					"height": 2048,
+					"mb": 2.667,
+					"path": "res://assets/models/cliffs/nordic_coastal_cliff_huge/textures/nordic_coastal_cliff_huge_diff_2k.jpg",
+					"width": 2048
+				},
+				{
+					"format": 17,
+					"height": 2048,
+					"mb": 2.667,
+					"path": "res://assets/models/cliffs/nordic_coastal_cliff_huge/textures/nordic_coastal_cliff_huge_orm_2k.png",
+					"width": 2048
+				},
+				{
+					"format": 17,
+					"height": 2048,
+					"mb": 2.667,
+					"path": "res://assets/models/outcrops/beach_rock_slabs/textures/beach_rock_slabs_orm_2k.png",
+					"width": 2048
+				},
+				{
+					"format": 17,
+					"height": 2048,
+					"mb": 2.667,
+					"path": "res://assets/models/outcrops/beach_rock_slabs/textures/beach_rock_slabs_diff_2k.jpg",
+					"width": 2048
+				},
+				{
+					"format": 17,
+					"height": 2048,
+					"mb": 2.667,
+					"path": "res://assets/models/cliffs/icelandic_lava_cliff_huge/textures/icelandic_lava_cliff_huge_diff_2k.jpg",
+					"width": 2048
+				},
+				{
+					"format": 17,
+					"height": 2048,
+					"mb": 2.667,
+					"path": "res://assets/models/cliffs/nordic_coastal_cliff_large/textures/nordic_coastal_cliff_large_orm_2k.png",
+					"width": 2048
+				},
+				{
+					"format": 17,
+					"height": 2048,
+					"mb": 2.667,
+					"path": "res://assets/models/cliffs/nordic_coastal_cliff_large/textures/nordic_coastal_cliff_large_diff_2k.jpg",
+					"width": 2048
+				},
+				{
+					"format": 17,
+					"height": 2048,
+					"mb": 2.667,
+					"path": "res://assets/models/cliffs/namaqualand_cliff_02/textures/namaqualand_cliff_02_diff_2k.jpg",
+					"width": 2048
+				},
+				{
+					"format": 17,
+					"height": 2048,
+					"mb": 2.667,
+					"path": "res://assets/models/outcrops/beach_rock_tower/textures/beach_rock_tower_orm_2k.png",
+					"width": 2048
+				},
+				{
+					"format": 17,
+					"height": 2048,
+					"mb": 2.667,
+					"path": "res://assets/models/village/calcata/calcata_village_Image_0.jpg",
+					"width": 2048
+				},
+				{
+					"format": 22,
+					"height": 1024,
+					"mb": 1.333,
+					"path": "res://textures/source/snow_normal_roughness_1k.png",
+					"width": 1024
+				},
+				{
+					"format": 22,
+					"height": 1024,
+					"mb": 1.333,
+					"path": "res://textures/source/snow_albedo_height_1k.png",
+					"width": 1024
+				},
+				{
+					"format": 22,
+					"height": 1024,
+					"mb": 1.333,
+					"path": "res://textures/source/pine_litter_normal_roughness_1k.png",
+					"width": 1024
+				},
+				{
+					"format": 22,
+					"height": 1024,
+					"mb": 1.333,
+					"path": "res://textures/source/pine_litter_albedo_height_1k.png",
+					"width": 1024
+				}
+			],
+			"total_mb": 181.296
+		}
+	},
+	"meta": {
+		"adapter": "NVIDIA GeForce RTX 3070 Laptop GPU",
+		"frame_capped": false,
+		"git": "d119daba",
+		"godot": "4.7.2-stable (official)",
+		"hidden_layers": [],
+		"label": "t3d11_migrated",
+		"lantern_shadow": true,
+		"msaa_3d": 1,
+		"post_effects_on": 0,
+		"scaling_3d_mode": 1,
+		"scaling_3d_scale": 0.850000023841858,
+		"screen_space_aa": 1,
+		"seed": 1541671226,
+		"ssao": false,
+		"sun_shadows": false,
+		"time": "2026-10-09T23:07:15",
+		"viewport": [
+			1906,
+			942
+		]
+	},
+	"startup": {
+		"first_frame_at_ms": 22151,
+		"pipelines_at_settle": "canvas=3 mesh=29 surface=52 draw=7 specialization=48",
+		"ready_started_at_ms": 3697,
+		"ready_total_ms": 18071,
+		"settled_at_ms": 22280,
+		"stage_ms": {
+			"Terrain3D import+height_range": 2309,
+			"boulder scattering": 218,
+			"cliff face dressing": 63,
+			"deadfall scattering": 1239,
+			"flower scattering": 574,
+			"grass density bake": 412,
+			"ground painting": 2037,
+			"heightmap build": 7699,
+			"mountain foot debris": 48,
+			"mountain walls": 295,
+			"outcrop placement": 45,
+			"player placement": 3,
+			"road mesh build": 182,
+			"sapling scattering": 255,
+			"scree scattering": 133,
+			"tree scattering": 348,
+			"understory scattering": 1157
+		}
+	},
+	"stations": [
+		{
+			"buffer_mem_mb": 276.969,
+			"cpu_render_ms": 5.806,
+			"draw_calls": 3858,
+			"frame_ms": 8.54,
+			"frames": 176,
+			"gpu_ms": 4.974,
+			"max_ms": 10.78,
+			"name": "spawn_ahead",
+			"nodes": 8540,
+			"objects": 4042,
+			"p50_ms": 8.416,
+			"p95_ms": 9.863,
+			"p99_ms": 10.628,
+			"physics_ms": 0.101,
+			"pos": [
+				192.0,
+				8.05,
+				767.0
+			],
+			"primitives": 65628470,
+			"process_ms": 10.66,
+			"static_mem_mb": 699.743,
+			"texture_mem_mb": 792.323,
+			"video_mem_mb": 1180.139
+		},
+		{
+			"buffer_mem_mb": 276.969,
+			"cpu_render_ms": 0.788,
+			"draw_calls": 99,
+			"frame_ms": 4.166,
+			"frames": 361,
+			"gpu_ms": 1.663,
+			"max_ms": 4.402,
+			"name": "spawn_ground",
+			"nodes": 8540,
+			"objects": 115,
+			"p50_ms": 4.165,
+			"p95_ms": 4.24,
+			"p99_ms": 4.277,
+			"physics_ms": 0.118,
+			"pos": [
+				192.0,
+				8.05,
+				767.0
+			],
+			"primitives": 63455278,
+			"process_ms": 4.179,
+			"static_mem_mb": 699.746,
+			"texture_mem_mb": 792.323,
+			"video_mem_mb": 1180.139
+		},
+		{
+			"buffer_mem_mb": 276.969,
+			"cpu_render_ms": 0.85,
+			"draw_calls": 192,
+			"frame_ms": 4.166,
+			"frames": 361,
+			"gpu_ms": 1.249,
+			"max_ms": 4.588,
+			"name": "spawn_sky",
+			"nodes": 8540,
+			"objects": 253,
+			"p50_ms": 4.166,
+			"p95_ms": 4.239,
+			"p99_ms": 4.28,
+			"physics_ms": 0.419,
+			"pos": [
+				192.0,
+				8.05,
+				767.0
+			],
+			"primitives": 63781177,
+			"process_ms": 4.179,
+			"static_mem_mb": 699.748,
+			"texture_mem_mb": 792.323,
+			"video_mem_mb": 1180.139
+		},
+		{
+			"buffer_mem_mb": 276.969,
+			"cpu_render_ms": 3.653,
+			"draw_calls": 2252,
+			"frame_ms": 5.815,
+			"frames": 258,
+			"gpu_ms": 4.782,
+			"max_ms": 7.571,
+			"name": "road_mid",
+			"nodes": 8540,
+			"objects": 2403,
+			"p50_ms": 5.666,
+			"p95_ms": 6.944,
+			"p99_ms": 7.288,
+			"physics_ms": 0.114,
+			"pos": [
+				156.0,
+				8.964,
+				288.0
+			],
+			"primitives": 66099083,
+			"process_ms": 7.528,
+			"static_mem_mb": 699.75,
+			"texture_mem_mb": 792.323,
+			"video_mem_mb": 1180.139
+		},
+		{
+			"buffer_mem_mb": 276.969,
+			"cpu_render_ms": 5.754,
+			"draw_calls": 3636,
+			"frame_ms": 8.51,
+			"frames": 177,
+			"gpu_ms": 4.18,
+			"max_ms": 10.479,
+			"name": "exit_look_back",
+			"nodes": 8540,
+			"objects": 3856,
+			"p50_ms": 8.376,
+			"p95_ms": 9.77,
+			"p99_ms": 10.212,
+			"physics_ms": 0.109,
+			"pos": [
+				62.898,
+				9.935,
+				-103.019
+			],
+			"primitives": 66463771,
+			"process_ms": 10.446,
+			"static_mem_mb": 699.752,
+			"texture_mem_mb": 792.323,
+			"video_mem_mb": 1180.139
+		},
+		{
+			"buffer_mem_mb": 276.969,
+			"cpu_render_ms": 5.962,
+			"draw_calls": 3801,
+			"frame_ms": 8.773,
+			"frames": 172,
+			"gpu_ms": 4.971,
+			"max_ms": 10.688,
+			"name": "forest_dense",
+			"nodes": 8540,
+			"objects": 4000,
+			"p50_ms": 8.628,
+			"p95_ms": 10.071,
+			"p99_ms": 10.344,
+			"physics_ms": 0.148,
+			"pos": [
+				130.0,
+				2.281,
+				-50.0
+			],
+			"primitives": 67185455,
+			"process_ms": 10.645,
+			"static_mem_mb": 699.754,
+			"texture_mem_mb": 792.323,
+			"video_mem_mb": 1180.139
+		},
+		{
+			"buffer_mem_mb": 276.969,
+			"cpu_render_ms": 4.844,
+			"draw_calls": 2909,
+			"frame_ms": 7.382,
+			"frames": 204,
+			"gpu_ms": 5.037,
+			"max_ms": 11.561,
+			"name": "road_open",
+			"nodes": 8540,
+			"objects": 3074,
+			"p50_ms": 7.097,
+			"p95_ms": 8.976,
+			"p99_ms": 9.607,
+			"physics_ms": 0.129,
+			"pos": [
+				218.5,
+				7.582,
+				581.5
+			],
+			"primitives": 66162947,
+			"process_ms": 8.97,
+			"static_mem_mb": 699.756,
+			"texture_mem_mb": 792.323,
+			"video_mem_mb": 1180.139
+		},
+		{
+			"buffer_mem_mb": 276.969,
+			"cpu_render_ms": 3.332,
+			"draw_calls": 1939,
+			"frame_ms": 6.089,
+			"frames": 247,
+			"gpu_ms": 5.466,
+			"max_ms": 8.779,
+			"name": "cliff_face",
+			"nodes": 8540,
+			"objects": 2086,
+			"p50_ms": 5.992,
+			"p95_ms": 6.856,
+			"p99_ms": 7.726,
+			"physics_ms": 0.113,
+			"pos": [
+				159.306,
+				1.926,
+				54.942
+			],
+			"primitives": 66591606,
+			"process_ms": 8.652,
+			"static_mem_mb": 699.758,
+			"texture_mem_mb": 792.323,
+			"video_mem_mb": 1180.139
+		}
+	],
+	"walk": {
+		"frame_ms": 7.839,
+		"frames": 2552,
+		"frames_over_16_7_ms": 0,
+		"gpu_ms": 4.895,
+		"hitches_over_2x_median": 0,
+		"max_ms": 12.563,
+		"metres": 200.045,
+		"p50_ms": 8.241,
+		"p95_ms": 9.946,
+		"p99_ms": 10.799,
+		"seconds": 20.005
+	}
+}

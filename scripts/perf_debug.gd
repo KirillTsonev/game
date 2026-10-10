@@ -29,6 +29,12 @@ extends Node
 ##   F7 = the scene's distance fog and the mountain rows' haze and mist off / on
 ##       (MountainWalls.toggle_fog; not saved). Not the clouds: those are F6.
 ##   F6 = the mountains' clouds off / on (MountainWalls.toggle_clouds; not saved).
+##   F4 = the displacement of the textures under trial off / on, to compare with them flat
+##       (WorldGenerator.toggle_trial_displacement; not saved). RockFace, RockyTrail and
+##       RockyTerrain now.
+##   F3 = terrain projection: steps through NEW (per pixel, blended) / OLD (Terrain3D's own
+##       shaders, projection on) / OFF (no projection), to compare them on one spot
+##       (WorldGenerator.cycle_projection_mode; not saved).
 ##   V = fly mode on / off (Player.debug_fly): no gravity, no collision. WASD moves where the
 ##       camera looks, Space up, Ctrl down, hold Shift for 6x speed. Switching it off drops the
 ##       player from where they are.
@@ -149,6 +155,14 @@ func _input(event: InputEvent) -> void:
 		print(MountainWalls.toggle_fog())
 	elif event.physical_keycode == KEY_F6:
 		print(MountainWalls.toggle_clouds())
+	elif event.physical_keycode == KEY_F4:
+		var gen := get_tree().current_scene.get_node_or_null("WorldGenerator")
+		if gen and gen.has_method("toggle_trial_displacement"):
+			print(gen.toggle_trial_displacement())
+	elif event.physical_keycode == KEY_F3:
+		var gen := get_tree().current_scene.get_node_or_null("WorldGenerator")
+		if gen and gen.has_method("cycle_projection_mode"):
+			print(gen.cycle_projection_mode())
 	elif event.physical_keycode == KEY_V:
 		var player := get_tree().current_scene.get_node_or_null("Player")
 		if player:

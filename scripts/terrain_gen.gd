@@ -118,13 +118,18 @@ func _ready() -> void:
 	var t_ready_stage := Time.get_ticks_msec()
 	var half_width := TerrainConfig.AREA_WIDTH * 0.5
 	var half_length := TerrainConfig.AREA_LENGTH * 0.5
-	var import_position := Vector3(-half_width, 0, -half_length)
+	# Snapped down to a region corner: Terrain3D 1.1 puts the image exactly at this position, where
+	# 1.0.2 snapped it itself (unsnapped, the 768 m wide import took four regions across and the
+	# whole map sat 64 m off).
+	var import_region := float(terrain.get_region_size())
+	var import_position := Vector3(floorf(-half_width / import_region) * import_region, 0, floorf(-half_length / import_region) * import_region)
 	# The hub's fixed strip of ground goes in with the generated map, south (+Z) of it: Terrain3D
 	# adds the extra regions toward +Z, so the generated map's corner stays where it was.
 	maps["hub_heights"] = TerrainHub.build_heights(maps.heights)
 	var images: Array[Image] = TerrainHub.join_images(maps, maps.hub_heights, terrain.get_region_size(), resolved_seed) # [HEIGHT, CONTROL, COLOR]
 	data.import_images(images, import_position, 0.0, 1.0)
 	data.calc_height_range(true)
+	_apply_displacement(terrain)
 
 	var height_range: Vector2 = data.get_height_range()
 	print("TERRAIN_GEN: imported. region_count=%d height_range=%s" % [data.get_region_count(), height_range])
@@ -204,6 +209,10 @@ func _ready() -> void:
 	# TerrainLandmarks.spawn_debug_overlay(get_parent(), heightmap_corner, maps)
 
 	await _loading_step(1)
+	# Here, a frame after _apply_displacement, so the shaders copied are the ones Terrain3D has
+	# generated for the displacement settings (the function checks that displacement is in them).
+	if PROJECTION_PER_PIXEL and DISPLACEMENT_TESSELLATION > 0:
+		_apply_projection_override(terrain)
 	t_ready_stage = Time.get_ticks_msec()
 	var boulder_rng := RandomNumberGenerator.new()
 	# Independent stream from the main pipeline's _derive_seeds -- purely
@@ -304,7 +313,8 @@ func _ready() -> void:
 	_log_stage("outcrop placement", t_ready_stage)
 	t_ready_stage = Time.get_ticks_msec()
 
-	TerrainRoad.build_road_mesh(get_parent(), maps.heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, maps.road_path, heightmap_corner, resolved_seed)
+	if not _road_displaced: # TRIAL: a displaced Road texture replaces the overlay (DISPLACEMENT_ROAD_SCALE)
+		TerrainRoad.build_road_mesh(get_parent(), maps.heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, maps.road_path, heightmap_corner, resolved_seed)
 	_log_stage("road mesh build", t_ready_stage)
 	t_ready_stage = Time.get_ticks_msec()
 
@@ -440,6 +450,273 @@ func _loading_step(index: int) -> void:
 ## Startup timings of this run, in ms: "stage_ms" (one entry per _log_stage call) plus the absolute
 ## timestamps since process start. Read by the benchmark (scripts/debug/perf_bench.gd).
 var startup_timings: Dictionary = {}
+
+## Displacement (Terrain3D 1.1), on by default since 2026-10-09 (Kirill: "turn on displacement by
+## default without needing to run separate scripts"). Set here at startup, not in main.tscn or
+## terrain_assets.tres. The values are the ones Kirill tried and liked. TUNING.
+const DISPLACEMENT_TESSELLATION := 3 ## 0 = off
+const DISPLACEMENT_SCALE := 2.0
+const DISPLACEMENT_TEXTURE_IDS: Array[int] = [2] ## RockFace: the mountain AND the walkable rock at cliffs
+const DISPLACEMENT_TEXTURE_SCALE := 1.0
+const DISPLACEMENT_TEXTURE_UV_SCALE := 0.15 ## about a 13 m tile; 0 = leave the textures' tile size as it is
+const DISPLACEMENT_MESH_SIZE := 64 ## Terrain3D.mesh_size while displacement is on (48 in the scene); 0 = leave it
+## TRIAL (2026-10-10): projection decided per PIXEL. Terrain3D decides per 1 m vertex whether a
+## texture is laid from above or from the side (steeper than 45 deg), from a slope measured toward
+## +X / +Z only; along every crease the four vertices round a pixel disagree, and the one that is
+## wrong for the pixel smears its texture into stripes (Kirill's screenshots: a striped band at
+## the foot and the lip of walls). With this on, the addon's own generated shaders -- the
+## terrain's and the displacement buffer's -- are patched at startup so all four use the slope of
+## the surface at the pixel (_apply_projection_override). false = the addon's shaders as they are.
+const PROJECTION_PER_PIXEL := true
+## Slopes (deg) between which the two ways of laying a texture are mixed: all from above below
+## the first, all from the side above the second. A wider range hides the change better and
+## costs two sets of texture reads on more of the ground.
+## 2026-10-10: were 35 / 55 (and 15 / 75 below). Kirill compared a 40-50 deg slope with no
+## projection: one coherent rock picture, against a patchwork here, where three differently laid
+## copies of the 13 m rock tile were mixed. Laid from above, a texture is stretched 2x at 60 deg
+## and 2.9x at 70; so slopes keep the one picture up to 50 deg and only near-walls change over.
+const PROJECTION_BLEND_FLAT := 50.0
+const PROJECTION_BLEND_STEEP := 70.0
+## The mix follows a smoothed slope, so it has no lines at the 1 m cells' edges; these two keep it
+## honest at a real crease, by the cell's exact slope (deg): flatter than the first, nothing is
+## laid from the side (no stripes on the floor beside a wall); steeper than the second, nothing
+## from above (none on the wall).
+const PROJECTION_NO_SIDE_BELOW := 35.0
+const PROJECTION_ALL_SIDE_FROM := 80.0
+## How quickly a steep face turns from "laid along X" to "laid along Z" as it turns its heading
+## (1 = a slow change, both drawn over most headings; larger = each face mostly one of them).
+const PROJECTION_SIDE_SHARPNESS := 4.0
+## TRIAL (2026-10-09, Kirill: "let's try displacement for the road texture"): the terrain's Road
+## texture (id 1, a 2 m tile) displaced by this scale -- 0.3 is about 10 cm from the stones' tops
+## to the joints. The offset puts the stones' TOPS on the collision surface (-0.5 = the whole
+## relief below it), so the player walks on them. While it is on, the RoadMesh overlay (the flat
+## parallax ribbon 3 cm above the ground, TerrainRoad.build_road_mesh) is NOT built -- the
+## displaced ground would come through it -- and the Road texture's detiling is switched off (it
+## turned every 1 m cell of the paving a different way; the overlay used to hide that). 0 = the
+## road as it was, with its overlay.
+const DISPLACEMENT_ROAD_SCALE := 1
+const DISPLACEMENT_ROAD_OFFSET := -0.5
+var _road_displaced := false
+## TRIAL (2026-10-09, Kirill asked to see it): the PineLitter texture (id 8, the needle litter
+## under the canopy; a tile of about 3 m) displaced by this scale -- 0.12 is about 3 cm up and
+## 3 cm down (1.0 would be 25 cm). Plants and debris stand at the undisplaced height. 0 = flat.
+const DISPLACEMENT_LITTER_SCALE := 1.2
+## TRIAL (2026-10-10, Kirill: "let's do aerial rocks texture next"): the AerialRocks texture
+## (id 4, the mossy rock ground at cliffs; a 1 m tile) displaced by this scale -- 1.0 is about
+## 8 cm up and 8 cm down. 0 = flat.
+const DISPLACEMENT_AERIAL_ROCKS_SCALE := 1.0
+## TRIAL (2026-10-10, Kirill: "let's do coast sand rocks next"): the CoastSandRocks texture
+## (id 3, where cliff meets grass; a 1 m tile) displaced by this scale -- 1.0 is about 8 cm up
+## and 8 cm down. 0 = flat.
+const DISPLACEMENT_COAST_SAND_ROCKS_SCALE := 1.0
+## TRIAL (2026-10-10, Kirill: "let's do rock face, rocky trail, and rocky terrain also"): the two
+## scree textures, RockyTrail (id 6) and RockyTerrain (id 7, scree with grass), both on a 1 m
+## tile -- 1.0 is about 8 cm up and 8 cm down. 0 = flat. (RockFace was displaced already:
+## DISPLACEMENT_TEXTURE_IDS above.)
+const DISPLACEMENT_ROCKY_TRAIL_SCALE := 3.0
+const DISPLACEMENT_ROCKY_TERRAIN_SCALE := 3.0
+## The Ground (soil) and Grass textures stay flat: both were tried the same day at about 8 cm
+## each way and removed again (Kirill: "grass is definitely off", then "remove soil too").
+
+## DEBUG (PerfDebug F4): the displacement of the textures under trial off / on in the running
+## game, to compare (not saved). Texture id -> the scale it has when on. RockFace, RockyTrail and
+## RockyTerrain since 2026-10-10 (before them, one at a time: the pine litter, the aerial rocks,
+## the coast sand rocks). To put other textures on the key, change this dictionary.
+const DISPLACEMENT_TOGGLE := {
+	2: DISPLACEMENT_TEXTURE_SCALE, # RockFace
+	6: DISPLACEMENT_ROCKY_TRAIL_SCALE,
+	7: DISPLACEMENT_ROCKY_TERRAIN_SCALE,
+}
+var _trial_displacement_on := true
+func toggle_trial_displacement() -> String:
+	var terrain: Terrain3D = get_parent().get_node_or_null("Terrain3D")
+	if terrain == null or terrain.get_assets() == null:
+		return "[WorldGenerator] displacement toggle: no Terrain3D"
+	_trial_displacement_on = not _trial_displacement_on
+	var names := PackedStringArray()
+	for id: int in DISPLACEMENT_TOGGLE:
+		var asset: Terrain3DTextureAsset = terrain.get_assets().get_texture_asset(id)
+		if asset:
+			asset.displacement_scale = float(DISPLACEMENT_TOGGLE[id]) if _trial_displacement_on else 0.0
+			names.append(asset.name)
+	return "[WorldGenerator] displacement of %s: %s" % [", ".join(names), "on" if _trial_displacement_on else "OFF"]
+
+## Applies the displacement settings above (the DISPLACEMENT_* constants are the only way to
+## change them: Kirill, 2026-10-09, "no more arguments, only variables"). A texture's relief is
+## 0.04 x its scale x its tile size (the buffer shader), times the global scale. Projection is
+## switched on with it: displaced faces are steep.
+func _apply_displacement(terrain: Terrain3D) -> void:
+	if DISPLACEMENT_TESSELLATION <= 0:
+		return
+	if DISPLACEMENT_MESH_SIZE > 0:
+		terrain.mesh_size = DISPLACEMENT_MESH_SIZE
+	terrain.tessellation_level = DISPLACEMENT_TESSELLATION
+	terrain.displacement_scale = DISPLACEMENT_SCALE
+	terrain.material.projection_enabled = true
+	for id in DISPLACEMENT_TEXTURE_IDS:
+		var texture_asset: Terrain3DTextureAsset = terrain.get_assets().get_texture_asset(id)
+		if texture_asset == null:
+			continue
+		texture_asset.displacement_scale = DISPLACEMENT_TEXTURE_SCALE
+		if DISPLACEMENT_TEXTURE_UV_SCALE > 0.0:
+			texture_asset.uv_scale = DISPLACEMENT_TEXTURE_UV_SCALE
+		print("TERRAIN_GEN: displacement -- texture %d (%s): uv_scale %.2f, displacement scale %.2f, relief about +-%.2f m" % [id, texture_asset.name, texture_asset.uv_scale, texture_asset.displacement_scale, minf(texture_asset.displacement_scale * 0.04 / (0.5 * texture_asset.uv_scale), 1.0) * DISPLACEMENT_SCALE])
+	var road_asset: Terrain3DTextureAsset = terrain.get_assets().get_texture_asset(TerrainRoad.ROAD_TEXTURE_ID)
+	if DISPLACEMENT_ROAD_SCALE > 0.0 and road_asset:
+		_road_displaced = true
+		road_asset.displacement_scale = DISPLACEMENT_ROAD_SCALE
+		road_asset.displacement_offset = DISPLACEMENT_ROAD_OFFSET
+		road_asset.detiling_rotation = 0.0
+		road_asset.detiling_shift = 0.0
+		print("TERRAIN_GEN: displacement -- road texture: scale %.2f, offset %.2f, about %.0f cm from the stones' tops to the joints at %.1f cm between vertices; no RoadMesh overlay, no detiling" % [DISPLACEMENT_ROAD_SCALE, DISPLACEMENT_ROAD_OFFSET, DISPLACEMENT_ROAD_SCALE * 0.04 / (0.5 * road_asset.uv_scale) * DISPLACEMENT_SCALE * 200.0, 100.0 / pow(2.0, DISPLACEMENT_TESSELLATION)])
+	var litter_asset: Terrain3DTextureAsset = terrain.get_assets().get_texture_asset(TerrainGroundPaint.PINE_LITTER_ID)
+	if DISPLACEMENT_LITTER_SCALE > 0.0 and litter_asset:
+		litter_asset.displacement_scale = DISPLACEMENT_LITTER_SCALE
+		print("TERRAIN_GEN: displacement -- pine litter texture: uv_scale %.2f, scale %.2f, relief about +-%.1f cm" % [litter_asset.uv_scale, DISPLACEMENT_LITTER_SCALE, DISPLACEMENT_LITTER_SCALE * 0.04 / (0.5 * litter_asset.uv_scale) * DISPLACEMENT_SCALE * 100.0])
+	var aerial_asset: Terrain3DTextureAsset = terrain.get_assets().get_texture_asset(TerrainGroundPaint.AERIAL_ROCKS_ID)
+	if DISPLACEMENT_AERIAL_ROCKS_SCALE > 0.0 and aerial_asset:
+		aerial_asset.displacement_scale = DISPLACEMENT_AERIAL_ROCKS_SCALE
+		print("TERRAIN_GEN: displacement -- aerial rocks texture: uv_scale %.2f, scale %.2f, relief about +-%.1f cm" % [aerial_asset.uv_scale, DISPLACEMENT_AERIAL_ROCKS_SCALE, DISPLACEMENT_AERIAL_ROCKS_SCALE * 0.04 / (0.5 * aerial_asset.uv_scale) * DISPLACEMENT_SCALE * 100.0])
+	var coast_asset: Terrain3DTextureAsset = terrain.get_assets().get_texture_asset(TerrainGroundPaint.COAST_SAND_ROCKS_ID)
+	if DISPLACEMENT_COAST_SAND_ROCKS_SCALE > 0.0 and coast_asset:
+		coast_asset.displacement_scale = DISPLACEMENT_COAST_SAND_ROCKS_SCALE
+		print("TERRAIN_GEN: displacement -- coast sand rocks texture: uv_scale %.2f, scale %.2f, relief about +-%.1f cm" % [coast_asset.uv_scale, DISPLACEMENT_COAST_SAND_ROCKS_SCALE, DISPLACEMENT_COAST_SAND_ROCKS_SCALE * 0.04 / (0.5 * coast_asset.uv_scale) * DISPLACEMENT_SCALE * 100.0])
+	for scree: Array in [[TerrainGroundPaint.ROCKY_TRAIL_ID, DISPLACEMENT_ROCKY_TRAIL_SCALE], [TerrainGroundPaint.ROCKY_TERRAIN_ID, DISPLACEMENT_ROCKY_TERRAIN_SCALE]]:
+		var scree_asset: Terrain3DTextureAsset = terrain.get_assets().get_texture_asset(int(scree[0]))
+		if float(scree[1]) > 0.0 and scree_asset:
+			scree_asset.displacement_scale = float(scree[1])
+			print("TERRAIN_GEN: displacement -- %s texture: uv_scale %.2f, scale %.2f, relief about +-%.1f cm" % [scree_asset.name, scree_asset.uv_scale, float(scree[1]), float(scree[1]) * 0.04 / (0.5 * scree_asset.uv_scale) * DISPLACEMENT_SCALE * 100.0])
+	print("TERRAIN_GEN: displacement -- Terrain3D %s, tessellation %d, displacement scale %.2f, mesh_size %d" % [terrain.version, terrain.tessellation_level, terrain.displacement_scale, terrain.mesh_size])
+
+## PROJECTION_PER_PIXEL: takes the two shaders Terrain3D has generated for the current settings
+## and installs changed copies as shader overrides. In the copies every corner vertex's texture
+## is laid by the slope of the surface AT THE PIXEL, not by the vertex's own, and in up to three
+## ways mixed by smooth weights: from above (all of it where flatter than PROJECTION_BLEND_FLAT),
+## from the side along X and from the side along Z (all side where steeper than
+## PROJECTION_BLEND_STEEP, shared between the two by the face's heading). Each
+## accumulate_material() call becomes three; one whose weight is about 0 is skipped.
+## The weights follow a SMOOTH slope (central differences at the four vertices, interpolated),
+## so they do not jump at the 1 m cells' edges; the cell's EXACT slope only limits them
+## (PROJECTION_NO_SIDE_BELOW / PROJECTION_ALL_SIDE_FROM), which leaves a line at real creases.
+## Tried first, the same day:
+##   - the same three ways mixed by the exact slope alone: no stripes, but the slope jumps at
+##     every cell edge and the lines showed on curved ground (Kirill: "still fairly visible");
+##   - the three ways mixed by a SMOOTH slope (central differences at the four vertices,
+##     interpolated): no lines, but beside a wall the flat floor counts as steep and the side
+##     projection smears into stripes on it (Kirill: "stretching is back");
+##   - a hard switch at 45 deg from the exact slope: no stripes, but a seam where the picture and
+##     the displaced relief both jumped (Kirill: "a sharp angle and seam/crease at the bends");
+##   - a blend of above / side, the side's direction still snapped to 45 deg steps of heading as
+##     in the addon, from the exact slope of each 1 m cell: the slope jumps at every cell edge and
+##     the direction at every step, so the ground showed as flat planes with hard edges (Kirill:
+##     "you can clearly see geometric planes with angles").
+## Patched from the addon's generated text, not from a copy kept in the project, so an addon
+## update is picked up; if the text no longer has the expected lines, nothing is overridden and
+## a warning says so. While an override is on, Terrain3D does not regenerate that shader when a
+## material feature is switched.
+func _apply_projection_override(terrain: Terrain3D) -> void:
+	var mat: Terrain3DMaterial = terrain.material
+	# The line where the calls begin (the generated text has no comments to anchor on).
+	var anchor := "material mat = material("
+	# One call: (1) up to its bilinear weight, (2) the corner, (3) up to the vertex normal, (4) the rest.
+	var calls := RegEx.create_from_string("accumulate_material\\(([^;]*?)weights\\[(\\d)\\]([^;]*?)index_normal\\[\\d\\]([^;]*?)\\);")
+	var three_calls := """if (px_wt > 0.004) {
+		accumulate_material($1weights[$2] * px_wt$3px_n_top$4);
+	}
+	if (px_wx > 0.004) {
+		accumulate_material($1weights[$2] * px_wx$3px_n_x$4);
+	}
+	if (px_wz > 0.004) {
+		accumulate_material($1weights[$2] * px_wz$3px_n_z$4);
+	}"""
+	# The exact slope of the surface at the pixel: that of the bilinear height patch of its cell.
+	# h[3], h[2], h[0], h[1] are the heights at the cell's corners (0,0), (1,0), (0,1), (1,1).
+	# OPEN / CLOSE: the terrain shader has h[1] only where it blends four vertices (near the camera).
+	# px_exact; and px_normal, the SMOOTH slope: central differences at the four corners (the
+	# eight heights fetched are their outer neighbours), interpolated.
+	var slope := """	vec3 px_normal = index_normal[3];
+	vec3 px_exact = index_normal[3];
+	OPEN
+		px_exact = normalize(vec3(-mix(h[2] - h[3], h[1] - h[0], weight.y), _vertex_spacing, -mix(h[0] - h[3], h[1] - h[2], weight.x)));
+		float px_xa = get_height(index_id, vec2(-1.0, 0.0));
+		float px_xb = get_height(index_id, vec2(-1.0, 1.0));
+		float px_za = get_height(index_id, vec2(0.0, -1.0));
+		float px_zb = get_height(index_id, vec2(1.0, -1.0));
+		float px_x2a = get_height(index_id, vec2(2.0, 0.0));
+		float px_x2b = get_height(index_id, vec2(2.0, 1.0));
+		float px_z2a = get_height(index_id, vec2(0.0, 2.0));
+		float px_z2b = get_height(index_id, vec2(1.0, 2.0));
+		float px_dx = mix(mix(h[2] - px_xa, px_x2a - h[3], weight.x), mix(h[1] - px_xb, px_x2b - h[0], weight.x), weight.y) * 0.5;
+		float px_dz = mix(mix(h[0] - px_za, px_z2a - h[3], weight.y), mix(h[1] - px_zb, px_z2b - h[2], weight.y), weight.x) * 0.5;
+		px_normal = normalize(vec3(-px_dx, _vertex_spacing, -px_dz));
+	CLOSE
+"""
+	# The three weights, and a normal for each that makes the addon's projection code lay the
+	# texture that way (it projects from the side where the normal's y is <= sqrt(0.5), along the
+	# normal's heading).
+	# The side's share follows the smooth slope, held inside what the exact slope allows: none
+	# where the surface itself is nearly flat, all where it is nearly upright.
+	var blend := """	float px_side = 1.0 - smoothstep(%f, %f, px_normal.y);
+	px_side = clamp(px_side, 1.0 - smoothstep(%f, %f, px_exact.y), 1.0 - smoothstep(%f, %f, px_exact.y));
+	vec2 px_a = pow(abs(px_normal.xz) + abs(px_exact.xz) * 0.02, vec2(%f));
+	px_a /= px_a.x + px_a.y + 0.000001;
+	float px_wt = 1.0 - px_side;
+	float px_wx = px_side * px_a.x;
+	float px_wz = px_side * px_a.y;
+	vec3 px_n_top = vec3(0.0, 1.0, 0.0);
+	vec3 px_n_x = vec3(px_normal.x < 0.0 ? -1.0 : 1.0, 0.0, 0.0);
+	vec3 px_n_z = vec3(0.0, 0.0, px_normal.z < 0.0 ? -1.0 : 1.0);
+""" % [cos(deg_to_rad(PROJECTION_BLEND_STEEP)), cos(deg_to_rad(PROJECTION_BLEND_FLAT)),
+		cos(deg_to_rad(PROJECTION_ALL_SIDE_FROM)), cos(deg_to_rad(PROJECTION_BLEND_STEEP)),
+		cos(deg_to_rad(PROJECTION_BLEND_FLAT)), cos(deg_to_rad(PROJECTION_NO_SIDE_BELOW)),
+		PROJECTION_SIDE_SHARPNESS]
+	var shaders: Array[Shader] = []
+	for rid: RID in [mat.get_shader_rid(), mat.get_buffer_shader_rid()]:
+		var code := RenderingServer.shader_get_code(rid) if rid.is_valid() else ""
+		if code.count(anchor) != 1 or calls.search_all(code).size() != 4 or not code.contains("i_normal.y <= 0.7071067811865475"):
+			push_warning("TERRAIN_GEN: projection per pixel NOT applied -- a generated Terrain3D shader does not look as expected (%d chars, anchor x%d, calls x%d)" % [code.length(), code.count(anchor), calls.search_all(code).size()])
+			return
+		if shaders.is_empty() and not code.contains("get_displacement("):
+			push_warning("TERRAIN_GEN: projection per pixel NOT applied -- the terrain shader has no displacement in it yet")
+			return
+		var define := slope.replace("OPEN", "if (bilerp) {" if code.contains("bool bilerp") else "{").replace("CLOSE", "}")
+		code = calls.sub(code, three_calls, true)
+		code = code.insert(code.rfind("\n", code.find(anchor)) + 1, define + blend)
+		var shader := Shader.new()
+		shader.code = code
+		shaders.append(shader)
+	_projection_shaders = shaders
+	mat.set_shader_override(shaders[0])
+	mat.set_shader_override_enabled(true)
+	mat.set_buffer_shader_override(shaders[1])
+	mat.set_buffer_shader_override_enabled(true)
+	print("TERRAIN_GEN: projection per pixel -- terrain shader and displacement buffer shader overridden (%d and %d chars), blended between %.0f and %.0f deg" % [shaders[0].code.length(), shaders[1].code.length(), PROJECTION_BLEND_FLAT, PROJECTION_BLEND_STEEP])
+
+## DEBUG (PerfDebug F3; not saved): steps through the three ways the terrain's textures can be
+## laid, to compare them on the same spot.
+var _projection_shaders: Array[Shader] = [] ## the two patched shaders, kept to switch back to
+var _projection_mode := 0
+const PROJECTION_MODE_NAMES: Array[String] = [
+	"NEW -- per pixel, three ways blended (the patched shaders)",
+	"OLD -- Terrain3D's own shaders, projection ON (per vertex)",
+	"OFF -- Terrain3D's own shaders, NO projection (everything laid from above)",
+]
+func cycle_projection_mode() -> String:
+	var terrain: Terrain3D = get_parent().get_node_or_null("Terrain3D")
+	if terrain == null or terrain.material == null:
+		return "[WorldGenerator] projection: no Terrain3D"
+	var mat: Terrain3DMaterial = terrain.material
+	_projection_mode = (_projection_mode + 1) % 3
+	if _projection_mode == 0 and _projection_shaders.is_empty():
+		_projection_mode = 1 # the patch was not applied at startup: nothing to switch back to
+	var patched := _projection_mode == 0
+	if patched:
+		mat.set_shader_override(_projection_shaders[0])
+		mat.set_buffer_shader_override(_projection_shaders[1])
+	mat.set_shader_override_enabled(patched)
+	mat.set_buffer_shader_override_enabled(patched)
+	mat.projection_enabled = _projection_mode != 2
+	return "[WorldGenerator] terrain projection: %s" % PROJECTION_MODE_NAMES[_projection_mode]
 
 ## Prints one _ready() stage's duration (measured from t_from) and keeps it in startup_timings.
 func _log_stage(stage: String, t_from: int) -> void:

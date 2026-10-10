@@ -29,6 +29,23 @@
 ##   - Vertex pair: open ground -> base Ground, overlay Grass, blend = grass weight.
 ##     Rocky ground -> base = its soil (Grass/Ground), overlay = its rock type, blend = rockiness.
 ##   - SPRAY: small-scale noise added to every blend value, strongest mid-transition.
+##
+## v3 (2026-10-10, Kirill: the textures "all look like they're following a grid"): measured on one
+## seed, 9.3 % of vertex-to-vertex edges showed 25 % or more of a texture the other side did not
+## hold. v2 mixed up to four textures by weight everywhere but a vertex holds two, so it chose
+## the pair by hard cuts (litter vs bare soil by the larger, the soil under a rock by a
+## threshold) and only dimmed the seams. Now the ground is PATCHES of one texture each:
+##   - the weights are as before (grass / litter / soil, rockiness, the rock type); each vertex
+##     takes the texture with the largest one, and a majority filter removes specks;
+##   - the border pass (_blend_band) gives every vertex within BORDER_FADE m of a border the pair
+##     (its texture, the one across), 50/50 at the border. Both sides hold the same pair, so the
+##     edge is drawn by the shares, the spray and the textures' relief.
+## Not possible this way: wide areas of a partial mix (say 30 % stones in grass), and a soft
+## edge where three textures meet. Tried first the same day and dropped: keeping the weights,
+## taking the two largest per vertex and fading a texture out where a neighbour does not hold it
+## -- three and four textures mix over most of the map, so the fades fought each other on 30 %
+## of the vertices and the count of visible steps did not fall.
+## What v2's list above says about pairs and seam fades no longer applies.
 ## These layers are ground only -- the cliff MESHES keep their own materials.
 class_name TerrainGroundPaint
 extends RefCounted
@@ -138,10 +155,6 @@ const LITTER_MIN := 0.02
 ## which puts the verge on the Ground/PineLitter ramp pair instead.
 const LITTER_ROAD_CLEAR := 1.0
 const LITTER_ROAD_REACH := 6.0
-const LITTER_SEAM_GRASS_MIN := 0.3 ## a Ground/Grass neighbour with at least this much grass counts as a seam
-const LITTER_SEAM_FADE := 0.5
-const PAIR_GROUND_GRASS := 1
-const PAIR_GROUND_LITTER := 2
 
 ## Terrain material: height-blend sharpness (0..1; Terrain3D default 0.5 = exponent ~36, very hard
 ## edges). Lower = softer, more gradual transitions.
@@ -181,16 +194,18 @@ const ROCKY_HI := 0.85
 ## features ~1/ROCK_WARP_FREQ m), so rect/circle iso-lines become irregular blobs.
 const ROCK_WARP_AMP := 3.5
 const ROCK_WARP_FREQ := 0.09
-## Where 8-neighbouring rock vertices use DIFFERENT rock textures, Terrain3D draws a hard 1 m
-## seam (overlay id swap) -- fade both sides' rock blend by this so the swap happens mostly in soil.
-const ROCK_TYPE_SEAM_FADE := 0.4
-## Rock vertices with fewer than ROCK_ISLAND_MIN rocky 8-neighbours render as lone squares --
-## their blend is multiplied by ROCK_ISLAND_FADE.
-const ROCK_ISLAND_MIN := 3
-const ROCK_ISLAND_FADE := 0.4
-const ROCK_NONE := 255 ## rock_of marker: not a rock vertex
-const ROCK_TYPE_MODE_RADIUS := 2 ## majority-filter window half-size (vertices = metres)
-const ROCK_TYPE_MODE_PASSES := 2
+## v3 (2026-10-10, see the header). ROAD_MARK: a road vertex in the per-vertex texture map.
+## BORDER_FADE: metres from a border over which the texture across it fades out (larger = softer,
+## wider edges). BORDER_RADIUS: how far the search for a border looks, in vertices (at least
+## BORDER_FADE + 0.5). THIRD_FADE: metres from a third texture within which the blend is held
+## back. DOM_MODE_RADIUS / DOM_MODE_PASSES: the majority filter's window half-size (vertices) and its
+## passes (larger / more = fewer small patches, rounder shapes).
+const ROAD_MARK := 255
+const BORDER_FADE := 2.5
+const BORDER_RADIUS := 3
+const THIRD_FADE := 2.0
+const DOM_MODE_RADIUS := 2
+const DOM_MODE_PASSES := 2
 const ROCKY_MIN := 0.03 ## below this a vertex is plain soil
 ## The band of scree across the mountain's foot line (see paint): m up the rock, m out into the
 ## valley, and how far noise moves each pixel's place in it. The mountain's colour fades out
@@ -281,21 +296,7 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 	var spray_n: PackedByteArray = (noise_images[4] as Image).get_data()
 	var warp_x: PackedByteArray = (noise_images[5] as Image).get_data()
 	var warp_z: PackedByteArray = (noise_images[6] as Image).get_data()
-	# Rock vertices are packed in a post-pass (seam/island fade): per vertex its rock id
-	# (ROCK_NONE = soil/road), soil base and pre-spray rockiness.
-	var rock_of := PackedByteArray()
-	rock_of.resize(n)
-	rock_of.fill(ROCK_NONE)
-	var soil_of := PackedByteArray()
-	soil_of.resize(n)
-	var rocky_of := PackedFloat32Array()
-	rocky_of.resize(n)
-	# Soil vertices: which pair (PAIR_*, 0 = other) and the pre-spray blend, for the litter seam pass.
-	var soil_pair := PackedByteArray()
-	soil_pair.resize(n)
-	var soil_b := PackedFloat32Array()
-	soil_b.resize(n)
-	var litter_ok := terrain.get_assets() != null and terrain.get_assets().get_texture(PINE_LITTER_ID) != null
+	var litter_ok := terrain.get_assets() != null and terrain.get_assets().get_texture_asset(PINE_LITTER_ID) != null
 	if not litter_ok:
 		print("GROUND_PAINT: texture id %d (PineLitter) not registered -- no litter painted; run fix_textures() in tools/assign_flat_textures.gd" % PINE_LITTER_ID)
 	var litter_full := 0
@@ -367,19 +368,12 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_paint_band.bind(ctx), bands, -1, true))
 	control.clear()
 	patch_shade.clear()
-	rock_of.clear()
-	soil_of.clear()
-	rocky_of.clear()
-	soil_pair.clear()
-	soil_b.clear()
+	# Per vertex, from the bands: its largest texture (ROAD_MARK = a road vertex, packed in control).
+	var dom := PackedByteArray()
 	for b: Dictionary in band_out:
 		control.append_array(b.control)
 		patch_shade.append_array(b.patch_shade)
-		rock_of.append_array(b.rock_of)
-		soil_of.append_array(b.soil_of)
-		rocky_of.append_array(b.rocky_of)
-		soil_pair.append_array(b.soil_pair)
-		soil_b.append_array(b.soil_b)
+		dom.append_array(b.dom)
 		counts.road += b.road
 		counts.soil += b.soil
 		counts.rock += b.rock
@@ -389,93 +383,7 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 		bare_sum += b.bare_sum
 		litter_full += b.litter_full
 		litter_ramp += b.litter_ramp
-
 	var t_main := Time.get_ticks_msec() - t0
-	# Rock-type majority filter (2026-09-29): the per-vertex "highest weight wins" type pick flips
-	# between neighbours all the time (first run: 9818 of ~18.9k rock vertices sat on a type seam),
-	# and every flip is a hard 1 m Terrain3D seam. Each rock vertex takes the most common type among
-	# the rock vertices within ROCK_TYPE_MODE_RADIUS, ROCK_TYPE_MODE_PASSES times -> coherent regions.
-	# Also in row bands on worker threads (it was most of the ~370 ms of post passes).
-	for _mp in ROCK_TYPE_MODE_PASSES:
-		var mode_out: Array = []
-		mode_out.resize(bands)
-		var mode_ctx := {"width": width, "length": length, "src": rock_of, "out": mode_out, "mutex": Mutex.new()}
-		WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_mode_band.bind(mode_ctx), bands, -1, true))
-		var filtered := PackedByteArray()
-		for b: PackedByteArray in mode_out:
-			filtered.append_array(b)
-		rock_of = filtered
-
-	# Post-pass (2026-09-29): pack rock vertices, fading hard rock-type seams and lone rock squares.
-	var seams := 0
-	var islands := 0
-	for pz in length:
-		for px in width:
-			var i := pz * width + px
-			var rid := rock_of[i]
-			if rid == ROCK_NONE:
-				continue
-			var rocky_nb := 0
-			var seam := false
-			for dz in range(-1, 2):
-				var zz := pz + dz
-				if zz < 0 or zz >= length:
-					continue
-				for dx in range(-1, 2):
-					var xx := px + dx
-					if (dx == 0 and dz == 0) or xx < 0 or xx >= width:
-						continue
-					var nr := rock_of[zz * width + xx]
-					if nr == ROCK_NONE:
-						continue
-					rocky_nb += 1
-					if nr != rid:
-						seam = true
-			var b := rocky_of[i]
-			if seam:
-				b *= ROCK_TYPE_SEAM_FADE
-				seams += 1
-			if rocky_nb < ROCK_ISLAND_MIN:
-				b *= ROCK_ISLAND_FADE
-				islands += 1
-			control[i] = TerrainHeightmap.pack_control_blend(soil_of[i], rid, _spray(b, spray_n[i] / 255.0 - 0.5))
-	# Litter seam pass: a litter-ramp vertex next to a grassy Ground/Grass vertex swaps overlays
-	# mid-blend (a blocky 1 m step) -- fade both toward Ground so the swap happens in soil.
-	var litter_seams := 0
-	var faded := PackedByteArray()
-	faded.resize(n)
-	for pz in length:
-		for px in width:
-			var i := pz * width + px
-			if soil_pair[i] != PAIR_GROUND_LITTER:
-				continue
-			var hit := false
-			for dz in range(-1, 2):
-				var zz := pz + dz
-				if zz < 0 or zz >= length:
-					continue
-				for dx in range(-1, 2):
-					var xx := px + dx
-					if xx < 0 or xx >= width:
-						continue
-					var k := zz * width + xx
-					if soil_pair[k] != PAIR_GROUND_GRASS or soil_b[k] < LITTER_SEAM_GRASS_MIN:
-						continue
-					hit = true
-					if faded[k] == 0:
-						faded[k] = 1
-						control[k] = TerrainHeightmap.pack_control_blend(GRASS_ID, GROUND_ID, _spray(soil_b[k] * LITTER_SEAM_FADE, spray_n[k] / 255.0 - 0.5))
-			if hit:
-				litter_seams += 1
-				control[i] = TerrainHeightmap.pack_control_blend(GRASS_ID, PINE_LITTER_ID, _spray(soil_b[i] * LITTER_SEAM_FADE, spray_n[i] / 255.0 - 0.5))
-	print("GROUND_PAINT v2: litter -- %.1f%% of vertices full litter, %.1f%% on the ramp, %d ramp vertices faded at bare-soil seams; bare soil ~%.1f%% of the map (rest of the open ground = Grass)" % [100.0 * litter_full / n, 100.0 * litter_ramp / n, litter_seams, 100.0 * bare_sum / n])
-	last_stats["seams"] = seams
-	last_stats["islands"] = islands
-	print("GROUND_PAINT v2: shape softening -- %d rock-type seam vertices faded, %d island vertices faded, warp +-%.1f m" % [seams, islands, ROCK_WARP_AMP])
-	var t_px := Time.get_ticks_msec() - t0
-	# Output checksum: must stay the same across a change that is only meant to be faster.
-	print("GROUND_PAINT v2: checksum control %d, patch shade %d; timing prep %d ms, main loop %d ms, post passes %d ms" % [hash(control), hash(patch_shade), t_prep - t_dist, t_main - t_prep, t_px - t_main])
-
 	# The mountain (2026-10-08): past its foot line (MountainWalls.raise_foot) the ground is the same
 	# bare rock face as the mountain apron beyond the map's edge. Across the line lies a band of
 	# scree, as at the foot of a real face: rock -> scree over MOUNTAIN_SCREE_IN m up the rock,
@@ -485,8 +393,10 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 	# column for the north end)]. Every pixel within reach of a line is painted by how far past
 	# the NEAREST line it lies (MountainWalls.mountain_depth), so the sides agree in the corners.
 	var mountain_feet: Array[PackedFloat32Array] = [maps.get("mountain_foot", PackedFloat32Array()), maps.get("mountain_foot_right", PackedFloat32Array()), maps.get("mountain_foot_north", PackedFloat32Array())]
-	var mountain_rock := _pack(ROCK_FACE_ID, ROCK_FACE_ID, 0.0)
+	# 2026-10-10 (v3): the band is three regions -- rock, scree, scree with grass -- whose edges
+	# the border pass below blends like any others.
 	var scree_noise := GrassScatter._noise(hash(mountain_feet[0]), 1.0 / 4.0)
+	var scree_half := MOUNTAIN_SCREE_IN * 0.5
 	for side in 3:
 		var mountain_foot := mountain_feet[side]
 		for along in mini(mountain_foot.size(), width if side == 2 else length):
@@ -498,16 +408,41 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 				var pz := along if side < 2 else inside
 				var t := -MountainWalls.mountain_depth(px, pz) + scree_noise.get_noise_2d(px, pz) * MOUNTAIN_SCREE_JITTER # < 0 on the rock
 				var i := pz * width + px
-				if t < -MOUNTAIN_SCREE_IN:
-					control[i] = mountain_rock
-				elif t < 0.0:
-					control[i] = _pack(ROCK_FACE_ID, ROCKY_TRAIL_ID, (t + MOUNTAIN_SCREE_IN) / MOUNTAIN_SCREE_IN)
+				if t < -scree_half:
+					dom[i] = ROCK_FACE_ID
+				elif t < scree_half:
+					dom[i] = ROCKY_TRAIL_ID
 				elif t < MOUNTAIN_SCREE_OUT:
-					# The outer third breaks up into patches before it stops.
-					var outer := (t - MOUNTAIN_SCREE_OUT * 0.66) / (MOUNTAIN_SCREE_OUT * 0.34)
-					if outer <= 0.0 or 0.5 + 0.5 * scree_noise.get_noise_2d(px * 2.7 + 91.0, pz * 2.7) > outer:
-						control[i] = _pack(ROCKY_TRAIL_ID, ROCKY_TERRAIN_ID, t / MOUNTAIN_SCREE_OUT)
+					dom[i] = ROCKY_TERRAIN_ID
 
+	# Majority filter: each vertex takes the most common texture within DOM_MODE_RADIUS
+	# of it, DOM_MODE_PASSES times. Removes specks of a few vertices and rounds corners.
+	for _mp in DOM_MODE_PASSES:
+		var mode_out: Array = []
+		mode_out.resize(bands)
+		var mode_ctx := {"width": width, "length": length, "src": dom, "out": mode_out, "mutex": Mutex.new()}
+		WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_mode_band.bind(mode_ctx), bands, -1, true))
+		var filtered := PackedByteArray()
+		for b: PackedByteArray in mode_out:
+			filtered.append_array(b)
+		dom = filtered
+	# Border pass: every vertex near a border gets the pair (its texture, the one across).
+	var blend_out: Array = []
+	blend_out.resize(bands)
+	var blend_ctx := {"width": width, "length": length, "dom": dom, "spray_n": spray_n, "road_control": control, "out": blend_out, "mutex": Mutex.new()}
+	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_blend_band.bind(blend_ctx), bands, -1, true))
+	var blended := PackedInt32Array()
+	var n_border := 0
+	var n_third := 0
+	for b: Dictionary in blend_out:
+		blended.append_array(b.control)
+		n_border += b.border
+		n_third += b.third
+	control = blended
+	print("GROUND_PAINT v3: litter weight full on %.1f%% of vertices, partial on %.1f%%; mean bare-soil weight %.2f; %.1f%% of vertices within %d m of a border, %.1f%% of them near a third texture (blend held back there)" % [100.0 * litter_full / n, 100.0 * litter_ramp / n, bare_sum / n, 100.0 * n_border / n, BORDER_RADIUS, 100.0 * n_third / maxf(1.0, n_border)])
+	var t_px := Time.get_ticks_msec() - t0
+	# Output checksum: must stay the same across a change that is only meant to be faster.
+	print("GROUND_PAINT v3: checksum control %d, patch shade %d; timing prep %d ms, main loop %d ms, mountain + filter + borders %d ms" % [hash(control), hash(patch_shade), t_prep - t_dist, t_main - t_prep, t_px - t_main])
 	# -- Write into each region's control image, then push to the GPU --
 	var data: Terrain3DData = terrain.get_data()
 	var rs := terrain.get_region_size()
@@ -563,7 +498,7 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 	data.update_maps(Terrain3DRegion.TYPE_CONTROL, true, false)
 	if regions_shaded > 0:
 		data.update_maps(Terrain3DRegion.TYPE_COLOR, true, false)
-	var grass_asset: Terrain3DTextureAsset = terrain.get_assets().get_texture(GRASS_ID) if terrain.get_assets() else null
+	var grass_asset: Terrain3DTextureAsset = terrain.get_assets().get_texture_asset(GRASS_ID) if terrain.get_assets() else null
 	if grass_asset:
 		grass_asset.set_albedo_color(GRASS_TINT)
 	print("GROUND_PAINT v2: grounding -- patch shade %.2f written to %d region colour map(s); Grass tint %s" % [PATCH_SHADE, regions_shaded, GRASS_TINT if grass_asset else "NOT SET"])
@@ -632,17 +567,10 @@ static func _paint_band(band: int, ctx: Dictionary) -> void:
 	var patch_shade := PackedByteArray()
 	patch_shade.resize(bn)
 	patch_shade.fill(255)
-	var rock_of := PackedByteArray()
-	rock_of.resize(bn)
-	rock_of.fill(ROCK_NONE)
-	var soil_of := PackedByteArray()
-	soil_of.resize(bn)
-	var rocky_of := PackedFloat32Array()
-	rocky_of.resize(bn)
-	var soil_pair := PackedByteArray()
-	soil_pair.resize(bn)
-	var soil_b := PackedFloat32Array()
-	soil_b.resize(bn)
+	# Per vertex: the texture that is largest there (ROAD_MARK on a road vertex, whose control is
+	# packed here).
+	var dom := PackedByteArray()
+	dom.resize(bn)
 	var n_road := 0
 	var n_soil := 0
 	var n_rock := 0
@@ -672,6 +600,7 @@ static func _paint_band(band: int, ctx: Dictionary) -> void:
 				# Road vertices keep their Road blend; only what the road fades INTO at its edge
 				# changes: Ground on a worn verge, Grass elsewhere (TerrainRoad paints Ground).
 				control[li] = _pack(GROUND_ID if verge >= 0.5 else GRASS_ID, ROAD_ID, ((old >> 14) & 0xFF) / 255.0)
+				dom[li] = ROAD_MARK
 				n_road += 1
 				continue
 
@@ -699,7 +628,6 @@ static func _paint_band(band: int, ctx: Dictionary) -> void:
 				g /= 6.0
 			grass_sum += g
 			patch_shade[li] = int(round(255.0 * (1.0 - PATCH_SHADE * g - GAP_SHADE * (1.0 - g) * smoothstep(0.05, 0.25, cov))))
-			var spray := spray_n[i] / 255.0 - 0.5
 
 			# Rockiness.
 			var xm := maxi(px - 1, 0)
@@ -760,20 +688,28 @@ static func _paint_band(band: int, ctx: Dictionary) -> void:
 			bare = maxf(bare, maxf(1.0 - smoothstep(BARE_NY_FULL, BARE_NY_NONE, ny), 1.0 - smoothstep(BARE_CLIFF_CLEAR, BARE_CLIFF_REACH, cliff_d[j])))
 
 			if rocky < ROCKY_MIN:
+				rocky = 0.0
+			# The vertex takes the texture with the largest weight (v3, see the header).
+			var lw := clampf(lit / LITTER_FULL, 0.0, 1.0)
+			var w_litter := lw * (1.0 - g * lw) # grass patches show through full litter
+			var w_ground := bare * (1.0 - lw)
+			var w_grass := maxf(1.0 - w_litter - w_ground, 0.0)
+			bare_sum += w_ground
+			if lw >= 1.0:
+				litter_full += 1
+			elif lit > LITTER_MIN:
+				litter_ramp += 1
+			var d_id := GRASS_ID
+			var d_w := w_grass
+			if w_litter > d_w:
+				d_w = w_litter
+				d_id = PINE_LITTER_ID
+			if w_ground > d_w:
+				d_w = w_ground
+				d_id = GROUND_ID
+			if rocky <= d_w * (1.0 - rocky):
 				n_soil += 1
-				if lit >= LITTER_FULL:
-					litter_full += 1
-					control[li] = _pack(PINE_LITTER_ID, GRASS_ID, _spray(g, spray))
-				elif lit > bare and lit > LITTER_MIN:
-					litter_ramp += 1
-					soil_pair[li] = PAIR_GROUND_LITTER
-					soil_b[li] = lit / LITTER_FULL
-					control[li] = _pack(GRASS_ID, PINE_LITTER_ID, _spray(soil_b[li], spray))
-				else:
-					bare_sum += bare
-					soil_pair[li] = PAIR_GROUND_GRASS
-					soil_b[li] = bare
-					control[li] = _pack(GRASS_ID, GROUND_ID, _spray(bare, spray))
+				dom[li] = d_id
 				continue
 
 			# Rock type: correlated weights + regional noise, highest wins.
@@ -802,14 +738,10 @@ static func _paint_band(band: int, ctx: Dictionary) -> void:
 				rock_id = COAST_SAND_ROCKS_ID
 			type_counts[rock_id] += 1
 			n_rock += 1
-			var soil := PINE_LITTER_ID if lit >= 0.5 else (GROUND_ID if bare >= 0.5 else GRASS_ID)
-			rock_of[li] = rock_id
-			soil_of[li] = soil
-			rocky_of[li] = rocky
+			dom[li] = rock_id
 
 	var result := {
-		"control": control, "patch_shade": patch_shade, "rock_of": rock_of, "soil_of": soil_of,
-		"rocky_of": rocky_of, "soil_pair": soil_pair, "soil_b": soil_b,
+		"control": control, "patch_shade": patch_shade, "dom": dom,
 		"road": n_road, "soil": n_soil, "rock": n_rock, "type_counts": type_counts,
 		"grass_sum": grass_sum, "bare_sum": bare_sum, "litter_full": litter_full, "litter_ramp": litter_ramp,
 	}
@@ -818,9 +750,9 @@ static func _paint_band(band: int, ctx: Dictionary) -> void:
 	(ctx.out as Array)[band] = result
 	mutex.unlock()
 
-## One band of the rock-type majority filter (see paint()): each rock vertex takes the most common
-## type among the rock vertices within ROCK_TYPE_MODE_RADIUS, read from the unfiltered `src`.
-## Worker thread, same rules as _paint_band; the output is the band's slice of the filtered map.
+## One band of the majority filter (see paint()): each vertex takes the most common texture within
+## DOM_MODE_RADIUS of it, read from the unfiltered `src`; its own wins a tie. Road vertices
+## are left alone and not counted. Worker thread, same rules as _paint_band.
 static func _mode_band(band: int, ctx: Dictionary) -> void:
 	var width: int = ctx.width
 	var length: int = ctx.length
@@ -828,35 +760,136 @@ static func _mode_band(band: int, ctx: Dictionary) -> void:
 	var z0 := band * PAINT_BAND_ROWS
 	var z1 := mini(z0 + PAINT_BAND_ROWS, length)
 	var out := src.slice(z0 * width, z1 * width)
+	var tally := PackedInt32Array()
+	tally.resize(32)
 	for pz in range(z0, z1):
+		var za := maxi(pz - DOM_MODE_RADIUS, 0)
+		var zb := mini(pz + DOM_MODE_RADIUS, length - 1)
 		for px in width:
-			var rid := src[pz * width + px]
-			if rid == ROCK_NONE:
+			var own := src[pz * width + px]
+			if own == ROAD_MARK:
 				continue
-			var tally := {}
-			for dz in range(-ROCK_TYPE_MODE_RADIUS, ROCK_TYPE_MODE_RADIUS + 1):
-				var zz := pz + dz
-				if zz < 0 or zz >= length:
-					continue
-				for dx in range(-ROCK_TYPE_MODE_RADIUS, ROCK_TYPE_MODE_RADIUS + 1):
-					var xx := px + dx
-					if xx < 0 or xx >= width:
+			var xa := maxi(px - DOM_MODE_RADIUS, 0)
+			var xb := mini(px + DOM_MODE_RADIUS, width - 1)
+			var same := 0
+			var cells := 0
+			for zz in range(za, zb + 1):
+				for xx in range(xa, xb + 1):
+					var v := src[zz * width + xx]
+					if v == ROAD_MARK:
 						continue
-					var nr := src[zz * width + xx]
-					if nr != ROCK_NONE:
-						tally[nr] = int(tally.get(nr, 0)) + 1
-			var best_id := rid
-			var best_n := int(tally.get(rid, 0))
-			for k in tally:
-				if int(tally[k]) > best_n:
-					best_n = int(tally[k])
-					best_id = k
+					cells += 1
+					if v == own:
+						same += 1
+			if same * 2 > cells:
+				continue # already the majority
+			tally.fill(0)
+			var best_id := own
+			var best_n := same
+			for zz in range(za, zb + 1):
+				for xx in range(xa, xb + 1):
+					var v := src[zz * width + xx]
+					if v == ROAD_MARK:
+						continue
+					tally[v] += 1
+					if tally[v] > best_n:
+						best_n = tally[v]
+						best_id = v
 			out[(pz - z0) * width + px] = best_id
 	var mutex: Mutex = ctx.mutex
 	mutex.lock()
 	(ctx.out as Array)[band] = out
 	mutex.unlock()
 
+## The border pass (see paint() and the header): packs every vertex. It looks for the nearest
+## vertex of another texture within BORDER_RADIUS; the pair is (own, that one), the other's share
+## 0.5 at the border and 0 from BORDER_FADE m inside. Both sides of a border so hold the same two
+## textures at nearly the same shares, and the edge is drawn by the shares and the textures'
+## relief, not by the vertex grid. Near a THIRD texture the share is held back (THIRD_FADE): a
+## vertex holds two textures only, so around a three-way corner the edges stay hard.
+static func _blend_band(band: int, ctx: Dictionary) -> void:
+	var width: int = ctx.width
+	var length: int = ctx.length
+	var dom: PackedByteArray = ctx.dom
+	var spray_n: PackedByteArray = ctx.spray_n
+	var road_control: PackedInt32Array = ctx.road_control
+	var z0 := band * PAINT_BAND_ROWS
+	var z1 := mini(z0 + PAINT_BAND_ROWS, length)
+	var control := PackedInt32Array()
+	control.resize((z1 - z0) * width)
+	var border := 0
+	var third := 0
+	var far := (BORDER_RADIUS + 1) * (BORDER_RADIUS + 1) * 2
+	for pz in range(z0, z1):
+		var za := maxi(pz - BORDER_RADIUS, 0)
+		var zb := mini(pz + BORDER_RADIUS, length - 1)
+		for px in width:
+			var i := pz * width + px
+			var li := (pz - z0) * width + px
+			var a := dom[i]
+			if a == ROAD_MARK:
+				control[li] = road_control[i]
+				continue
+			# The two nearest other textures: e1 at d1 (squared), e2 at d2.
+			var e1 := -1
+			var e2 := -1
+			var d1 := far
+			var d2 := far
+			var xa := maxi(px - BORDER_RADIUS, 0)
+			var xb := mini(px + BORDER_RADIUS, width - 1)
+			for zz in range(za, zb + 1):
+				var row := zz * width
+				var dz2 := (zz - pz) * (zz - pz)
+				for xx in range(xa, xb + 1):
+					var u := dom[row + xx]
+					if u == a or u == ROAD_MARK:
+						continue
+					var d := dz2 + (xx - px) * (xx - px)
+					if u == e1:
+						if d < d1:
+							d1 = d
+					elif u == e2:
+						if d < d2:
+							d2 = d
+							if d2 < d1:
+								var sw_e := e1
+								var sw_d := d1
+								e1 = e2
+								d1 = d2
+								e2 = sw_e
+								d2 = sw_d
+					elif d < d1:
+						e2 = e1
+						d2 = d1
+						e1 = u
+						d1 = d
+					elif d < d2:
+						e2 = u
+						d2 = d
+			if e1 < 0:
+				control[li] = _pack(a, a, 0.0)
+				continue
+			border += 1
+			# The border runs half a metre short of the nearest other vertex.
+			var share := 0.5 * (1.0 - smoothstep(0.0, BORDER_FADE, sqrt(float(d1)) - 0.5))
+			if e2 >= 0:
+				var hold := smoothstep(0.0, THIRD_FADE, sqrt(float(d2)) - 0.5)
+				if hold < 1.0:
+					third += 1
+					share *= hold
+			# Spray moves the share of the texture with the LOWER id: the two sides of a border
+			# hold the same pair the other way round and so move the same way.
+			var s := spray_n[i] / 255.0 - 0.5
+			if share > 0.0:
+				if a < e1:
+					share = 1.0 - _spray(1.0 - share, s)
+				else:
+					share = _spray(share, s)
+			control[li] = _pack(a, e1, share)
+	var mutex: Mutex = ctx.mutex
+	mutex.lock()
+	(ctx.out as Array)[band] = {"control": control, "border": border, "third": third}
+	mutex.unlock()
 static func _new_field(n: int, cap: float) -> PackedFloat32Array:
 	var f := PackedFloat32Array()
 	f.resize(n)
