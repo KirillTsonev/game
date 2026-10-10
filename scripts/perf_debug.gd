@@ -32,9 +32,10 @@ extends Node
 ##   F4 = the displacement of the textures under trial off / on, to compare with them flat
 ##       (WorldGenerator.toggle_trial_displacement; not saved). RockFace, RockyTrail and
 ##       RockyTerrain now.
-##   F3 = terrain projection: steps through NEW (per pixel, blended) / OLD (Terrain3D's own
-##       shaders, projection on) / OFF (no projection), to compare them on one spot
-##       (WorldGenerator.cycle_projection_mode; not saved).
+##   F2 = texture detiling: the new values (WorldGenerator.DETILING_*) / the old "any angle"
+##       (WorldGenerator.toggle_detiling; not saved).
+##   F3 = the rock's detail layer off / on, to compare (WorldGenerator.toggle_rock_detail; not
+##       saved).
 ##   V = fly mode on / off (Player.debug_fly): no gravity, no collision. WASD moves where the
 ##       camera looks, Space up, Ctrl down, hold Shift for 6x speed. Switching it off drops the
 ##       player from where they are.
@@ -159,10 +160,14 @@ func _input(event: InputEvent) -> void:
 		var gen := get_tree().current_scene.get_node_or_null("WorldGenerator")
 		if gen and gen.has_method("toggle_trial_displacement"):
 			print(gen.toggle_trial_displacement())
+	elif event.physical_keycode == KEY_F2:
+		var gen := get_tree().current_scene.get_node_or_null("WorldGenerator")
+		if gen and gen.has_method("toggle_detiling"):
+			print(gen.toggle_detiling())
 	elif event.physical_keycode == KEY_F3:
 		var gen := get_tree().current_scene.get_node_or_null("WorldGenerator")
-		if gen and gen.has_method("cycle_projection_mode"):
-			print(gen.cycle_projection_mode())
+		if gen and gen.has_method("toggle_rock_detail"):
+			print(gen.toggle_rock_detail())
 	elif event.physical_keycode == KEY_V:
 		var player := get_tree().current_scene.get_node_or_null("Player")
 		if player:

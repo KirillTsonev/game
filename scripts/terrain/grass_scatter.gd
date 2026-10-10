@@ -39,6 +39,28 @@ const SCREE_BAND_STEP := 0.75 ## m between stamped points along the foot
 ## was 3.0 + 0.2 from the raw path only -> grass on the road on bends and at wide paint wobbles.
 const ROAD_CLEAR_MARGIN := 0.5
 const ROAD_FADE := 1.8 ## m over which grass recovers beyond that
+## 2026-10-10 (Kirill: "a band of empty space clearing the grass blades to the sides of the road
+## ... it looks like it's been mowed on purpose"): the two constants above gave every stretch of
+## road the same bare band, 0.5 m past the WORST-CASE painted edge and 1.8 m more to full grass.
+## The blades now go by the distance to the road's PAINTED vertices (those showing at least
+## ROAD_PAINT_MIN_BLEND of the road texture) and by the verge's wear, a smooth noise:
+##   reach = VERGE_REACH_MAX x smoothstep(VERGE_NOISE_LO, VERGE_NOISE_HI, noise) -- how far from
+##           the stones the ground is worn to soil here; 0 on most of the road's length;
+##   soil  = 1 within half of reach of the stones, 0 from reach (GrassScatter.verge_soil, which
+##           the ground paint reads for the soil texture and for what the road's edge fades into);
+##   grass = none within reach + VERGE_GRASS_GAP, full VERGE_GRASS_FADE further.
+## So blades stand up to the stones where the verge is not worn, and the worn patches are
+## lens-shaped, widest where the noise peaks. ROAD_CLEAR_MARGIN / ROAD_FADE and the distance to
+## the centrelines are still computed, for debug_road_check only. Not handled: the RoadMesh
+## overlay (built only while the road texture is not displaced) follows a smoothed centreline and
+## can leave the paint on bends.
+const ROAD_PAINT_MIN_BLEND := 0.3
+const VERGE_NOISE_FREQ := 1.0 / 9.0 ## ~9 m features along the road
+const VERGE_NOISE_LO := 0.42 ## 2026-10-10: were 0.5 / 0.72 -- Kirill: "they blend better but there's much fewer of them"
+const VERGE_NOISE_HI := 0.62
+const VERGE_REACH_MAX := 5.0 ## was 3: patches under about 4 m across cannot be round on the 1 m vertex grid
+const VERGE_GRASS_GAP := 0.3
+const VERGE_GRASS_FADE := 0.8
 ## R is COVERAGE (2026-09-25 "middle ground"): the fraction of ground inside dense grass patches,
 ## not a per-blade thinning factor. The patches themselves (2-6 m, soft edges) + gap tussocks are
 ## made on the GPU in grass_cull.glsl; this only sets how much of each area they cover. Targets
@@ -112,6 +134,7 @@ static var color_texture: ImageTexture ## maps.color (Terrain3D colour-variation
 static var patch_image: Image ## blade patch noise, R8, PATCH_RES px/m (see PATCH_* above)
 static var patch_texture: ImageTexture
 static var worn := PackedByteArray() ## worn-soil weight per map pixel, 0..255 (see WORN_*)
+static var verge_soil := PackedByteArray() ## worn road verge per map pixel, 0..255 (see VERGE_*)
 static var map_corner := Vector3.ZERO ## world position of pixel (0, 0) -- WorldGenerator's heightmap_corner
 static var map_size := Vector2i.ZERO
 static var height_min := 0.0
@@ -183,6 +206,21 @@ static func bake(_parent_node: Node, maps: Dictionary, corner: Vector3, rng: Ran
 			last_stamp = p
 			_stamp_circle(road_d, width, length, p.x, p.y, 0.0, road_cap)
 			road_stamps += 1
+	# Distance to the road's painted vertices (see VERGE_*), from the control map as the road left it.
+	var paint_cap := VERGE_REACH_MAX + VERGE_GRASS_GAP + VERGE_GRASS_FADE + 1.0
+	var paint_d := PackedFloat32Array()
+	paint_d.resize(n)
+	paint_d.fill(paint_cap)
+	var road_control: PackedByteArray = (maps.control as Image).get_data() # FORMAT_RF: uint32 bits
+	var min_blend := int(ROAD_PAINT_MIN_BLEND * 255.0)
+	var painted := 0
+	for pz in length:
+		for px in width:
+			var c := road_control.decode_u32((pz * width + px) * 4)
+			# base = bits 27-31, overlay = 22-26, blend = 14-21
+			if ((c >> 27) & 0x1F) == TerrainRoad.ROAD_TEXTURE_ID or (((c >> 22) & 0x1F) == TerrainRoad.ROAD_TEXTURE_ID and ((c >> 14) & 0xFF) >= min_blend):
+				_stamp_circle(paint_d, width, length, px, pz, 0.0, paint_cap)
+				painted += 1
 	if not road_path.is_empty():
 		var p0: Vector2 = road_path[0]
 		if p0.x < -1.0 or p0.x > float(width) or p0.y < -1.0 or p0.y > float(length):
@@ -211,15 +249,17 @@ static func bake(_parent_node: Node, maps: Dictionary, corner: Vector3, rng: Ran
 	pn.frequency = 1.0 / (PATCH_SCALE * PATCH_RES)
 	var worn_a_noise := _noise(rng.randi(), WORN_REGION_FREQ)
 	var worn_b_noise := _noise(rng.randi(), WORN_DETAIL_FREQ)
+	var verge_noise := _noise(rng.randi(), VERGE_NOISE_FREQ) # drawn last: the seeds above stay as they were
 	var noise_images := noise_images_parallel([
 		[patch_noise, width, length], [clump_noise, width, length], [dry_noise, width, length],
 		[worn_a_noise, width, length], [worn_b_noise, width, length],
-		[pn, width * PATCH_RES, length * PATCH_RES]])
+		[pn, width * PATCH_RES, length * PATCH_RES], [verge_noise, width, length]])
 	var patch_n: PackedByteArray = (noise_images[0] as Image).get_data()
 	var clump_n: PackedByteArray = (noise_images[1] as Image).get_data()
 	var dry_n: PackedByteArray = (noise_images[2] as Image).get_data()
 	var worn_a: PackedByteArray = (noise_images[3] as Image).get_data()
 	var worn_b: PackedByteArray = (noise_images[4] as Image).get_data()
+	var verge_n: PackedByteArray = (noise_images[6] as Image).get_data()
 	var t_fields := Time.get_ticks_msec() - t0
 
 	# -- Per-pixel combine, in row bands on worker threads (see _bake_band) --
@@ -230,12 +270,14 @@ static func bake(_parent_node: Node, maps: Dictionary, corner: Vector3, rng: Ran
 		"width": width, "length": length, "heights": heights, "rock_d": rock_d, "road_d": road_d,
 		"canopy_grid": canopy_grid, "gw": gw, "gl": gl,
 		"patch_n": patch_n, "clump_n": clump_n, "dry_n": dry_n, "worn_a": worn_a, "worn_b": worn_b,
+		"paint_d": paint_d, "verge_n": verge_n,
 		"height_min": height_min, "hspan": hspan, "road_lo": road_clear_distance(),
 		"out": band_out, "mutex": Mutex.new(),
 	}
 	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_bake_band.bind(ctx), bands, -1, true))
 	var bytes := PackedByteArray()
 	worn = PackedByteArray()
+	verge_soil = PackedByteArray()
 	var dens_sum := 0.0
 	var covered := 0
 	var full := 0
@@ -245,6 +287,7 @@ static func bake(_parent_node: Node, maps: Dictionary, corner: Vector3, rng: Ran
 	for b: Dictionary in band_out:
 		bytes.append_array(b.bytes)
 		worn.append_array(b.worn)
+		verge_soil.append_array(b.verge)
 		curv_samples.append_array(b.curv_samples)
 		dens_sum += b.dens_sum
 		covered += b.covered
@@ -258,7 +301,7 @@ static func bake(_parent_node: Node, maps: Dictionary, corner: Vector3, rng: Ran
 	color_texture = ImageTexture.create_from_image(maps.color)
 	patch_image = noise_images[5]
 	patch_texture = ImageTexture.create_from_image(patch_image)
-	_dbg = {"heights": heights, "rock_d": rock_d, "road_d": road_d, "canopy": canopy_grid, "gw": gw, "gl": gl, "patch": patch_n, "clump": clump_n, "dry": dry_n}
+	_dbg = {"heights": heights, "rock_d": rock_d, "road_d": road_d, "paint_d": paint_d, "verge_n": verge_n, "canopy": canopy_grid, "gw": gw, "gl": gl, "patch": patch_n, "clump": clump_n, "dry": dry_n}
 
 	curv_samples.sort()
 	var cs := curv_samples.size()
@@ -270,7 +313,7 @@ static func bake(_parent_node: Node, maps: Dictionary, corner: Vector3, rng: Ran
 	print("GRASS: rock sources %d boulder/erratic + %d outcrop circle(s), %d scree-band point(s), %d cliff rect(s); road %d stamp(s) from %d path pts; curvature p10 %.3f p90 %.3f (CURV_FULL %.3f)" % [
 		boulder_count, outcrop_count, scree_points, rects.size(), road_stamps, road_path.size(), c10, c90, CURV_FULL])
 	# Output checksum: must not change across a speed-only change.
-	print("GRASS: checksum density %d, worn %d, patch %d" % [hash(bytes), hash(worn), hash(patch_image.get_data())])
+	print("GRASS: checksum density %d, worn %d, patch %d, verge %d (%d painted road vertices)" % [hash(bytes), hash(worn), hash(patch_image.get_data()), hash(verge_soil), painted])
 	print("GRASS: timing -- rock field %d ms, all fields %d ms, total %d ms" % [t_rock, t_fields, Time.get_ticks_msec() - t0])
 
 const BAKE_BAND_ROWS := 16 ## rows per worker-thread task in bake()
@@ -284,7 +327,6 @@ static func _bake_band(band: int, ctx: Dictionary) -> void:
 	var length: int = ctx.length
 	var heights: PackedFloat32Array = ctx.heights
 	var rock_d: PackedFloat32Array = ctx.rock_d
-	var road_d: PackedFloat32Array = ctx.road_d
 	var canopy_grid: PackedFloat32Array = ctx.canopy_grid
 	var gw: int = ctx.gw
 	var gl: int = ctx.gl
@@ -293,9 +335,10 @@ static func _bake_band(band: int, ctx: Dictionary) -> void:
 	var dry_n: PackedByteArray = ctx.dry_n
 	var worn_a: PackedByteArray = ctx.worn_a
 	var worn_b: PackedByteArray = ctx.worn_b
+	var paint_d: PackedFloat32Array = ctx.paint_d
+	var verge_n: PackedByteArray = ctx.verge_n
 	var h_min: float = ctx.height_min
 	var hspan: float = ctx.hspan
-	var road_lo: float = ctx.road_lo
 
 	var z0 := band * BAKE_BAND_ROWS
 	var z1 := mini(z0 + BAKE_BAND_ROWS, length)
@@ -304,9 +347,10 @@ static func _bake_band(band: int, ctx: Dictionary) -> void:
 	bytes.resize(bn * 4)
 	var worn_out := PackedByteArray()
 	worn_out.resize(bn)
+	var verge_out := PackedByteArray()
+	verge_out.resize(bn)
 	var w1 := width - 1
 	var l1 := length - 1
-	var road_hi := road_lo + ROAD_FADE
 	var inv_r2 := 1.0 / float(CURV_RADIUS * CURV_RADIUS)
 	var dens_sum := 0.0
 	var covered := 0
@@ -339,7 +383,12 @@ static func _bake_band(band: int, ctx: Dictionary) -> void:
 
 			var slope_f := smoothstep(SLOPE_BARE_NY, SLOPE_FULL_NY, ny)
 			var rock_f := smoothstep(ROCK_GAP, ROCK_FADE, rock_d[i])
-			var road_f := smoothstep(road_lo, road_hi, road_d[i])
+			# The road's verge (see VERGE_*): worn to soil within `reach` of the stones, grass beyond.
+			var reach := VERGE_REACH_MAX * smoothstep(VERGE_NOISE_LO, VERGE_NOISE_HI, verge_n[i] / 255.0)
+			var pd := paint_d[i]
+			if reach > 0.3:
+				verge_out[li] = int((1.0 - smoothstep(reach * 0.5, reach, pd)) * 255.0 + 0.5)
+			var road_f := smoothstep(reach + VERGE_GRASS_GAP, reach + VERGE_GRASS_GAP + VERGE_GRASS_FADE, pd)
 			var canopy := UnderstoryScatter._grid_sample(canopy_grid, gw, gl, float(px), float(pz))
 			var canopy_f := lerpf(1.0, CANOPY_MIN_FACTOR, canopy)
 			var meadow_f := lerpf(MEADOW_VAR_MIN, 1.0, patch_n[i] / 255.0)
@@ -369,7 +418,7 @@ static func _bake_band(band: int, ctx: Dictionary) -> void:
 			if density > 0.8:
 				full += 1
 
-	var result := {"bytes": bytes, "worn": worn_out, "curv_samples": curv_samples, "dens_sum": dens_sum, "covered": covered, "full": full, "dry_sum": dry_sum, "tall_sum": tall_sum}
+	var result := {"bytes": bytes, "worn": worn_out, "verge": verge_out, "curv_samples": curv_samples, "dens_sum": dens_sum, "covered": covered, "full": full, "dry_sum": dry_sum, "tall_sum": tall_sum}
 	var mutex: Mutex = ctx.mutex
 	mutex.lock()
 	(ctx.out as Array)[band] = result
@@ -560,17 +609,17 @@ static func debug_probe(world_pos: Vector3) -> String:
 	var dz := (heights[zp * width + px] - heights[zm * width + px]) / float(zp - zm)
 	var ny := 1.0 / sqrt(1.0 + dx * dx + dz * dz)
 	var rock_d: float = _dbg.rock_d[i]
-	var road_d: float = _dbg.road_d[i]
+	var paint_d: float = _dbg.paint_d[i]
+	var reach := VERGE_REACH_MAX * smoothstep(VERGE_NOISE_LO, VERGE_NOISE_HI, _dbg.verge_n[i] / 255.0)
 	var canopy := UnderstoryScatter._grid_sample(_dbg.canopy, _dbg.gw, _dbg.gl, float(px), float(pz))
-	var road_lo := road_clear_distance()
 	var px_col := density_image.get_pixel(px, pz)
-	return "[Grass] pixel (%d, %d): COVERAGE %.2f  tussock %.2f  dry %.2f  tall %.2f\n  open    x%.2f\n  meadow  noise %.2f -> x%.2f\n  slope   normal.y %.2f -> x%.2f\n  rock    %.1f m -> x%.2f\n  road    %.1f m from centre -> x%.2f\n  canopy  %.2f -> x%.2f" % [
+	return "[Grass] pixel (%d, %d): COVERAGE %.2f  tussock %.2f  dry %.2f  tall %.2f\n  open    x%.2f\n  meadow  noise %.2f -> x%.2f\n  slope   normal.y %.2f -> x%.2f\n  rock    %.1f m -> x%.2f\n  road    %.1f m from the painted road, verge worn to %.1f m -> x%.2f\n  canopy  %.2f -> x%.2f" % [
 		px, pz, px_col.r, px_col.a, px_col.g, px_col.b,
 		OPEN_COVERAGE,
 		_dbg.patch[i] / 255.0, lerpf(MEADOW_VAR_MIN, 1.0, _dbg.patch[i] / 255.0),
 		ny, smoothstep(SLOPE_BARE_NY, SLOPE_FULL_NY, ny),
 		rock_d, smoothstep(ROCK_GAP, ROCK_FADE, rock_d),
-		road_d, smoothstep(road_lo, road_lo + ROAD_FADE, road_d),
+		paint_d, reach, smoothstep(reach + VERGE_GRASS_GAP, reach + VERGE_GRASS_GAP + VERGE_GRASS_FADE, paint_d),
 		canopy, lerpf(1.0, CANOPY_MIN_FACTOR, canopy)]
 
 ## DEBUG: does the BAKE put any grass on the painted road? Counts pixels within the worst-case
@@ -619,6 +668,7 @@ static func reset_run_state() -> void:
 	patch_image = null
 	patch_texture = null
 	worn = PackedByteArray()
+	verge_soil = PackedByteArray()
 	density_texture = null
 	height_texture = null
 	color_texture = null

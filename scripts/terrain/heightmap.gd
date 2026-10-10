@@ -646,6 +646,23 @@ static func build_heightmap(master_seed: int = TerrainConfig.MASTER_SEED) -> Dic
 	# The village's shoulder (TerrainCastle): where it reaches onto the map's rock, beside the castle.
 	TerrainCastle.raise_massif_on_map(heights)
 
+	# 2026-10-10: round the creases every stage above left (see round_creases). Last of the
+	# shaping, before the road, which grades its own bed. The knots' levels are flooded before and
+	# after: rounding must not cut one off.
+	t_stage = Time.get_ticks_msec()
+	var levels_before: Array = []
+	for knot: Dictionary in knots:
+		levels_before.append(TerrainKnots.flood_reached_levels(knot, heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, TerrainKnots.knot_rock_mask(int(knot.index), cliff_dressing_plan, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH)))
+	var crease_report := round_creases(heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, cliff_dressing_plan, outcrop_plan)
+	var levels_lost: Array[String] = []
+	for k in knots.size():
+		var knot: Dictionary = knots[k]
+		var after := TerrainKnots.flood_reached_levels(knot, heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, TerrainKnots.knot_rock_mask(int(knot.index), cliff_dressing_plan, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH))
+		for level_name: String in levels_before[k]:
+			if not after.has(level_name):
+				levels_lost.append("#%d %s" % [int(knot.index), level_name])
+	print("TERRAIN_GEN: crease rounding -- %s; knot levels no longer reached after it: %s (%.2fs)" % [crease_report, "none" if levels_lost.is_empty() else ", ".join(levels_lost), (Time.get_ticks_msec() - t_stage) / 1000.0])
+
 	# Control map: defaults to ground everywhere; the road step below paints
 	# over it where it runs. Built as plain ints (packed base/overlay/blend)
 	# rather than floats, since that's what the road step naturally produces --
@@ -835,6 +852,57 @@ static func _print_roughness_stats(heights: PackedFloat32Array, width: int, leng
 ## single biggest cost in a heightmap build (the ROAD_SMOOTH_RADIUS=3
 ## call inside _generate_road alone was ~32% of total build time) -- this
 ## sliding-window change is the further fix for that.
+## Crease rounding (2026-10-10, Kirill: "what can we do about the sharp lines?"). The flatten /
+## raise passes, the knots and the mountain's foot leave creases one pixel wide where a floor
+## meets a wall or a wall its top. The terrain shader lays a texture from above on the floor and
+## from the side on the wall, so a crease shows as a sharp line whatever the shader does
+## (terrain_gen.gd, PROJECTION_PER_PIXEL). Here every pixel moves toward a lightly blurred copy of
+## the map, by how far it stands from it: nothing on even ground, flat or sloping (there the
+## blurred copy is the same), fully from CREASE_ROUND_HI m. A foot gets a fillet and a lip a
+## shoulder about CREASE_ROUND_PASSES m wide; the wall between them stays, a little less steep.
+## Not touched: the ground under and close round the cliff meshes and the outcrops, which was
+## fitted to them. TUNING. CREASE_ROUND_PASSES 0 = off.
+const CREASE_ROUND_PASSES := 2 ## 3 x 3 blurs of the copy: more = wider rounding, gentler walls
+const CREASE_ROUND_LO := 0.15 ## m from the blurred copy up to which a pixel is left alone
+const CREASE_ROUND_HI := 0.6
+const CREASE_PROTECT_BLUR := 3 ## how far round a mesh / outcrop the protection fades out (about 2x this, m)
+
+static func round_creases(heights: PackedFloat32Array, width: int, length: int, cliff_plan: Array[Dictionary], outcrop_plan: Array) -> String:
+	if CREASE_ROUND_PASSES <= 0:
+		return "off"
+	var n := width * length
+	var soft := heights.duplicate()
+	smooth(soft, width, length, CREASE_ROUND_PASSES, 1)
+	var mesh_mask := CliffDressing.build_cliff_dressing_obstacle_mask(cliff_plan, width, length)
+	var protect := PackedFloat32Array()
+	protect.resize(n)
+	for i in n:
+		if mesh_mask[i] == 1:
+			protect[i] = 1.0
+	for o: Dictionary in outcrop_plan:
+		var r := float(o.radius)
+		for pz in range(maxi(int(float(o.pz) - r), 0), mini(int(float(o.pz) + r) + 1, length)):
+			for px in range(maxi(int(float(o.px) - r), 0), mini(int(float(o.px) + r) + 1, width)):
+				if Vector2(px - float(o.px), pz - float(o.pz)).length() <= r:
+					protect[pz * width + px] = 1.0
+	smooth(protect, width, length, 2, CREASE_PROTECT_BLUR)
+	var changed := 0
+	var held := 0
+	var most := 0.0
+	for i in n:
+		var d := soft[i] - heights[i]
+		if absf(d) <= CREASE_ROUND_LO:
+			continue
+		var free := 1.0 - smoothstep(0.0, 0.35, protect[i])
+		if free <= 0.0:
+			held += 1
+			continue
+		d *= smoothstep(CREASE_ROUND_LO, CREASE_ROUND_HI, absf(d)) * free
+		heights[i] += d
+		changed += 1
+		most = maxf(most, absf(d))
+	return "%d px moved (%.1f%% of the map), at most %.2f m; %d px left as they were beside cliff meshes / outcrops" % [changed, 100.0 * changed / n, most, held]
+
 static func smooth(heights: PackedFloat32Array, width: int, length: int, passes: int, radius: int) -> void:
 	var window := 2 * radius + 1
 	var row_buffer := PackedFloat32Array()

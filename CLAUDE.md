@@ -95,8 +95,14 @@ automatically) -- a local copy also lives at
     larger `mesh_size` and larger features reduce it; it cannot be removed.
   - Collision stays on the undisplaced surface. Subdivision is paid everywhere near the camera,
     whatever the texture: about 0.8-1.1 ms of GPU at tessellation 3 (level 4 not measured).
-  - Texture id 2 (RockFace) is both the walkable rock at cliffs and the mountain: before
-    displacement is set up for real the mountain needs its own texture id.
+  - Texture id 2 (RockFace) was both the walkable rock at cliffs and the mountain. Since
+    2026-10-10 the mountain has its own id: `WorldGenerator._ensure_mountain_texture` appends a
+    copy of the RockFace asset ("MountainRock") at startup, for the run only
+    (`terrain_assets.tres` is not written), and sets `MountainWalls.rock_texture_id`, which the
+    aprons, the north end, the village's shoulder and the ground paint's mountain band use.
+    Its values are `DISPLACEMENT_MOUNTAIN_SCALE` / `_UV_SCALE`; RockFace keeps
+    `DISPLACEMENT_TEXTURE_SCALE` / `_UV_SCALE`. Any new code that paints mountain terrain must
+    use `MountainWalls.rock_texture_id`, not 2.
 - **Projection is patched per pixel since 2026-10-10** (`PROJECTION_PER_PIXEL` and the
   `PROJECTION_*` constants in `terrain_gen.gd`, `_apply_projection_override`; Kirill: "I think
   that's the fix"). How the addon's own projection works (read from the source of `854a457`):
@@ -115,9 +121,17 @@ automatically) -- a local copy also lives at
     of 35 / 55 deg (three differently laid copies of the 13 m rock tile mixed into a patchwork on
     ordinary slopes). What works: weights from the smoothed slope, limited by the exact one, and
     side projection only from 50-70 deg up.
-  - PerfDebug F3 steps through the patched shaders / the addon's with projection / no
-    projection. The patch's GPU cost is not measured yet. A sharp line still shows where a flat
-    floor meets a wall: that is the heightmap's crease (rounding it was discussed, not done).
+  - PerfDebug F3 was a three-way switch between the patched shaders, the addon's and no
+    projection while this was tuned; removed the same day (F3 is the rock detail layer now, see
+    `ROCK_DETAIL_*` in `terrain_gen.gd`: the same patch reads RockFace and the mountain's rock a
+    second time at a small tile for grain, because their 13 m tile is soft up close).
+    The patch's GPU cost is not measured yet. A sharp line still shows where a flat
+    floor meets a wall: that is the heightmap's crease. Displacement does not hide it (Kirill).
+  - Crease rounding (same day): `TerrainHeightmap.round_creases`, the last shaping stage before
+    the road (`CREASE_ROUND_*` constants, 0 passes = off). It moves a pixel toward a lightly
+    blurred copy of the map only where the two differ, and leaves the ground round cliff meshes
+    and outcrops alone. On one seed: 23 % of the map's pixels moved, at most 3.2 m, no knot
+    level cut off (the stage floods every knot before and after and prints any it loses).
 - **The instancer has no scene nodes in 1.1**: it draws its MultiMeshes straight on the
   RenderingServer, so there are no `MMI3D_*` nodes under `Terrain3D/MMI/`. Found when the J
   panel stopped hiding trees and fern shadows stayed. A mesh layer is hidden through

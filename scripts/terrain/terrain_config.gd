@@ -22,7 +22,7 @@ extends RefCounted
 ## any other int -- always regenerate that exact map (byte-identical every
 ##                  run). Useful while tuning a specific result, or for
 ##                  pinning down a bug tied to one particular seed.
-const MASTER_SEED := 3082472107
+const MASTER_SEED := -1
 
 #master_seed=858829582 main testing done here
 #master_seed=508666034 end to the left

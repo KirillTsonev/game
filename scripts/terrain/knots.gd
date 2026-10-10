@@ -680,6 +680,12 @@ static func _build_rows(knot: Dictionary, heights: PackedFloat32Array, width: in
 		# (the lower mesh's near end is partly buried in the bank instead).
 		var by_foot: Array[Dictionary] = entries.duplicate()
 		by_foot.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a.height) > float(b.height))
+		# The same day: with the trench gone, the whole difference between the two feet stood in
+		# the gap between the meshes as a bare terrain wall (11.7 m at about 80 deg in Kirill's
+		# screenshot: "a sharp angle between wall and floor"). No foot in a row may be more than
+		# KNOT_ROW_FOOT_SPREAD below the highest: the lower mesh is raised onto built-up ground.
+		for e in by_foot:
+			e["height"] = maxf(float(e.height), float(by_foot[0].height) - KNOT_ROW_FOOT_SPREAD)
 		var row_lock := PackedFloat32Array()
 		for n in by_foot.size():
 			var one: Array[Dictionary] = [by_foot[n]]
@@ -721,6 +727,8 @@ const KNOT_LOCK_FRONT := 1.0
 const KNOT_LOCK_FEATHER := 5.0
 ## The lock between two meshes of ONE row (see _build_rows): the footprint alone, a short feather.
 const KNOT_ROW_LOCK_FEATHER := 2.0
+## The most (m) one mesh's foot may lie below the highest foot of its row (see _build_rows).
+const KNOT_ROW_FOOT_SPREAD := 3.0
 
 static func _protect_entries(entries: Array[Dictionary], protect: PackedFloat32Array, width: int, length: int, defs: Dictionary, lock_behind := KNOT_LOCK_BEHIND, lock_front := KNOT_LOCK_FRONT, feather := KNOT_LOCK_FEATHER) -> void:
 	for e in entries:

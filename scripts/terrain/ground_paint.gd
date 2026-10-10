@@ -72,10 +72,8 @@ const PINE_LITTER_ID := 8 ## pine_litter -- needle litter under canopy (baked fr
 ## Verge (user 2026-10-01: no uniform soil strip along the road): worn-to-soil stretches where the
 ## verge noise is above BARE_VERGE_LO..HI, grass up to the stones elsewhere. Road vertices get the
 ## matching base (Ground / Grass) so the pair swap at the road edge shows the same texture.
-const BARE_VERGE_LO := 0.47
-const BARE_VERGE_HI := 0.6
-const BARE_ROAD_CLEAR := 0.8
-const BARE_ROAD_REACH := 3.5
+## 2026-10-10: the verge is GrassScatter.verge_soil now (see VERGE_* there); the BARE_VERGE_* and
+## BARE_ROAD_* constants that described the strip are gone.
 ## 2026-10-02: the worn-patch noise is GrassScatter's (GrassScatter.worn / WORN_*), so the grass
 ## thins out over the same patches; only the blend cap is set here.
 const BARE_WORN_MAX := 0.8
@@ -307,6 +305,10 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 	if worn_bytes.size() != n:
 		worn_bytes = PackedByteArray()
 		worn_bytes.resize(n)
+	var verge_bytes := GrassScatter.verge_soil
+	if verge_bytes.size() != n:
+		verge_bytes = PackedByteArray()
+		verge_bytes.resize(n)
 	var old_control: PackedByteArray = (maps.control as Image).get_data() # FORMAT_RF: uint32 bits
 	# Distance to the road's painted vertices: litter fades out toward them (LITTER_ROAD_*).
 	var road_d := _new_field(n, LITTER_ROAD_REACH)
@@ -356,7 +358,7 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 		patch_nv[v] = smoothstep(GrassScatter.PATCH_N_LO, GrassScatter.PATCH_N_HI, byte_as_f32[v])
 	var ctx := {
 		"width": width, "length": length, "heights": heights, "old_control": old_control,
-		"coverage_bytes": coverage_bytes, "worn_bytes": worn_bytes,
+		"coverage_bytes": coverage_bytes, "worn_bytes": worn_bytes, "verge_bytes": verge_bytes,
 		"big_n": big_n, "small_n": small_n, "type_a": type_a, "type_b": type_b, "spray_n": spray_n,
 		"warp_x": warp_x, "warp_z": warp_z,
 		"cliff_d": cliff_d, "boulder_d": boulder_d, "scree_d": scree_d, "road_d": road_d,
@@ -393,7 +395,7 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 	# column for the north end)]. Every pixel within reach of a line is painted by how far past
 	# the NEAREST line it lies (MountainWalls.mountain_depth), so the sides agree in the corners.
 	var mountain_feet: Array[PackedFloat32Array] = [maps.get("mountain_foot", PackedFloat32Array()), maps.get("mountain_foot_right", PackedFloat32Array()), maps.get("mountain_foot_north", PackedFloat32Array())]
-	# 2026-10-10 (v3): the band is three regions -- rock, scree, scree with grass -- whose edges
+	# 2026-10-10 (v3): the band is regions -- rock, then scree with grass -- whose edges
 	# the border pass below blends like any others.
 	var scree_noise := GrassScatter._noise(hash(mountain_feet[0]), 1.0 / 4.0)
 	var scree_half := MOUNTAIN_SCREE_IN * 0.5
@@ -408,10 +410,10 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 				var pz := along if side < 2 else inside
 				var t := -MountainWalls.mountain_depth(px, pz) + scree_noise.get_noise_2d(px, pz) * MOUNTAIN_SCREE_JITTER # < 0 on the rock
 				var i := pz * width + px
-				if t < -scree_half:
-					dom[i] = ROCK_FACE_ID
-				elif t < scree_half:
-					dom[i] = ROCKY_TRAIL_ID
+				# Two regions since later the same day (Kirill: "remove rocky trail from the mix",
+				# extend rock face in its stead): RockyTrail lay between these two.
+				if t < scree_half:
+					dom[i] = MountainWalls.rock_texture_id # the mountain's own rock texture
 				elif t < MOUNTAIN_SCREE_OUT:
 					dom[i] = ROCKY_TERRAIN_ID
 
@@ -534,6 +536,7 @@ static func _paint_band(band: int, ctx: Dictionary) -> void:
 	var old_control: PackedByteArray = ctx.old_control
 	var coverage_bytes: PackedByteArray = ctx.coverage_bytes
 	var worn_bytes: PackedByteArray = ctx.worn_bytes
+	var verge_bytes: PackedByteArray = ctx.verge_bytes
 	var big_n: PackedByteArray = ctx.big_n
 	var small_n: PackedByteArray = ctx.small_n
 	var type_a: PackedByteArray = ctx.type_a
@@ -591,9 +594,10 @@ static func _paint_band(band: int, ctx: Dictionary) -> void:
 			var i := pz * width + px
 			var li := (pz - z0) * width + px
 			var old := old_control.decode_u32(i * 4)
-			# Verge: is the roadside here worn to soil (1) or grown over (0)? Regional noise, so soil
-			# and grass alternate along the road in stretches instead of one even strip (BARE_VERGE_*).
-			var verge := smoothstep(BARE_VERGE_LO, BARE_VERGE_HI, 0.6 * (type_b[i] / 255.0) + 0.4 * (big_n[i] / 255.0))
+			# Verge: how far the roadside here is worn to soil, 0..1 -- GrassScatter.verge_soil, the
+			# same field that keeps the blades off it (2026-10-10; before, a noise of this module's
+			# own switched whole stretches of a fixed-width strip on and off: rectangles).
+			var verge := verge_bytes[i] / 255.0
 			# Control-map bits read directly (base = bits 27-31, overlay = 22-26, blend = 14-21; same
 			# as Terrain3DUtil.get_base / get_overlay / get_blend, without the calls).
 			if ((old >> 27) & 0x1F) == ROAD_ID or ((old >> 22) & 0x1F) == ROAD_ID:
@@ -680,9 +684,7 @@ static func _paint_band(band: int, ctx: Dictionary) -> void:
 				lit *= smoothstep(LITTER_NY_NONE, LITTER_NY_FULL, ny) * smoothstep(LITTER_CLIFF_CLEAR, LITTER_CLIFF_REACH, cliff_d[j])
 
 			# Bare soil (BARE_*): the road verge + sparse worn patches. Everything else is Grass.
-			var bare := maxf(
-				verge * (1.0 - smoothstep(BARE_ROAD_CLEAR, BARE_ROAD_REACH, road_d[j])),
-				BARE_WORN_MAX * worn_bytes[i] / 255.0)
+			var bare := maxf(verge, BARE_WORN_MAX * worn_bytes[i] / 255.0)
 			# No turf on steep ground or against cliffs (user screenshot 2026-10-01: grass up a bank
 			# and blending into a cliff mesh) -- there the soil under the rock texture is Ground.
 			bare = maxf(bare, maxf(1.0 - smoothstep(BARE_NY_FULL, BARE_NY_NONE, ny), 1.0 - smoothstep(BARE_CLIFF_CLEAR, BARE_CLIFF_REACH, cliff_d[j])))
@@ -828,7 +830,19 @@ static func _blend_band(band: int, ctx: Dictionary) -> void:
 			var li := (pz - z0) * width + px
 			var a := dom[i]
 			if a == ROAD_MARK:
-				control[li] = road_control[i]
+				# What the road's edge fades into is the patch beside it: the texture of the nearest
+				# vertex off the road within 2 m. (Before 2026-10-10 each road vertex chose soil or
+				# grass for itself, which left lone soil squares along the edge.)
+				var beside := -1
+				var beside_d := 99
+				for zz in range(maxi(pz - 2, 0), mini(pz + 2, length - 1) + 1):
+					for xx in range(maxi(px - 2, 0), mini(px + 2, width - 1) + 1):
+						var u := dom[zz * width + xx]
+						var d := (zz - pz) * (zz - pz) + (xx - px) * (xx - px)
+						if u != ROAD_MARK and d < beside_d:
+							beside_d = d
+							beside = u
+				control[li] = road_control[i] if beside < 0 else (road_control[i] & 0x07FFFFFF) | ((beside & 0x1F) << 27)
 				continue
 			# The two nearest other textures: e1 at d1 (squared), e2 at d2.
 			var e1 := -1

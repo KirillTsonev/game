@@ -168,6 +168,18 @@ const CLIFF_DRESSING_RAISE_JOIN_BLEND := 2.0
 ## line -- nothing in the front half (it used to reach the front face line and poke out above the
 ## rocks' rounded tops as a terrain spine). Raise toward 1.0 if a slit opens between rock backs.
 const CLIFF_DRESSING_RAISE_JOIN_BRIDGE_FULL := 0.5
+## 2026-10-10 (Kirill's screenshot of a knot row, a tall mesh beside a short one: "the outer sides
+## of the knot have gentle ramps, but the space between the meshes is a sharp drop"): at a join
+## the two plateaus hand over within the gap between the meshes (the seam above is capped by the
+## real gap, about 2 m), so a tall model next to a short one left a step of several metres there.
+## Now the LOWER mesh's plateau, behind its back edge, starts at the taller neighbour's height on
+## that side and comes down to its own top at no more than CLIFF_DRESSING_RAISE_MAX_SLOPE. Inside
+## the footprint's depth nothing changes: there the ground still meets each rock's own top, and
+## the step stays between the rocks, where the taller one's end stands. MIN_RISE: no ramp for a
+## smaller difference. BACK: the distance behind the back edge over which the ramp comes in (more
+## for a large rise). Not applied in seam_only mode (the landmark keeps its captured shape).
+const CLIFF_DRESSING_RAISE_JOIN_RAMP_MIN_RISE := 0.5
+const CLIFF_DRESSING_RAISE_JOIN_RAMP_BACK := 3.0
 ## 2026-09-18 round 20 ("can the side curves be a little random in terms of terrain, not the
 ## same smooth slope"): two noise layers on the raised slopes.
 ## EDGE_WARP -- low-frequency noise stretches/shrinks the lateral and far-fade falloff DISTANCES
@@ -1141,6 +1153,22 @@ static func raise_terrain_behind_cliff_dressing(plan: Array[Dictionary], heights
 		# down to ONLY the side that's actually join-bridging.
 		var joined_left := nearest_gap_left < CLIFF_DRESSING_RAISE_JOIN_THRESHOLD
 		var joined_right := nearest_gap_right < CLIFF_DRESSING_RAISE_JOIN_THRESHOLD
+		# 2026-10-10 join ramp -- see CLIFF_DRESSING_RAISE_JOIN_RAMP_MIN_RISE. How far the joined
+		# neighbour's facing edge stands above this mesh's own edge (0 = no ramp on that side), and
+		# the run over which this mesh's plateau comes down from it.
+		var join_rise_left := 0.0
+		var join_rise_right := 0.0
+		if not seam_only:
+			if joined_left and not is_nan(join_edge_height_left):
+				join_rise_left = join_edge_height_left - plateau_edge_left
+			if joined_right and not is_nan(join_edge_height_right):
+				join_rise_right = join_edge_height_right - plateau_edge_right
+		if join_rise_left < CLIFF_DRESSING_RAISE_JOIN_RAMP_MIN_RISE:
+			join_rise_left = 0.0
+		if join_rise_right < CLIFF_DRESSING_RAISE_JOIN_RAMP_MIN_RISE:
+			join_rise_right = 0.0
+		var join_run_left := clampf(join_rise_left / CLIFF_DRESSING_RAISE_MAX_SLOPE, CLIFF_DRESSING_RAISE_JOIN_SEAM_WIDTH, CLIFF_DRESSING_RAISE_LATERAL_SOFTNESS_MAX)
+		var join_run_right := clampf(join_rise_right / CLIFF_DRESSING_RAISE_MAX_SLOPE, CLIFF_DRESSING_RAISE_JOIN_SEAM_WIDTH, CLIFF_DRESSING_RAISE_LATERAL_SOFTNESS_MAX)
 		var behind_reach := half_z + ramp_distance + plateau_depth + fade_distance
 		var reach := behind_reach + maxf(effective_edge_left + lateral_softness_left, effective_edge_right + lateral_softness_right) # generous square bound -- exact shaping happens per-pixel below
 
@@ -1241,6 +1269,16 @@ static func raise_terrain_behind_cliff_dressing(plan: Array[Dictionary], heights
 				# see the 2026-09-21 comment above CLIFF_DRESSING_RAISE_PROXIMITY_FALLOFF for why
 				# and how to tune it.
 				var plateau_height := origin_y + top_local_y * scale_jitter + top_lift
+				# Join ramp: behind this mesh's back edge its plateau starts at the taller neighbour's
+				# height on the joined side and comes down to its own across join_run. Nothing inside
+				# the footprint's depth, where the ground must meet this rock's own top.
+				if d_behind > 0.0 and (join_rise_left > 0.0 or join_rise_right > 0.0):
+					var join_lift := 0.0
+					if join_rise_left > 0.0:
+						join_lift = join_rise_left * (1.0 - smoothstep(0.0, join_run_left, maxf(local_x + half_x, 0.0)))
+					if join_rise_right > 0.0:
+						join_lift = maxf(join_lift, join_rise_right * (1.0 - smoothstep(0.0, join_run_right, maxf(half_x - local_x, 0.0))))
+					plateau_height += join_lift * smoothstep(0.0, maxf(CLIFF_DRESSING_RAISE_JOIN_RAMP_BACK, join_lift / (2.0 * CLIFF_DRESSING_RAISE_MAX_SLOPE)), d_behind)
 
 				var idx := qz * width + qx
 				var raise_w := depth_weight * lateral_weight
@@ -1254,7 +1292,18 @@ static func raise_terrain_behind_cliff_dressing(plan: Array[Dictionary], heights
 				raise_w_sum[idx] += avg_w
 				raise_wp_sum[idx] += avg_w * plateau_height
 				raise_wl_sum[idx] += avg_w * top_lift
-				raise_keep[idx] *= (1.0 - raise_w)
+				# 2026-10-10 (Kirill: "a big cleft between the meshes"): in a join gap each side's
+				# weight fades from its own edge, so mid-gap neither is full and coverage, their
+				# combination, dipped -- a trench one pixel wide and 3-4 m deep along the gap, back
+				# to natural ground (it was there before, hidden in the step the join ramp removed).
+				# Coverage on a joined side now stays full across the whole gap, to 1 m past the
+				# neighbour's edge; the height AVERAGE above still hands over inside the gap.
+				var cover_w := raise_w
+				if side_joined:
+					var side_gap := nearest_gap_left if local_x < 0.0 else nearest_gap_right
+					var cover_outside := maxf(0.0, absf(local_x) - half_x - maxf(side_gap, 0.0))
+					cover_w = depth_weight * maxf(lateral_weight, 1.0 - smoothstep(0.0, 1.0, cover_outside))
+				raise_keep[idx] *= (1.0 - cover_w)
 				touched_x0 = mini(touched_x0, qx)
 				touched_x1 = maxi(touched_x1, qx)
 				touched_z0 = mini(touched_z0, qz)

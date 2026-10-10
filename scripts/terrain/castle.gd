@@ -325,9 +325,9 @@ static func build_maps(edge_row: PackedFloat32Array, edge_color: PackedByteArray
 				turf = 0.0
 				snow = 0.0
 			if snow > 0.02:
-				control[cell] = TerrainHeightmap.pack_control_blend(MountainWalls.APRON_ROCK, MountainWalls.APRON_SNOW_ID, snow)
+				control[cell] = TerrainHeightmap.pack_control_blend(MountainWalls.rock_texture_id, MountainWalls.APRON_SNOW_ID, snow)
 			else:
-				control[cell] = TerrainHeightmap.pack_control_blend(MountainWalls.APRON_ROCK, MountainWalls.APRON_TURF_ID, turf)
+				control[cell] = TerrainHeightmap.pack_control_blend(MountainWalls.rock_texture_id, MountainWalls.APRON_TURF_ID, turf)
 			var curvature := heights[j * width + c0] + heights[j * width + c1] + heights[j0 * width + c] + heights[j1 * width + c] - 4.0 * h # > 0 in a crease
 			var shade := clampf(1.0 - curvature * MountainWalls.APRON_CREASE_SHADE, MountainWalls.APRON_CREASE_MIN, MountainWalls.APRON_CREASE_MAX) / MountainWalls.APRON_CREASE_MAX
 			shade *= 1.0 - MountainWalls.APRON_STRATA_SHADE * (0.5 + 0.5 * sin((h + 4.0 * shade_noise.get_noise_2d(float(c) * 3.0, float(j) * 3.0)) * TAU / MountainWalls.APRON_STRATA_PERIOD))
@@ -668,7 +668,7 @@ static func west_strip_maps(apron_heights: PackedFloat32Array, apron_width: int,
 	var color := PackedByteArray()
 	color.resize(width * rows * 4)
 	color.fill(255)
-	var rock := TerrainHeightmap.pack_control_blend(MountainWalls.APRON_ROCK, MountainWalls.APRON_ROCK, 0.0)
+	var rock := TerrainHeightmap.pack_control_blend(MountainWalls.rock_texture_id, MountainWalls.rock_texture_id, 0.0)
 	var span := massif_rows()
 	var ground := 0
 	for row in rows:

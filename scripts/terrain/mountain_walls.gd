@@ -422,7 +422,14 @@ const FOOT_BOULDER_SPACING := 7.0
 const FOOT_BOULDER_REACH := 9.0
 const FOOT_BOULDER_SCALE_MIN := 0.7
 const FOOT_BOULDER_SCALE_MAX := 2.2
-const FOOT_BOULDER_MIN_NORMAL_Y := 0.6 ## no boulder on steeper ground than this
+## 2026-10-10 (Kirill: "the boulders and scree are sometimes placed on very steep cliffs on the
+## mountain ridge terrains"): were 0.6 for boulders (53 deg) and 0.45 for scree (63 deg), read at
+## the one point where the stone stands. Now about 35 and 41 deg, and the steepest of five
+## readings counts: the spot itself and FOOT_SLOPE_PROBE x the stone's scale to each side, so a
+## stone on a narrow ledge under a face is refused too.
+const FOOT_BOULDER_MIN_NORMAL_Y := 0.82 ## no boulder on steeper ground than this
+const FOOT_SCREE_MIN_NORMAL_Y := 0.75
+const FOOT_SLOPE_PROBE := 0.8 ## m per unit of scale
 ## Scree stones: this many per m of line, from FOOT_SCREE_BACK m up the rock to FOOT_SCREE_REACH
 ## m out, enlarged (the scree meshes are 4-23 cm stones).
 const FOOT_SCREE_PER_METRE := 4.0
@@ -486,6 +493,12 @@ const APRON_RELIEF_FREQUENCY := 1.0 / 110.0
 ## the mossy rock on its gentler parts read as soil on a mountain), with a mild brightness
 ## variation in the colour map.
 const APRON_ROCK := 2 ## TerrainGroundPaint.ROCK_FACE_ID
+## The texture id every piece of mountain terrain is painted with: the aprons, the north end, the
+## village's shoulder and the rock past the foot line on the map. 2026-10-10: a texture of its
+## own ("MountainRock", the RockFace images again), so the mountain's displacement and tile size
+## can differ from the rock ground at the valley's cliffs. WorldGenerator registers it at startup
+## and sets this (_ensure_mountain_texture); APRON_ROCK is what it stays at if that fails.
+static var rock_texture_id := APRON_ROCK
 const APRON_SHADE_FREQUENCY := 1.0 / 60.0
 const APRON_SHADE_MIN := 0.86
 ## WorldBounds' invisible wall on this side stands this far out from the map's edge, m. The
@@ -811,14 +824,14 @@ static func apron_maps(maps: Dictionary, master_seed: int, side: int = 0) -> Dic
 				turf = 0.0
 			if turf > 0.02:
 				turf_px += 1
-			control[i] = TerrainHeightmap.pack_control_blend(APRON_ROCK, APRON_TURF_ID, turf)
+			control[i] = TerrainHeightmap.pack_control_blend(rock_texture_id, APRON_TURF_ID, turf)
 			# Snow on the tips (turf never reaches this high).
 			var snow := smoothstep(APRON_SNOW_FROM, APRON_SNOW_FULL, h - edge_height + APRON_SNOW_WANDER * shade_noise.get_noise_2d(float(a) * 2.0 + 50.0, float(row) * 2.0)) 				* smoothstep(APRON_SNOW_NY_NONE, APRON_SNOW_NY_FULL, ny)
 			if bare:
 				snow = 0.0
 			if snow > 0.02:
 				snow_px += 1
-				control[i] = TerrainHeightmap.pack_control_blend(APRON_ROCK, APRON_SNOW_ID, snow)
+				control[i] = TerrainHeightmap.pack_control_blend(rock_texture_id, APRON_SNOW_ID, snow)
 			# Brightness: creases darker, edges lighter; faint layers by height; a mild broad variation.
 			var curvature := h_a0 + h_a1 + h_r0 + h_r1 - 4.0 * h # > 0 in a crease
 			var shade := clampf(1.0 - curvature * APRON_CREASE_SHADE, APRON_CREASE_MIN, APRON_CREASE_MAX) / APRON_CREASE_MAX
@@ -1034,7 +1047,7 @@ static func scatter_foot_debris(parent_node: Node, terrain: Terrain3D, maps: Dic
 	var line_length := 2.0 * float(length) + float(width)
 	for pass_def: Array in [
 			[int(line_length / FOOT_BOULDER_SPACING), RockScatter.ROCK_MESH_IDS, 0.0, FOOT_BOULDER_REACH, FOOT_BOULDER_SCALE_MIN, FOOT_BOULDER_SCALE_MAX, FOOT_BOULDER_MIN_NORMAL_Y, true],
-			[int(line_length * FOOT_SCREE_PER_METRE), RockScatter.SCREE_MESH_IDS, FOOT_SCREE_BACK, FOOT_SCREE_REACH, FOOT_SCREE_SCALE_MIN, FOOT_SCREE_SCALE_MAX, 0.45, false]]:
+			[int(line_length * FOOT_SCREE_PER_METRE), RockScatter.SCREE_MESH_IDS, FOOT_SCREE_BACK, FOOT_SCREE_REACH, FOOT_SCREE_SCALE_MIN, FOOT_SCREE_SCALE_MAX, FOOT_SCREE_MIN_NORMAL_Y, false]]:
 		var ids: Array[int] = pass_def[1]
 		var is_boulder: bool = pass_def[7]
 		for i in int(pass_def[0]):
@@ -1057,7 +1070,11 @@ static func scatter_foot_debris(parent_node: Node, terrain: Terrain3D, maps: Dic
 			if px < 1.0 or px > float(width) - 2.0 or pz < 1.0 or pz > float(length) - 2.0 or road_weight[int(pz) * width + int(px)] > 0.0:
 				continue
 			var normal := TerrainUtil.sample_normal(heights, width, length, px, pz)
-			if normal.y < float(pass_def[6]):
+			var steepest_ny := normal.y
+			var probe := FOOT_SLOPE_PROBE * scale
+			for offset: Vector2 in [Vector2(probe, 0.0), Vector2(-probe, 0.0), Vector2(0.0, probe), Vector2(0.0, -probe)]:
+				steepest_ny = minf(steepest_ny, TerrainUtil.sample_normal(heights, width, length, clampf(px + offset.x, 1.0, float(width) - 2.0), clampf(pz + offset.y, 1.0, float(length) - 2.0)).y)
+			if steepest_ny < float(pass_def[6]):
 				continue
 			if is_boulder:
 				scale *= float(RockScatter.ROCK_BASE_SCALE[mesh_id])

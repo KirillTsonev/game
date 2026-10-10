@@ -74,6 +74,8 @@ func _ready() -> void:
 		LoadingScreen.end() # the boot scene may have put it up
 		return
 	var data: Terrain3DData = terrain.get_data()
+	# Before anything is painted: the aprons and the ground paint write this id.
+	MountainWalls.rock_texture_id = _ensure_mountain_texture(terrain)
 	# Terrain3D auto-loads whatever's on disk at terrain.data_directory when
 	# it enters the tree (that's still there as a static fallback/editor
 	# preview), so clear any regions that brought in before importing this
@@ -130,6 +132,7 @@ func _ready() -> void:
 	data.import_images(images, import_position, 0.0, 1.0)
 	data.calc_height_range(true)
 	_apply_displacement(terrain)
+	_apply_detiling(terrain, false)
 
 	var height_range: Vector2 = data.get_height_range()
 	print("TERRAIN_GEN: imported. region_count=%d height_range=%s" % [data.get_region_count(), height_range])
@@ -456,10 +459,18 @@ var startup_timings: Dictionary = {}
 ## terrain_assets.tres. The values are the ones Kirill tried and liked. TUNING.
 const DISPLACEMENT_TESSELLATION := 3 ## 0 = off
 const DISPLACEMENT_SCALE := 2.0
-const DISPLACEMENT_TEXTURE_IDS: Array[int] = [2] ## RockFace: the mountain AND the walkable rock at cliffs
-const DISPLACEMENT_TEXTURE_SCALE := 1.0
+const DISPLACEMENT_TEXTURE_IDS: Array[int] = [2] ## RockFace: the rock ground at the valley's cliffs (not the mountain since 2026-10-10)
+const DISPLACEMENT_TEXTURE_SCALE := 0.5
 const DISPLACEMENT_TEXTURE_UV_SCALE := 0.15 ## about a 13 m tile; 0 = leave the textures' tile size as it is
 const DISPLACEMENT_MESH_SIZE := 64 ## Terrain3D.mesh_size while displacement is on (48 in the scene); 0 = leave it
+## The mountain's rock (2026-10-10, Kirill: "let's separate the rock face displacement. one for
+## the mountain terrain, one for the ground and cliff meshes"): its own texture id, registered at
+## startup by _ensure_mountain_texture as a copy of RockFace -- the same images, so it looks the
+## same until these two differ from DISPLACEMENT_TEXTURE_SCALE / _UV_SCALE above. Scale 0 = the
+## mountain is not displaced; UV scale 0 = the tile size RockFace has in terrain_assets.tres.
+const DISPLACEMENT_MOUNTAIN_SCALE := 1.0
+const DISPLACEMENT_MOUNTAIN_UV_SCALE := 0.15
+const MOUNTAIN_TEXTURE_NAME := "MountainRock"
 ## TRIAL (2026-10-10): projection decided per PIXEL. Terrain3D decides per 1 m vertex whether a
 ## texture is laid from above or from the side (steeper than 45 deg), from a slope measured toward
 ## +X / +Z only; along every crease the four vertices round a pixel disagree, and the one that is
@@ -483,6 +494,21 @@ const PROJECTION_BLEND_STEEP := 70.0
 ## from above (none on the wall).
 const PROJECTION_NO_SIDE_BELOW := 35.0
 const PROJECTION_ALL_SIDE_FROM := 80.0
+## TRIAL (2026-10-10, Kirill: "the mountain rock texture looks very low quality ... are you
+## telling me I can pick either displacement or visual quality?"). The rock's tile is about 13 m
+## so that its displacement has shapes metres across; its 1K image is then 1.3 cm a pixel, soft
+## at arm's length. With ROCK_DETAIL_TILES above 0 the patched terrain shader reads RockFace and
+## the mountain's rock a second time, this many times smaller (a tile of about 13 m / this) and
+## turned by a fixed angle, and lays that copy's grain over the large one: its brightness
+## relative to its own average multiplies the colour (ROCK_DETAIL_COLOUR, 0..1) and its normal
+## is added (ROCK_DETAIL_NORMAL). Full within ROCK_DETAIL_NEAR m of the camera, gone by
+## ROCK_DETAIL_FAR. Displacement still comes from the large copy alone. Costs three more
+## texture reads per rock texture and vertex near the camera; not measured yet. 0 = off.
+const ROCK_DETAIL_TILES := 8.37
+const ROCK_DETAIL_COLOUR := 0.8
+const ROCK_DETAIL_NORMAL := 0.8
+const ROCK_DETAIL_NEAR := 12.0
+const ROCK_DETAIL_FAR := 35.0
 ## How quickly a steep face turns from "laid along X" to "laid along Z" as it turns its heading
 ## (1 = a slow change, both drawn over most headings; larger = each face mostly one of them).
 const PROJECTION_SIDE_SHARPNESS := 4.0
@@ -527,6 +553,41 @@ const DISPLACEMENT_TOGGLE := {
 	6: DISPLACEMENT_ROCKY_TRAIL_SCALE,
 	7: DISPLACEMENT_ROCKY_TERRAIN_SCALE,
 }
+## Detiling (2026-10-10, Kirill's screenshots from above: "the repeatable texture pattern that looks
+## artificial and very visible"). Terrain3D breaks a texture's repetition by giving each cell of
+## one tile's size its own random turn and shift, and blending neighbours. terrain_assets.tres has
+## every texture at rotation 1.0 = ANY angle. A texture with a grain (needles, shards, moss) then
+## shows as a patchwork of grain directions, one per cell -- cells of 1 m for the textures with
+## uv_scale 2 -- which reads as swirls. Set here at startup, not in terrain_assets.tres:
+## DETILING_ROTATION is the largest turn as a share of a full circle either way (0.1 = up to 36
+## deg), DETILING_SHIFT the largest shift (it hides the repetition and has no direction).
+## DETILING_BY_ID overrides both for one texture id: [rotation, shift]. The Road is left to
+## _apply_displacement (none at all while it is displaced: turned stones would be cut at the cells'
+## edges). PerfDebug F2 switches between these values and the file's 1.0 / 1.0. TUNING.
+const DETILING_ROTATION := 0.1
+const DETILING_SHIFT := 1.0
+const DETILING_BY_ID := {}
+var _detiling_old := false
+func toggle_detiling() -> String:
+	var terrain: Terrain3D = get_parent().get_node_or_null("Terrain3D")
+	if terrain == null or terrain.get_assets() == null:
+		return "[WorldGenerator] detiling: no Terrain3D"
+	_detiling_old = not _detiling_old
+	_apply_detiling(terrain, _detiling_old)
+	return "[WorldGenerator] texture detiling: %s" % ("OLD -- any angle (rotation 1.0, shift 1.0)" if _detiling_old else "NEW -- rotation %.2f, shift %.2f" % [DETILING_ROTATION, DETILING_SHIFT])
+
+func _apply_detiling(terrain: Terrain3D, old_values: bool) -> void:
+	var assets: Terrain3DAssets = terrain.get_assets()
+	for id in assets.get_texture_count():
+		if id == TerrainRoad.ROAD_TEXTURE_ID:
+			continue
+		var asset: Terrain3DTextureAsset = assets.get_texture_asset(id)
+		if asset == null:
+			continue
+		var values: Array = DETILING_BY_ID.get(id, [DETILING_ROTATION, DETILING_SHIFT])
+		asset.detiling_rotation = 1.0 if old_values else float(values[0])
+		asset.detiling_shift = 1.0 if old_values else float(values[1])
+
 var _trial_displacement_on := true
 func toggle_trial_displacement() -> String:
 	var terrain: Terrain3D = get_parent().get_node_or_null("Terrain3D")
@@ -534,13 +595,40 @@ func toggle_trial_displacement() -> String:
 		return "[WorldGenerator] displacement toggle: no Terrain3D"
 	_trial_displacement_on = not _trial_displacement_on
 	var names := PackedStringArray()
-	for id: int in DISPLACEMENT_TOGGLE:
+	var toggled: Dictionary = DISPLACEMENT_TOGGLE.duplicate()
+	if MountainWalls.rock_texture_id != MountainWalls.APRON_ROCK:
+		toggled[MountainWalls.rock_texture_id] = DISPLACEMENT_MOUNTAIN_SCALE
+	for id: int in toggled:
 		var asset: Terrain3DTextureAsset = terrain.get_assets().get_texture_asset(id)
 		if asset:
-			asset.displacement_scale = float(DISPLACEMENT_TOGGLE[id]) if _trial_displacement_on else 0.0
+			asset.displacement_scale = float(toggled[id]) if _trial_displacement_on else 0.0
 			names.append(asset.name)
 	return "[WorldGenerator] displacement of %s: %s" % [", ".join(names), "on" if _trial_displacement_on else "OFF"]
 
+## Registers the mountain's own rock texture (see DISPLACEMENT_MOUNTAIN_SCALE) and returns its id:
+## a copy of the RockFace asset appended to the list Terrain3D loaded, for this run only --
+## terrain_assets.tres is not written. Returns RockFace's id, with a warning, if it cannot.
+func _ensure_mountain_texture(terrain: Terrain3D) -> int:
+	var assets: Terrain3DAssets = terrain.get_assets()
+	if assets == null:
+		return MountainWalls.APRON_ROCK
+	var count := assets.get_texture_count()
+	for id in count:
+		var existing: Terrain3DTextureAsset = assets.get_texture_asset(id)
+		if existing and existing.name == MOUNTAIN_TEXTURE_NAME:
+			return id
+	var rock_face: Terrain3DTextureAsset = assets.get_texture_asset(MountainWalls.APRON_ROCK)
+	if rock_face == null or count >= 32:
+		push_warning("TERRAIN_GEN: no texture of its own for the mountain (RockFace missing, or 32 textures in use) -- it shares RockFace")
+		return MountainWalls.APRON_ROCK
+	var mountain: Terrain3DTextureAsset = rock_face.duplicate()
+	mountain.name = MOUNTAIN_TEXTURE_NAME
+	assets.set_texture_asset(count, mountain)
+	if assets.get_texture_count() != count + 1:
+		push_warning("TERRAIN_GEN: Terrain3D did not take the mountain's texture -- it shares RockFace")
+		return MountainWalls.APRON_ROCK
+	print("TERRAIN_GEN: mountain rock texture registered as id %d (a copy of RockFace)" % count)
+	return count
 ## Applies the displacement settings above (the DISPLACEMENT_* constants are the only way to
 ## change them: Kirill, 2026-10-09, "no more arguments, only variables"). A texture's relief is
 ## 0.04 x its scale x its tile size (the buffer shader), times the global scale. Projection is
@@ -561,6 +649,13 @@ func _apply_displacement(terrain: Terrain3D) -> void:
 		if DISPLACEMENT_TEXTURE_UV_SCALE > 0.0:
 			texture_asset.uv_scale = DISPLACEMENT_TEXTURE_UV_SCALE
 		print("TERRAIN_GEN: displacement -- texture %d (%s): uv_scale %.2f, displacement scale %.2f, relief about +-%.2f m" % [id, texture_asset.name, texture_asset.uv_scale, texture_asset.displacement_scale, minf(texture_asset.displacement_scale * 0.04 / (0.5 * texture_asset.uv_scale), 1.0) * DISPLACEMENT_SCALE])
+	if MountainWalls.rock_texture_id != MountainWalls.APRON_ROCK:
+		var mountain_asset: Terrain3DTextureAsset = terrain.get_assets().get_texture_asset(MountainWalls.rock_texture_id)
+		if mountain_asset:
+			mountain_asset.displacement_scale = DISPLACEMENT_MOUNTAIN_SCALE
+			if DISPLACEMENT_MOUNTAIN_UV_SCALE > 0.0:
+				mountain_asset.uv_scale = DISPLACEMENT_MOUNTAIN_UV_SCALE
+			print("TERRAIN_GEN: displacement -- texture %d (%s): uv_scale %.2f, displacement scale %.2f, relief about +-%.2f m" % [MountainWalls.rock_texture_id, mountain_asset.name, mountain_asset.uv_scale, mountain_asset.displacement_scale, minf(mountain_asset.displacement_scale * 0.04 / (0.5 * mountain_asset.uv_scale), 1.0) * DISPLACEMENT_SCALE])
 	var road_asset: Terrain3DTextureAsset = terrain.get_assets().get_texture_asset(TerrainRoad.ROAD_TEXTURE_ID)
 	if DISPLACEMENT_ROAD_SCALE > 0.0 and road_asset:
 		_road_displaced = true
@@ -682,41 +777,55 @@ func _apply_projection_override(terrain: Terrain3D) -> void:
 		var define := slope.replace("OPEN", "if (bilerp) {" if code.contains("bool bilerp") else "{").replace("CLOSE", "}")
 		code = calls.sub(code, three_calls, true)
 		code = code.insert(code.rfind("\n", code.find(anchor)) + 1, define + blend)
+		# The rock's detail layer (see ROCK_DETAIL_TILES): the terrain shader only, where each of
+		# a vertex's two textures has just been read -- the line that tints it follows.
+		if shaders.is_empty() and ROCK_DETAIL_TILES > 0.0:
+			var tint_line := "alb.rgb *= _texture_color_array[id].rgb;"
+			if code.count(tint_line) == 2:
+				var mask := (1 << TerrainGroundPaint.ROCK_FACE_ID) | (1 << MountainWalls.rock_texture_id)
+				var detail := """if (((%du >> uint(id)) & 1u) == 1u) {
+			float dt_fade = (1.0 - smoothstep(%f, %f, v_vertex_xz_dist)) * rock_detail_on;
+			if (dt_fade > 0.0) {
+				const vec2 dt_cs = vec2(0.5403, 0.8415);
+				vec2 dt_uv = rotate_vec2(id_uv, dt_cs) * %f;
+				vec2 dt_dx = rotate_vec2(id_dd.xy, dt_cs) * %f;
+				vec2 dt_dy = rotate_vec2(id_dd.zw, dt_cs) * %f;
+				vec3 dt_alb = textureGrad(_texture_array_albedo, vec3(dt_uv, float(id)), dt_dx, dt_dy).rgb;
+				vec3 dt_avg = textureLod(_texture_array_albedo, vec3(dt_uv, float(id)), 7.0).rgb;
+				vec3 dt_nrm = textureGrad(_texture_array_normal, vec3(dt_uv, float(id)), dt_dx, dt_dy).rgb;
+				float dt_gain = clamp(dot(dt_alb, vec3(0.299, 0.587, 0.114)) / max(dot(dt_avg, vec3(0.299, 0.587, 0.114)), 0.004), 0.4, 1.8);
+				alb.rgb *= mix(1.0, dt_gain, dt_fade * %f);
+				nrm.xy += rotate_vec2(dt_nrm.xy - 0.5, dt_cs) * (dt_fade * %f);
+			}
+		}
+		""" % [mask, ROCK_DETAIL_NEAR, ROCK_DETAIL_FAR, ROCK_DETAIL_TILES, ROCK_DETAIL_TILES, ROCK_DETAIL_TILES, ROCK_DETAIL_COLOUR, ROCK_DETAIL_NORMAL]
+				code = code.replace(tint_line, detail + tint_line)
+				code = code.insert(code.find("void accumulate_material("), "uniform float rock_detail_on = 1.0;\n")
+				_rock_detail_patched = true
+			else:
+				push_warning("TERRAIN_GEN: rock detail layer NOT applied -- the terrain shader's texture lines do not look as expected (x%d)" % code.count(tint_line))
 		var shader := Shader.new()
 		shader.code = code
 		shaders.append(shader)
-	_projection_shaders = shaders
 	mat.set_shader_override(shaders[0])
 	mat.set_shader_override_enabled(true)
 	mat.set_buffer_shader_override(shaders[1])
 	mat.set_buffer_shader_override_enabled(true)
 	print("TERRAIN_GEN: projection per pixel -- terrain shader and displacement buffer shader overridden (%d and %d chars), blended between %.0f and %.0f deg" % [shaders[0].code.length(), shaders[1].code.length(), PROJECTION_BLEND_FLAT, PROJECTION_BLEND_STEEP])
 
-## DEBUG (PerfDebug F3; not saved): steps through the three ways the terrain's textures can be
-## laid, to compare them on the same spot.
-var _projection_shaders: Array[Shader] = [] ## the two patched shaders, kept to switch back to
-var _projection_mode := 0
-const PROJECTION_MODE_NAMES: Array[String] = [
-	"NEW -- per pixel, three ways blended (the patched shaders)",
-	"OLD -- Terrain3D's own shaders, projection ON (per vertex)",
-	"OFF -- Terrain3D's own shaders, NO projection (everything laid from above)",
-]
-func cycle_projection_mode() -> String:
+## DEBUG (PerfDebug F3; not saved): the rock's detail layer off / on, to compare (ROCK_DETAIL_*).
+## A uniform of the patched shader, so the switch is immediate.
+var _rock_detail_on := true
+func toggle_rock_detail() -> String:
 	var terrain: Terrain3D = get_parent().get_node_or_null("Terrain3D")
 	if terrain == null or terrain.material == null:
-		return "[WorldGenerator] projection: no Terrain3D"
-	var mat: Terrain3DMaterial = terrain.material
-	_projection_mode = (_projection_mode + 1) % 3
-	if _projection_mode == 0 and _projection_shaders.is_empty():
-		_projection_mode = 1 # the patch was not applied at startup: nothing to switch back to
-	var patched := _projection_mode == 0
-	if patched:
-		mat.set_shader_override(_projection_shaders[0])
-		mat.set_buffer_shader_override(_projection_shaders[1])
-	mat.set_shader_override_enabled(patched)
-	mat.set_buffer_shader_override_enabled(patched)
-	mat.projection_enabled = _projection_mode != 2
-	return "[WorldGenerator] terrain projection: %s" % PROJECTION_MODE_NAMES[_projection_mode]
+		return "[WorldGenerator] rock detail: no Terrain3D"
+	if not _rock_detail_patched:
+		return "[WorldGenerator] rock detail: the layer was not applied at startup (ROCK_DETAIL_TILES 0, or a warning in the log)"
+	_rock_detail_on = not _rock_detail_on
+	RenderingServer.material_set_param(terrain.material.get_material_rid(), &"rock_detail_on", 1.0 if _rock_detail_on else 0.0)
+	return "[WorldGenerator] rock detail layer: %s" % ("on" if _rock_detail_on else "OFF")
+var _rock_detail_patched := false
 
 ## Prints one _ready() stage's duration (measured from t_from) and keeps it in startup_timings.
 func _log_stage(stage: String, t_from: int) -> void:
