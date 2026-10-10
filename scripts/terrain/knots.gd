@@ -123,6 +123,8 @@ const KNOT_LEVEL_PROBE := 9.0 ## a row's plateau is checked this far behind the 
 ## circles only) and `obstacle_mask`. Returns {"knots": Array[Dictionary], "mesh_plan":
 ## Array[Dictionary]} -- mesh_plan entries use the exact cliff-dressing plan format (plus "knot"
 ## and "knot_row") so the caller can append them to cliff_dressing_plan.
+const KNOT_REACH_PARALLEL := true ## see build_knots: every knot's reachability pass at once on worker threads
+
 static func build_knots(heights: PackedFloat32Array, width: int, length: int, rng: RandomNumberGenerator, pre_dressing_heights: PackedFloat32Array, cliff_features: Array[Dictionary], cliff_plan: Array[Dictionary], outcrop_plan: Array[Dictionary], obstacle_mask: PackedByteArray, top_profiles: Dictionary) -> Dictionary:
 	var t_start := Time.get_ticks_msec()
 	var prof := {} # TEMP 2026-09-29 knot profiling (Kirill: "look into ramps and optimization") -- remove after
@@ -152,7 +154,10 @@ static func build_knots(heights: PackedFloat32Array, width: int, length: int, rn
 		for pz in slots:
 			plan.append({"type": t, "pz": pz, "jitter": KNOT_SLOT_JITTER * spacing, "slot_half": 0.5 * spacing})
 
+	# KNOT_REACH_PARALLEL false, or the user argument --knots-sequential: the old order, to compare.
+	var sequential := not KNOT_REACH_PARALLEL or "--knots-sequential" in OS.get_cmdline_user_args()
 	var knots: Array[Dictionary] = []
+	var mesh_blocks: Array[PackedByteArray] = [] # per knot, for the reachability pass after the loop
 	var mesh_plan: Array[Dictionary] = []
 	var mesh_usage: Dictionary = {} # def name -> meshes placed in knots so far (see _assign_row_models)
 	for p in plan:
@@ -185,12 +190,48 @@ static func build_knots(heights: PackedFloat32Array, width: int, length: int, rn
 		var mesh_block := _mesh_block_mask(entries, width, length)
 		_collect_levels(knot, heights, width, length, mesh_block) # 2026-09-29: needs the rock mask (skips rock / covered tops)
 		tt = _prof(prof, "levels+mesh_block", tt)
-		_ensure_reachable(knot, heights, width, length, footprint, obstacle_mask, mesh_block)
-		tt = _prof(prof, "reach+ramps", tt)
+		if sequential: # the order before 2026-10-10: this knot's ramps before the next knot is placed
+			_ensure_reachable(knot, heights, width, length, footprint, obstacle_mask, mesh_block)
+			knot.erase("_changed")
+			tt = _prof(prof, "reach+ramps", tt)
 		mesh_plan.append_array(entries)
 		knot["mesh_count"] = entries.size()
 		knots.append(knot)
+		mesh_blocks.append(mesh_block)
+
+	# Reachability and ramps, every knot at once on worker threads (2026-10-10: it was 1.8 s of
+	# the 2.9 s, one knot after the other; 5.1 of 6.1 s on a seed where one knot fails three ramp
+	# tries). The pass uses no random numbers and reads and writes only inside the knot's own
+	# circle, so each task works on private copies of the maps and its circle is copied back
+	# afterwards. Checked on two seeds against the old order (--knots-sequential): the same
+	# heightmap and the same checksums in every later stage.
+	tt = Time.get_ticks_usec()
+	var reach_ctx := {"knots": knots, "mesh_blocks": mesh_blocks, "heights": heights, "footprint": footprint, "obstacle_mask": obstacle_mask, "width": width, "length": length, "out": [], "mutex": Mutex.new()}
+	(reach_ctx.out as Array).resize(knots.size())
+	if not knots.is_empty() and not sequential:
+		WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_reach_task.bind(reach_ctx), knots.size(), -1, true))
+	for k in knots.size():
+		var knot: Dictionary = knots[k]
+		var own_heights: PackedFloat32Array = (reach_ctx.out as Array)[k] if not sequential else heights
+		var kept: PackedInt32Array = knot.get("_changed", PackedInt32Array())
+		for idx in kept:
+			footprint[idx] = 1
+			obstacle_mask[idx] = 1
+		# The heights: every pixel of the knot's circle that differs, not only `kept` -- a carve
+		# reports changes above 1 mm only, and smaller ones (of kept and of undone ramps) stay in
+		# the map; without them the result differed from the one-after-the-other order by them.
+		if not sequential:
+			var reach := int(ceil(float(knot.reach))) + 4
+			for pz in range(clampi(int(knot.cz) - reach, 0, length - 1), clampi(int(knot.cz) + reach, 0, length - 1) + 1):
+				for px in range(clampi(int(knot.cx) - reach, 0, width - 1), clampi(int(knot.cx) + reach, 0, width - 1) + 1):
+					# Inside the circle only: the square's corners can lie in a neighbour's circle,
+					# where this task's copy does not have that neighbour's ramps.
+					var i := pz * width + px
+					if own_heights[i] != heights[i] and Vector2(px - float(knot.cx), pz - float(knot.cz)).length() <= float(knot.reach) + 1.5:
+						heights[i] = own_heights[i]
+		knot.erase("_changed")
 		_print_knot(knot)
+	tt = _prof(prof, "reach+ramps (all knots at once)", tt)
 
 	# Self-check: nothing outside the knot circles may have changed.
 	tt = Time.get_ticks_usec()
@@ -228,6 +269,17 @@ static func build_knots(heights: PackedFloat32Array, width: int, length: int, rn
 	print("TERRAIN_GEN: knots -- %d/%d placed, %d cliff mesh(es), %d changed pixel(s) OUTSIDE knot circles (must be 0) (%.2fs)" % [knots.size(), plan.size(), mesh_plan.size(), outside, (Time.get_ticks_msec() - t_start) / 1000.0])
 	return {"knots": knots, "mesh_plan": mesh_plan, "mesh_usage": mesh_usage}
 
+## build_knots()'s reachability pass for one knot. Worker thread: private copies of the maps it
+## writes (a write into a shared packed array from a task is lost); the heights come back whole.
+static func _reach_task(index: int, ctx: Dictionary) -> void:
+	var heights: PackedFloat32Array = (ctx.heights as PackedFloat32Array).duplicate()
+	var footprint: PackedByteArray = (ctx.footprint as PackedByteArray).duplicate()
+	var obstacle_mask: PackedByteArray = (ctx.obstacle_mask as PackedByteArray).duplicate()
+	_ensure_reachable((ctx.knots as Array)[index], heights, ctx.width, ctx.length, footprint, obstacle_mask, (ctx.mesh_blocks as Array)[index])
+	var mutex: Mutex = ctx.mutex
+	mutex.lock()
+	(ctx.out as Array)[index] = heights
+	mutex.unlock()
 ## TEMP 2026-09-29 knot profiling helper: adds (now - t0) usec to prof[key], returns now.
 static func _prof(prof: Dictionary, key: String, t0: int) -> int:
 	var now := Time.get_ticks_usec()
@@ -792,10 +844,7 @@ static func _mark_knot(knot: Dictionary, heights: PackedFloat32Array, before: Pa
 				footprint[i] = 1
 				obstacle_mask[i] = 1
 	_fill_circle(occupied, width, length, cx, cz, r + KNOT_OCCUPIED_MARGIN)
-	var mesh_mask := CliffDressing.build_cliff_dressing_obstacle_mask(entries, width, length)
-	for i in mesh_mask.size():
-		if mesh_mask[i] == 1:
-			obstacle_mask[i] = 1
+	CliffDressing.build_cliff_dressing_obstacle_mask(entries, width, length, obstacle_mask)
 
 # ---------------------------------------------------------------------------------------------
 # Reachability
@@ -1072,6 +1121,10 @@ static func _ramp_level(knot: Dictionary, b: Dictionary, heights: PackedFloat32A
 			for idx in changed:
 				footprint[idx] = 1
 				obstacle_mask[idx] = 1
+			# The pixels of every ramp kept, for build_knots to copy back from this task's maps.
+			var kept: PackedInt32Array = knot.get("_changed", PackedInt32Array())
+			kept.append_array(changed)
+			knot["_changed"] = kept
 			var ramp_list: Array = knot.get("ramp_paths", [])
 			ramp_list.append({"level": b.name, "from": r.from, "to": r.to, "from_h": r.from_h, "to_h": r.to_h})
 			knot["ramp_paths"] = ramp_list
@@ -1267,9 +1320,10 @@ static func _carve_ramp(knot: Dictionary, b: Dictionary, heights: PackedFloat32A
 	var highs: Array[Vector2] = []
 	var high_h := PackedFloat32Array()
 	var top := _level_top(knot, b, heights, width, length, mesh_block)
-	var top_idx := {} # pixel index -> true, for _segment_clear_top
+	var top_mask := PackedByteArray() # 1 on the top region's pixels, for _segment_clear_top
+	top_mask.resize(width * length)
 	for q in top:
-		top_idx[int(q.y) * width + int(q.x)] = true
+		top_mask[int(q.y) * width + int(q.x)] = 1
 	var fine := top.size() < KNOT_RAMP_SMALL_TOP # 2026-09-29: small ledges get every pixel as a candidate
 	for q in top:
 		var hx := int(q.x)
@@ -1299,7 +1353,12 @@ static func _carve_ramp(knot: Dictionary, b: Dictionary, heights: PackedFloat32A
 		min_high = minf(min_high, hh)
 	# Shortest straight ramp from reached lower ground to any top that stays <= KNOT_RAMP_PAIR_SLOPE
 	# and clears every rock (Round 3c pair search, unchanged).
-	var best_len := INF
+	# 2026-10-10: the pairs are tested shortest first. The loop used to walk them in map order,
+	# testing every pair shorter than the best so far against the rocks (_segment_clear_top, by
+	# far the costly part: 62,000 tests and 2.3 s for one level on one seed). The answer was, and
+	# is, the shortest pair that passes, the earliest in map order among equals -- both ends are
+	# whole pixels, so "shorter" is decided by the squared distance, a whole number, and the keys
+	# below sort by (squared distance, low pixel in map order, top index).
 	var p0 := Vector2(-1, -1)
 	var p1 := Vector2(-1, -1)
 	var h0 := 0.0
@@ -1308,6 +1367,9 @@ static func _carve_ramp(knot: Dictionary, b: Dictionary, heights: PackedFloat32A
 	var n_steep := 0
 	var n_rock := 0
 	var min_slope := INF
+	var low_pts := PackedVector2Array()
+	var low_hs := PackedFloat32Array()
+	var keys := PackedInt64Array()
 	for lz in range(0, bh, 2):
 		for lx in range(0, bw, 2):
 			if visited[lz * bw + lx] == 0:
@@ -1315,28 +1377,38 @@ static func _carve_ramp(knot: Dictionary, b: Dictionary, heights: PackedFloat32A
 			var lh := heights[(z0 + lz) * width + x0 + lx]
 			if lh >= min_high - 1.0:
 				continue
-			n_lows += 1
 			var lp := Vector2(x0 + lx, z0 + lz)
+			var low_seq := n_lows
+			n_lows += 1
+			low_pts.append(lp)
+			low_hs.append(lh)
 			for k in highs.size():
 				if high_h[k] - lh < 1.0:
 					continue
 				var hp: Vector2 = highs[k]
 				var run := lp.distance_to(hp)
-				if run >= best_len:
-					continue
 				var pair_slope := (high_h[k] - lh) / maxf(run, 1.0)
 				if pair_slope > KNOT_RAMP_PAIR_SLOPE:
 					n_steep += 1
 					min_slope = minf(min_slope, pair_slope)
 					continue
-				if not _segment_clear_top(lp, hp, mesh_block, width, length, top_idx):
-					n_rock += 1
-					continue
-				best_len = run
-				p0 = lp
-				p1 = hp
-				h0 = lh
-				target_h = high_h[k]
+				var ddx := int(hp.x) - (x0 + lx)
+				var ddz := int(hp.y) - (z0 + lz)
+				keys.append(((ddx * ddx + ddz * ddz) << 40) | (low_seq << 16) | k)
+	keys.sort()
+	for key in keys:
+		var k := key & 0xFFFF
+		var low_seq := (key >> 16) & 0xFFFFFF
+		var lp := low_pts[low_seq]
+		var hp: Vector2 = highs[k]
+		if not _segment_clear_top(lp, hp, mesh_block, width, length, top_mask):
+			n_rock += 1
+			continue
+		p0 = lp
+		p1 = hp
+		h0 = low_hs[low_seq]
+		target_h = high_h[k]
+		break
 	if p0.x < 0.0:
 		_ramp_why(knot, b, "no ramp line: %d top px, %d reached low px, %d too steep (best %.2f > %.2f), %d blocked by rock" % [highs.size(), n_lows, n_steep, min_slope, KNOT_RAMP_PAIR_SLOPE, n_rock]) # TEMP ramp diag
 		return {}
@@ -1421,7 +1493,7 @@ static func _carve_ramp(knot: Dictionary, b: Dictionary, heights: PackedFloat32A
 ## edged by rock by design -- the full side clearance (BED_HALF + ROCK_CLEAR = 6 m each side) ruled
 ## out every ledge narrower than ~12 m (e.g. every floor knot's front ledge, wall knots' benches),
 ## so those levels never got a ramp. The climbing part (off the top) keeps the full clearance.
-static func _segment_clear_top(a: Vector2, b: Vector2, mesh_block: PackedByteArray, width: int, length: int, top_idx: Dictionary) -> bool:
+static func _segment_clear_top(a: Vector2, b: Vector2, mesh_block: PackedByteArray, width: int, length: int, top_mask: PackedByteArray) -> bool:
 	var seg := b - a
 	var n := int(ceil(seg.length() / 0.7))
 	if n <= 0:
@@ -1429,21 +1501,29 @@ static func _segment_clear_top(a: Vector2, b: Vector2, mesh_block: PackedByteArr
 	var nrm := Vector2(-seg.y, seg.x).normalized()
 	var side_a := nrm * KNOT_RAMP_BED_HALF
 	var side_b := nrm * (KNOT_RAMP_BED_HALF + KNOT_RAMP_ROCK_CLEAR)
+	var x_max := width - 1
+	var z_max := length - 1
 	for k in range(n + 1):
 		var p := a + seg * (float(k) / float(n))
-		var px := clampi(int(round(p.x)), 0, width - 1)
-		var pz := clampi(int(round(p.y)), 0, length - 1)
-		if mesh_block[pz * width + px] == 1:
+		var i := clampi(int(round(p.y)), 0, z_max) * width + clampi(int(round(p.x)), 0, x_max)
+		if mesh_block[i] == 1:
 			return false
-		if top_idx.has(pz * width + px):
+		if top_mask[i] == 1:
 			continue # on the ledge itself: centre line clear is enough
-		for q in [p + side_a, p - side_a, p + side_b, p - side_b]:
-			var qx := clampi(int(round(q.x)), 0, width - 1)
-			var qz := clampi(int(round(q.y)), 0, length - 1)
-			if mesh_block[qz * width + qx] == 1:
-				return false
+		# The four side points, written out (a list of them per sample was a good part of the cost).
+		var q := p + side_a
+		if mesh_block[clampi(int(round(q.y)), 0, z_max) * width + clampi(int(round(q.x)), 0, x_max)] == 1:
+			return false
+		q = p - side_a
+		if mesh_block[clampi(int(round(q.y)), 0, z_max) * width + clampi(int(round(q.x)), 0, x_max)] == 1:
+			return false
+		q = p + side_b
+		if mesh_block[clampi(int(round(q.y)), 0, z_max) * width + clampi(int(round(q.x)), 0, x_max)] == 1:
+			return false
+		q = p - side_b
+		if mesh_block[clampi(int(round(q.y)), 0, z_max) * width + clampi(int(round(q.x)), 0, x_max)] == 1:
+			return false
 	return true
-
 ## True if a ramp from a to b (its centre line and both sides, ~1.5 m out) crosses no rock.
 static func _segment_clear(a: Vector2, b: Vector2, mesh_block: PackedByteArray, width: int, length: int) -> bool:
 	var seg := b - a

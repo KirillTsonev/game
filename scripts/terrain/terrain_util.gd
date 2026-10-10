@@ -176,3 +176,14 @@ static func sum_mesh_normals_recursive(node: Node, parent_transform: Transform3D
 	for child in node.get_children():
 		total += sum_mesh_normals_recursive(child, local_transform)
 	return total
+
+## How many worker threads a band task should ask for when its inner loop calls engine objects
+## (RandomNumberGenerator, FastNoiseLite ...) per item; pass it as add_group_task()'s third argument.
+## Measured 2026-10-10: on a release build such calls scale across threads (about 5 x on this
+## machine). On a debug build -- the editor's executable and debug exports -- every call on an
+## object from a worker thread waits on one engine-wide lock: 16 tasks of random numbers took
+## 32 ms on one thread and 211 ms on twelve. Bands of plain arithmetic on packed arrays are not
+## affected and should keep asking for -1 (all threads).
+const DEBUG_OBJECT_CALL_THREADS := 6 ## threads for such bands on a debug build; -1 = all
+static func object_call_threads() -> int:
+	return DEBUG_OBJECT_CALL_THREADS if OS.is_debug_build() else -1

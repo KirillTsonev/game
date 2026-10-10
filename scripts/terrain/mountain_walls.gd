@@ -214,16 +214,33 @@ static func _build_cloud_sheets(root: Node3D, heightmap_corner: Vector3, floor_y
 ## The repeating noise the rows' clouds are cut from (built once per run of the game).
 static func _cloud_noise_texture() -> ImageTexture:
 	if _cloud_noise == null:
-		var noise := FastNoiseLite.new()
-		noise.seed = 0x434C4F55 # 'CLOU'
-		noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
-		noise.frequency = 0.012
-		noise.fractal_octaves = 4
-		var image := noise.get_seamless_image(CLOUD_NOISE_SIZE, CLOUD_NOISE_SIZE)
-		image.convert(Image.FORMAT_L8)
-		image.generate_mipmaps()
-		_cloud_noise = ImageTexture.create_from_image(image)
+		if _cloud_noise_task >= 0:
+			WorkerThreadPool.wait_for_task_completion(_cloud_noise_task)
+			_cloud_noise_task = -1
+		else:
+			_render_cloud_noise()
+		_cloud_noise = ImageTexture.create_from_image(_cloud_noise_image)
+		_cloud_noise_image = null
 	return _cloud_noise
+
+## Starts rendering that image on a worker thread (2026-10-10); WorldGenerator calls it before the
+## heightmap build. _cloud_noise_texture() waits for it, or renders the image itself.
+static var _cloud_noise_task := -1
+static var _cloud_noise_image: Image
+static func prewarm_cloud_noise() -> void:
+	if _cloud_noise == null and _cloud_noise_task < 0:
+		_cloud_noise_task = WorkerThreadPool.add_task(_render_cloud_noise)
+
+static func _render_cloud_noise() -> void:
+	var noise := FastNoiseLite.new()
+	noise.seed = 0x434C4F55 # 'CLOU'
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	noise.frequency = 0.012
+	noise.fractal_octaves = 4
+	var image := noise.get_seamless_image(CLOUD_NOISE_SIZE, CLOUD_NOISE_SIZE)
+	image.convert(Image.FORMAT_L8)
+	image.generate_mipmaps()
+	_cloud_noise_image = image
 
 const NODE_NAME := "MountainWalls"
 const SHADER_PATH := "res://shaders/mountain_wall.gdshader"
@@ -724,8 +741,6 @@ static func apron_maps(maps: Dictionary, master_seed: int, side: int = 0) -> Dic
 	var crest_max := -INF
 	# The ramp only depends on the (shifted) distance out and on the grade at the edge: one
 	# table per grade in steps of 0.01, read between its 1 m entries.
-	apron_envelope[side] = PackedFloat32Array()
-	apron_envelope[side].resize(rows)
 	var table_size := APRON_WIDTH + int(APRON_PLAN_SHIFT) + 2
 	var ramp_tables: Dictionary = {}
 	for row in rows:
@@ -736,40 +751,28 @@ static func apron_maps(maps: Dictionary, master_seed: int, side: int = 0) -> Dic
 			for out in table_size:
 				table[out] = _ramp_height(float(out), grade_key / 100.0)
 			ramp_tables[grade_key] = table
-		var ramp: PackedFloat32Array = ramp_tables[grade_key]
-		var edge_height: float = rim.height[row]
-		var edge_grade: float = rim.local_grade[row]
-		var base_height: float = rim.smooth_height[row]
-		var plan_shift := plan_noise.get_noise_1d(float(row)) * APRON_PLAN_SHIFT
-		var envelope := lerpf(APRON_ENVELOPE_MIN, APRON_ENVELOPE_MAX, smoothstep(-0.4, 0.4, envelope_noise.get_noise_1d(float(row))))
-		var connect := smoothstep(APRON_CONNECT_ENVELOPE_NONE, APRON_CONNECT_ENVELOPE_FULL, envelope)
-		var ledge_share := _ledge_share(master_seed, row, side)
-		apron_envelope[side][row] = (envelope - APRON_ENVELOPE_MIN) / (APRON_ENVELOPE_MAX - APRON_ENVELOPE_MIN)
-		var crest := -INF
-		for a in APRON_WIDTH:
-			var out := float(APRON_WIDTH - a if side == 0 else a + 1) # m out from the map's edge
-			# The ramp, read nearer or further out (never before its own start).
-			var shifted := maxf(out + plan_shift * smoothstep(0.0, APRON_EDGE_BLEND, out), out * 0.35)
-			var s0 := mini(int(shifted), table_size - 2)
-			var rise := lerpf(ramp[s0], ramp[s0 + 1], shifted - float(s0))
-			rise += smoothstep(8.0, 50.0, shifted) * APRON_SPUR_HEIGHT * (0.5 + 0.5 * spur_noise.get_noise_2d(out * 0.25, float(row)))
-			rise += smoothstep(APRON_RELIEF_START, APRON_RELIEF_FULL, shifted) * APRON_RELIEF * (0.5 + 0.5 * relief_noise.get_noise_2d(out, float(row)))
-			# Taller or lower along the valley (not the first metres), and at the peaks no fall behind the crest.
-			rise = minf(rise, APRON_ENVELOPE_FLOOR) + envelope * maxf(rise - APRON_ENVELOPE_FLOOR, 0.0)
-			rise += connect * APRON_CONNECT_GRADE * maxf(shifted - APRON_CONNECT_START, 0.0)
-			# Faces and ledges, at the base only (and none in the first metres, where the apron still follows the map's edge).
-			var shift := terrace_noise.get_noise_2d(out, float(row)) * APRON_TERRACE_WARP
-			var bands := (rise + shift) / APRON_TERRACE_HEIGHT
-			var stepped := (floorf(bands) + smoothstep(0.0, APRON_TERRACE_FACE, bands - floorf(bands))) * APRON_TERRACE_HEIGHT - shift
-			rise = lerpf(rise, stepped, APRON_TERRACE_STRENGTH * ledge_share * smoothstep(4.0, 20.0, out) * (1.0 - smoothstep(APRON_TERRACE_TOP * 0.4, APRON_TERRACE_TOP, rise)))
-			var body := base_height + rise
-			var near := edge_height + edge_grade * out
-			var h := lerpf(near, body, smoothstep(0.0, APRON_EDGE_BLEND, out))
-			heights[row * APRON_WIDTH + a] = h
-			crest = maxf(crest, h - edge_height)
-		crest_min = minf(crest_min, crest)
-		crest_max = maxf(crest_max, crest)
-
+	# 2026-10-10: the rows in bands on worker threads (see _apron_height_band; each side was
+	# 0.3 s of heights on the main thread). A row depends on nothing but its own inputs, so the
+	# result is the single loop's.
+	_ledge_share(master_seed, 0, side) # builds the shared section noise before the bands read it
+	var bands := ceili(float(rows) / APRON_BAND_ROWS)
+	var height_out: Array = []
+	height_out.resize(bands)
+	var height_ctx := {
+		"rows": rows, "side": side, "master_seed": master_seed, "table_size": table_size, "ramp_tables": ramp_tables,
+		"grade": rim.grade, "edge_height": rim.height, "edge_grade": rim.local_grade, "base_height": rim.smooth_height,
+		"plan_noise": plan_noise, "envelope_noise": envelope_noise, "spur_noise": spur_noise, "relief_noise": relief_noise, "terrace_noise": terrace_noise,
+		"out": height_out, "mutex": Mutex.new(),
+	}
+	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_apron_height_band.bind(height_ctx), bands, TerrainUtil.object_call_threads(), true))
+	heights.clear()
+	var envelopes := PackedFloat32Array()
+	for b: Dictionary in height_out:
+		heights.append_array(b.heights)
+		envelopes.append_array(b.envelopes)
+		crest_min = minf(crest_min, b.crest_min)
+		crest_max = maxf(crest_max, b.crest_max)
+	apron_envelope[side] = envelopes
 	# The village's shoulder, on the low-X side (TerrainCastle): the higher of the two heights,
 	# before anything is derived from the shape. Bare rock where it is: no turf, no snow.
 	var on_shoulder := PackedByteArray()
@@ -784,20 +787,121 @@ static func apron_maps(maps: Dictionary, master_seed: int, side: int = 0) -> Dic
 
 	# -- Ground and colour, from the finished shape --
 	var control := PackedInt32Array()
-	control.resize(APRON_WIDTH * rows)
 	var color := PackedByteArray()
-	color.resize(APRON_WIDTH * rows * 4)
 	var turf_px := 0
 	var snow_px := 0
 	# The generated map's own colour-map pixels along the edge (its hub rows have none: white).
 	var map_color := PackedByteArray()
 	if maps.get("color") is Image and (maps.color as Image).get_format() == Image.FORMAT_RGBA8:
 		map_color = (maps.color as Image).get_data()
+	# In bands on worker threads, as the heights above (see _apron_color_band).
+	var color_out: Array = []
+	color_out.resize(bands)
+	var color_ctx := {
+		"rows": rows, "side": side, "heights": heights, "edge_height": rim.height, "on_shoulder": on_shoulder,
+		"map_color": map_color, "shade_noise": shade_noise, "rock_id": rock_texture_id,
+		"out": color_out, "mutex": Mutex.new(),
+	}
+	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_apron_color_band.bind(color_ctx), bands, TerrainUtil.object_call_threads(), true))
+	for b: Dictionary in color_out:
+		control.append_array(b.control)
+		color.append_array(b.color)
+		turf_px += b.turf_px
+		snow_px += b.snow_px
+	print("TERRAIN_GEN: mountain apron -- %d x %d m of terrain on the %s side, crest %.0f..%.0f m above the map's edge, turf on %.1f %% of it, snow on %.1f %% (%d ms)" % [APRON_WIDTH, rows, "low-X" if side == 0 else "high-X", crest_min, crest_max, 100.0 * turf_px / float(APRON_WIDTH * rows), 100.0 * snow_px / float(APRON_WIDTH * rows), Time.get_ticks_msec() - t0])
+	return {"heights": heights, "control": control, "color": color}
+
+const APRON_BAND_ROWS := 32 ## rows per worker-thread task in apron_maps()
+
+## apron_maps()'s heights for rows [band * APRON_BAND_ROWS, +APRON_BAND_ROWS). Worker thread: reads
+## the shared inputs in ctx, fills band-sized outputs of its own, stores them under ctx.mutex.
+static func _apron_height_band(band: int, ctx: Dictionary) -> void:
+	var rows: int = ctx.rows
+	var side: int = ctx.side
+	var master_seed: int = ctx.master_seed
+	var table_size: int = ctx.table_size
+	var ramp_tables: Dictionary = ctx.ramp_tables
+	var grades: PackedFloat32Array = ctx.grade
+	var edge_heights: PackedFloat32Array = ctx.edge_height
+	var edge_grades: PackedFloat32Array = ctx.edge_grade
+	var base_heights: PackedFloat32Array = ctx.base_height
+	var plan_noise: FastNoiseLite = ctx.plan_noise
+	var envelope_noise: FastNoiseLite = ctx.envelope_noise
+	var spur_noise: FastNoiseLite = ctx.spur_noise
+	var relief_noise: FastNoiseLite = ctx.relief_noise
+	var terrace_noise: FastNoiseLite = ctx.terrace_noise
+	var r_from := band * APRON_BAND_ROWS
+	var r_to := mini(r_from + APRON_BAND_ROWS, rows)
+	var heights := PackedFloat32Array()
+	heights.resize(APRON_WIDTH * (r_to - r_from))
+	var envelopes := PackedFloat32Array()
+	envelopes.resize(r_to - r_from)
+	var crest_min := INF
+	var crest_max := -INF
+	for row in range(r_from, r_to):
+		var ramp: PackedFloat32Array = ramp_tables[roundi(float(grades[row]) * 100.0)]
+		var edge_height: float = edge_heights[row]
+		var edge_grade: float = edge_grades[row]
+		var base_height: float = base_heights[row]
+		var plan_shift := plan_noise.get_noise_1d(float(row)) * APRON_PLAN_SHIFT
+		var envelope := lerpf(APRON_ENVELOPE_MIN, APRON_ENVELOPE_MAX, smoothstep(-0.4, 0.4, envelope_noise.get_noise_1d(float(row))))
+		var connect := smoothstep(APRON_CONNECT_ENVELOPE_NONE, APRON_CONNECT_ENVELOPE_FULL, envelope)
+		var ledge_share := _ledge_share(master_seed, row, side)
+		envelopes[row - r_from] = (envelope - APRON_ENVELOPE_MIN) / (APRON_ENVELOPE_MAX - APRON_ENVELOPE_MIN)
+		var crest := -INF
+		for a in APRON_WIDTH:
+			var out := float(APRON_WIDTH - a if side == 0 else a + 1) # m out from the map's edge
+			# The ramp, read nearer or further out (never before its own start).
+			var shifted := maxf(out + plan_shift * smoothstep(0.0, APRON_EDGE_BLEND, out), out * 0.35)
+			var s0 := mini(int(shifted), table_size - 2)
+			var rise := lerpf(ramp[s0], ramp[s0 + 1], shifted - float(s0))
+			rise += smoothstep(8.0, 50.0, shifted) * APRON_SPUR_HEIGHT * (0.5 + 0.5 * spur_noise.get_noise_2d(out * 0.25, float(row)))
+			rise += smoothstep(APRON_RELIEF_START, APRON_RELIEF_FULL, shifted) * APRON_RELIEF * (0.5 + 0.5 * relief_noise.get_noise_2d(out, float(row)))
+			# Taller or lower along the valley (not the first metres), and at the peaks no fall behind the crest.
+			rise = minf(rise, APRON_ENVELOPE_FLOOR) + envelope * maxf(rise - APRON_ENVELOPE_FLOOR, 0.0)
+			rise += connect * APRON_CONNECT_GRADE * maxf(shifted - APRON_CONNECT_START, 0.0)
+			# Faces and ledges, at the base only (and none in the first metres, where the apron still follows the map's edge).
+			var shift := terrace_noise.get_noise_2d(out, float(row)) * APRON_TERRACE_WARP
+			var steps := (rise + shift) / APRON_TERRACE_HEIGHT
+			var stepped := (floorf(steps) + smoothstep(0.0, APRON_TERRACE_FACE, steps - floorf(steps))) * APRON_TERRACE_HEIGHT - shift
+			rise = lerpf(rise, stepped, APRON_TERRACE_STRENGTH * ledge_share * smoothstep(4.0, 20.0, out) * (1.0 - smoothstep(APRON_TERRACE_TOP * 0.4, APRON_TERRACE_TOP, rise)))
+			var body := base_height + rise
+			var near := edge_height + edge_grade * out
+			var h := lerpf(near, body, smoothstep(0.0, APRON_EDGE_BLEND, out))
+			heights[(row - r_from) * APRON_WIDTH + a] = h
+			crest = maxf(crest, h - edge_height)
+		crest_min = minf(crest_min, crest)
+		crest_max = maxf(crest_max, crest)
+	var mutex: Mutex = ctx.mutex
+	mutex.lock()
+	(ctx.out as Array)[band] = {"heights": heights, "envelopes": envelopes, "crest_min": crest_min, "crest_max": crest_max}
+	mutex.unlock()
+
+## apron_maps()'s ground and colour for one band of rows, from the finished heights. Worker
+## thread, same rules; the control pixels are packed here (TerrainGroundPaint._pack, the same
+## bits as TerrainHeightmap.pack_control_blend without its GDExtension calls).
+static func _apron_color_band(band: int, ctx: Dictionary) -> void:
+	var rows: int = ctx.rows
+	var side: int = ctx.side
+	var heights: PackedFloat32Array = ctx.heights
+	var edge_heights: PackedFloat32Array = ctx.edge_height
+	var on_shoulder: PackedByteArray = ctx.on_shoulder
+	var map_color: PackedByteArray = ctx.map_color
+	var shade_noise: FastNoiseLite = ctx.shade_noise
+	var rock_id: int = ctx.rock_id
+	var r_from := band * APRON_BAND_ROWS
+	var r_to := mini(r_from + APRON_BAND_ROWS, rows)
+	var control := PackedInt32Array()
+	control.resize(APRON_WIDTH * (r_to - r_from))
+	var color := PackedByteArray()
+	color.resize(APRON_WIDTH * (r_to - r_from) * 4)
+	var turf_px := 0
+	var snow_px := 0
 	var map_width := TerrainConfig.AREA_WIDTH
-	for row in rows:
+	for row in range(r_from, r_to):
 		var r0 := maxi(row - 1, 0)
 		var r1 := mini(row + 1, rows - 1)
-		var edge_height: float = rim.height[row]
+		var edge_height: float = edge_heights[row]
 		# What the map's ground is coloured right at the edge (the ground paint multiplies the
 		# mountain's tint into the map's colour there): the apron starts from exactly that and
 		# takes its own shading over APRON_COLOR_BLEND m, or a straight line shows at the edge.
@@ -807,6 +911,7 @@ static func apron_maps(maps: Dictionary, master_seed: int, side: int = 0) -> Dic
 			edge_color = Color(map_color[e] / 255.0 * MOUNTAIN_TINT.r, map_color[e + 1] / 255.0 * MOUNTAIN_TINT.g, map_color[e + 2] / 255.0 * MOUNTAIN_TINT.b)
 		for a in APRON_WIDTH:
 			var i := row * APRON_WIDTH + a
+			var li := (row - r_from) * APRON_WIDTH + a
 			var a0 := maxi(a - 1, 0)
 			var a1 := mini(a + 1, APRON_WIDTH - 1)
 			var h := heights[i]
@@ -824,14 +929,14 @@ static func apron_maps(maps: Dictionary, master_seed: int, side: int = 0) -> Dic
 				turf = 0.0
 			if turf > 0.02:
 				turf_px += 1
-			control[i] = TerrainHeightmap.pack_control_blend(rock_texture_id, APRON_TURF_ID, turf)
+			control[li] = TerrainGroundPaint._pack(rock_id, APRON_TURF_ID, turf)
 			# Snow on the tips (turf never reaches this high).
-			var snow := smoothstep(APRON_SNOW_FROM, APRON_SNOW_FULL, h - edge_height + APRON_SNOW_WANDER * shade_noise.get_noise_2d(float(a) * 2.0 + 50.0, float(row) * 2.0)) 				* smoothstep(APRON_SNOW_NY_NONE, APRON_SNOW_NY_FULL, ny)
+			var snow := smoothstep(APRON_SNOW_FROM, APRON_SNOW_FULL, h - edge_height + APRON_SNOW_WANDER * shade_noise.get_noise_2d(float(a) * 2.0 + 50.0, float(row) * 2.0)) * smoothstep(APRON_SNOW_NY_NONE, APRON_SNOW_NY_FULL, ny)
 			if bare:
 				snow = 0.0
 			if snow > 0.02:
 				snow_px += 1
-				control[i] = TerrainHeightmap.pack_control_blend(rock_texture_id, APRON_SNOW_ID, snow)
+				control[li] = TerrainGroundPaint._pack(rock_id, APRON_SNOW_ID, snow)
 			# Brightness: creases darker, edges lighter; faint layers by height; a mild broad variation.
 			var curvature := h_a0 + h_a1 + h_r0 + h_r1 - 4.0 * h # > 0 in a crease
 			var shade := clampf(1.0 - curvature * APRON_CREASE_SHADE, APRON_CREASE_MIN, APRON_CREASE_MAX) / APRON_CREASE_MAX
@@ -841,13 +946,14 @@ static func apron_maps(maps: Dictionary, master_seed: int, side: int = 0) -> Dic
 			shade = lerpf(shade, 1.0, snow * 0.7) # snow fills creases and covers the rock's layers
 			var own := Color(shade * tint.r, shade * tint.g, shade * tint.b)
 			var final := edge_color.lerp(own, smoothstep(0.0, APRON_COLOR_BLEND, float(APRON_WIDTH - a if side == 0 else a + 1)))
-			color[i * 4] = int(255.0 * final.r)
-			color[i * 4 + 1] = int(255.0 * final.g)
-			color[i * 4 + 2] = int(255.0 * final.b)
-			color[i * 4 + 3] = 128 # roughness left as it is
-	print("TERRAIN_GEN: mountain apron -- %d x %d m of terrain on the %s side, crest %.0f..%.0f m above the map's edge, turf on %.1f %% of it, snow on %.1f %% (%d ms)" % [APRON_WIDTH, rows, "low-X" if side == 0 else "high-X", crest_min, crest_max, 100.0 * turf_px / float(APRON_WIDTH * rows), 100.0 * snow_px / float(APRON_WIDTH * rows), Time.get_ticks_msec() - t0])
-	return {"heights": heights, "control": control, "color": color}
-
+			color[li * 4] = int(255.0 * final.r)
+			color[li * 4 + 1] = int(255.0 * final.g)
+			color[li * 4 + 2] = int(255.0 * final.b)
+			color[li * 4 + 3] = 128 # roughness left as it is
+	var mutex: Mutex = ctx.mutex
+	mutex.lock()
+	(ctx.out as Array)[band] = {"control": control, "color": color, "turf_px": turf_px, "snow_px": snow_px}
+	mutex.unlock()
 static func _apron_noise(noise_seed: int, frequency: float, fractal: int, octaves: int) -> FastNoiseLite:
 	var noise := FastNoiseLite.new()
 	noise.seed = noise_seed

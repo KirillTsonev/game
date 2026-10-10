@@ -217,9 +217,12 @@ const CLIFF_DRESSING_TOP_PROFILE_SAMPLES := 25
 ## from def.real_size/def.depth * scale_jitter, projected onto the mesh's own local basis),
 ## but as a hard boolean flag rather than a soft height blend, padded by
 ## CLIFF_DRESSING_ROAD_OBSTACLE_MARGIN so the road can't shave right past the mesh's edge.
-static func build_cliff_dressing_obstacle_mask(plan: Array[Dictionary], width: int, length: int) -> PackedByteArray:
-	var obstacle := PackedByteArray()
-	obstacle.resize(width * length)
+## `into`: an existing mask to mark instead of a new one (the knots pass the road's obstacle mask:
+## they used to copy a new whole-map mask into it pixel by pixel, once per knot).
+static func build_cliff_dressing_obstacle_mask(plan: Array[Dictionary], width: int, length: int, into := PackedByteArray()) -> PackedByteArray:
+	var obstacle := into
+	if obstacle.is_empty():
+		obstacle.resize(width * length)
 
 	var defs_by_name: Dictionary = {}
 	for def in TerrainConfig.CLIFF_DRESSING_DEFS:
@@ -1186,6 +1189,27 @@ static func raise_terrain_behind_cliff_dressing(plan: Array[Dictionary], heights
 		# half_z keeps it from eating into the front (visible-face) half of the footprint.
 		var inner_ramp := minf(ramp_distance, half_z)
 
+		# 2026-10-10: the loop below walks only the part of that square this entry can touch. A
+		# pixel gets a weight only behind the mesh's centre line (local_z < 0), no further back
+		# than plateau + fade, and no further sideways than edge + softness -- the last two
+		# stretched by the warp, which is at least 1 - EDGE_WARP; 0.5 is used here to be safe.
+		# The box round that rotated rectangle, plus a pixel, cut to the square. Same result, about
+		# half the pixels (the pass was 0.5 s of the knots' row building).
+		var box_back := half_z + plateau_depth + fade_distance / 0.5
+		var box_left := effective_edge_left + lateral_softness_left / 0.5
+		var box_right := effective_edge_right + lateral_softness_right / 0.5
+		var box_lo := Vector2(INF, INF)
+		var box_hi := Vector2(-INF, -INF)
+		for corner_x: float in [-box_left, box_right]:
+			for corner_z: float in [-box_back, 0.0]:
+				var corner := Vector2(px, pz) + axis_local_x * corner_x + axis_local_z * corner_z
+				box_lo = box_lo.min(corner)
+				box_hi = box_hi.max(corner)
+		min_px = maxi(min_px, int(floor(box_lo.x)) - 1)
+		max_px = mini(max_px, int(ceil(box_hi.x)) + 1)
+		min_pz = maxi(min_pz, int(floor(box_lo.y)) - 1)
+		max_pz = mini(max_pz, int(ceil(box_hi.y)) + 1)
+
 		for qz in range(min_pz, max_pz + 1):
 			for qx in range(min_px, max_px + 1):
 				var delta := Vector2(qx - px, qz - pz)
@@ -1196,8 +1220,12 @@ static func raise_terrain_behind_cliff_dressing(plan: Array[Dictionary], heights
 				var d_behind := -local_z - half_z
 				# round 20: per-pixel distance warps (world-grid sampled, so overlapping placements
 				# see the same noise and still combine cleanly). Offset second sample decorrelates them.
-				var fade_warp := 1.0 + CLIFF_DRESSING_RAISE_EDGE_WARP * raise_warp_noise.get_noise_2d(qx, qz)
-				var lateral_warp := 1.0 + CLIFF_DRESSING_RAISE_EDGE_WARP * raise_warp_noise.get_noise_2d(qx + 5000.0, qz - 5000.0)
+				# 2026-10-10: each is worked out only where it is used (the fade only behind the plateau,
+				# the lateral one only outside the edge, further down) -- they were sampled for every
+				# pixel of the square, most of which this entry does not touch. Same values.
+				var fade_warp := 1.0
+				if d_behind > plateau_depth:
+					fade_warp = 1.0 + CLIFF_DRESSING_RAISE_EDGE_WARP * raise_warp_noise.get_noise_2d(qx, qz)
 
 				# 2026-09-18 round 14 -- see joined_left/joined_right's own comment above. A pixel
 				# laterally within the mesh's own footprint width keeps the original front-face-gated
@@ -1255,7 +1283,9 @@ static func raise_terrain_behind_cliff_dressing(plan: Array[Dictionary], heights
 
 				var side_effective_edge := effective_edge_left if local_x < 0.0 else effective_edge_right
 				var side_lateral_softness := lateral_softness_left if local_x < 0.0 else lateral_softness_right
-				var lateral_outside := maxf(0.0, absf(local_x) - side_effective_edge) * lateral_warp # round 20
+				var lateral_outside := maxf(0.0, absf(local_x) - side_effective_edge)
+				if lateral_outside > 0.0: # round 20
+					lateral_outside *= 1.0 + CLIFF_DRESSING_RAISE_EDGE_WARP * raise_warp_noise.get_noise_2d(qx + 5000.0, qz - 5000.0)
 				var lateral_weight := 1.0 - smoothstep(0.0, side_lateral_softness, lateral_outside)
 				if lateral_weight <= 0.0:
 					continue

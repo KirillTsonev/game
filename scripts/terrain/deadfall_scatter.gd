@@ -221,6 +221,15 @@ static func scatter_deadfall(parent_node: Node, terrain: Terrain3D, heights: Pac
 	# Lookup grids for _capsule_blocked (2026-10-05: its plain scans of every circle and every
 	# placed piece were 0.67 s of this stage's 0.93 s). KEEP_GRID_CELL cells -> indices into
 	# ctx.circles / ctx.placed of whatever overlaps the cell; same answers, far fewer tests.
+	# 2026-10-10: the same for the cliff rects and the knots' ramps, which every sample point of
+	# every piece and every cone spot scanned in full (66 rects, 11 knots on one seed).
+	ctx["rect_grid"] = _build_rect_grid(ctx.rects)
+	var ramps: Array[Vector2] = [] # from, to, from, to ...
+	for knot: Dictionary in knots:
+		for ramp: Dictionary in knot.get("ramp_paths", []):
+			ramps.append(ramp.from)
+			ramps.append(ramp.to)
+	ctx["ramps"] = ramps
 	ctx["circle_grid"] = {}
 	ctx["placed_grid"] = {}
 	var all_circles: Array[Vector3] = ctx.circles
@@ -492,15 +501,7 @@ static func _scatter_cones(ctx: Dictionary, instancer: Terrain3DInstancer, asset
 		var tr := _nearest_trunk(ctx.trunk_grid, p, 1.0)
 		if tr.z > 0.0 and p.distance_to(Vector2(tr.x, tr.y)) < TRUNK_RADIUS * tr.z + CONE_PAD:
 			continue
-		var in_rect := false
-		for kr: Dictionary in ctx.rects:
-			var d: Vector2 = p - kr.c
-			var lx := d.dot(kr.ax)
-			var lz := d.dot(kr.az)
-			if lx >= float(kr.x0) - CONE_PAD and lx <= float(kr.x1) + CONE_PAD and lz >= float(kr.z0) - CONE_PAD and lz <= float(kr.z1) + CONE_PAD:
-				in_rect = true
-				break
-		if in_rect:
+		if _rect_hit(ctx, p, CONE_PAD):
 			continue
 		var id := _pick(mix, rng)
 		var scale := rng.randf_range(CONE_SCALE_MIN, CONE_SCALE_MAX)
@@ -701,6 +702,41 @@ static func _try_place(ctx: Dictionary, id: int, p: Vector2, angle: float, scale
 	counts[id] += 1
 	return true
 
+## The cliff rects (UnderstoryScatter._build_keep_rects) bucketed in KEEP_GRID_CELL cells: each
+## cell lists the rects a point in it can be within RECT_GRID_PAD of. A rect's axes are unit and
+## at right angles, so "within pad along both of its axes" is at most pad * sqrt(2) outside the
+## box round its four corners.
+const RECT_GRID_PAD := 2.0 ## m, the largest pad _rect_hit answers from the grid (larger: full scan)
+const _NO_RECTS: Array = []
+static func _build_rect_grid(rects: Array[Dictionary]) -> Dictionary:
+	var grid := {}
+	var grow := RECT_GRID_PAD * 1.5
+	for kr in rects:
+		var lo := Vector2(INF, INF)
+		var hi := Vector2(-INF, -INF)
+		for lx: float in [kr.x0, kr.x1]:
+			for lz: float in [kr.z0, kr.z1]:
+				var corner: Vector2 = (kr.c as Vector2) + (kr.ax as Vector2) * lx + (kr.az as Vector2) * lz
+				lo = lo.min(corner)
+				hi = hi.max(corner)
+		for gz in range(floori((lo.y - grow) / KEEP_GRID_CELL), floori((hi.y + grow) / KEEP_GRID_CELL) + 1):
+			for gx in range(floori((lo.x - grow) / KEEP_GRID_CELL), floori((hi.x + grow) / KEEP_GRID_CELL) + 1):
+				var cell := Vector2i(gx, gz)
+				if not grid.has(cell):
+					grid[cell] = []
+				grid[cell].append(kr)
+	return grid
+
+## True if q (pixel space) is within `pad` of a cliff rect along both of the rect's axes.
+static func _rect_hit(ctx: Dictionary, q: Vector2, pad: float) -> bool:
+	var list: Array = ctx.rects if pad > RECT_GRID_PAD else (ctx.rect_grid as Dictionary).get(Vector2i(floori(q.x / KEEP_GRID_CELL), floori(q.y / KEEP_GRID_CELL)), _NO_RECTS)
+	for kr: Dictionary in list:
+		var d: Vector2 = q - kr.c
+		var lx := d.dot(kr.ax)
+		var lz := d.dot(kr.az)
+		if lx >= float(kr.x0) - pad and lx <= float(kr.x1) + pad and lz >= float(kr.z0) - pad and lz <= float(kr.z1) + pad:
+			return true
+	return false
 ## Lists `index` in every KEEP_GRID_CELL cell of `grid` that the box (x0, z0)-(x1, z1) touches.
 static func _bucket_index(grid: Dictionary, index: int, x0: float, z0: float, x1: float, z1: float) -> void:
 	for gz in range(floori(z0 / KEEP_GRID_CELL), floori(z1 / KEEP_GRID_CELL) + 1):
@@ -717,14 +753,11 @@ static func _capsule_blocked(ctx: Dictionary, a: Vector2, b: Vector2, r: float, 
 	var pad := r + KEEPOUT_MARGIN
 	var circles: Array[Vector3] = ctx.circles
 	var circle_grid: Dictionary = ctx.circle_grid
+	var ramps: Array[Vector2] = ctx.ramps
 	for k in n + 1:
 		var q := a.lerp(b, float(k) / float(n))
-		for kr: Dictionary in ctx.rects:
-			var d: Vector2 = q - kr.c
-			var lx := d.dot(kr.ax)
-			var lz := d.dot(kr.az)
-			if lx >= float(kr.x0) - pad and lx <= float(kr.x1) + pad and lz >= float(kr.z0) - pad and lz <= float(kr.z1) + pad:
-				return true
+		if _rect_hit(ctx, q, pad):
+			return true
 		# Only the circles bucketed in the cells within `pad` of q can be closer than radius + pad.
 		for gz in range(floori((q.y - pad) / KEEP_GRID_CELL), floori((q.y + pad) / KEEP_GRID_CELL) + 1):
 			for gx in range(floori((q.x - pad) / KEEP_GRID_CELL), floori((q.x + pad) / KEEP_GRID_CELL) + 1):
@@ -737,8 +770,8 @@ static func _capsule_blocked(ctx: Dictionary, a: Vector2, b: Vector2, r: float, 
 		var tr := _nearest_trunk(ctx.trunk_grid, q, pad + TRUNK_RADIUS * 1.5)
 		if tr.z > 0.0 and q.distance_to(Vector2(tr.x, tr.y)) < TRUNK_RADIUS * tr.z + pad:
 			return true
-		for knot in ctx.knots:
-			if RockScatter._near_knot_ramp(knot, q.x, q.y, KNOT_RAMP_CLEAR + r):
+		for ri in range(0, ramps.size(), 2): # as RockScatter._near_knot_ramp, over every knot's ramps
+			if q.distance_to(Geometry2D.get_closest_point_to_segment(q, ramps[ri], ramps[ri + 1])) < KNOT_RAMP_CLEAR + r:
 				return true
 	# Placed pieces: only those bucketed in the cells this capsule's box reaches, grown by its radius
 	# and the larger of the two gaps (a piece is bucketed by its own box grown by its own radius).

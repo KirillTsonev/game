@@ -260,19 +260,17 @@ static func build_maps(edge_row: PackedFloat32Array, edge_color: PackedByteArray
 		ramp[d] = maxf(MountainWalls._ramp_height(float(d), WALL_EDGE_GRADE), minf(float(d), WALL_BACK_MIN))
 
 	# -- Heights --
+	# 2026-10-10: the rows in bands on worker threads (see _north_height_band), as on the sides.
 	var heights := PackedFloat32Array()
-	heights.resize(width * LENGTH)
 	var crest := -INF
-	for j in LENGTH:
-		var d := LENGTH - j # m north of the map's edge
-		var relief := smoothstep(10.0, 60.0, float(d)) * WALL_RELIEF
-		var join := smoothstep(0.0, EDGE_BLEND, float(d))
-		for c in width:
-			var body := base[c] + ramp[d] + relief * (0.5 + 0.5 * relief_noise.get_noise_2d(c, d))
-			var h := lerpf(edge_row[c] + WALL_EDGE_GRADE * float(d), body, join)
-			heights[j * width + c] = h
-			crest = maxf(crest, h - base[c])
-
+	var bands := ceili(float(LENGTH) / MountainWalls.APRON_BAND_ROWS)
+	var height_out: Array = []
+	height_out.resize(bands)
+	var height_ctx := {"width": width, "edge_row": edge_row, "base": base, "ramp": ramp, "relief_noise": relief_noise, "out": height_out, "mutex": Mutex.new()}
+	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_north_height_band.bind(height_ctx), bands, TerrainUtil.object_call_threads(), true))
+	for b: Dictionary in height_out:
+		heights.append_array(b.heights)
+		crest = maxf(crest, b.crest)
 	# -- The village's shoulder, where it reaches north of the map: the higher of the two --
 	var on_shoulder := PackedByteArray() # 1 = bare rock there (no turf, no snow)
 	on_shoulder.resize(width * LENGTH)
@@ -299,17 +297,73 @@ static func build_maps(edge_row: PackedFloat32Array, edge_color: PackedByteArray
 	# -- Ground and colour, from the finished shape: the mountain's, as on the side aprons --
 	# (bare rock, turf on low ledges only, snow high up; creases darker, faint layers by height)
 	var control := PackedInt32Array()
-	control.resize(width * LENGTH)
 	var color := PackedByteArray()
-	color.resize(width * LENGTH * 4)
+	var color_out: Array = []
+	color_out.resize(bands)
+	var color_ctx := {
+		"width": width, "heights": heights, "base": base, "on_shoulder": on_shoulder, "edge_color": edge_color,
+		"shade_noise": shade_noise, "rock_id": MountainWalls.rock_texture_id, "out": color_out, "mutex": Mutex.new(),
+	}
+	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_north_color_band.bind(color_ctx), bands, TerrainUtil.object_call_threads(), true))
+	for b: Dictionary in color_out:
+		control.append_array(b.control)
+		color.append_array(b.color)
+	print("TERRAIN_GEN: north apron -- %dx%d m of terrain north of the map, crest up to %.0f m above the map's edge (%d ms)" % [width, LENGTH, crest, Time.get_ticks_msec() - t0])
+	return {"heights": heights, "control": control, "color": color}
+
+## build_maps()'s heights for rows [band * APRON_BAND_ROWS, +APRON_BAND_ROWS). Worker thread: reads
+## the shared inputs in ctx, fills band-sized outputs of its own, stores them under ctx.mutex.
+static func _north_height_band(band: int, ctx: Dictionary) -> void:
+	var width: int = ctx.width
+	var edge_row: PackedFloat32Array = ctx.edge_row
+	var base: PackedFloat32Array = ctx.base
+	var ramp: PackedFloat32Array = ctx.ramp
+	var relief_noise: FastNoiseLite = ctx.relief_noise
+	var j_from := band * MountainWalls.APRON_BAND_ROWS
+	var j_to := mini(j_from + MountainWalls.APRON_BAND_ROWS, LENGTH)
+	var heights := PackedFloat32Array()
+	heights.resize(width * (j_to - j_from))
+	var crest := -INF
+	for j in range(j_from, j_to):
+		var d := LENGTH - j # m north of the map's edge
+		var relief := smoothstep(10.0, 60.0, float(d)) * WALL_RELIEF
+		var join := smoothstep(0.0, EDGE_BLEND, float(d))
+		for c in width:
+			var body := base[c] + ramp[d] + relief * (0.5 + 0.5 * relief_noise.get_noise_2d(c, d))
+			var h := lerpf(edge_row[c] + WALL_EDGE_GRADE * float(d), body, join)
+			heights[(j - j_from) * width + c] = h
+			crest = maxf(crest, h - base[c])
+	var mutex: Mutex = ctx.mutex
+	mutex.lock()
+	(ctx.out as Array)[band] = {"heights": heights, "crest": crest}
+	mutex.unlock()
+
+## build_maps()'s ground and colour for one band of rows, from the finished heights. Worker
+## thread, same rules; control pixels packed with TerrainGroundPaint._pack (the same bits as
+## TerrainHeightmap.pack_control_blend without its GDExtension calls).
+static func _north_color_band(band: int, ctx: Dictionary) -> void:
+	var width: int = ctx.width
+	var heights: PackedFloat32Array = ctx.heights
+	var base: PackedFloat32Array = ctx.base
+	var on_shoulder: PackedByteArray = ctx.on_shoulder
+	var edge_color: PackedByteArray = ctx.edge_color
+	var shade_noise: FastNoiseLite = ctx.shade_noise
+	var rock_id: int = ctx.rock_id
+	var j_from := band * MountainWalls.APRON_BAND_ROWS
+	var j_to := mini(j_from + MountainWalls.APRON_BAND_ROWS, LENGTH)
+	var control := PackedInt32Array()
+	control.resize(width * (j_to - j_from))
+	var color := PackedByteArray()
+	color.resize(width * (j_to - j_from) * 4)
 	var map_from := MountainWalls.MAP_OFFSET_X
 	var map_to := MountainWalls.MAP_OFFSET_X + TerrainConfig.AREA_WIDTH
-	for j in LENGTH:
+	for j in range(j_from, j_to):
 		var j0 := maxi(j - 1, 0)
 		var j1 := mini(j + 1, LENGTH - 1)
 		var own_share := smoothstep(0.0, COLOR_BLEND, float(LENGTH - j))
 		for c in width:
 			var cell := j * width + c
+			var li := (j - j_from) * width + c
 			var c0 := maxi(c - 1, 0)
 			var c1 := mini(c + 1, width - 1)
 			var h := heights[cell]
@@ -325,9 +379,9 @@ static func build_maps(edge_row: PackedFloat32Array, edge_color: PackedByteArray
 				turf = 0.0
 				snow = 0.0
 			if snow > 0.02:
-				control[cell] = TerrainHeightmap.pack_control_blend(MountainWalls.rock_texture_id, MountainWalls.APRON_SNOW_ID, snow)
+				control[li] = TerrainGroundPaint._pack(rock_id, MountainWalls.APRON_SNOW_ID, snow)
 			else:
-				control[cell] = TerrainHeightmap.pack_control_blend(MountainWalls.rock_texture_id, MountainWalls.APRON_TURF_ID, turf)
+				control[li] = TerrainGroundPaint._pack(rock_id, MountainWalls.APRON_TURF_ID, turf)
 			var curvature := heights[j * width + c0] + heights[j * width + c1] + heights[j0 * width + c] + heights[j1 * width + c] - 4.0 * h # > 0 in a crease
 			var shade := clampf(1.0 - curvature * MountainWalls.APRON_CREASE_SHADE, MountainWalls.APRON_CREASE_MIN, MountainWalls.APRON_CREASE_MAX) / MountainWalls.APRON_CREASE_MAX
 			shade *= 1.0 - MountainWalls.APRON_STRATA_SHADE * (0.5 + 0.5 * sin((h + 4.0 * shade_noise.get_noise_2d(float(c) * 3.0, float(j) * 3.0)) * TAU / MountainWalls.APRON_STRATA_PERIOD))
@@ -342,13 +396,14 @@ static func build_maps(edge_row: PackedFloat32Array, edge_color: PackedByteArray
 				if c >= map_from and c < map_to:
 					edge = Color(edge.r * MountainWalls.MOUNTAIN_TINT.r, edge.g * MountainWalls.MOUNTAIN_TINT.g, edge.b * MountainWalls.MOUNTAIN_TINT.b)
 				final = edge.lerp(final, own_share)
-			color[cell * 4] = int(255.0 * final.r)
-			color[cell * 4 + 1] = int(255.0 * final.g)
-			color[cell * 4 + 2] = int(255.0 * final.b)
-			color[cell * 4 + 3] = 128 # roughness left as it is
-	print("TERRAIN_GEN: north apron -- %dx%d m of terrain north of the map, crest up to %.0f m above the map's edge (%d ms)" % [width, LENGTH, crest, Time.get_ticks_msec() - t0])
-	return {"heights": heights, "control": control, "color": color}
-
+			color[li * 4] = int(255.0 * final.r)
+			color[li * 4 + 1] = int(255.0 * final.g)
+			color[li * 4 + 2] = int(255.0 * final.b)
+			color[li * 4 + 3] = 128 # roughness left as it is
+	var mutex: Mutex = ctx.mutex
+	mutex.lock()
+	(ctx.out as Array)[band] = {"control": control, "color": color}
+	mutex.unlock()
 static func _noise(noise_seed: int, frequency: float, fractal: int, octaves: int) -> FastNoiseLite:
 	var noise := FastNoiseLite.new()
 	noise.seed = noise_seed

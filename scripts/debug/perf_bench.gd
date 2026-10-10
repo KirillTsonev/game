@@ -8,11 +8,14 @@
 ##     multiplied by x for the whole run; a scale above 1.0 in total crashes the renderer with MSAA
 ##     on), --bench-hide=<layer>[,<layer>...] (those layers hidden for the whole run),
 ##     --bench-lantern-shadow-off (the lantern's own shadow off for the whole run). The last
-##     four are recorded in the report's meta.
+##     four are recorded in the report's meta. --bench-detail (the switches trimmed from a
+##     normal run on 2026-10-10, see DETAIL_TOGGLES).
 ##
-## What a run does (about 4 minutes; the player is frozen and moved by the benchmark):
-##   1. Conditions: VSync off, FPS cap off, window WINDOW_SIZE. Needs MASTER_SEED pinned
-##      (TerrainConfig) -- the stations come from the generated map.
+## What a run does (about 4 minutes; with --bench-detail about 6; the player is frozen and moved
+## by the benchmark):
+##   1. Conditions: VSync off, FPS cap off, window WINDOW_SIZE. The stations come from the
+##      generated map, so two runs compare only on one seed: pin MASTER_SEED (TerrainConfig), or
+##      launch both with the user argument --seed=<n> (the report's meta records the seed).
 ##   2. Audit: every mesh in the scene (instances, triangles, shadow casting) and every texture
 ##      their materials and the terrain use (size, estimated memory).
 ##   3. Stations: fixed camera spots picked from the map data (_build_stations). At each one:
@@ -36,7 +39,39 @@ const SETTLE_SECONDS := 0.6
 const MEASURE_FRAMES := 120
 const MEASURE_SECONDS := 1.5
 const MEASURE_MAX_FRAMES := 5000
-const ABLATION_STATIONS := ["spawn_ahead", "forest_dense", "exit_look_back"]
+## Three since 2026-10-10: the player's first view, the densest forest, and rock at arm's length
+## (the terrain shader's patch, the rock detail layer and displacement only cost anything with
+## rock on screen). Before: spawn_ahead, forest_dense, exit_look_back -- two forest-road views
+## with near-identical deltas (trees 1.02 / 1.29 ms GPU, sun shadows 1.02 / 1.77 in the run of
+## 2026-10-08), and spawn_ahead is no longer where the player starts. Both are still stations.
+const ABLATION_STATIONS := ["hub_overlook", "forest_dense", "mountain_foot"]
+## TRIMMED 2026-10-10 (Kirill: "is there anything redundant we can remove ... these benchmarks
+## will run for half an hour otherwise"). A switch costs about 2.3 s per ablation station, and
+## the list had grown to about 50. The ones below are no longer in a normal run; they come back
+## with the user argument --bench-detail, and --bench-only=<text> can still name any of them.
+## What each saved when it was last measured in full (GPU ms at spawn_ahead / forest_dense /
+## exit_look_back, run 20261008_185151_c2454614_valley_384; that run's noise is about 0.3 ms):
+##   plants:understory:lod0..2    0.09 / -0.07 / -0.03,  0.32 / -0.32 / 0.23,  0.11 / -0.33 / -0.22
+##   plants:flowers:lod0..2       all within +-0.21      -- the layer totals cover both
+##   grass:blades_0..4            0.83 / 0.17 / -0.14,  0.34 / -0.01 / 0.12,  the rest within +-0.45
+##   grass:short_0..1             0.24 / 0.11 / -0.08,  0.05 / -0.41 / -0.19  -- layer:grass covers them
+##   post:<each effect>           painterly_sat 0.32 / 0.19 / 0.31, glare 0.13 / -0.02 / 0.10,
+##                                gaussian_blur, radial_blur, noise, unreal_bloom within +-0.21
+##                                -- post:ALL stays, and POST PASSES times every effect directly
+##   lantern_shadow               0.02 / 0.07 / 0.18
+##   lantern_ground_pool          0.20 / 0.20 / 0.08     -- the lantern as a whole stays
+##   sun_shadow_100m              -0.17 / 0.16 / -0.31   -- "range alone: no gain", findings step 4
+##   screen_space_aa              0.09 / -0.16 / -0.10
+##   terrain_shadows              0.04 / 0.23 / 0.07
+##   layer:cliffs, outcrops, flowers, deadfall, rocks, instanced_other
+##                                each within +-0.7 on the GPU; on the CPU rocks up to 1.16 ms and
+##                                the others under 1 -- now one switch, layer:SMALL
+## Kept as before: layer:trees / understory / saplings (2 ms of CPU) / grass / ALL, sun_shadows,
+## post:ALL, lantern, msaa_3d, render_scale_50, terrain_texturing, the env: switches, and every
+## layer or switch added since (mountains, mountain_clouds, village, castle, terrain:*).
+const SMALL_LAYERS: Array[StringName] = [&"cliffs", &"outcrops", &"flowers", &"deadfall", &"rocks", &"instanced_other"]
+const DETAIL_TOGGLES: Array[String] = ["lantern_shadow", "lantern_ground_pool", "sun_shadow_100m", "screen_space_aa", "terrain_shadows"]
+const DETAIL_PREFIXES: Array[String] = ["plants:", "grass:", "post:"] # except post:ALL
 const WALK_SPEED := 10.0 ## m/s along the road (the player walks at 4.5)
 const WALK_SECONDS := 20.0
 const FOREST_CELL := 16.0 ## m -- grid used to find the densest tree cell
@@ -145,6 +180,7 @@ func run(quit_when_done: bool, label: String) -> void:
 			"ssao": ssao_on,
 			"post_effects_on": post_effects_on,
 			"frame_capped": false,
+			"terrain": _gen.bench_meta() if _gen.has_method("bench_meta") else {},
 		},
 		"startup": _gen.startup_timings,
 		"audit": {"meshes": _audit_meshes()},
@@ -387,6 +423,28 @@ func _build_stations() -> Array[Dictionary]:
 			if p.distance_squared_to(target) < near.distance_squared_to(target):
 				near = p
 		stations.append(_station("cliff_face", near, target - near, 0.0))
+
+	# 2026-10-10: what was built since the mountains. None of the stations above looks at it.
+	# hub_overlook: where the player starts, on the hub's plateau, looking up the valley.
+	if maps.has("hub_heights"):
+		var hub_spawn := TerrainHub.spawn_pixel(maps.hub_heights)
+		stations.append(_station("hub_overlook", Vector2(hub_spawn.x, hub_spawn.z), Vector2(0.0, -1.0), -0.1))
+	# mountain_foot: 5 m out from the low-X foot line, about 40 % up the valley, looking along
+	# the rock at arm's length -- displaced rock, the projection blend and the detail layer.
+	var foot: PackedFloat32Array = maps.get("mountain_foot", PackedFloat32Array())
+	if not foot.is_empty():
+		var row := int(foot.size() * 0.4)
+		for step in foot.size():
+			var candidate := int(foot.size() * 0.4) + (step if step % 2 == 0 else -step) / 2
+			if candidate > 8 and candidate < foot.size() - 8 and foot[candidate] > 1.0:
+				row = candidate
+				break
+		stations.append(_station("mountain_foot", Vector2(foot[row] + 5.0, float(row)), Vector2(-0.45, -1.0), 0.1))
+	# valley_north: from the road at 70 % of its length toward the castle and the north rows.
+	var north_p := path[int(n * 0.7)]
+	stations.append(_station("valley_north", north_p, TerrainCastle.SITE_PX - north_p, 0.15))
+	# castle_foot: the road's end, looking up at the village on the shoulder.
+	stations.append(_station("castle_foot", exit, TerrainCastle.VILLAGE_PX - exit, 0.6))
 	return stations
 
 func _station(station_name: String, px: Vector2, dir: Vector2, pitch: float) -> Dictionary:
@@ -605,6 +663,12 @@ func _build_toggles() -> Array[Dictionary]:
 		for key: StringName in _layer_nodes:
 			_set_layer_shown(on, key)
 	toggles.append({"name": "layer:ALL", "apply": all_layers})
+	# The layers that each cost next to nothing, as one switch (see DETAIL_TOGGLES).
+	var small_layers := func(on: bool) -> void:
+		for key: StringName in SMALL_LAYERS:
+			if _layer_nodes.has(key):
+				_set_layer_shown(on, key)
+	toggles.append({"name": "layer:SMALL", "apply": small_layers})
 	# The grass, band by band (2026-10-06): each toggle hides one layer and stops its cull pass.
 	var grass := _scene.get_node_or_null(GrassField.NODE_NAME) as GrassField
 	if grass:
@@ -626,6 +690,24 @@ func _build_toggles() -> Array[Dictionary]:
 		if terrain_shadows != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF:
 			toggles.append({"name": "terrain_shadows", "apply":func(on: bool) -> void: _terrain.cast_shadows = terrain_shadows if on else RenderingServer.SHADOW_CASTING_SETTING_OFF})
 
+	# The terrain's patched shaders and displacement (2026-10-10). "shader_patch" off = Terrain3D's
+	# own shaders (per-vertex projection, no rock detail). Subdivision can only be switched with
+	# the patch off, so the last one is both: displacement alone ~ its delta minus the patch's.
+	if _gen.has_method("bench_meta"):
+		var terrain_meta: Dictionary = _gen.bench_meta()
+		if terrain_meta.rock_detail:
+			toggles.append({"name": "terrain:rock_detail", "apply":func(on: bool) -> void: _gen.set_rock_detail_enabled(on)})
+		if terrain_meta.shader_patch:
+			toggles.append({"name": "terrain:shader_patch", "apply":func(on: bool) -> void: _gen.set_shader_patch_enabled(on)})
+			if int(terrain_meta.tessellation_level) > 0:
+				var both := func(on: bool) -> void:
+					if on:
+						_gen.set_displacement_enabled(true)
+						_gen.set_shader_patch_enabled(true)
+					else:
+						_gen.set_shader_patch_enabled(false)
+						_gen.set_displacement_enabled(false)
+				toggles.append({"name": "terrain:displacement+shader_patch", "apply": both})
 	var world_env := _scene.get_node_or_null("WorldEnvironment") as WorldEnvironment
 	if world_env and world_env.compositor:
 		var effects: Array[CompositorEffect] = []
@@ -681,6 +763,22 @@ func _build_toggles() -> Array[Dictionary]:
 	# per-pixel work (shading, overdraw, post); a small one = by geometry / draw calls / CPU.
 	var scale := root.scaling_3d_scale
 	toggles.append({"name": "render_scale_50", "apply":func(on: bool) -> void: root.scaling_3d_scale = scale if on else scale * 0.5})
+	# The trimmed switches (see DETAIL_TOGGLES) run only with --bench-detail, or when --bench-only
+	# is given, which may name one of them.
+	var args := OS.get_cmdline_user_args()
+	var detailed := "--bench-detail" in args
+	for arg in args:
+		if arg.begins_with("--bench-only="):
+			detailed = true
+	if not detailed:
+		toggles = toggles.filter(func(t: Dictionary) -> bool:
+			var toggle_name := str(t.name)
+			if DETAIL_TOGGLES.has(toggle_name) or (toggle_name.begins_with("layer:") and SMALL_LAYERS.has(StringName(toggle_name.trim_prefix("layer:")))):
+				return false
+			for prefix in DETAIL_PREFIXES:
+				if toggle_name.begins_with(prefix) and toggle_name != "post:ALL":
+					return false
+			return true)
 	# --bench-only=<text>[,<text>...]: keep only the toggles whose name contains one of the texts
 	# (a quick, targeted run).
 	for arg in OS.get_cmdline_user_args():
@@ -719,6 +817,14 @@ func _classify(node: Node, layer_by_id: Dictionary) -> Array:
 		return [layer_by_id.get(parsed.x, &"instanced_other"), "%d %s" % [parsed.x, asset.name if asset else "?"], parsed.y]
 	var top := path.get_slice("/", 0)
 	var layer: StringName = {CliffInstancer.CLIFF_DRESSING_NODE_NAME: &"cliffs", TerrainOutcrops.OUTCROP_NODE_NAME: &"outcrops", TerrainRoad.ROAD_MESH_NODE_NAME: &"road"}.get(top, StringName(top))
+	# What was built since the mountains (2026-10-10): the rows and their cloud sheets share one
+	# node, and are two layers here.
+	if top == MountainWalls.NODE_NAME:
+		layer = &"mountain_clouds" if str(node.name).begins_with("Cloud_") else &"mountains"
+	elif top == TerrainCastle.VILLAGE_NAME:
+		layer = &"village"
+	elif top == TerrainCastle.PLACEHOLDER_NAME:
+		layer = &"castle"
 	var label := str(node.name)
 	var lod := 0
 	var at := label.rfind("_LOD")
@@ -759,7 +865,7 @@ func _audit_layers() -> Array:
 		if not LayerTogglePanel.mesh_ids(spec[0]).is_empty() and not _layer_nodes.has(spec[0]):
 			_layer_nodes[spec[0]] = []
 	for key: StringName in _layer_nodes.keys():
-		if not (key in [&"grass", &"cliffs", &"outcrops", &"instanced_other"] or not LayerTogglePanel.mesh_ids(key).is_empty()):
+		if not (key in [&"grass", &"cliffs", &"outcrops", &"instanced_other", &"mountains", &"mountain_clouds", &"village", &"castle"] or not LayerTogglePanel.mesh_ids(key).is_empty()):
 			_layer_nodes.erase(key) # player, road, ...: listed in the audit, not switched off
 	var layers: Array = []
 	for key: StringName in _layer_assets:
@@ -937,6 +1043,9 @@ static func _summary(report: Dictionary) -> String:
 	var out: Array[String] = []
 	out.append("==== PERF BENCH %s  git %s  %s ====" % [meta.label, meta.git, meta.time])
 	out.append("viewport %dx%d, 3D scale %.3f, sun shadows %s, SSAO %s, %d post effects | %s | Godot %s | seed %d" % [meta.viewport[0], meta.viewport[1], meta.scaling_3d_scale, "on" if meta.sun_shadows else "OFF", "on" if meta.ssao else "OFF", meta.post_effects_on, meta.adapter, meta.godot, meta.seed])
+	var terrain_meta: Dictionary = meta.get("terrain", {})
+	if not terrain_meta.is_empty():
+		out.append("terrain: tessellation %d, displacement scale %.2f, shader patch %s, rock detail %s (x%.2f), mountain texture id %d" % [terrain_meta.tessellation_level, terrain_meta.displacement_scale, "on" if terrain_meta.shader_patch else "OFF", "on" if terrain_meta.rock_detail else "OFF", terrain_meta.rock_detail_tiles, terrain_meta.mountain_texture_id])
 	if meta.frame_capped:
 		out.append("!! FRAME RATE CAPPED FROM OUTSIDE THE GAME (driver / overlay limiter): the frame columns show the cap -- read the GPU columns.")
 	out.append("")

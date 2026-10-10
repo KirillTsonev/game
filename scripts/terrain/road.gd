@@ -442,53 +442,18 @@ static func generate_road(heights: PackedFloat32Array, control: PackedInt32Array
 	# the strongest road TEXTURE blend fraction seen (0.0 = pure ground,
 	# 1.0 = pure road) -- see _pack_control_blend()'s own comment for why
 	# this replaced a binary "painted or not" flag.
+	# 2026-10-10: in row bands on worker threads (_raster_band). Every band walks the segments in
+	# the same order and keeps the strongest value per pixel, so the result is the single loop's.
 	var road_weight := PackedFloat32Array()
-	road_weight.resize(width * length)
 	var road_blend := PackedFloat32Array()
-	road_blend.resize(width * length)
-
-	for i in range(path.size() - 1):
-		var a: Vector2 = path[i]
-		var b: Vector2 = path[i + 1]
-		var seg := b - a
-		var seg_len_sq := seg.length_squared()
-
-		var min_px := clampi(int(floor(minf(a.x, b.x) - ROAD_HALF_WIDTH)), 0, width - 1)
-		var max_px := clampi(int(ceil(maxf(a.x, b.x) + ROAD_HALF_WIDTH)), 0, width - 1)
-		var min_pz := clampi(int(floor(minf(a.y, b.y) - ROAD_HALF_WIDTH)), 0, length - 1)
-		var max_pz := clampi(int(ceil(maxf(a.y, b.y) + ROAD_HALF_WIDTH)), 0, length - 1)
-
-		for pz in range(min_pz, max_pz + 1):
-			for px in range(min_px, max_px + 1):
-				var point := Vector2(px, pz)
-				var t := 0.0
-				if seg_len_sq > 0.00001:
-					t = clampf((point - a).dot(seg) / seg_len_sq, 0.0, 1.0)
-				var closest := a + seg * t
-				var d := point.distance_to(closest)
-				if d > ROAD_HALF_WIDTH:
-					continue
-
-				var idx := pz * width + px
-				var grade_weight := 1.0 - smoothstep(ROAD_HALF_WIDTH - ROAD_EDGE_SOFTNESS, ROAD_HALF_WIDTH, d)
-				if grade_weight > road_weight[idx]:
-					road_weight[idx] = grade_weight
-				# Jitter only the painted-texture edge, not the graded corridor
-				# width above -- the corridor shape is what actually governs
-				# walkability/grading, and keeping it a clean offset from the
-				# smoothed path avoids any risk of an ungraded bump right at the
-				# road's own edge. The paint edge is purely cosmetic, so it can
-				# wobble freely to break up the razor-straight shoulder line.
-				var painted_half_width := ROAD_TEXTURE_HALF_WIDTH + edge_noise.get_noise_2d(px, pz) * ROAD_EDGE_NOISE_STRENGTH
-				# Cross-fade band: 1.0 (pure road) once d is ROAD_TEXTURE_BLEND_WIDTH
-				# or more inside the jittered edge, ramping smoothly down to 0.0
-				# (pure ground) exactly at the edge itself and beyond -- see
-				# ROAD_TEXTURE_BLEND_WIDTH's own comment. smoothstep's built-in
-				# clamping means no extra "if d > painted_half_width" guard is
-				# needed here the way the old binary flag required.
-				var blend_frac := 1.0 - smoothstep(painted_half_width - ROAD_TEXTURE_BLEND_WIDTH, painted_half_width, d)
-				if blend_frac > road_blend[idx]:
-					road_blend[idx] = blend_frac
+	var raster_bands := ceili(float(length) / ROAD_BAND_ROWS)
+	var raster_out: Array = []
+	raster_out.resize(raster_bands)
+	var raster_ctx := {"path": path, "width": width, "length": length, "edge_noise": edge_noise, "out": raster_out, "mutex": Mutex.new()}
+	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_raster_band.bind(raster_ctx), raster_bands, TerrainUtil.object_call_threads(), true))
+	for b: Dictionary in raster_out:
+		road_weight.append_array(b.weight)
+		road_blend.append_array(b.blend)
 	print("TERRAIN_GEN:   segment rasterization (%.3fs)" % ((Time.get_ticks_msec() - t_road_stage) / 1000.0))
 	t_road_stage = Time.get_ticks_msec()
 
@@ -532,6 +497,98 @@ static func generate_road(heights: PackedFloat32Array, control: PackedInt32Array
 	# carries the parallax material.
 	return {"weight": road_weight, "spawn_pixel": spawn_pixel, "exit_pixel": exit_pixel, "path": path}
 
+const ROAD_BAND_ROWS := 32 ## rows per worker-thread task in the two road loops below
+
+## generate_road()'s corridor weight and paint blend for rows [band * ROAD_BAND_ROWS, +ROAD_BAND_ROWS).
+## Worker thread: reads ctx, returns the band's own slices.
+static func _raster_band(band: int, ctx: Dictionary) -> void:
+	var path: PackedVector2Array = ctx.path
+	var width: int = ctx.width
+	var length: int = ctx.length
+	var edge_noise: FastNoiseLite = ctx.edge_noise
+	var z_from := band * ROAD_BAND_ROWS
+	var z_to := mini(z_from + ROAD_BAND_ROWS, length) - 1
+	var road_weight := PackedFloat32Array()
+	road_weight.resize((z_to - z_from + 1) * width)
+	var road_blend := PackedFloat32Array()
+	road_blend.resize((z_to - z_from + 1) * width)
+	for i in range(path.size() - 1):
+		var a: Vector2 = path[i]
+		var b: Vector2 = path[i + 1]
+		var min_pz := maxi(clampi(int(floor(minf(a.y, b.y) - ROAD_HALF_WIDTH)), 0, length - 1), z_from)
+		var max_pz := mini(clampi(int(ceil(maxf(a.y, b.y) + ROAD_HALF_WIDTH)), 0, length - 1), z_to)
+		if min_pz > max_pz:
+			continue
+		var seg := b - a
+		var seg_len_sq := seg.length_squared()
+		var min_px := clampi(int(floor(minf(a.x, b.x) - ROAD_HALF_WIDTH)), 0, width - 1)
+		var max_px := clampi(int(ceil(maxf(a.x, b.x) + ROAD_HALF_WIDTH)), 0, width - 1)
+		for pz in range(min_pz, max_pz + 1):
+			for px in range(min_px, max_px + 1):
+				var point := Vector2(px, pz)
+				var t := 0.0
+				if seg_len_sq > 0.00001:
+					t = clampf((point - a).dot(seg) / seg_len_sq, 0.0, 1.0)
+				var closest := a + seg * t
+				var d := point.distance_to(closest)
+				if d > ROAD_HALF_WIDTH:
+					continue
+				var idx := (pz - z_from) * width + px
+				var grade_weight := 1.0 - smoothstep(ROAD_HALF_WIDTH - ROAD_EDGE_SOFTNESS, ROAD_HALF_WIDTH, d)
+				if grade_weight > road_weight[idx]:
+					road_weight[idx] = grade_weight
+				# Jitter only the painted-texture edge, not the graded corridor width (see generate_road).
+				var painted_half_width := ROAD_TEXTURE_HALF_WIDTH + edge_noise.get_noise_2d(px, pz) * ROAD_EDGE_NOISE_STRENGTH
+				var blend_frac := 1.0 - smoothstep(painted_half_width - ROAD_TEXTURE_BLEND_WIDTH, painted_half_width, d)
+				if blend_frac > road_blend[idx]:
+					road_blend[idx] = blend_frac
+	var mutex: Mutex = ctx.mutex
+	mutex.lock()
+	(ctx.out as Array)[band] = {"weight": road_weight, "blend": road_blend}
+	mutex.unlock()
+
+## _grade_level_bed()'s nearest road segment per pixel (distance and bed height) for one band of
+## rows. Worker thread, same rules.
+static func _bed_band(band: int, ctx: Dictionary) -> void:
+	var line: PackedVector2Array = ctx.line
+	var prof: PackedFloat32Array = ctx.prof
+	var width: int = ctx.width
+	var length: int = ctx.length
+	var reach: float = ctx.reach
+	var z_from := band * ROAD_BAND_ROWS
+	var z_to := mini(z_from + ROAD_BAND_ROWS, length) - 1
+	var best_d := PackedFloat32Array()
+	best_d.resize((z_to - z_from + 1) * width)
+	best_d.fill(INF)
+	var bed_h := PackedFloat32Array()
+	bed_h.resize((z_to - z_from + 1) * width)
+	for i in range(line.size() - 1):
+		var a: Vector2 = line[i]
+		var b: Vector2 = line[i + 1]
+		var z0 := maxi(clampi(int(floor(minf(a.y, b.y) - reach)), 0, length - 1), z_from)
+		var z1 := mini(clampi(int(ceil(maxf(a.y, b.y) + reach)), 0, length - 1), z_to)
+		if z0 > z1:
+			continue
+		var seg := b - a
+		var sl2 := seg.length_squared()
+		var x0 := clampi(int(floor(minf(a.x, b.x) - reach)), 0, width - 1)
+		var x1 := clampi(int(ceil(maxf(a.x, b.x) + reach)), 0, width - 1)
+		for pz in range(z0, z1 + 1):
+			for px in range(x0, x1 + 1):
+				var q := Vector2(px, pz)
+				var t := 0.0
+				if sl2 > 0.00001:
+					t = clampf((q - a).dot(seg) / sl2, 0.0, 1.0)
+				var d := q.distance_to(a + seg * t)
+				var idx := (pz - z_from) * width + px
+				if d >= reach or d >= best_d[idx]:
+					continue
+				best_d[idx] = d
+				bed_h[idx] = lerpf(prof[i], prof[i + 1], t)
+	var mutex: Mutex = ctx.mutex
+	mutex.lock()
+	(ctx.out as Array)[band] = {"best_d": best_d, "bed_h": bed_h}
+	mutex.unlock()
 ## Level road bed + slope-limited banks (2026-09-29, see ROAD_BED_HALF_WIDTH). Replaces the old
 ## per-pixel blend toward `blurred`, which kept a hillside's cross-tilt under the road.
 static func _grade_level_bed(heights: PackedFloat32Array, blurred: PackedFloat32Array, width: int, length: int, path: PackedVector2Array, obst: PackedFloat32Array) -> void:
@@ -561,36 +618,19 @@ static func _grade_level_bed(heights: PackedFloat32Array, blurred: PackedFloat32
 
 	# Nearest centre-line point per pixel (within ROAD_BANK_REACH) and the bed height there.
 	var total := width * length
-	var best_d := PackedFloat32Array()
-	best_d.resize(total)
-	best_d.fill(INF)
-	var bed_h := PackedFloat32Array()
-	bed_h.resize(total)
 	var reach := ROAD_BANK_REACH
-	for i in range(n - 1):
-		var a: Vector2 = line[i]
-		var b: Vector2 = line[i + 1]
-		var seg := b - a
-		var sl2 := seg.length_squared()
-		var x0 := clampi(int(floor(minf(a.x, b.x) - reach)), 0, width - 1)
-		var x1 := clampi(int(ceil(maxf(a.x, b.x) + reach)), 0, width - 1)
-		var z0 := clampi(int(floor(minf(a.y, b.y) - reach)), 0, length - 1)
-		var z1 := clampi(int(ceil(maxf(a.y, b.y) + reach)), 0, length - 1)
-		for pz in range(z0, z1 + 1):
-			for px in range(x0, x1 + 1):
-				var q := Vector2(px, pz)
-				var t := 0.0
-				if sl2 > 0.00001:
-					t = clampf((q - a).dot(seg) / sl2, 0.0, 1.0)
-				var d := q.distance_to(a + seg * t)
-				var idx := pz * width + px
-				if d >= reach or d >= best_d[idx]:
-					continue
-				best_d[idx] = d
-				bed_h[idx] = lerpf(prof[i], prof[i + 1], t)
-
-	# Bed exactly level inside ROAD_BED_HALF_WIDTH; banks clamped into a ROAD_BANK_SLOPE cone around
-	# it (cut or fill), natural ground left alone where it's already inside the cone.
+	# 2026-10-10: in row bands on worker threads (_bed_band); the nearest segment per pixel, the
+	# first one winning a tie, as in the single loop.
+	var best_d := PackedFloat32Array()
+	var bed_h := PackedFloat32Array()
+	var bed_bands := ceili(float(length) / ROAD_BAND_ROWS)
+	var bed_out: Array = []
+	bed_out.resize(bed_bands)
+	var bed_ctx := {"line": line, "prof": prof, "width": width, "length": length, "reach": reach, "out": bed_out, "mutex": Mutex.new()}
+	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_bed_band.bind(bed_ctx), bed_bands, -1, true))
+	for b: Dictionary in bed_out:
+		best_d.append_array(b.best_d)
+		bed_h.append_array(b.bed_h)
 	var zone := PackedInt32Array()
 	var mark := PackedByteArray()
 	mark.resize(total)
@@ -810,118 +850,161 @@ static func _find_road_path(heights: PackedFloat32Array, width: int, length: int
 	# Here, `closed` makes re-popping a stale, already-finalized duplicate a
 	# cheap early-exit instead of reprocessing it -- standard technique for
 	# an array-backed binary heap without an efficient decrease-key.
-	var heap: Array = []
-	var closed := {}
-	var came_from := {}
-	var g_score := {start: 0.0}
+	# 2026-10-10: the same search on flat arrays (it was 0.19 s: every node and neighbour went
+	# through closures and Dictionaries keyed by Vector2i). A node is row * cols + column. What
+	# depends only on the node or only on the step direction is worked out once, with the
+	# expressions the loop used; the heap makes the same comparisons on f in the same order, so
+	# it pops the same nodes and the path is the same.
+	var node_count := cols * rows
+	var node_h := PackedFloat32Array()
+	node_h.resize(node_count)
+	var node_blocked := PackedByteArray()
+	node_blocked.resize(node_count)
+	var node_od := PackedFloat32Array() # obstacle distance at the node
+	node_od.resize(node_count)
+	var has_od := not obst_dist.is_empty()
+	for gz in rows:
+		for gx in cols:
+			var node := gz * cols + gx
+			node_h[node] = sample_height.call(gx, gz)
+			node_blocked[node] = 1 if is_obstructed.call(gx, gz) else 0
+			if has_od:
+				node_od[node] = obst_dist[clampi(int(round(float(gz) * ROAD_PATH_GRID_STEP)), 0, length - 1) * width + clampi(int(round(float(gx) * ROAD_PATH_GRID_STEP)), 0, width - 1)]
+	var row_pref := PackedFloat64Array()
+	row_pref.resize(rows)
+	for gz in rows:
+		row_pref[gz] = preferred_col.call(gz)
+	var offset_dist := PackedFloat64Array()
+	var offset_side: Array[Vector2] = []
+	for offset: Vector2i in neighbor_offsets:
+		offset_dist.append(ROAD_PATH_GRID_STEP * Vector2(offset).length())
+		var step_dir := Vector2(offset).normalized()
+		offset_side.append(Vector2(-step_dir.y, step_dir.x) * ROAD_HALF_WIDTH)
 
-	var heap_push := func(f: float, node: Vector2i) -> void:
-		heap.append([f, node])
-		var i := heap.size() - 1
-		while i > 0:
-			var parent := (i - 1) / 2
-			if heap[parent][0] <= heap[i][0]:
-				break
-			var tmp = heap[parent]
-			heap[parent] = heap[i]
-			heap[i] = tmp
-			i = parent
+	# Binary min-heap as two parallel arrays (f, node); see the note above about duplicates.
+	var heap_f := PackedFloat64Array()
+	var heap_n := PackedInt32Array()
+	var closed := PackedByteArray()
+	closed.resize(node_count)
+	var came_from := PackedInt32Array()
+	came_from.resize(node_count)
+	came_from.fill(-1)
+	var g_score := PackedFloat64Array()
+	g_score.resize(node_count)
+	g_score.fill(INF)
+	var start_node := start.y * cols + start.x
+	var goal_node := goal.y * cols + goal.x
+	var goal_v := Vector2(goal)
+	g_score[start_node] = 0.0
+	heap_f.append(Vector2(start).distance_to(Vector2(goal)) * ROAD_PATH_GRID_STEP)
+	heap_n.append(start_node)
 
-	var heap_pop_min := func() -> Array:
-		var top = heap[0]
-		var last := heap.size() - 1
-		heap[0] = heap[last]
-		heap.remove_at(last)
-		var i := 0
-		var n := heap.size()
+	while not heap_f.is_empty():
+		# pop the smallest f
+		var current := heap_n[0]
+		var last := heap_f.size() - 1
+		heap_f[0] = heap_f[last]
+		heap_n[0] = heap_n[last]
+		heap_f.remove_at(last)
+		heap_n.remove_at(last)
+		var hi := 0
+		var hn := heap_f.size()
 		while true:
-			var left := i * 2 + 1
-			var right := i * 2 + 2
-			var smallest := i
-			if left < n and heap[left][0] < heap[smallest][0]:
+			var left := hi * 2 + 1
+			var right := hi * 2 + 2
+			var smallest := hi
+			if left < hn and heap_f[left] < heap_f[smallest]:
 				smallest = left
-			if right < n and heap[right][0] < heap[smallest][0]:
+			if right < hn and heap_f[right] < heap_f[smallest]:
 				smallest = right
-			if smallest == i:
+			if smallest == hi:
 				break
-			var tmp2 = heap[i]
-			heap[i] = heap[smallest]
-			heap[smallest] = tmp2
-			i = smallest
-		return top
-
-	heap_push.call(Vector2(start).distance_to(Vector2(goal)) * ROAD_PATH_GRID_STEP, start)
-
-	while not heap.is_empty():
-		var top: Array = heap_pop_min.call()
-		var current: Vector2i = top[1]
-		if closed.has(current):
+			var tf := heap_f[hi]
+			heap_f[hi] = heap_f[smallest]
+			heap_f[smallest] = tf
+			var tn := heap_n[hi]
+			heap_n[hi] = heap_n[smallest]
+			heap_n[smallest] = tn
+			hi = smallest
+		if closed[current] == 1:
 			continue # stale duplicate -- a better route to this node was already finalized
-		closed[current] = true
+		closed[current] = 1
 
-		if current == goal:
-			var path_nodes: Array[Vector2i] = [current]
-			while came_from.has(current):
+		if current == goal_node:
+			var path_nodes: Array[int] = [current]
+			while came_from[current] >= 0:
 				current = came_from[current]
 				path_nodes.push_front(current)
 			var path := PackedVector2Array()
 			for node in path_nodes:
-				path.append(Vector2(node.x * ROAD_PATH_GRID_STEP, node.y * ROAD_PATH_GRID_STEP))
+				path.append(Vector2((node % cols) * ROAD_PATH_GRID_STEP, (node / cols) * ROAD_PATH_GRID_STEP))
 			return path
 
-		var current_height: float = sample_height.call(current.x, current.y)
+		var current_x := current % cols
+		var current_y := current / cols
+		var current_height := node_h[current]
+		var current_g := g_score[current]
 
-		for offset in neighbor_offsets:
-			var neighbor: Vector2i = current + offset
-			if neighbor.x < 0 or neighbor.x >= cols or neighbor.y < 0 or neighbor.y >= rows:
+		for oi in 8:
+			var offset: Vector2i = neighbor_offsets[oi]
+			var nx := current_x + offset.x
+			var ny := current_y + offset.y
+			if nx < 0 or nx >= cols or ny < 0 or ny >= rows:
 				continue
-			if closed.has(neighbor):
+			var neighbor := ny * cols + nx
+			if closed[neighbor] == 1:
 				continue
-
-			if is_obstructed.call(neighbor.x, neighbor.y):
+			if node_blocked[neighbor] == 1:
 				continue # planted cliff-dressing footprint -- solid terrain, never route through it
 
-			var neighbor_height: float = sample_height.call(neighbor.x, neighbor.y)
-			var height_delta := absf(neighbor_height - current_height)
+			var height_delta := absf(node_h[neighbor] - current_height)
 			if height_delta > ROAD_SLOPE_HARD_LIMIT:
 				continue # too steep to ever route through, no matter the cost
 
-			var step_distance: float = ROAD_PATH_GRID_STEP * Vector2(offset).length()
+			var step_distance := offset_dist[oi]
 			var slope := height_delta / step_distance
 			var move_cost := step_distance * (1.0 + ROAD_SLOPE_PENALTY * slope * slope)
 			# 2026-09-29: sidehill cost -- ground tilting ACROSS the step (ROAD_HALF_WIDTH to either
 			# side of the neighbour). See ROAD_CROSS_SLOPE_PENALTY.
-			var step_dir := Vector2(offset).normalized()
-			var side := Vector2(-step_dir.y, step_dir.x) * ROAD_HALF_WIDTH
-			var npx := float(neighbor.x) * ROAD_PATH_GRID_STEP
-			var npz := float(neighbor.y) * ROAD_PATH_GRID_STEP
+			var side := offset_side[oi]
+			var npx := float(nx) * ROAD_PATH_GRID_STEP
+			var npz := float(ny) * ROAD_PATH_GRID_STEP
 			var h_left: float = heights[clampi(int(round(npz + side.y)), 0, length - 1) * width + clampi(int(round(npx + side.x)), 0, width - 1)]
 			var h_right: float = heights[clampi(int(round(npz - side.y)), 0, length - 1) * width + clampi(int(round(npx - side.x)), 0, width - 1)]
 			var cross := absf(h_left - h_right) / (2.0 * ROAD_HALF_WIDTH)
 			move_cost += step_distance * ROAD_CROSS_SLOPE_PENALTY * cross * cross
 			# 2026-09-29: keep clear of rocks (ROAD_OBSTACLE_SOFT_CLEARANCE) -- the bed can't be
 			# levelled next to them.
-			if not obst_dist.is_empty():
-				var od: float = obst_dist[clampi(int(round(npz)), 0, length - 1) * width + clampi(int(round(npx)), 0, width - 1)]
+			if has_od:
+				var od: float = node_od[neighbor]
 				if od < ROAD_OBSTACLE_SOFT_CLEARANCE:
 					var near := 1.0 - od / ROAD_OBSTACLE_SOFT_CLEARANCE
 					move_cost += step_distance * ROAD_OBSTACLE_PROXIMITY_PENALTY * near * near
 
-			# Cosmetic meander pull (see ROAD_MEANDER_* consts): an EXTRA soft
-			# cost for straying from the wandering preferred column at this row,
-			# on top of the real slope cost above -- never overrides the hard
-			# slope-limit `continue` above, only shapes preference among cells
-			# that were already going to be considered.
-			var lateral_deviation := absf(float(neighbor.x) - preferred_col.call(neighbor.y))
+			# Cosmetic meander pull (see ROAD_MEANDER_* consts): an EXTRA soft cost for straying
+			# from the wandering preferred column at this row, on top of the real slope cost.
+			var lateral_deviation := absf(float(nx) - row_pref[ny])
 			move_cost += ROAD_MEANDER_COST_WEIGHT * lateral_deviation * step_distance
 
-			var tentative_g: float = g_score.get(current, INF) + move_cost
-			if tentative_g < g_score.get(neighbor, INF):
+			var tentative_g := current_g + move_cost
+			if tentative_g < g_score[neighbor]:
 				came_from[neighbor] = current
 				g_score[neighbor] = tentative_g
-				var f := tentative_g + Vector2(neighbor).distance_to(Vector2(goal)) * ROAD_PATH_GRID_STEP
-				heap_push.call(f, neighbor)
-
+				# push
+				heap_f.append(tentative_g + Vector2(nx, ny).distance_to(goal_v) * ROAD_PATH_GRID_STEP)
+				heap_n.append(neighbor)
+				var ci := heap_f.size() - 1
+				while ci > 0:
+					var parent := (ci - 1) / 2
+					if heap_f[parent] <= heap_f[ci]:
+						break
+					var pf := heap_f[parent]
+					heap_f[parent] = heap_f[ci]
+					heap_f[ci] = pf
+					var pn := heap_n[parent]
+					heap_n[parent] = heap_n[ci]
+					heap_n[ci] = pn
+					ci = parent
 	# No route found at all (e.g. a wall of ROAD_SLOPE_HARD_LIMIT-steep terrain
 	# spans the whole map) -- fall back to a straight line rather than no road.
 	push_warning("TERRAIN_GEN: road pathfinding found no route from north to south edge -- falling back to a straight line")

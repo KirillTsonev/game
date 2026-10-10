@@ -241,6 +241,7 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 	# -- Distance fields (m, capped) to the three rock-source families --
 	var cliff_d := _new_field(n, CLIFF_REACH)
 	var faces := 0
+	var cliff_circles := PackedFloat64Array() # stamped together on worker threads (GrassScatter.stamp_circles)
 	for f in maps.cliff_features:
 		if not f.has("step_height") or absf(float(f.step_height)) < CLIFF_MIN_STEP:
 			continue
@@ -255,23 +256,22 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 			var nt := clampf(t / half_len, -1.0, 1.0) if half_len > 0.0001 else 0.0
 			var curve := float(f.curve_amplitude) * lerpf(sin(nt * PI * float(f.curve_frequency) + float(f.curve_phase)), sin(nt * PI * float(f.curve_frequency2) + float(f.curve_phase2)), float(f.curve_weight2))
 			var p := center + axis * t + perp * curve
-			GrassScatter._stamp_circle(cliff_d, width, length, p.x, p.y, face_r, CLIFF_REACH)
+			cliff_circles.append_array(PackedFloat64Array([p.x, p.y, face_r]))
 			t += FACE_STAMP_STEP
 	var rects := UnderstoryScatter._build_keep_rects(maps.cliff_dressing_plan, maps.cliff_dressing_top_profiles)
 	for kr in rects:
 		GrassScatter._stamp_rect(cliff_d, width, length, kr, CLIFF_REACH)
 	for oc in maps.outcrop_plan:
-		GrassScatter._stamp_circle(cliff_d, width, length, float(oc.px), float(oc.pz), float(oc.radius), CLIFF_REACH)
+		cliff_circles.append_array(PackedFloat64Array([float(oc.px), float(oc.pz), float(oc.radius)]))
+	cliff_d = GrassScatter.stamp_circles(cliff_d, width, length, cliff_circles, CLIFF_REACH)
 	# The rock band along the edge where the mountain wall begins (2026-10-08): painted like a cliff's foot.
 	MountainWalls.stamp_rock_distance(cliff_d, width, length, CLIFF_REACH)
 	var boulder_d := _new_field(n, BOULDER_REACH)
-	for c in RockScatter.rock_keep_circles:
-		GrassScatter._stamp_circle(boulder_d, width, length, c.x, c.y, c.z, BOULDER_REACH)
+	boulder_d = GrassScatter.stamp_circles(boulder_d, width, length, GrassScatter.pack_circles(RockScatter.rock_keep_circles), BOULDER_REACH)
 	var scree_d := _new_field(n, SCREE_REACH)
 	var scree_circles: Array[Vector3] = []
 	GrassScatter._add_scree_band_circles(maps.cliff_features, scree_circles)
-	for c in scree_circles:
-		GrassScatter._stamp_circle(scree_d, width, length, c.x, c.y, c.z, SCREE_REACH)
+	scree_d = GrassScatter.stamp_circles(scree_d, width, length, GrassScatter.pack_circles(scree_circles), SCREE_REACH)
 	var t_dist := Time.get_ticks_msec() - t0
 
 	# -- Shade (moss), same fields the understory uses --
@@ -315,20 +315,23 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 	# Distance to stumps / logs, for the litter collar (boulders: boulder_d above).
 	var dead_d := _new_field(n, LITTER_COLLAR_REACH)
 	if litter_ok:
-		for kc in DeadfallScatter.deadfall_keep_circles:
-			GrassScatter._stamp_circle(dead_d, width, length, kc.x, kc.y, kc.z, LITTER_COLLAR_REACH)
+		dead_d = GrassScatter.stamp_circles(dead_d, width, length, GrassScatter.pack_circles(DeadfallScatter.deadfall_keep_circles), LITTER_COLLAR_REACH)
 	# Distance past each tree's litter core (0 inside it).
 	var tree_d := _new_field(n, LITTER_TREE_FADE + LITTER_EDGE_NOISE)
 	if litter_ok:
+		var tree_circles := PackedFloat64Array()
 		for tp in TreeScatter.tree_points:
-			GrassScatter._stamp_circle(tree_d, width, length, tp.x, tp.y, LITTER_TREE_CORE * tp.z, LITTER_TREE_FADE + LITTER_EDGE_NOISE)
+			tree_circles.append_array(PackedFloat64Array([tp.x, tp.y, LITTER_TREE_CORE * tp.z]))
+		tree_d = GrassScatter.stamp_circles(tree_d, width, length, tree_circles, LITTER_TREE_FADE + LITTER_EDGE_NOISE)
 	var bare_sum := 0.0
 	# Always built: the road distance also drives the bare verge (BARE_ROAD_*).
+	var road_circles := PackedFloat64Array()
 	for pz in length:
 		for px in width:
 			var c := old_control.decode_u32((pz * width + px) * 4)
 			if ((c >> 27) & 0x1F) == ROAD_ID or ((c >> 22) & 0x1F) == ROAD_ID: # base / overlay bits, see _paint_band
-				GrassScatter._stamp_circle(road_d, width, length, px, pz, 0.0, LITTER_ROAD_REACH)
+				road_circles.append_array(PackedFloat64Array([px, pz, 0.0]))
+	road_d = GrassScatter.stamp_circles(road_d, width, length, road_circles, LITTER_ROAD_REACH)
 	var control := PackedInt32Array()
 	control.resize(n)
 	# Colour-map multiplier per vertex, 255 = unchanged (PATCH_SHADE).
@@ -398,31 +401,21 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 	# 2026-10-10 (v3): the band is regions -- rock, then scree with grass -- whose edges
 	# the border pass below blends like any others.
 	var scree_noise := GrassScatter._noise(hash(mountain_feet[0]), 1.0 / 4.0)
-	var scree_half := MOUNTAIN_SCREE_IN * 0.5
-	for side in 3:
-		var mountain_foot := mountain_feet[side]
-		for along in mini(mountain_foot.size(), width if side == 2 else length):
-			var line := mountain_foot[along]
-			if line <= 0.0: # a cliff or knot stands at the edge here: no mountain foot
-				continue
-			for inside in clampi(int(line + MOUNTAIN_SCREE_OUT) + 2, 0, length if side == 2 else width):
-				var px := inside if side == 0 else (width - 1 - inside if side == 1 else along)
-				var pz := along if side < 2 else inside
-				var t := -MountainWalls.mountain_depth(px, pz) + scree_noise.get_noise_2d(px, pz) * MOUNTAIN_SCREE_JITTER # < 0 on the rock
-				var i := pz * width + px
-				# Two regions since later the same day (Kirill: "remove rocky trail from the mix",
-				# extend rock face in its stead): RockyTrail lay between these two.
-				if t < scree_half:
-					dom[i] = MountainWalls.rock_texture_id # the mountain's own rock texture
-				elif t < MOUNTAIN_SCREE_OUT:
-					dom[i] = ROCKY_TERRAIN_ID
-
+	# 2026-10-10: in row bands on worker threads (_mountain_band; the loop was 0.13 s here).
+	var mountain_out: Array = []
+	mountain_out.resize(bands)
+	var mountain_ctx := {"width": width, "length": length, "dom": dom, "feet": mountain_feet, "noise": scree_noise, "rock_id": MountainWalls.rock_texture_id, "out": mountain_out, "mutex": Mutex.new()}
+	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_mountain_band.bind(mountain_ctx), bands, TerrainUtil.object_call_threads(), true))
+	var with_mountain := PackedByteArray()
+	for mb: PackedByteArray in mountain_out:
+		with_mountain.append_array(mb)
+	dom = with_mountain
 	# Majority filter: each vertex takes the most common texture within DOM_MODE_RADIUS
 	# of it, DOM_MODE_PASSES times. Removes specks of a few vertices and rounds corners.
 	for _mp in DOM_MODE_PASSES:
 		var mode_out: Array = []
 		mode_out.resize(bands)
-		var mode_ctx := {"width": width, "length": length, "src": dom, "out": mode_out, "mutex": Mutex.new()}
+		var mode_ctx := {"width": width, "length": length, "src": dom, "grid": _uniform_grid(dom, width, length), "out": mode_out, "mutex": Mutex.new()}
 		WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_mode_band.bind(mode_ctx), bands, -1, true))
 		var filtered := PackedByteArray()
 		for b: PackedByteArray in mode_out:
@@ -431,7 +424,7 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 	# Border pass: every vertex near a border gets the pair (its texture, the one across).
 	var blend_out: Array = []
 	blend_out.resize(bands)
-	var blend_ctx := {"width": width, "length": length, "dom": dom, "spray_n": spray_n, "road_control": control, "out": blend_out, "mutex": Mutex.new()}
+	var blend_ctx := {"width": width, "length": length, "dom": dom, "grid": _uniform_grid(dom, width, length), "spray_n": spray_n, "road_control": control, "out": blend_out, "mutex": Mutex.new()}
 	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_blend_band.bind(blend_ctx), bands, -1, true))
 	var blended := PackedInt32Array()
 	var n_border := 0
@@ -450,7 +443,12 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 	var rs := terrain.get_region_size()
 	var regions_written := 0
 	var regions_shaded := 0
+	var region_sum := 0 # checksum of what was written, region by region
 	var color_src: PackedByteArray = (maps.color as Image).get_data() if maps.get("color") is Image and (maps.color as Image).get_format() == Image.FORMAT_RGBA8 else PackedByteArray()
+	# 2026-10-10: the pixels of every region are worked out on worker threads (one task per
+	# region, _region_band; this loop was 0.5 s on the main thread, most of it spent stepping
+	# over the 13 regions that hold no map pixel). Images are read and set here, on the main thread.
+	var jobs: Array = []
 	for loc: Vector2i in data.get_region_locations():
 		var region: Terrain3DRegion = data.get_region(loc)
 		if region == null:
@@ -458,52 +456,44 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 		var img: Image = region.get_control_map()
 		if img == null:
 			continue
-		var bytes := img.get_data()
 		var ox := loc.x * rs - int(corner.x) # region pixel (0,0) in heightmap-pixel space
 		var oz := loc.y * rs - int(corner.z)
+		if ox + rs <= 0 or ox >= width or oz + rs <= 0 or oz >= length:
+			continue # no map pixel in this region (apron, hub, north end)
 		# Colour map: the generated macro colour (maps.color) x the patch shade.
 		var cimg: Image = region.get_color_map()
 		var shade_ok := cimg != null and cimg.get_format() == Image.FORMAT_RGBA8 and color_src.size() == n * 4
-		var cbytes := cimg.get_data() if shade_ok else PackedByteArray()
-		var wrote := false
-		for lz in rs:
-			var pz := oz + lz
-			if pz < 0 or pz >= length:
-				continue
-			for lx in rs:
-				var px := ox + lx
-				if px < 0 or px >= width:
-					continue
-				bytes.encode_u32((lz * rs + lx) * 4, control[pz * width + px])
-				wrote = true
-				if shade_ok:
-					var si := (pz * width + px) * 4
-					var di := (lz * rs + lx) * 4
-					var s := patch_shade[pz * width + px]
-					# Past the mountain's foot line the ground takes the mountain's colour, fading out
-					# across the scree band.
-					var mountain := smoothstep(-MOUNTAIN_SCREE_OUT, MOUNTAIN_SCREE_IN, MountainWalls.mountain_depth(px, pz))
-					cbytes[di] = int(color_src[si] * s / 255 * lerpf(1.0, MountainWalls.MOUNTAIN_TINT.r, mountain))
-					cbytes[di + 1] = int(color_src[si + 1] * s / 255 * lerpf(1.0, MountainWalls.MOUNTAIN_TINT.g, mountain))
-					cbytes[di + 2] = int(color_src[si + 2] * s / 255 * lerpf(1.0, MountainWalls.MOUNTAIN_TINT.b, mountain))
-		if wrote:
-			region.set_control_map(Image.create_from_data(rs, rs, false, Image.FORMAT_RF, bytes))
-			regions_written += 1
-			if shade_ok:
-				# The region's colour map carries mipmaps (the shader samples it mipmapped):
-				# rebuild from level 0 and regenerate them.
-				var shaded := Image.create_from_data(rs, rs, false, Image.FORMAT_RGBA8, cbytes.slice(0, rs * rs * 4))
-				if cimg.has_mipmaps():
-					shaded.generate_mipmaps()
-				region.set_color_map(shaded)
-				regions_shaded += 1
+		jobs.append({"region": region, "bytes": img.get_data(), "ox": ox, "oz": oz, "shade_ok": shade_ok,
+			"cbytes": cimg.get_data() if shade_ok else PackedByteArray(), "mipmaps": shade_ok and cimg.has_mipmaps()})
+	var job_out: Array = []
+	job_out.resize(jobs.size())
+	var region_ctx := {"jobs": jobs, "control": control, "patch_shade": patch_shade, "color_src": color_src, "width": width, "length": length, "rs": rs, "out": job_out, "mutex": Mutex.new()}
+	if not jobs.is_empty():
+		WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_region_band.bind(region_ctx), jobs.size(), -1, true))
+	for k in jobs.size():
+		var job: Dictionary = jobs[k]
+		var done: Dictionary = job_out[k]
+		var region: Terrain3DRegion = job.region
+		var bytes: PackedByteArray = done.bytes
+		var cbytes: PackedByteArray = done.cbytes
+		region_sum = hash([region_sum, hash(bytes), hash(cbytes.slice(0, rs * rs * 4)) if job.shade_ok else 0])
+		region.set_control_map(Image.create_from_data(rs, rs, false, Image.FORMAT_RF, bytes))
+		regions_written += 1
+		if job.shade_ok:
+			# The region's colour map carries mipmaps (the shader samples it mipmapped):
+			# rebuild from level 0 and regenerate them.
+			var shaded := Image.create_from_data(rs, rs, false, Image.FORMAT_RGBA8, cbytes.slice(0, rs * rs * 4))
+			if job.mipmaps:
+				shaded.generate_mipmaps()
+			region.set_color_map(shaded)
+			regions_shaded += 1
 	data.update_maps(Terrain3DRegion.TYPE_CONTROL, true, false)
 	if regions_shaded > 0:
 		data.update_maps(Terrain3DRegion.TYPE_COLOR, true, false)
 	var grass_asset: Terrain3DTextureAsset = terrain.get_assets().get_texture_asset(GRASS_ID) if terrain.get_assets() else null
 	if grass_asset:
 		grass_asset.set_albedo_color(GRASS_TINT)
-	print("GROUND_PAINT v2: grounding -- patch shade %.2f written to %d region colour map(s); Grass tint %s" % [PATCH_SHADE, regions_shaded, GRASS_TINT if grass_asset else "NOT SET"])
+	print("GROUND_PAINT v2: grounding -- patch shade %.2f written to %d region colour map(s); Grass tint %s; checksum of the regions written %d" % [PATCH_SHADE, regions_shaded, GRASS_TINT if grass_asset else "NOT SET", region_sum])
 	if terrain.material:
 		terrain.material.set_shader_param(&"blend_sharpness", BLEND_SHARPNESS)
 
@@ -517,6 +507,41 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 	print("GROUND_PAINT v2: sources %d escarpment face(s), %d cliff-mesh rect(s), %d outcrop(s), %d boulder(s), %d scree pt(s); %d region(s) written; blend_sharpness %.2f; timing dist %d ms, pixels %d ms, total %d ms" % [
 		faces, rects.size(), maps.outcrop_plan.size(), RockScatter.rock_keep_circles.size(), scree_circles.size(), regions_written, BLEND_SHARPNESS, t_dist, t_px - t_dist, Time.get_ticks_msec() - t0])
 
+## paint()'s pixels for one Terrain3D region (jobs[index]): the control map's, and the colour
+## map's -- the generated macro colour x the patch shade x the mountain's tint. Worker thread: the
+## region's own byte arrays are copies of this task's, everything else is only read.
+static func _region_band(index: int, ctx: Dictionary) -> void:
+	var job: Dictionary = (ctx.jobs as Array)[index]
+	var control: PackedInt32Array = ctx.control
+	var patch_shade: PackedByteArray = ctx.patch_shade
+	var color_src: PackedByteArray = ctx.color_src
+	var width: int = ctx.width
+	var length: int = ctx.length
+	var rs: int = ctx.rs
+	var bytes: PackedByteArray = job.bytes
+	var cbytes: PackedByteArray = job.cbytes
+	var ox: int = job.ox
+	var oz: int = job.oz
+	var shade_ok: bool = job.shade_ok
+	for lz in range(maxi(-oz, 0), mini(length - oz, rs)):
+		var pz := oz + lz
+		for lx in range(maxi(-ox, 0), mini(width - ox, rs)):
+			var px := ox + lx
+			bytes.encode_u32((lz * rs + lx) * 4, control[pz * width + px])
+			if shade_ok:
+				var si := (pz * width + px) * 4
+				var di := (lz * rs + lx) * 4
+				var s := patch_shade[pz * width + px]
+				# Past the mountain's foot line the ground takes the mountain's colour, fading out
+				# across the scree band.
+				var mountain := smoothstep(-MOUNTAIN_SCREE_OUT, MOUNTAIN_SCREE_IN, MountainWalls.mountain_depth(px, pz))
+				cbytes[di] = int(color_src[si] * s / 255 * lerpf(1.0, MountainWalls.MOUNTAIN_TINT.r, mountain))
+				cbytes[di + 1] = int(color_src[si + 1] * s / 255 * lerpf(1.0, MountainWalls.MOUNTAIN_TINT.g, mountain))
+				cbytes[di + 2] = int(color_src[si + 2] * s / 255 * lerpf(1.0, MountainWalls.MOUNTAIN_TINT.b, mountain))
+	var mutex: Mutex = ctx.mutex
+	mutex.lock()
+	(ctx.out as Array)[index] = {"bytes": bytes, "cbytes": cbytes}
+	mutex.unlock()
 const PAINT_BAND_ROWS := 16 ## rows per worker-thread task in paint()
 
 ## TerrainHeightmap.pack_control_blend with the bits packed here (base << 27, overlay << 22,
@@ -752,6 +777,89 @@ static func _paint_band(band: int, ctx: Dictionary) -> void:
 	(ctx.out as Array)[band] = result
 	mutex.unlock()
 
+## Per 8 x 8 block of vertices: the texture every vertex of it has, or UNIFORM_MIXED. A window of
+## up to 8 vertices across touches at most 2 x 2 blocks, so "its four corner blocks all hold my
+## texture" means the whole window does -- which lets the majority filter and the border pass skip
+## their per-vertex window scan on ground far from any border (about half the map; 2026-10-10).
+## Built in bands on worker threads.
+const UNIFORM_MIXED := 254
+static func _uniform_grid(dom: PackedByteArray, width: int, length: int) -> PackedByteArray:
+	var grid_l := (length + 7) >> 3
+	var bands := ceili(float(grid_l) / 4.0)
+	var out: Array = []
+	out.resize(bands)
+	var ctx := {"dom": dom, "width": width, "length": length, "out": out, "mutex": Mutex.new()}
+	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_uniform_band.bind(ctx), bands, -1, true))
+	var grid := PackedByteArray()
+	for b: PackedByteArray in out:
+		grid.append_array(b)
+	return grid
+
+static func _uniform_band(band: int, ctx: Dictionary) -> void:
+	var dom: PackedByteArray = ctx.dom
+	var width: int = ctx.width
+	var length: int = ctx.length
+	var grid_w := (width + 7) >> 3
+	var grid_l := (length + 7) >> 3
+	var g0 := band * 4
+	var g1 := mini(g0 + 4, grid_l)
+	var out := PackedByteArray()
+	out.resize((g1 - g0) * grid_w)
+	for gz in range(g0, g1):
+		for gx in grid_w:
+			var first := dom[(gz << 3) * width + (gx << 3)]
+			var value := first
+			for pz in range(gz << 3, mini((gz << 3) + 8, length)):
+				var row := pz * width
+				for px in range(gx << 3, mini((gx << 3) + 8, width)):
+					if dom[row + px] != first:
+						value = UNIFORM_MIXED
+						break
+				if value == UNIFORM_MIXED:
+					break
+			out[(gz - g0) * grid_w + gx] = value
+	var mutex: Mutex = ctx.mutex
+	mutex.lock()
+	(ctx.out as Array)[band] = out
+	mutex.unlock()
+## paint()'s mountain band for rows [band * PAINT_BAND_ROWS, +PAINT_BAND_ROWS): the three sides in
+## their order, each over the pixels it covered in the single loop that fall in these rows, so a
+## corner pixel still ends with the last side's answer. Worker thread; returns the band's slice.
+static func _mountain_band(band: int, ctx: Dictionary) -> void:
+	var width: int = ctx.width
+	var length: int = ctx.length
+	var dom: PackedByteArray = ctx.dom
+	var feet: Array[PackedFloat32Array] = ctx.feet
+	var scree_noise: FastNoiseLite = ctx.noise
+	var rock_id: int = ctx.rock_id
+	var z_from := band * PAINT_BAND_ROWS
+	var z_to := mini(z_from + PAINT_BAND_ROWS, length) - 1
+	var out := dom.slice(z_from * width, (z_to + 1) * width)
+	var scree_half := MOUNTAIN_SCREE_IN * 0.5
+	for side in 3:
+		var mountain_foot := feet[side]
+		var along_count := mini(mountain_foot.size(), width if side == 2 else length)
+		# Sides 0 and 1 run along the rows: only this band's. Side 2 runs along the columns.
+		for along in (range(z_from, mini(z_to + 1, along_count)) if side < 2 else range(along_count)):
+			var line := mountain_foot[along]
+			if line <= 0.0: # a cliff or knot stands at the edge here: no mountain foot
+				continue
+			var inside_count := clampi(int(line + MOUNTAIN_SCREE_OUT) + 2, 0, length if side == 2 else width)
+			for inside in (range(inside_count) if side < 2 else range(z_from, mini(z_to + 1, inside_count))):
+				var px: int = inside if side == 0 else (width - 1 - inside if side == 1 else along)
+				var pz: int = along if side < 2 else inside
+				var t := -MountainWalls.mountain_depth(px, pz) + scree_noise.get_noise_2d(px, pz) * MOUNTAIN_SCREE_JITTER # < 0 on the rock
+				var i := (pz - z_from) * width + px
+				# Two regions since later the same day (Kirill: "remove rocky trail from the mix",
+				# extend rock face in its stead): RockyTrail lay between these two.
+				if t < scree_half:
+					out[i] = rock_id # the mountain's own rock texture
+				elif t < MOUNTAIN_SCREE_OUT:
+					out[i] = ROCKY_TERRAIN_ID
+	var mutex: Mutex = ctx.mutex
+	mutex.lock()
+	(ctx.out as Array)[band] = out
+	mutex.unlock()
 ## One band of the majority filter (see paint()): each vertex takes the most common texture within
 ## DOM_MODE_RADIUS of it, read from the unfiltered `src`; its own wins a tie. Road vertices
 ## are left alone and not counted. Worker thread, same rules as _paint_band.
@@ -759,6 +867,8 @@ static func _mode_band(band: int, ctx: Dictionary) -> void:
 	var width: int = ctx.width
 	var length: int = ctx.length
 	var src: PackedByteArray = ctx.src
+	var grid: PackedByteArray = ctx.grid
+	var grid_w := (width + 7) >> 3
 	var z0 := band * PAINT_BAND_ROWS
 	var z1 := mini(z0 + PAINT_BAND_ROWS, length)
 	var out := src.slice(z0 * width, z1 * width)
@@ -773,6 +883,9 @@ static func _mode_band(band: int, ctx: Dictionary) -> void:
 				continue
 			var xa := maxi(px - DOM_MODE_RADIUS, 0)
 			var xb := mini(px + DOM_MODE_RADIUS, width - 1)
+			# All of the window in blocks of this one texture: nothing to count (see _uniform_grid).
+			if grid[(za >> 3) * grid_w + (xa >> 3)] == own and grid[(za >> 3) * grid_w + (xb >> 3)] == own and grid[(zb >> 3) * grid_w + (xa >> 3)] == own and grid[(zb >> 3) * grid_w + (xb >> 3)] == own:
+				continue
 			var same := 0
 			var cells := 0
 			for zz in range(za, zb + 1):
@@ -813,6 +926,8 @@ static func _blend_band(band: int, ctx: Dictionary) -> void:
 	var width: int = ctx.width
 	var length: int = ctx.length
 	var dom: PackedByteArray = ctx.dom
+	var grid: PackedByteArray = ctx.grid
+	var grid_w := (width + 7) >> 3
 	var spray_n: PackedByteArray = ctx.spray_n
 	var road_control: PackedInt32Array = ctx.road_control
 	var z0 := band * PAINT_BAND_ROWS
@@ -851,6 +966,10 @@ static func _blend_band(band: int, ctx: Dictionary) -> void:
 			var d2 := far
 			var xa := maxi(px - BORDER_RADIUS, 0)
 			var xb := mini(px + BORDER_RADIUS, width - 1)
+			# All of the window in blocks of this one texture: no border near (see _uniform_grid).
+			if grid[(za >> 3) * grid_w + (xa >> 3)] == a and grid[(za >> 3) * grid_w + (xb >> 3)] == a and grid[(zb >> 3) * grid_w + (xa >> 3)] == a and grid[(zb >> 3) * grid_w + (xb >> 3)] == a:
+				control[li] = _pack(a, a, 0.0)
+				continue
 			for zz in range(za, zb + 1):
 				var row := zz * width
 				var dz2 := (zz - pz) * (zz - pz)

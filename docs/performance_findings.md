@@ -1076,6 +1076,135 @@ are on another map than every earlier run, so compare kinds of view, not exact f
 - Not done yet: fewer draws for trees and saplings (the remedy that fits is the one step 8 used
   for the understory, or larger instancer cells), and the startup stages above.
 
+### 11. Startup after the mountains, and the new baseline (2026-10-10)
+
+The map is 384 x 1024 since 2026-10-09, with terrain aprons on both sides and the north end.
+World generation had grown from 5.1 s (2026-10-06, 256 x 512) to 10.3 s (2026-10-08, 384 x 768)
+to 19.1 s; Kirill: startup "takes around 30 seconds now and my laptop's fans go crazy" (30 s is
+a start from the editor, with the debugger attached; a command-line launch drew its first frame
+at 22.6 s). Measured on seed 3082472107, launched with `-- --seed=3082472107`.
+
+Where the 19 s went: heightmap build 8.1 (knots 2.9, of it 1.8 reachability and ramps; road 1.8;
+erosion 1.6; crease rounding 0.6), hub + aprons + north end + import 3.0, ground painting 1.9,
+deadfall 1.1, understory 1.0, grass bake 0.7, the rest 3.3.
+
+Done, each with the same output checksums before and after:
+
+| Change | Before | After |
+|---|---|---|
+| Side aprons' and north end's height and colour loops in row bands on worker threads (`MountainWalls._apron_height_band` / `_apron_color_band`, `TerrainCastle._north_height_band` / `_north_color_band`) | hub + aprons + join 2.19 s | 1.44 s |
+| Ground paint's region write: one worker task per region, and the 13 regions with no map pixel skipped (`TerrainGroundPaint._region_band`) | 0.52 s | 0.15 s |
+| Knot reachability and ramps: every knot at once on worker threads, each on private copies, its circle copied back (`TerrainKnots._reach_task`; `--knots-sequential` runs the old order) | knots 2.81 s (6.13 s on seed 2415213935, where one knot fails three ramp tries) | 1.85 s (4.46 s) |
+| `TerrainHeightmap.smooth()`: both sweeps on worker threads with the single loop's arithmetic (rows in bands; columns in slabs, put back together row by row) -- bit-identical | first smoothing 0.24 s, road's graded target 0.32 s, crease rounding 0.57 s | 0.06 s, 0.08 s, 0.33 s |
+| Road: the corridor rasterisation and the bed's nearest-segment search in row bands (`TerrainRoad._raster_band`, `_bed_band`) | road 1.78 s | 0.97 s (0.36 s of it the path search) |
+| Ground paint: an 8 x 8 "one texture" block grid lets vertices far from any border skip the majority filter's and the border pass's window scans (`_uniform_grid`) | filter + borders 0.68 s | 0.58 s |
+| Erosion: the four corner indices worked out once per step | 1.59 s | 1.45 s |
+| World cache (`WORLD_CACHE` in `terrain_gen.gd`): heightmap + joined import + the module variables they leave, per seed, in `user://world_cache/` | world build 18.0 s | 8.4 s on a start that reads it (first frame at 12.0 s) |
+
+A start that builds its world is now 15.8 s on seed 3082472107 with the editor's executable (was 19.1 to 20.0 s; 18.0 s after the first three changes), every change checked for identical checksums on two seeds (3082472107 and 2415213935). The cache only helps a start on
+a seed built before with the terrain's own scripts unchanged: `MASTER_SEED` is -1 (random), so it
+needs the seed pinned, or `--seed`. Editing a script outside `WORLD_CACHE_DOWNSTREAM` rebuilds.
+Every checksum of the later stages (deadfall, understory, grass, flowers, ground paint, region
+maps) was identical between the building start and the reading start.
+
+**The exported release build after all five rounds (2026-10-10, 14:10, two runs): world generation
+9.8 and 9.9 s, first frame at 12.8 and 12.9 s** on seed 3082472107, against 11.3 s and about 15 s
+with the editor's executable. Same checksums as the editor's. Largest stages there: erosion
+1.43 s (both passes), the import with its join 1.34 s, ground paint 0.97 s, knots 0.78 s, road
+0.75 s; about 1.3 s is not in any stage (0.6 s after the import, the rest the loading frames).
+
+The first export, for comparison (`builds/startup_timing`, before the knot change): world
+generation 15.7 s and first frame at 19.0 s on the same seed, against 18.0 s and about 22 s with the
+editor's executable. Same checksums. That is the figure a player sees.
+
+Second round the same day, again with identical checksums on both seeds: 13.6 s on seed
+3082472107 (first frame at 17.3 s) and 16.6 s on 2415213935 (was 15.8 and 18.9 s).
+
+| Change | Before | After |
+|---|---|---|
+| Deadfall: the cliff rects sorted into 4 m cells (`_build_rect_grid`) and the knots' ramps in one flat list, where every sample point of every piece and every cone spot scanned all 66 rects and asked all 11 knots | 1.11 s (cones 0.28 s of it) | 0.43 s (cones 0.09 s) |
+| Saplings, understory, flowers: `RockScatter.build_keep_grid` / `keep_grid_blocked` in place of `boulder_blocked`'s scan of every rect and circle (about 640 tests per plant) | saplings 0.22 s | 0.11 s |
+| Understory and flower bands on 6 worker threads instead of 12 on a debug build (`TerrainUtil.object_call_threads`, see below) | understory 1.0 s, flowers 0.52 s | 0.46 s, 0.27 s |
+| The same for the apron, north end and road raster bands | hub + aprons + join 1.51 s | 1.10 s |
+| The wind noise and the mountains' cloud noise rendered on a worker thread during the heightmap build (`FoliageWind.prewarm`, `MountainWalls.prewarm_cloud_noise`) | 0.15 s of the main thread after the import | 0 |
+
+Third round: the knots' ramp search (`_carve_ramp`). It was all of "reach + ramps": per unreached
+level, every pair (reached low pixel, top pixel) shorter than the best so far was tested against
+the rocks in map order -- 62,000 line tests and 2.3 s for one level that ends with no ramp. The
+pairs are now sorted by length first (whole-pixel ends, so by squared distance, then map order)
+and the first that passes is the same ramp as before; the line test no longer builds a list per
+sample and reads the top region from a byte mask. Reach + ramps 3.79 -> 1.50 s on seed 2415213935
+and 0.84 -> 0.12 s on 3082472107; `_ready()` 14.3 and 12.8 s. Same checksums, same knot lines.
+What is left on the slow seed is the level with no ramp: every pair still has to fail.
+
+Fourth round, same checksums on both seeds: `_ready()` 11.9 s on seed 3082472107 (first frame at
+15.6 s) and 13.3 s on 2415213935.
+
+| Change | Before | After |
+|---|---|---|
+| Distance stamping in row bands on worker threads (`GrassScatter.stamp_circles`): the grass bake's rock, road and painted-road fields, the ground paint's cliff, boulder, scree, deadfall, tree and road fields | grass bake 0.69 s, paint 1.46 s | 0.39 s, 1.26 s |
+| Ground paint's mountain band in row bands (`_mountain_band`) | paint 1.26 s | 1.12 s |
+| The raise pass behind cliff meshes (`raise_terrain_behind_cliff_dressing`): its loop walks the box round the rotated rectangle an entry can touch, not the whole square, and samples its two warps only where they are used | knot rows 0.58 s, cliff dressing 0.30 s | 0.42 s, 0.23 s |
+| Knots: the meshes' obstacle rectangles marked straight into the road's mask (a new whole-map mask was copied into it pixel by pixel, per knot) | clip + mark 0.14 s | 0.05 s |
+
+Fifth round, same checksums (the import's colour bytes included): `_ready()` 11.3 s and 12.8 s.
+
+| Change | Before | After |
+|---|---|---|
+| Base heights (valley shape + five noise layers) in row bands (`_base_band`) | 0.44 s | 0.27 s (bound by the debug lock: six noise calls a pixel) |
+| Macro colour map in row bands, bytes written as `Image.set_pixel()` writes them (`_color_band`) | 0.15 s | 0.06 s |
+| Roughness statistics (a log line) in row bands | 0.10 s | 0.02 s |
+| Road path search on flat arrays: per-node and per-direction values worked out once, heap as two packed arrays making the same comparisons | 0.19 s of "pathfinding" | 0.08 s (the other 0.17 s there is the obstacle distance field) |
+
+Left, in script: erosion (1.4 s, one droplet after another by nature), the obstacle distance
+field (0.17 s, a two-pass sweep), the knots' occupancy dilation (0.17 s), the west strip
+(0.18 s), the foot lines and the village's shoulder (0.25 s), crease rounding (0.33 s).
+
+**Calls on engine objects do not scale across worker threads on a debug build.** Found when the
+keep-out lookup made the flower stage slower (0.87 s against 0.55 s) while doing a twentieth of
+the work. A standalone test (16 tasks of 60,000 calls):
+
+| | one thread | 12 worker threads, editor / debug template | 12 worker threads, release template |
+|---|---|---|---|
+| plain arithmetic | 46 ms | 11 ms | 9 ms |
+| `RandomNumberGenerator.randf()` | 32 ms | 211 ms | 5.5 ms |
+| `FastNoiseLite.get_noise_2d()` | 205 ms | 207 ms | 33 ms |
+
+On a debug build every call on an object from a worker thread waits on one engine-wide lock
+(that it is the freed-object check is a guess; the measurement is not). With fewer threads the
+queue is shorter: random numbers alone are quickest on 2, a mix with real work between the calls
+on 6 to 12. So a band whose inner loop calls `rng` or noise per item asks for
+`TerrainUtil.object_call_threads()` threads (6 on a debug build, all on a release build); bands
+of plain arithmetic keep -1. Tried on the knot, grass bake, ground paint and road bed bands too:
+no gain or a loss, left at -1. The release build has no such lock, so there these stages are
+faster than anything the editor shows; an export has not been re-timed since.
+
+The time no stage's timer covered (about 1.3 s) was measured: 0.25 s `PlantField.claim_shadow_casters`
+(each `set_cast_shadows` makes Terrain3D update), 0.15 s the wind noise image (now threaded),
+0.17 s the projection patch's two shaders, and 0.09 to 0.2 s per loading-screen frame, which is
+deferred engine work: with four of the six frame waits removed, the one left took 0.55 s.
+`_log_stage` now prints such a gap when it is 30 ms or more.
+
+Two mistakes made on the knot change, both caught by the checksums: copying back only the pixels a
+ramp reports (a carve reports changes above 1 mm; smaller ones stay in the map), and copying back
+a square round each knot (its corners lie in neighbours' circles and undid their ramps).
+
+Looked at and left:
+
+- Crease rounding (0.57 s): 0.32 s is two box blurs of the whole map (`smooth()`), 0.18 s the two
+  knot floods. The blur's running sums cannot be split across rows without changing the last
+  digits of the heights, and the road is routed on them next.
+- Ground paint's majority filter (0.29 s) and border pass (0.24 s) are already threaded; both
+  scan a window per vertex. A coarse "this block is one texture" grid would let about 40 % of
+  the vertices skip the scan. Not done.
+- Knot reachability and ramps (1.8 s), erosion (1.6 s), road (1.8 s): sequential by nature.
+
+New benchmark baseline for this map: `20261010_122955_7175930c_mountains_baseline` (taken before
+the three changes above, which do not touch what is drawn). Against the older maps' reports the
+GPU time is up by 1 to 1.5 ms at every station, the sky included (3.25 ms against 1.95); of that,
+the shader patch measures 0.2-0.7 ms and displacement about 0.6-0.7 ms where terrain fills the
+view. What is paid when looking at the sky is not pinned down yet.
+
 ## Research (2026-10-05)
 
 A web search for optimisation guidance, read against the findings above.

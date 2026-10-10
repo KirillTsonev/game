@@ -445,51 +445,17 @@ static func build_heightmap(master_seed: int = TerrainConfig.MASTER_SEED) -> Dic
 	# the floor's edge on this row (beyond that it stays at rim height, under the mountain's rock).
 	var wall_run_lo := base_floor_lo()
 	var wall_run_hi := float(TerrainConfig.AREA_WIDTH - 1) - base_floor_hi()
+	# 2026-10-10: in row bands on worker threads (_base_band; the loop was 0.45 s here). Every
+	# pixel is worked out from its own coordinates alone, so the heights are the single loop's.
 	var heights := PackedFloat32Array()
-	heights.resize(TerrainConfig.AREA_WIDTH * TerrainConfig.AREA_LENGTH)
-	for pz in TerrainConfig.AREA_LENGTH:
-		var row_lo := valley_floor_lo[pz]
-		var row_hi := valley_floor_hi[pz]
-		for px in TerrainConfig.AREA_WIDTH:
-			var row_valley_height := BASE_LEVEL
-			var row_noise_scale := 1.0
-			if float(px) < row_lo:
-				var wall_t := _wall_rise(row_lo - float(px), wall_run_lo)
-				row_valley_height += VALLEY_LEFT_WALL_HEIGHT * wall_t
-				row_noise_scale = lerpf(1.0, VALLEY_WALL_NOISE_DAMPING, wall_t)
-			elif float(px) > row_hi:
-				var wall_t := _wall_rise(float(px) - row_hi, wall_run_hi)
-				row_valley_height += VALLEY_RIGHT_WALL_HEIGHT * wall_t
-				row_noise_scale = lerpf(1.0, VALLEY_WALL_NOISE_DAMPING, wall_t)
-			var warp_x := px + warp_noise.get_noise_2d(px, pz) * WARP_STRENGTH
-			var warp_z := pz + warp_noise.get_noise_2d(pz, px) * WARP_STRENGTH
-
-			var base := base_noise.get_noise_2d(warp_x, warp_z) # -1..1
-			var mid := mid_noise.get_noise_2d(warp_x, warp_z) # -1..1 -- shares the warp so it bends with the base layer instead of looking like an independent grid
-			var ridge := ridge_noise.get_noise_2d(px, pz) # -1..1
-			# Ridged shaping: fold around 0 so ridges add height rather than
-			# also carving symmetric trenches, then SQUARE the fold instead of
-			# using it linearly. Linear fold makes a sharp V-shaped cross
-			# section (a knife-edge ridge); squaring it rounds the apex into
-			# a dome/hill profile instead while still tapering to 0 at the
-			# base -- same footprint, much less "jagged mountain" silhouette.
-			var ridge_fold := maxf(0.0, 1.0 - absf(ridge) * 2.0)
-			var ridge_shaped := ridge_fold * ridge_fold
-			var detail := detail_noise.get_noise_2d(px, pz) # -1..1
-
-			# The macro valley shape (flat floor -> steepening wall -> rim,
-			# asymmetric left/right) is now the BASE of the height, replacing
-			# the old flat BASE_LEVEL constant -- noise perturbs that shape
-			# rather than defining the terrain's silhouette by itself. Noise
-			# amplitude is damped on the walls (valley_noise_scale, full
-			# strength on the floor) so the wall still reads as the macro
-			# shape underneath its own texture instead of getting broken up.
-			var height := row_valley_height \
-				+ (base * BASE_AMPLITUDE \
-					+ mid * MID_AMPLITUDE \
-					+ ridge_shaped * RIDGE_AMPLITUDE \
-					+ detail * DETAIL_AMPLITUDE) * row_noise_scale
-			heights[pz * TerrainConfig.AREA_WIDTH + px] = height
+	var base_bands := ceili(float(TerrainConfig.AREA_LENGTH) / HEIGHT_BAND_ROWS)
+	var base_out: Array = []
+	base_out.resize(base_bands)
+	var base_ctx := {"warp_noise": warp_noise, "base_noise": base_noise, "mid_noise": mid_noise, "ridge_noise": ridge_noise, "detail_noise": detail_noise,
+		"warp_strength": WARP_STRENGTH, "wall_run_lo": wall_run_lo, "wall_run_hi": wall_run_hi, "out": base_out, "mutex": Mutex.new()}
+	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_base_band.bind(base_ctx), base_bands, TerrainUtil.object_call_threads(), true))
+	for b: PackedFloat32Array in base_out:
+		heights.append_array(b)
 	print("TERRAIN_GEN: base noise+valley heightmap done (%.2fs)" % ((Time.get_ticks_msec() - t_stage) / 1000.0))
 	t_stage = Time.get_ticks_msec()
 
@@ -751,15 +717,104 @@ static func _build_color_map(seeds: Dictionary, width: int, length: int) -> Imag
 	rough_noise.fractal_octaves = 2
 	rough_noise.frequency = MACRO_ROUGH_FREQUENCY
 
-	var image := Image.create(width, length, false, Image.FORMAT_RGBA8)
-	for pz in length:
+	# 2026-10-10: in row bands on worker threads (_color_band; the loop was 0.15 s here), the
+	# bytes written as Image.set_pixel() writes them.
+	var bands := ceili(float(length) / HEIGHT_BAND_ROWS)
+	var out: Array = []
+	out.resize(bands)
+	var ctx := {"tint_noise": tint_noise, "hue_noise": hue_noise, "rough_noise": rough_noise, "width": width, "length": length, "out": out, "mutex": Mutex.new()}
+	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_color_band.bind(ctx), bands, TerrainUtil.object_call_threads(), true))
+	var bytes := PackedByteArray()
+	for b: PackedByteArray in out:
+		bytes.append_array(b)
+	return Image.create_from_data(width, length, false, Image.FORMAT_RGBA8, bytes)
+
+const HEIGHT_BAND_ROWS := 16 ## rows per worker-thread task in the bands below
+
+## build_heightmap()'s base heights (valley shape + noise layers) for one band of rows.
+## Worker thread: reads ctx and the valley's per-row edges, returns the band's own slice.
+static func _base_band(band: int, ctx: Dictionary) -> void:
+	var warp_noise: FastNoiseLite = ctx.warp_noise
+	var base_noise: FastNoiseLite = ctx.base_noise
+	var mid_noise: FastNoiseLite = ctx.mid_noise
+	var ridge_noise: FastNoiseLite = ctx.ridge_noise
+	var detail_noise: FastNoiseLite = ctx.detail_noise
+	var warp_strength: float = ctx.warp_strength
+	var wall_run_lo: float = ctx.wall_run_lo
+	var wall_run_hi: float = ctx.wall_run_hi
+	var width := TerrainConfig.AREA_WIDTH
+	var z_from := band * HEIGHT_BAND_ROWS
+	var z_to := mini(z_from + HEIGHT_BAND_ROWS, TerrainConfig.AREA_LENGTH) - 1
+	var out := PackedFloat32Array()
+	out.resize((z_to - z_from + 1) * width)
+	for pz in range(z_from, z_to + 1):
+		var row_lo := valley_floor_lo[pz]
+		var row_hi := valley_floor_hi[pz]
+		for px in width:
+			var row_valley_height := BASE_LEVEL
+			var row_noise_scale := 1.0
+			if float(px) < row_lo:
+				var wall_t := _wall_rise(row_lo - float(px), wall_run_lo)
+				row_valley_height += VALLEY_LEFT_WALL_HEIGHT * wall_t
+				row_noise_scale = lerpf(1.0, VALLEY_WALL_NOISE_DAMPING, wall_t)
+			elif float(px) > row_hi:
+				var wall_t := _wall_rise(float(px) - row_hi, wall_run_hi)
+				row_valley_height += VALLEY_RIGHT_WALL_HEIGHT * wall_t
+				row_noise_scale = lerpf(1.0, VALLEY_WALL_NOISE_DAMPING, wall_t)
+			var warp_x := px + warp_noise.get_noise_2d(px, pz) * warp_strength
+			var warp_z := pz + warp_noise.get_noise_2d(pz, px) * warp_strength
+			var base := base_noise.get_noise_2d(warp_x, warp_z) # -1..1
+			var mid := mid_noise.get_noise_2d(warp_x, warp_z) # -1..1 -- shares the warp so it bends with the base layer
+			var ridge := ridge_noise.get_noise_2d(px, pz) # -1..1
+			# Ridged shaping: fold around 0 so ridges add height rather than also carving
+			# symmetric trenches, then SQUARE the fold: a dome, not a knife edge.
+			var ridge_fold := maxf(0.0, 1.0 - absf(ridge) * 2.0)
+			var ridge_shaped := ridge_fold * ridge_fold
+			var detail := detail_noise.get_noise_2d(px, pz) # -1..1
+			# The macro valley shape is the BASE of the height; noise perturbs it, damped on
+			# the walls so they still read as the macro shape.
+			var height := row_valley_height \
+				+ (base * BASE_AMPLITUDE \
+					+ mid * MID_AMPLITUDE \
+					+ ridge_shaped * RIDGE_AMPLITUDE \
+					+ detail * DETAIL_AMPLITUDE) * row_noise_scale
+			out[(pz - z_from) * width + px] = height
+	var mutex: Mutex = ctx.mutex
+	mutex.lock()
+	(ctx.out as Array)[band] = out
+	mutex.unlock()
+
+## _build_color_map()'s pixels for one band of rows, as RGBA8 bytes. A Color holds 32-bit floats
+## and set_pixel() stores each as uint8(clamp(c * 255, 0, 255)): `f32` rounds the sums the same way.
+static func _color_band(band: int, ctx: Dictionary) -> void:
+	var tint_noise: FastNoiseLite = ctx.tint_noise
+	var hue_noise: FastNoiseLite = ctx.hue_noise
+	var rough_noise: FastNoiseLite = ctx.rough_noise
+	var width: int = ctx.width
+	var length: int = ctx.length
+	var z_from := band * HEIGHT_BAND_ROWS
+	var z_to := mini(z_from + HEIGHT_BAND_ROWS, length) - 1
+	var out := PackedByteArray()
+	out.resize((z_to - z_from + 1) * width * 4)
+	var f32 := PackedFloat32Array([0.0, 0.0, 0.0, 0.0])
+	for pz in range(z_from, z_to + 1):
 		for px in width:
 			var tint := 1.0 + tint_noise.get_noise_2d(px, pz) * MACRO_TINT_STRENGTH
 			var hue := hue_noise.get_noise_2d(px, pz) * MACRO_HUE_STRENGTH
 			var rough := 0.5 + rough_noise.get_noise_2d(px, pz) * MACRO_ROUGH_STRENGTH
-			image.set_pixel(px, pz, Color(tint + hue, tint, tint - hue, rough))
-	return image
-
+			f32[0] = tint + hue
+			f32[1] = tint
+			f32[2] = tint - hue
+			f32[3] = rough
+			var o := ((pz - z_from) * width + px) * 4
+			out[o] = int(clampf(f32[0] * 255.0, 0.0, 255.0))
+			out[o + 1] = int(clampf(f32[1] * 255.0, 0.0, 255.0))
+			out[o + 2] = int(clampf(f32[2] * 255.0, 0.0, 255.0))
+			out[o + 3] = int(clampf(f32[3] * 255.0, 0.0, 255.0))
+	var mutex: Mutex = ctx.mutex
+	mutex.lock()
+	(ctx.out as Array)[band] = out
+	mutex.unlock()
 ## Packs a solid, unblended control-map pixel for the given texture id
 ## (base = overlay = id, blend = 0) and returns it as the raw packed int --
 ## NOT yet the float-reinterpreted form an Image pixel needs (see
@@ -789,12 +844,39 @@ static func pack_control_blend(base_id: int, overlay_id: int, blend_frac: float)
 ## regardless of APPLY_TO_TERRAIN so tuning never needs to touch the live
 ## terrain to see whether a change helped.
 static func _print_roughness_stats(heights: PackedFloat32Array, width: int, length: int) -> void:
+	# 2026-10-10: in row bands on worker threads (0.10 s on the main thread for a log line). The
+	# average is summed band by band, so its last digits can differ from the single loop's.
+	var bands := ceili(float(length) / HEIGHT_BAND_ROWS)
+	var out: Array = []
+	out.resize(bands)
+	var ctx := {"heights": heights, "width": width, "length": length, "out": out, "mutex": Mutex.new()}
+	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_roughness_band.bind(ctx), bands, -1, true))
 	var min_h := heights[0]
 	var max_h := heights[0]
 	var delta_sum := 0.0
 	var delta_count := 0
 	var max_delta := 0.0
-	for pz in length:
+	for b: Array in out:
+		min_h = minf(min_h, b[0])
+		max_h = maxf(max_h, b[1])
+		delta_sum += b[2]
+		delta_count += b[3]
+		max_delta = maxf(max_delta, b[4])
+	print("TERRAIN_GEN: height range=[%.2f, %.2f] avg_adjacent_delta=%.4f max_adjacent_delta=%.4f" \
+		% [min_h, max_h, delta_sum / delta_count, max_delta])
+
+static func _roughness_band(band: int, ctx: Dictionary) -> void:
+	var heights: PackedFloat32Array = ctx.heights
+	var width: int = ctx.width
+	var length: int = ctx.length
+	var z_from := band * HEIGHT_BAND_ROWS
+	var z_to := mini(z_from + HEIGHT_BAND_ROWS, length) - 1
+	var min_h := heights[z_from * width]
+	var max_h := min_h
+	var delta_sum := 0.0
+	var delta_count := 0
+	var max_delta := 0.0
+	for pz in range(z_from, z_to + 1):
 		for px in width:
 			var h := heights[pz * width + px]
 			min_h = minf(min_h, h)
@@ -809,9 +891,10 @@ static func _print_roughness_stats(heights: PackedFloat32Array, width: int, leng
 				delta_sum += dz
 				delta_count += 1
 				max_delta = maxf(max_delta, dz)
-	print("TERRAIN_GEN: height range=[%.2f, %.2f] avg_adjacent_delta=%.4f max_adjacent_delta=%.4f" \
-		% [min_h, max_h, delta_sum / delta_count, max_delta])
-
+	var mutex: Mutex = ctx.mutex
+	mutex.lock()
+	(ctx.out as Array)[band] = [min_h, max_h, delta_sum, delta_count, max_delta]
+	mutex.unlock()
 ## Simple box blur, `passes` times, with a (2*radius+1)^2 window and
 ## clamped-to-edge sampling. This is the direct fix for "jagged/rocky":
 ## it doesn't care why a spike is there (noise, erosion, a single bad
@@ -904,42 +987,100 @@ static func round_creases(heights: PackedFloat32Array, width: int, length: int, 
 	return "%d px moved (%.1f%% of the map), at most %.2f m; %d px left as they were beside cliff meshes / outcrops" % [changed, 100.0 * changed / n, most, held]
 
 static func smooth(heights: PackedFloat32Array, width: int, length: int, passes: int, radius: int) -> void:
-	var window := 2 * radius + 1
-	var row_buffer := PackedFloat32Array()
-	row_buffer.resize(width * length)
-	var col_sum := PackedFloat32Array()
-	col_sum.resize(width)
+	# 2026-10-10: both sweeps on worker threads, with the single loop's arithmetic kept exactly --
+	# the result is the same to the last bit, which the road routing and the knots' checks need.
+	# The horizontal sweep is independent per row (bands of rows); the vertical one per column
+	# (slabs of columns, put back together row by row). This function was 0.9 s of a start in
+	# its three callers (the first smoothing, the road's graded target, the crease rounding).
+	if passes <= 0:
+		return
+	var current := heights
+	var bands := ceili(float(length) / SMOOTH_BAND_ROWS)
+	var slabs := ceili(float(width) / SMOOTH_SLAB_COLS)
 	for p in passes:
-		# Horizontal pass: row_buffer[pz][px] = sliding-window avg over
-		# heights[pz][clamp(px+dx)]. Reads only from `heights` (this pass's
-		# input), writes only to `row_buffer` -- no aliasing hazard.
+		var row_out: Array = []
+		row_out.resize(bands)
+		var row_ctx := {"src": current, "width": width, "length": length, "radius": radius, "out": row_out, "mutex": Mutex.new()}
+		WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_smooth_row_band.bind(row_ctx), bands, -1, true))
+		var row_buffer := PackedFloat32Array()
+		for b: PackedFloat32Array in row_out:
+			row_buffer.append_array(b)
+		var slab_out: Array = []
+		slab_out.resize(slabs)
+		var slab_ctx := {"src": row_buffer, "width": width, "length": length, "radius": radius, "out": slab_out, "mutex": Mutex.new()}
+		WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_smooth_col_slab.bind(slab_ctx), slabs, -1, true))
+		var next := PackedFloat32Array()
 		for pz in length:
-			var row_start := pz * width
-			var sum := 0.0
-			for dx in range(-radius, radius + 1):
-				sum += heights[row_start + clampi(dx, 0, width - 1)]
-			row_buffer[row_start] = sum / window
-			for px in range(1, width):
-				var leaving := clampi(px - 1 - radius, 0, width - 1)
-				var entering := clampi(px + radius, 0, width - 1)
-				sum += heights[row_start + entering] - heights[row_start + leaving]
-				row_buffer[row_start + px] = sum / window
+			for k in slabs:
+				var slab: PackedFloat32Array = slab_out[k]
+				var slab_width := mini(SMOOTH_SLAB_COLS, width - k * SMOOTH_SLAB_COLS)
+				next.append_array(slab.slice(pz * slab_width, (pz + 1) * slab_width))
+		current = next
+	# Into the caller's own array, as the in-place loop did.
+	heights.clear()
+	heights.append_array(current)
 
-		# Vertical pass: heights[pz][px] = sliding-window avg over
-		# row_buffer[clamp(pz+dz)][px]. Reads only from `row_buffer`, writes
-		# only to `heights` -- safe to write in place since this pass never
-		# reads `heights`.
-		col_sum.fill(0.0)
-		for dz in range(-radius, radius + 1):
-			var base := clampi(dz, 0, length - 1) * width
-			for px in width:
-				col_sum[px] += row_buffer[base + px]
-		for px in width:
-			heights[px] = col_sum[px] / window
-		for pz in range(1, length):
-			var leaving_base := clampi(pz - 1 - radius, 0, length - 1) * width
-			var entering_base := clampi(pz + radius, 0, length - 1) * width
-			var row_base := pz * width
-			for px in width:
-				col_sum[px] += row_buffer[entering_base + px] - row_buffer[leaving_base + px]
-				heights[row_base + px] = col_sum[px] / window
+const SMOOTH_BAND_ROWS := 64
+const SMOOTH_SLAB_COLS := 32
+
+## smooth()'s horizontal sweep for rows [band * SMOOTH_BAND_ROWS, +SMOOTH_BAND_ROWS): the sliding
+## window sum along each row, as before. Worker thread: reads ctx.src, returns its own rows.
+static func _smooth_row_band(band: int, ctx: Dictionary) -> void:
+	var src: PackedFloat32Array = ctx.src
+	var width: int = ctx.width
+	var length: int = ctx.length
+	var radius: int = ctx.radius
+	var window := 2 * radius + 1
+	var z0 := band * SMOOTH_BAND_ROWS
+	var z1 := mini(z0 + SMOOTH_BAND_ROWS, length)
+	var out := PackedFloat32Array()
+	out.resize((z1 - z0) * width)
+	for pz in range(z0, z1):
+		var row_start := pz * width
+		var out_start := (pz - z0) * width
+		var sum := 0.0
+		for dx in range(-radius, radius + 1):
+			sum += src[row_start + clampi(dx, 0, width - 1)]
+		out[out_start] = sum / window
+		for px in range(1, width):
+			var leaving := clampi(px - 1 - radius, 0, width - 1)
+			var entering := clampi(px + radius, 0, width - 1)
+			sum += src[row_start + entering] - src[row_start + leaving]
+			out[out_start + px] = sum / window
+	var mutex: Mutex = ctx.mutex
+	mutex.lock()
+	(ctx.out as Array)[band] = out
+	mutex.unlock()
+
+## smooth()'s vertical sweep for columns [slab * SMOOTH_SLAB_COLS, +SMOOTH_SLAB_COLS): one running
+## sum per column in a float32 array, as before. Returns the slab row-major (length x slab width).
+static func _smooth_col_slab(slab: int, ctx: Dictionary) -> void:
+	var src: PackedFloat32Array = ctx.src
+	var width: int = ctx.width
+	var length: int = ctx.length
+	var radius: int = ctx.radius
+	var window := 2 * radius + 1
+	var x0 := slab * SMOOTH_SLAB_COLS
+	var slab_width := mini(SMOOTH_SLAB_COLS, width - x0)
+	var out := PackedFloat32Array()
+	out.resize(length * slab_width)
+	var col_sum := PackedFloat32Array()
+	col_sum.resize(slab_width)
+	col_sum.fill(0.0)
+	for dz in range(-radius, radius + 1):
+		var base := clampi(dz, 0, length - 1) * width + x0
+		for c in slab_width:
+			col_sum[c] += src[base + c]
+	for c in slab_width:
+		out[c] = col_sum[c] / window
+	for pz in range(1, length):
+		var leaving_base := clampi(pz - 1 - radius, 0, length - 1) * width + x0
+		var entering_base := clampi(pz + radius, 0, length - 1) * width + x0
+		var out_base := pz * slab_width
+		for c in slab_width:
+			col_sum[c] += src[entering_base + c] - src[leaving_base + c]
+			out[out_base + c] = col_sum[c] / window
+	var mutex: Mutex = ctx.mutex
+	mutex.lock()
+	(ctx.out as Array)[slab] = out
+	mutex.unlock()

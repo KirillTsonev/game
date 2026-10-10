@@ -942,7 +942,29 @@ optimisation; never judge by GPU utilisation %.
   sides GPU-limited, hide draw-heavy layers for the whole run with
   `--bench-hide=<layer>[,<layer>...]` (e.g. `saplings,rocks,deadfall,flowers`). `--bench-scale`
   cannot do it: a total 3D scale above 1.0 crashes the renderer with MSAA on.
-- Stations are picked from the map data, so `MASTER_SEED` must stay pinned between compared runs.
+- Stations are picked from the map data, so `MASTER_SEED` must stay pinned between compared runs
+  -- or launch both with `-- --bench --seed=<n>` (the report records the seed; `MASTER_SEED` is
+  -1 = random since the map work of 2026-10-08/10).
+- Since 2026-10-10 the bench also covers what was built from the mountains on: stations
+  `hub_overlook`, `mountain_foot` (also an ablation station, the fourth), `valley_north`,
+  `castle_foot`; layers `mountains`, `mountain_clouds`, `village`, `castle`; toggles
+  `terrain:rock_detail`, `terrain:shader_patch` (off = Terrain3D's own shaders) and
+  `terrain:displacement+shader_patch` (subdivision can only be switched with the patch off:
+  displacement alone is about that delta minus the patch's); the report's first lines record
+  tessellation, the patch, the detail layer and the mountain's texture id. Every baseline listed
+  below predates the 384 x 1024 map and all of this: none is comparable with a run made now.
+  BASELINE for all of this: `20261010_122955_7175930c_mountains_baseline.json` (seed 3082472107
+  through `--seed`, 3 min 36 s in all; every station GPU 5.3-9.0 ms, frame 6.0-11.1 ms).
+  `..._123501_..._mountains_layers.json` is a targeted run of the same state for the four new
+  layers, which the baseline's switching left out through a bug fixed right after it. The
+  three `terrain:` toggles switched and restored cleanly (start / end baselines within 0.1 ms).
+- The same day the ablation was TRIMMED (Kirill: the runs were heading for half an hour): three
+  ablation stations (`hub_overlook`, `forest_dense`, `mountain_foot`) and about 22 switches
+  instead of about 50 at four. Out of a normal run: the per-LOD plant switches, the per-band
+  grass switches, each post effect on its own, the lantern's parts, `sun_shadow_100m`, FXAA,
+  `terrain_shadows`, and the six cheap layers as separate switches (now one `layer:SMALL`).
+  What each last measured is listed at `DETAIL_TOGGLES` in `scripts/debug/perf_bench.gd`;
+  `--bench-detail` brings them back, and `--bench-only=<text>` can still name any of them.
 - Frame cap: on 2026-10-04 frames stayed locked at 16.67 ms even with VSync off and `max_fps` 0.
   The cause was a RivaTuner (RTSS) frame limiter; the user raised it to 200 FPS on 2026-10-05 and
   frame ms is now real. A station sitting at exactly 5.00 ms is on that 200 FPS limit (only
@@ -967,6 +989,21 @@ optimisation; never judge by GPU utilisation %.
   `..._uncapped.json` has the old plant placement (GPU ms within 4 % of baseline2); the capped
   `..._baseline.json` must not be used at all: for the same scene its GPU ms read 2-19 % lower
   at seven of the eight stations (cause unknown), so a diff against it shows a false regression.
+- **World cache (2026-10-10):** `WORLD_CACHE` in `terrain_gen.gd` keeps the heightmap, the joined
+  import and the module variables they leave behind per seed in `user://world_cache/` (editor
+  runs only). A start on a cached seed skips about 10 s (world build 18.0 -> 8.4 s). So a startup
+  timing or a "did the terrain change" check must say which kind of start it was: the log prints
+  `world cache -- read` or `-- written`, and `-- --no-world-cache` forces a build. It only hits
+  when the seed repeats (`MASTER_SEED` pinned or `--seed`). A new heightmap-stage result kept in
+  a static variable must be added to `_world_statics`, or cached starts silently differ --
+  compare the later stages' checksums between a building and a reading start. Details:
+  `docs/performance_findings.md` step 11.
+- **Threaded stages read slower in the editor than in the game** (2026-10-10): on a debug build
+  a call on an engine object (`rng`, noise) from a worker thread waits on one engine-wide lock,
+  on a release build it does not. Bands that make such calls per item use
+  `TerrainUtil.object_call_threads()` (6 threads on a debug build). A new scatter layer that
+  tests against cliffs and rocks uses `RockScatter.build_keep_grid` / `keep_grid_blocked`, not
+  `boulder_blocked` per plant. Details: `docs/performance_findings.md` step 11.
 - Startup only: a 20-frame launch is enough (`... --path herald-of-oblivion --quit-after 20`,
   ~15 s) -- read the `TERRAIN_GEN` timing and checksum lines it prints.
 - A benchmark launch uses the Options menu's saved video settings (`user://settings.cfg`): a run

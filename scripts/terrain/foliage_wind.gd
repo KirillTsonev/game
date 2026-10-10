@@ -56,15 +56,33 @@ static func reset_run_state() -> void:
 ## code: perlin 512 seamless, freq 0.0275, fractal gain 0.1, domain warp amp 20 freq 0.005.
 static func noise_texture() -> ImageTexture:
 	if _noise == null:
-		var wind := FastNoiseLite.new()
-		wind.noise_type = FastNoiseLite.TYPE_PERLIN
-		wind.frequency = 0.0275
-		wind.fractal_gain = 0.1
-		wind.domain_warp_enabled = true
-		wind.domain_warp_amplitude = 20.0
-		wind.domain_warp_frequency = 0.005
-		_noise = ImageTexture.create_from_image(wind.get_seamless_image(512, 512))
+		if _noise_task >= 0:
+			WorkerThreadPool.wait_for_task_completion(_noise_task)
+			_noise_task = -1
+		else:
+			_render_noise()
+		_noise = ImageTexture.create_from_image(_noise_image)
+		_noise_image = null
 	return _noise
+
+## Starts rendering the noise image on a worker thread (2026-10-10: it was about 0.15 s of the
+## main thread's time in setup()). WorldGenerator calls it before the heightmap build;
+## noise_texture() waits for it, or renders the image itself if this was never called.
+static var _noise_task := -1
+static var _noise_image: Image
+static func prewarm() -> void:
+	if _noise == null and _noise_task < 0:
+		_noise_task = WorkerThreadPool.add_task(_render_noise)
+
+static func _render_noise() -> void:
+	var wind := FastNoiseLite.new()
+	wind.noise_type = FastNoiseLite.TYPE_PERLIN
+	wind.frequency = 0.0275
+	wind.fractal_gain = 0.1
+	wind.domain_warp_enabled = true
+	wind.domain_warp_amplitude = 20.0
+	wind.domain_warp_frequency = 0.005
+	_noise_image = wind.get_seamless_image(512, 512)
 
 ## Switches the sway on for every foliage-cutout material of the SWAY plants (all their LOD meshes;
 ## the impostor LODs are on another shader and are skipped).

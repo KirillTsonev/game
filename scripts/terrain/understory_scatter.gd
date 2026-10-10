@@ -162,11 +162,11 @@ static func scatter_understory(parent_node: Node, terrain: Terrain3D, heights: P
 		"width": width, "length": length, "heights": heights, "road_weight": road_weight,
 		"import_position": import_position, "steps_x": steps_x, "steps_z": steps_z,
 		"canopy": canopy, "cliff": cliff, "gw": gw, "gl": gl, "hmin": hmin, "hspan": hspan,
-		"trunk_grid": trunk_grid, "keep_rects": keep_rects, "keep_circles": keep_circles,
+		"trunk_grid": trunk_grid, "keep_grid": RockScatter.build_keep_grid(keep_rects, keep_circles, width, length),
 		"glade_noise": glade_noise, "clump_noise": clump_noise, "active": active,
 		"row_seed": rng.randi(), "out": band_out, "mutex": Mutex.new(),
 	}
-	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_scatter_band.bind(ctx), bands, -1, true))
+	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_scatter_band.bind(ctx), bands, TerrainUtil.object_call_threads(), true))
 	for b: Dictionary in band_out:
 		for id in UNDERSTORY_MESH_IDS:
 			(transforms_by_mesh[id] as Array).append_array(b.transforms[id])
@@ -223,8 +223,8 @@ static func _scatter_band(band: int, ctx: Dictionary) -> void:
 	var hmin: float = ctx.hmin
 	var hspan: float = ctx.hspan
 	var trunk_grid: Dictionary = ctx.trunk_grid
-	var keep_rects: Array[Dictionary] = ctx.keep_rects
-	var keep_circles: Array[Vector3] = ctx.keep_circles
+	var keep_start: PackedInt32Array = ctx.keep_grid.start
+	var keep_data: PackedFloat64Array = ctx.keep_grid.data
 	var glade_noise: FastNoiseLite = ctx.glade_noise
 	var clump_noise: FastNoiseLite = ctx.clump_noise
 	var active: Dictionary = ctx.active
@@ -275,7 +275,7 @@ static func _scatter_band(band: int, ctx: Dictionary) -> void:
 			if road_weight[idx] > 0.0:
 				counts.rej_road += 1
 				continue
-			if MountainWalls.on_mountain(px, pz, KEEPOUT_RADIUS) or RockScatter.boulder_blocked(px, pz, KEEPOUT_RADIUS, keep_rects, keep_circles):
+			if MountainWalls.on_mountain(px, pz, KEEPOUT_RADIUS) or RockScatter.keep_grid_blocked(px, pz, KEEPOUT_RADIUS, keep_start, keep_data):
 				counts.rej_rock += 1
 				continue
 			if DeadfallScatter.keep_blocked(px, pz, KEEPOUT_RADIUS): # stumps + logs (bucketed lookup)

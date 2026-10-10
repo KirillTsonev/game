@@ -92,6 +92,9 @@ static func scatter_saplings(terrain: Terrain3D, heights: PackedFloat32Array, wi
 	for oc in outcrop_plan:
 		keep_circles.append(Vector3(oc.px, oc.pz, oc.radius))
 	keep_circles.append_array(RockScatter.rock_keep_circles)
+	var keep_grid := RockScatter.build_keep_grid(keep_rects, keep_circles, width, length)
+	var keep_start: PackedInt32Array = keep_grid.start
+	var keep_data: PackedFloat64Array = keep_grid.data
 
 	var patch_noise := FastNoiseLite.new()
 	patch_noise.seed = rng.randi()
@@ -129,7 +132,7 @@ static func scatter_saplings(terrain: Terrain3D, heights: PackedFloat32Array, wi
 			if road_weight[idx] > 0.0:
 				counts.rej_road += 1
 				continue
-			if MountainWalls.on_mountain(px, pz, KEEPOUT_RADIUS) or RockScatter.boulder_blocked(px, pz, KEEPOUT_RADIUS, keep_rects, keep_circles):
+			if MountainWalls.on_mountain(px, pz, KEEPOUT_RADIUS) or RockScatter.keep_grid_blocked(px, pz, KEEPOUT_RADIUS, keep_start, keep_data):
 				counts.rej_rock += 1
 				continue
 			if DeadfallScatter.keep_blocked(px, pz, KEEPOUT_RADIUS):

@@ -111,6 +111,9 @@ static func scatter_flowers(terrain: Terrain3D, heights: PackedFloat32Array, wid
 		"road": road_weight, "rects": UnderstoryScatter._build_keep_rects(cliff_plan, cliff_top_profiles),
 		"circles": keep_circles, "active": active, "transforms": transforms, "counts": counts,
 	}
+	var keep_grid := RockScatter.build_keep_grid(ctx.rects, keep_circles, width, length)
+	ctx["keep_start"] = keep_grid.start
+	ctx["keep_data"] = keep_grid.data
 	var coverage := GrassScatter.density_image.get_data() # RGBA8, R = grass coverage
 	var min_grass := int(OPEN_MIN_GRASS * 255.0)
 
@@ -132,7 +135,7 @@ static func scatter_flowers(terrain: Terrain3D, heights: PackedFloat32Array, wid
 		"steps_x": steps_x, "steps_z": steps_z, "row_seed": rng.randi(),
 		"out": band_out, "mutex": Mutex.new(),
 	})
-	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_scatter_band.bind(ctx), bands, -1, true))
+	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_scatter_band.bind(ctx), bands, TerrainUtil.object_call_threads(), true))
 	for b: Dictionary in band_out:
 		for id in FLOWER_MESH_IDS:
 			(transforms[id] as Array).append_array(b.transforms[id])
@@ -267,7 +270,7 @@ static func _add(ctx: Dictionary, row: Array, px: float, pz: float, hug: bool, m
 	if normal.y < min_normal_y \
 			or road[clampi(int(round(pz)), 0, length - 1) * width + clampi(int(round(px)), 0, width - 1)] > 0.0 \
 			or MountainWalls.on_mountain(px, pz, keepout) \
-			or RockScatter.boulder_blocked(px, pz, keepout, ctx.rects, ctx.circles) \
+			or RockScatter.keep_grid_blocked(px, pz, keepout, ctx.keep_start, ctx.keep_data) \
 			or DeadfallScatter.keep_blocked(px, pz, keepout):
 		ctx.counts.rejected += 1
 		return false

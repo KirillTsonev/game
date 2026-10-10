@@ -22,7 +22,7 @@ extends Node
 ##       road walk, mesh + texture audit -> res://perf_reports/. Also runs (then quits) when the
 ##       game is launched with the user argument --bench [--bench-label=<name>].
 ##   F10 = station hold: freezes the player at the benchmark's ablation stations in turn
-##       (spawn_ahead, forest_dense, exit_look_back, then released) under the benchmark's window
+##       (hub_overlook, forest_dense, mountain_foot, then released) under the benchmark's window
 ##       size with VSync and the FPS cap off -- for a profiler capture of the view the reports
 ##       measure (editor: Debugger > Visual Profiler).
 ##   F11 = sun shadows on / off (not saved).

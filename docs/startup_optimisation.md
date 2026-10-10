@@ -87,6 +87,14 @@ pieces must not overlap) stays sequential; make its inner test cheap instead.
   no `Terrain3DUtil.*`. Read images as bytes (`get_data()`) and do bit packing in GDScript. With
   those calls inside, the ground-paint loop only went from 740 to 504 ms on 12 cores; without
   them, to 88 ms.
+- Why (measured 2026-10-10): on a debug build -- the editor's executable too -- a call on any
+  engine object from a worker thread waits on one engine-wide lock. Random numbers took 32 ms
+  on one thread and 211 ms on twelve; a release build ran them in 5.5 ms. Where the loop cannot
+  do without `rng` or noise calls (scatter bands, the aprons), pass
+  `TerrainUtil.object_call_threads()` as the thread count in place of -1: 6 threads on a debug
+  build beat 12 by a factor of two. Judge such a stage on a release export, not in the editor.
+- Shared lookups a band reads per item: packed arrays, not Dictionaries of Arrays
+  (`RockScatter.build_keep_grid` is the pattern).
 - Randomness: one `RandomNumberGenerator` per band, reseeded per row with
   `hash(row_seed + row)`, where `row_seed` is drawn once from the stage's own stream before the
   bands start. Draw any other seeds (noise) in a fixed order before starting too.

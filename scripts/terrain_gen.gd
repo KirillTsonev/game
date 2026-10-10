@@ -97,8 +97,15 @@ func _ready() -> void:
 	_loading_from = LoadingScreen.progress
 	await _loading_step(0)
 
+	# Two fixed noise images later stages need, rendered on worker threads meanwhile.
+	FoliageWind.prewarm()
+	MountainWalls.prewarm_cloud_noise()
 	var t_start := Time.get_ticks_msec() # temporary timing probe -- answering "is runtime-per-session generation viable" needs a real number, not a guess
-	var maps := TerrainHeightmap.build_heightmap(resolved_seed)
+	# 2026-10-10: the heightmap and the joined import are kept on disk per seed (WORLD_CACHE):
+	# a restart on the same seed with the terrain's own scripts unchanged reads them back.
+	var cache_path := _world_cache_path(resolved_seed)
+	var cached := _world_cache_load(cache_path)
+	var maps: Dictionary = cached.maps if not cached.is_empty() else TerrainHeightmap.build_heightmap(resolved_seed)
 	_debug_maps = maps # 2026-09-29 DEBUG (landmark capture / listing)
 	_debug_seed = resolved_seed
 	print("TERRAIN_GEN: heightmap build took %d ms (noise+erosion+smoothing+features+road, no I/O)" % (Time.get_ticks_msec() - t_start))
@@ -127,8 +134,17 @@ func _ready() -> void:
 	var import_position := Vector3(floorf(-half_width / import_region) * import_region, 0, floorf(-half_length / import_region) * import_region)
 	# The hub's fixed strip of ground goes in with the generated map, south (+Z) of it: Terrain3D
 	# adds the extra regions toward +Z, so the generated map's corner stays where it was.
-	maps["hub_heights"] = TerrainHub.build_heights(maps.heights)
-	var images: Array[Image] = TerrainHub.join_images(maps, maps.hub_heights, terrain.get_region_size(), resolved_seed) # [HEIGHT, CONTROL, COLOR]
+	var t_join := Time.get_ticks_msec()
+	var images: Array[Image] = []
+	if cached.is_empty():
+		maps["hub_heights"] = TerrainHub.build_heights(maps.heights)
+		images = TerrainHub.join_images(maps, maps.hub_heights, terrain.get_region_size(), resolved_seed) # [HEIGHT, CONTROL, COLOR]
+		_world_cache_save(cache_path, maps, images)
+	else:
+		images.assign(cached.images)
+	# Output checksums (2026-10-10): must stay the same across a change that is only meant to be
+	# faster. The import's cover the hub, the three aprons and the west strip as well.
+	print("TERRAIN_GEN: checksum heightmap %d; import height %d, control %d, colour %d (hub + aprons + join %d ms)" % [hash(maps.heights), hash(images[0].get_data()), hash(images[1].get_data()), hash(images[2].get_data()), Time.get_ticks_msec() - t_join])
 	data.import_images(images, import_position, 0.0, 1.0)
 	data.calc_height_range(true)
 	_apply_displacement(terrain)
@@ -454,6 +470,138 @@ func _loading_step(index: int) -> void:
 ## timestamps since process start. Read by the benchmark (scripts/debug/perf_bench.gd).
 var startup_timings: Dictionary = {}
 
+## World cache (2026-10-10, Kirill: startup "takes around 30 seconds now and my laptop's fans go
+## crazy"). The heightmap build and the joined terrain import (hub, aprons, north end) were about
+## 10 of the 19 s, and come out the same on every start of one seed. With WORLD_CACHE on they are
+## written to user://world_cache/ after being built and read back on the next start with the same
+## seed, as long as nothing they depend on changed: the key holds the seed, the mountain's texture
+## id, the cliff models' scanned profiles and the modification times of every script in
+## scripts/terrain/ except WORLD_CACHE_DOWNSTREAM (the stages that run after the import) and of
+## the landmark's data file. A new random seed is built as before, and then cached.
+## Read back with them: the module variables those stages leave behind (_world_statics). A stage
+## added to the heightmap build that keeps a result in a static variable must be added there, or
+## a cached start differs from a built one -- compare the checksums of the later stages (deadfall,
+## understory, grass, flowers, ground paint) between a first and a second start to check.
+## WORLD_CACHE_KEEP files are kept (about 6 MB each); the oldest go.
+const WORLD_CACHE := true
+const WORLD_CACHE_VERSION := 1 ## bump to throw every cached world away
+const WORLD_CACHE_KEEP := 4
+const WORLD_CACHE_DIR := "user://world_cache"
+const WORLD_CACHE_DOWNSTREAM: Array[String] = [
+	"ground_paint.gd", "grass_scatter.gd", "grass_field.gd", "plant_field.gd", "flower_scatter.gd",
+	"understory_scatter.gd", "sapling_scatter.gd", "deadfall_scatter.gd", "tree_scatter.gd",
+	"rock_scatter.gd", "foliage_wind.gd", "cliff_instancer.gd", "world_bounds.gd", "terrain_preload.gd",
+]
+var world_cache_hit := false ## this run read its world from the cache (recorded by the benchmark)
+
+func _world_cache_path(world_seed: int) -> String:
+	# Development only: an exported game rolls a new seed on every start and would only fill the disk.
+	if not WORLD_CACHE or not OS.has_feature("editor") or "--no-world-cache" in OS.get_cmdline_user_args():
+		return ""
+	var stamps: Array = [WORLD_CACHE_VERSION, world_seed, MountainWalls.rock_texture_id, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH]
+	var dir := DirAccess.open("res://scripts/terrain")
+	if dir == null:
+		return "" # an exported game has no script files to date: no cache there
+	var files := dir.get_files()
+	files.sort()
+	for file in files:
+		if file.ends_with(".gd") and not WORLD_CACHE_DOWNSTREAM.has(file):
+			stamps.append(file)
+			stamps.append(FileAccess.get_modified_time("res://scripts/terrain/" + file))
+	stamps.append(FileAccess.get_modified_time(TerrainLandmarks.DATA_PATH) if FileAccess.file_exists(TerrainLandmarks.DATA_PATH) else 0)
+	stamps.append(hash(var_to_bytes(CliffDressing.build_cliff_dressing_top_profiles())))
+	return "%s/seed_%d_%d.world" % [WORLD_CACHE_DIR, world_seed, hash(stamps)]
+
+## The module variables the heightmap build and the import's join leave behind for later stages.
+static func _world_statics() -> Dictionary:
+	return {
+		"valley_floor_lo": TerrainHeightmap.valley_floor_lo, "valley_floor_hi": TerrainHeightmap.valley_floor_hi,
+		"foot_lines": MountainWalls.foot_lines, "foot_rise": MountainWalls._foot_rise,
+		"apron_back_heights": MountainWalls.apron_back_heights, "apron_envelope": MountainWalls.apron_envelope,
+		"massif_top_y": TerrainCastle.massif_top_y, "site_ground_y": TerrainCastle.site_ground_y,
+		"natural_back_heights": TerrainCastle.natural_back_heights, "side_edge_heights": TerrainCastle.side_edge_heights,
+		"north_apron_heights": TerrainCastle.north_apron_heights, "north_apron_width": TerrainCastle.north_apron_width,
+	}
+
+static func _world_statics_restore(d: Dictionary) -> void:
+	TerrainHeightmap.valley_floor_lo = d.valley_floor_lo
+	TerrainHeightmap.valley_floor_hi = d.valley_floor_hi
+	MountainWalls.foot_lines.assign(d.foot_lines)
+	MountainWalls._foot_rise = d.foot_rise
+	MountainWalls.apron_back_heights.assign(d.apron_back_heights)
+	MountainWalls.apron_envelope.assign(d.apron_envelope)
+	TerrainCastle.massif_top_y = d.massif_top_y
+	TerrainCastle.site_ground_y = d.site_ground_y
+	TerrainCastle.natural_back_heights = d.natural_back_heights
+	TerrainCastle.side_edge_heights.assign(d.side_edge_heights)
+	TerrainCastle.north_apron_heights = d.north_apron_heights
+	TerrainCastle.north_apron_width = d.north_apron_width
+
+static func _image_to_var(image: Image) -> Array:
+	return [image.get_width(), image.get_height(), image.get_format(), image.get_data()]
+
+static func _image_from_var(v: Array) -> Image:
+	return Image.create_from_data(int(v[0]), int(v[1]), false, int(v[2]) as Image.Format, v[3])
+
+func _world_cache_save(path: String, maps: Dictionary, images: Array[Image]) -> void:
+	if path.is_empty():
+		return
+	var t0 := Time.get_ticks_msec()
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(WORLD_CACHE_DIR))
+	var plain: Dictionary = {}
+	for key: String in maps:
+		if maps[key] is Image:
+			plain[key] = _image_to_var(maps[key])
+		elif key != "outcrop_models" and key != "cliff_dressing_top_profiles": # rebuilt on load (model scans, themselves cached)
+			plain[key] = maps[key]
+	var payload := {"maps": plain, "statics": _world_statics(), "images": images.map(_image_to_var)}
+	var file := FileAccess.open_compressed(path, FileAccess.WRITE, FileAccess.COMPRESSION_ZSTD)
+	if file == null:
+		push_warning("TERRAIN_GEN: world cache not written (%s)" % path)
+		return
+	file.store_var(payload)
+	file.close()
+	# Keep the newest WORLD_CACHE_KEEP files.
+	var dir := DirAccess.open(WORLD_CACHE_DIR)
+	if dir:
+		var dated: Array = []
+		for name in dir.get_files():
+			if name.ends_with(".world"):
+				dated.append([FileAccess.get_modified_time(WORLD_CACHE_DIR + "/" + name), name])
+		dated.sort()
+		for k in maxi(dated.size() - WORLD_CACHE_KEEP, 0):
+			dir.remove(dated[k][1])
+	print("TERRAIN_GEN: world cache -- written %s (%.1f MB, %d ms)" % [path.get_file(), FileAccess.get_file_as_bytes(path).size() / 1048576.0, Time.get_ticks_msec() - t0])
+
+## {} when there is no usable cache for this start; else {maps, images} with the statics restored.
+func _world_cache_load(path: String) -> Dictionary:
+	if path.is_empty() or not FileAccess.file_exists(path):
+		return {}
+	var t0 := Time.get_ticks_msec()
+	var file := FileAccess.open_compressed(path, FileAccess.READ, FileAccess.COMPRESSION_ZSTD)
+	if file == null:
+		return {}
+	var payload: Variant = file.get_var()
+	file.close()
+	if not (payload is Dictionary) or not (payload as Dictionary).has_all(["maps", "statics", "images"]):
+		return {}
+	var maps: Dictionary = payload.maps
+	for key: String in ["height", "control", "color"]:
+		maps[key] = _image_from_var(maps[key])
+	# Typed again: the stages take these as Array[Dictionary].
+	for key: String in ["cliff_features", "cliff_dressing_plan", "outcrop_plan"]:
+		var typed: Array[Dictionary] = []
+		typed.assign(maps[key])
+		maps[key] = typed
+	maps["outcrop_models"] = TerrainOutcrops.load_outcrop_models()
+	maps["cliff_dressing_top_profiles"] = CliffDressing.build_cliff_dressing_top_profiles()
+	_world_statics_restore(payload.statics)
+	var images: Array[Image] = []
+	for v: Array in payload.images:
+		images.append(_image_from_var(v))
+	world_cache_hit = true
+	print("TERRAIN_GEN: world cache -- read %s (%d ms): heightmap build and import join skipped" % [path.get_file(), Time.get_ticks_msec() - t0])
+	return {"maps": maps, "images": images}
 ## Displacement (Terrain3D 1.1), on by default since 2026-10-09 (Kirill: "turn on displacement by
 ## default without needing to run separate scripts"). Set here at startup, not in main.tscn or
 ## terrain_assets.tres. The values are the ones Kirill tried and liked. TUNING.
@@ -807,6 +955,7 @@ func _apply_projection_override(terrain: Terrain3D) -> void:
 		var shader := Shader.new()
 		shader.code = code
 		shaders.append(shader)
+	_patched_shaders = shaders
 	mat.set_shader_override(shaders[0])
 	mat.set_shader_override_enabled(true)
 	mat.set_buffer_shader_override(shaders[1])
@@ -822,16 +971,66 @@ func toggle_rock_detail() -> String:
 		return "[WorldGenerator] rock detail: no Terrain3D"
 	if not _rock_detail_patched:
 		return "[WorldGenerator] rock detail: the layer was not applied at startup (ROCK_DETAIL_TILES 0, or a warning in the log)"
-	_rock_detail_on = not _rock_detail_on
-	RenderingServer.material_set_param(terrain.material.get_material_rid(), &"rock_detail_on", 1.0 if _rock_detail_on else 0.0)
+	set_rock_detail_enabled(not _rock_detail_on)
 	return "[WorldGenerator] rock detail layer: %s" % ("on" if _rock_detail_on else "OFF")
 var _rock_detail_patched := false
 
+## For the benchmark (scripts/debug/perf_bench.gd), which switches one thing off at a time.
+var _patched_shaders: Array[Shader] = [] ## the terrain's and the displacement buffer's, as installed
+func set_rock_detail_enabled(on: bool) -> void:
+	var terrain: Terrain3D = get_parent().get_node_or_null("Terrain3D")
+	if terrain == null or terrain.material == null or not _rock_detail_patched:
+		return
+	_rock_detail_on = on
+	RenderingServer.material_set_param(terrain.material.get_material_rid(), &"rock_detail_on", 1.0 if on else 0.0)
+
+## The patched shaders (per-pixel projection + rock detail) off = Terrain3D's own, and back.
+func set_shader_patch_enabled(on: bool) -> void:
+	var terrain: Terrain3D = get_parent().get_node_or_null("Terrain3D")
+	if terrain == null or terrain.material == null or _patched_shaders.size() != 2:
+		return
+	var mat: Terrain3DMaterial = terrain.material
+	if on:
+		mat.set_shader_override(_patched_shaders[0])
+		mat.set_buffer_shader_override(_patched_shaders[1])
+	mat.set_shader_override_enabled(on)
+	mat.set_buffer_shader_override_enabled(on)
+	if on and _rock_detail_patched:
+		RenderingServer.material_set_param(mat.get_material_rid(), &"rock_detail_on", 1.0 if _rock_detail_on else 0.0)
+
+## Subdivision of the terrain mesh off / back to DISPLACEMENT_TESSELLATION. Switch the shader
+## patch off first and on after: the patched shaders were generated with displacement in them.
+func set_displacement_enabled(on: bool) -> void:
+	var terrain: Terrain3D = get_parent().get_node_or_null("Terrain3D")
+	if terrain:
+		terrain.tessellation_level = DISPLACEMENT_TESSELLATION if on else 0
+
+## What a report should record about the terrain's settings: two runs that differ here differ.
+func bench_meta() -> Dictionary:
+	var terrain: Terrain3D = get_parent().get_node_or_null("Terrain3D")
+	return {
+		"tessellation_level": terrain.tessellation_level if terrain else -1,
+		"displacement_scale": terrain.displacement_scale if terrain else 0.0,
+		"shader_patch": _patched_shaders.size() == 2,
+		"rock_detail": _rock_detail_patched and _rock_detail_on,
+		"rock_detail_tiles": ROCK_DETAIL_TILES,
+		"mountain_texture_id": MountainWalls.rock_texture_id,
+		"world_cache_hit": world_cache_hit,
+		"displacement_rock_scale_uv": [DISPLACEMENT_TEXTURE_SCALE, DISPLACEMENT_TEXTURE_UV_SCALE],
+		"displacement_mountain_scale_uv": [DISPLACEMENT_MOUNTAIN_SCALE, DISPLACEMENT_MOUNTAIN_UV_SCALE],
+		"detiling_rotation_shift": [DETILING_ROTATION, DETILING_SHIFT],
+	}
+
 ## Prints one _ready() stage's duration (measured from t_from) and keeps it in startup_timings.
+var _last_stage_end_ms := 0
 func _log_stage(stage: String, t_from: int) -> void:
 	var ms := Time.get_ticks_msec() - t_from
 	startup_timings.stage_ms[stage] = ms
-	print("TERRAIN_GEN: %s (%.2fs)" % [stage, ms / 1000.0])
+	# Time no stage's own timer covers (loading-screen frames, work between stages): printed when
+	# it is worth knowing about (2026-10-10; it added up to about 1.5 s unseen).
+	var gap := t_from - _last_stage_end_ms if _last_stage_end_ms > 0 else 0
+	_last_stage_end_ms = Time.get_ticks_msec()
+	print("TERRAIN_GEN: %s (%.2fs)%s" % [stage, ms / 1000.0, " -- %d ms untimed before it" % gap if gap >= 30 else ""])
 
 ## 2026-09-21 startup-time probe: cumulative GPU pipeline compilations by source. mesh/surface
 ## are compiled when materials/meshes load; draw/specialization are compiled on demand while

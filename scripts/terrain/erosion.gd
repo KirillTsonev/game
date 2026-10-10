@@ -44,10 +44,16 @@ static func erode(heights: PackedFloat32Array, width: int, length: int, rng: Ran
 			var node_x1 := mini(node_x + 1, width - 1)
 			var node_z1 := mini(node_z + 1, length - 1)
 
-			var h_nw := heights[node_z * width + node_x]
-			var h_ne := heights[node_z * width + node_x1]
-			var h_sw := heights[node_z1 * width + node_x]
-			var h_se := heights[node_z1 * width + node_x1]
+			# The four corner indices, worked out once per step (2026-10-10; they were recomputed
+			# for every read and write below -- the arithmetic on the heights is unchanged).
+			var i_nw := node_z * width + node_x
+			var i_ne := node_z * width + node_x1
+			var i_sw := node_z1 * width + node_x
+			var i_se := node_z1 * width + node_x1
+			var h_nw := heights[i_nw]
+			var h_ne := heights[i_ne]
+			var h_sw := heights[i_sw]
+			var h_se := heights[i_se]
 
 			var gradient_x := (h_ne - h_nw) * (1.0 - cell_z) + (h_se - h_sw) * cell_z
 			var gradient_z := (h_sw - h_nw) * (1.0 - cell_x) + (h_se - h_ne) * cell_x
@@ -96,18 +102,18 @@ static func erode(heights: PackedFloat32Array, width: int, length: int, rng: Ran
 				# Moving uphill, or carrying more than it can hold: drop sediment.
 				var deposit_amount := minf(height_diff, sediment) if height_diff > 0.0 else (sediment - capacity) * DEPOSIT_SPEED
 				sediment -= deposit_amount
-				heights[node_z * width + node_x] += deposit_amount * (1 - cell_x) * (1 - cell_z)
-				heights[node_z * width + node_x1] += deposit_amount * cell_x * (1 - cell_z)
-				heights[node_z1 * width + node_x] += deposit_amount * (1 - cell_x) * cell_z
-				heights[node_z1 * width + node_x1] += deposit_amount * cell_x * cell_z
+				heights[i_nw] += deposit_amount * (1 - cell_x) * (1 - cell_z)
+				heights[i_ne] += deposit_amount * cell_x * (1 - cell_z)
+				heights[i_sw] += deposit_amount * (1 - cell_x) * cell_z
+				heights[i_se] += deposit_amount * cell_x * cell_z
 			else:
 				# Steep and fast: pick up sediment, capped by what's actually there.
 				var erode_amount := minf((capacity - sediment) * ERODE_SPEED, -height_diff)
 				sediment += erode_amount
-				heights[node_z * width + node_x] -= erode_amount * (1 - cell_x) * (1 - cell_z)
-				heights[node_z * width + node_x1] -= erode_amount * cell_x * (1 - cell_z)
-				heights[node_z1 * width + node_x] -= erode_amount * (1 - cell_x) * cell_z
-				heights[node_z1 * width + node_x1] -= erode_amount * cell_x * cell_z
+				heights[i_nw] -= erode_amount * (1 - cell_x) * (1 - cell_z)
+				heights[i_ne] -= erode_amount * cell_x * (1 - cell_z)
+				heights[i_sw] -= erode_amount * (1 - cell_x) * cell_z
+				heights[i_se] -= erode_amount * cell_x * cell_z
 
 			speed = sqrt(maxf(0.0, speed * speed + height_diff * -GRAVITY))
 			water *= (1.0 - EVAPORATE_SPEED)

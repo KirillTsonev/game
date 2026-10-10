@@ -1036,6 +1036,104 @@ static func boulder_blocked(px: float, pz: float, radius: float, keep_rects: Arr
 			return true
 	return false
 
+## boulder_blocked() for callers that ask many thousands of times against lists that no longer
+## change (understory, saplings, flowers: 66 rects and about 570 circles scanned per plant on one
+## seed, 2026-10-10). build_keep_grid() sorts both lists into KEEP_GRID_CELL cells, each cell
+## holding whatever a point in it could be within KEEP_GRID_PAD of; keep_grid_blocked() then runs
+## boulder_blocked()'s own tests on that cell's few entries.
+## Two packed arrays, so worker threads can read them freely. `data`: every rect as 10 numbers
+## (c, ax, az, x0, x1, z0, z1) and every circle as 3, once in full and then again per cell.
+## `start`: [cells across, cells along, then four offsets into data (rects from, to; circles from,
+## to) for "everything" and for each cell]. A point outside the cells, or a pad over
+## KEEP_GRID_PAD, is answered from "everything". The numbers are kept as 64-bit floats and the
+## tests are boulder_blocked()'s own, so the answers are the same.
+const KEEP_GRID_CELL := 4.0
+const KEEP_GRID_PAD := 4.0 ## m, the largest radius + margin answered from one cell
+static func build_keep_grid(keep_rects: Array[Dictionary], keep_circles: Array[Vector3], width: int, length: int) -> Dictionary:
+	var gw := int(ceil(float(width) / KEEP_GRID_CELL)) + 1
+	var gl := int(ceil(float(length) / KEEP_GRID_CELL)) + 1
+	var cell_rects: Array = []
+	cell_rects.resize(gw * gl)
+	var cell_circles: Array = []
+	cell_circles.resize(gw * gl)
+	var data := PackedFloat64Array()
+	# A rect's axes are unit and at right angles: "within pad along both" is at most pad * sqrt(2)
+	# outside the box round its four corners.
+	var rect_grow := KEEP_GRID_PAD * 1.5
+	for ri in keep_rects.size():
+		var kr := keep_rects[ri]
+		var c: Vector2 = kr.c
+		var ax: Vector2 = kr.ax
+		var az: Vector2 = kr.az
+		data.append_array(PackedFloat64Array([c.x, c.y, ax.x, ax.y, az.x, az.y, float(kr.x0), float(kr.x1), float(kr.z0), float(kr.z1)]))
+		var lo := Vector2(INF, INF)
+		var hi := Vector2(-INF, -INF)
+		for lx: float in [kr.x0, kr.x1]:
+			for lz: float in [kr.z0, kr.z1]:
+				var corner := c + ax * lx + az * lz
+				lo = lo.min(corner)
+				hi = hi.max(corner)
+		for gz in range(maxi(floori((lo.y - rect_grow) / KEEP_GRID_CELL), 0), mini(floori((hi.y + rect_grow) / KEEP_GRID_CELL), gl - 1) + 1):
+			for gx in range(maxi(floori((lo.x - rect_grow) / KEEP_GRID_CELL), 0), mini(floori((hi.x + rect_grow) / KEEP_GRID_CELL), gw - 1) + 1):
+				if cell_rects[gz * gw + gx] == null:
+					cell_rects[gz * gw + gx] = PackedInt32Array()
+				cell_rects[gz * gw + gx].append(ri)
+	var circles_at := data.size()
+	for ci in keep_circles.size():
+		var kc := keep_circles[ci]
+		data.append_array(PackedFloat64Array([kc.x, kc.y, kc.z]))
+		var reach := kc.z + KEEP_GRID_PAD + 0.01
+		for gz in range(maxi(floori((kc.y - reach) / KEEP_GRID_CELL), 0), mini(floori((kc.y + reach) / KEEP_GRID_CELL), gl - 1) + 1):
+			for gx in range(maxi(floori((kc.x - reach) / KEEP_GRID_CELL), 0), mini(floori((kc.x + reach) / KEEP_GRID_CELL), gw - 1) + 1):
+				if cell_circles[gz * gw + gx] == null:
+					cell_circles[gz * gw + gx] = PackedInt32Array()
+				cell_circles[gz * gw + gx].append(ci)
+	var start := PackedInt32Array()
+	start.resize(6 + gw * gl * 4)
+	start[0] = gw
+	start[1] = gl
+	start[2] = 0
+	start[3] = circles_at
+	start[4] = circles_at
+	start[5] = data.size()
+	for cell in gw * gl:
+		var o := 6 + cell * 4
+		start[o] = data.size()
+		if cell_rects[cell] != null:
+			for ri: int in cell_rects[cell]:
+				data.append_array(data.slice(ri * 10, ri * 10 + 10))
+		start[o + 1] = data.size()
+		start[o + 2] = data.size()
+		if cell_circles[cell] != null:
+			for ci: int in cell_circles[cell]:
+				data.append_array(data.slice(circles_at + ci * 3, circles_at + ci * 3 + 3))
+		start[o + 3] = data.size()
+	return {"start": start, "data": data}
+
+static func keep_grid_blocked(px: float, pz: float, radius: float, start: PackedInt32Array, data: PackedFloat64Array) -> bool:
+	var pad := radius + BOULDER_KEEPOUT_MARGIN
+	var gx := floori(px / KEEP_GRID_CELL)
+	var gz := floori(pz / KEEP_GRID_CELL)
+	var o := 2 # "everything"
+	if pad <= KEEP_GRID_PAD and gx >= 0 and gz >= 0 and gx < start[0] and gz < start[1]:
+		o = 6 + (gz * start[0] + gx) * 4
+	var p := Vector2(px, pz)
+	var i := start[o]
+	var end := start[o + 1]
+	while i < end:
+		var d := p - Vector2(data[i], data[i + 1])
+		var lx := d.dot(Vector2(data[i + 2], data[i + 3]))
+		var lz := d.dot(Vector2(data[i + 4], data[i + 5]))
+		if lx >= data[i + 6] - pad and lx <= data[i + 7] + pad and lz >= data[i + 8] - pad and lz <= data[i + 9] + pad:
+			return true
+		i += 10
+	i = start[o + 2]
+	end = start[o + 3]
+	while i < end:
+		if p.distance_to(Vector2(data[i], data[i + 1])) < data[i + 2] + pad:
+			return true
+		i += 3
+	return false
 ## Restores this module's static state (caches, debug buffers, counters) to its initial
 ## values. Called at the start of every WorldGenerator run so each run starts clean, the
 ## same as when these were per-instance member variables on WorldGenerator.

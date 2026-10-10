@@ -172,8 +172,7 @@ static func bake(_parent_node: Node, maps: Dictionary, corner: Vector3, rng: Ran
 		circles.append(Vector3(oc.px, oc.pz, oc.radius))
 	var outcrop_count := circles.size() - boulder_count
 	var scree_points := _add_scree_band_circles(maps.cliff_features, circles)
-	for c in circles:
-		_stamp_circle(rock_d, width, length, c.x, c.y, c.z, ROCK_FADE)
+	rock_d = stamp_circles(rock_d, width, length, pack_circles(circles), ROCK_FADE)
 	var rects := UnderstoryScatter._build_keep_rects(maps.cliff_dressing_plan, maps.cliff_dressing_top_profiles)
 	for kr in rects:
 		_stamp_rect(rock_d, width, length, kr, ROCK_FADE)
@@ -189,11 +188,12 @@ static func bake(_parent_node: Node, maps: Dictionary, corner: Vector3, rng: Ran
 	var road_path: PackedVector2Array = maps.road_path
 	var last_stamp := Vector2(-INF, -INF)
 	var road_stamps := 0
+	var road_circles := PackedFloat64Array()
 	for p in road_path:
 		if p.distance_squared_to(last_stamp) < 0.25: # path is dense; 0.5 m between stamps is plenty
 			continue
 		last_stamp = p
-		_stamp_circle(road_d, width, length, p.x, p.y, 0.0, road_cap)
+		road_circles.append_array(PackedFloat64Array([p.x, p.y, 0.0]))
 		road_stamps += 1
 	# The visible road MESH follows a separately smoothed centreline (TerrainRoad.build_road_mesh:
 	# _resample_path + _smooth_path_for_mesh(3, 4)) that drifts off the raw path on bends -- stamp it too.
@@ -204,8 +204,9 @@ static func bake(_parent_node: Node, maps: Dictionary, corner: Vector3, rng: Ran
 			if p.distance_squared_to(last_stamp) < 0.25:
 				continue
 			last_stamp = p
-			_stamp_circle(road_d, width, length, p.x, p.y, 0.0, road_cap)
+			road_circles.append_array(PackedFloat64Array([p.x, p.y, 0.0]))
 			road_stamps += 1
+	road_d = stamp_circles(road_d, width, length, road_circles, road_cap)
 	# Distance to the road's painted vertices (see VERGE_*), from the control map as the road left it.
 	var paint_cap := VERGE_REACH_MAX + VERGE_GRASS_GAP + VERGE_GRASS_FADE + 1.0
 	var paint_d := PackedFloat32Array()
@@ -214,13 +215,15 @@ static func bake(_parent_node: Node, maps: Dictionary, corner: Vector3, rng: Ran
 	var road_control: PackedByteArray = (maps.control as Image).get_data() # FORMAT_RF: uint32 bits
 	var min_blend := int(ROAD_PAINT_MIN_BLEND * 255.0)
 	var painted := 0
+	var paint_circles := PackedFloat64Array()
 	for pz in length:
 		for px in width:
 			var c := road_control.decode_u32((pz * width + px) * 4)
 			# base = bits 27-31, overlay = 22-26, blend = 14-21
 			if ((c >> 27) & 0x1F) == TerrainRoad.ROAD_TEXTURE_ID or (((c >> 22) & 0x1F) == TerrainRoad.ROAD_TEXTURE_ID and ((c >> 14) & 0xFF) >= min_blend):
-				_stamp_circle(paint_d, width, length, px, pz, 0.0, paint_cap)
+				paint_circles.append_array(PackedFloat64Array([px, pz, 0.0]))
 				painted += 1
+	paint_d = stamp_circles(paint_d, width, length, paint_circles, paint_cap)
 	if not road_path.is_empty():
 		var p0: Vector2 = road_path[0]
 		if p0.x < -1.0 or p0.x > float(width) or p0.y < -1.0 or p0.y > float(length):
@@ -468,6 +471,79 @@ static func _stamp_circle(field: PackedFloat32Array, width: int, length: int, cx
 			if d < field[row + x]:
 				field[row + x] = d
 
+## _stamp_circle() for many circles at once, in row bands on worker threads (2026-10-10: the
+## stamping loops were about 0.3 s of the ground paint and 0.35 s of the grass bake, all on the
+## main thread). `circles`: cx, cz, r per circle, as 64-bit floats (what _stamp_circle is given).
+## Returns the field with the circles stamped in; the one passed in is not changed. A pixel ends
+## up with the smallest of the distances written to it whatever the order, so the result is the
+## single loop's.
+const STAMP_BAND_ROWS := 16
+static func stamp_circles(field: PackedFloat32Array, width: int, length: int, circles: PackedFloat64Array, cap: float) -> PackedFloat32Array:
+	if circles.is_empty():
+		return field
+	var bands := ceili(float(length) / STAMP_BAND_ROWS)
+	var per_band: Array = [] # per band: the offsets into `circles` of those that reach its rows
+	per_band.resize(bands)
+	for b in bands:
+		per_band[b] = PackedInt32Array()
+	for ci in range(0, circles.size(), 3):
+		var reach := circles[ci + 2] + cap
+		var z0 := maxi(0, floori(circles[ci + 1] - reach))
+		var z1 := mini(length - 1, ceili(circles[ci + 1] + reach))
+		if z0 > z1:
+			continue
+		for b in range(z0 / STAMP_BAND_ROWS, z1 / STAMP_BAND_ROWS + 1):
+			per_band[b].append(ci)
+	var out: Array = []
+	out.resize(bands)
+	var ctx := {"field": field, "width": width, "length": length, "circles": circles, "cap": cap, "per_band": per_band, "out": out, "mutex": Mutex.new()}
+	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_stamp_band.bind(ctx), bands, -1, true))
+	var joined := PackedFloat32Array()
+	for b: PackedFloat32Array in out:
+		joined.append_array(b)
+	return joined
+
+static func _stamp_band(band: int, ctx: Dictionary) -> void:
+	var field: PackedFloat32Array = ctx.field
+	var width: int = ctx.width
+	var length: int = ctx.length
+	var circles: PackedFloat64Array = ctx.circles
+	var cap: float = ctx.cap
+	var mine: PackedInt32Array = (ctx.per_band as Array)[band]
+	var z_from := band * STAMP_BAND_ROWS
+	var z_to := mini(z_from + STAMP_BAND_ROWS, length) - 1
+	var out := field.slice(z_from * width, (z_to + 1) * width)
+	for ci in mine:
+		var cx := circles[ci]
+		var cz := circles[ci + 1]
+		var r := circles[ci + 2]
+		var reach := r + cap
+		var x0 := maxi(0, floori(cx - reach))
+		var x1 := mini(width - 1, ceili(cx + reach))
+		var z0 := maxi(z_from, floori(cz - reach))
+		var z1 := mini(z_to, ceili(cz + reach))
+		for z in range(z0, z1 + 1):
+			var fz := float(z) - cz
+			var row := (z - z_from) * width
+			for x in range(x0, x1 + 1):
+				var fx := float(x) - cx
+				var d := maxf(sqrt(fx * fx + fz * fz) - r, 0.0)
+				if d < out[row + x]:
+					out[row + x] = d
+	var mutex: Mutex = ctx.mutex
+	mutex.lock()
+	(ctx.out as Array)[band] = out
+	mutex.unlock()
+
+## Circles (x, z, radius) as stamp_circles() takes them.
+static func pack_circles(circles: Array[Vector3]) -> PackedFloat64Array:
+	var packed := PackedFloat64Array()
+	packed.resize(circles.size() * 3)
+	for i in circles.size():
+		packed[i * 3] = circles[i].x
+		packed[i * 3 + 1] = circles[i].y
+		packed[i * 3 + 2] = circles[i].z
+	return packed
 ## Same for a cliff mesh's rotated local footprint box (UnderstoryScatter._build_keep_rects format).
 static func _stamp_rect(field: PackedFloat32Array, width: int, length: int, kr: Dictionary, cap: float) -> void:
 	var c: Vector2 = kr.c
