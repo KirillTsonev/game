@@ -7,6 +7,7 @@
 ##     --bench-no-shadows (sun shadows off for the whole run), --bench-scale=<x> (3D render scale
 ##     multiplied by x for the whole run; a scale above 1.0 in total crashes the renderer with MSAA
 ##     on), --bench-hide=<layer>[,<layer>...] (those layers hidden for the whole run),
+##     --bench-ablate-at=<station>[,...] (the ablation at these stations, not ABLATION_STATIONS),
 ##     --bench-lantern-shadow-off (the lantern's own shadow off for the whole run). The last
 ##     four are recorded in the report's meta. --bench-detail (the switches trimmed from a
 ##     normal run on 2026-10-10, see DETAIL_TOGGLES).
@@ -221,8 +222,14 @@ func run(quit_when_done: bool, label: String) -> void:
 		push_warning("[Bench] the frame rate is capped from outside the game -- compare GPU ms, not frame ms")
 
 	var toggles := _build_toggles()
+	# --bench-ablate-at=<station>[,<station>...]: switch things off at these stations instead of
+	# ABLATION_STATIONS (2026-10-11, to take apart what a frame costs looking at the sky).
+	var ablate_at: Array = ABLATION_STATIONS
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--bench-ablate-at="):
+			ablate_at = Array(arg.trim_prefix("--bench-ablate-at=").split(",", false))
 	for st in stations:
-		if not ABLATION_STATIONS.has(st.name):
+		if not ablate_at.has(st.name):
 			continue
 		_goto(st)
 		await _debug_compare_effects(st.name)
@@ -726,6 +733,10 @@ func _build_toggles() -> Array[Dictionary]:
 		for prop in ["ssao_enabled", "ssil_enabled", "sdfgi_enabled", "glow_enabled", "volumetric_fog_enabled", "fog_enabled", "ssr_enabled"]:
 			if env.get(prop) == true:
 				toggles.append({"name": "env:%s" % prop.trim_suffix("_enabled"), "apply":func(on: bool) -> void: env.set(prop, on)})
+		# The sky's own shader (scripts/cloud_sky.gd): a plain colour in its place. Only what
+		# drawing the sky costs; the light it gives the scene changes with it, so not a look test.
+		if env.background_mode == Environment.BG_SKY:
+			toggles.append({"name": "env:sky_shader", "apply":func(on: bool) -> void: env.background_mode = Environment.BG_SKY if on else Environment.BG_COLOR})
 		# (2026-10-05: toggles for SSAO at each quality level were here. Every level cost the same
 		# -- docs/performance_findings.md step 5 -- and SSAO is off in the project since.)
 

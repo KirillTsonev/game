@@ -1331,7 +1331,7 @@ New benchmark baseline for this map: `20261010_122955_7175930c_mountains_baselin
 the three changes above, which do not touch what is drawn). Against the older maps' reports the
 GPU time is up by 1 to 1.5 ms at every station, the sky included (3.25 ms against 1.95); of that,
 the shader patch measures 0.2-0.7 ms and displacement about 0.6-0.7 ms where terrain fills the
-view. What is paid when looking at the sky is not pinned down yet.
+view. What is paid when looking at the sky was taken apart on 2026-10-12: step 12.
 
 ### 12. Same-look work after the trees (2026-10-11, open)
 
@@ -1345,7 +1345,7 @@ shadow distance, MSAA, displacement level) are not part of it. The list, with wh
 | 2 | Terrain shader patch: skip the smooth slope's eight height fetches under `PROJECTION_NO_SIDE_BELOW` | tried, taken back: no measurable gain (below) |
 | 3 | Post effects: merge passes that only hand a texture on (about 0.1-0.15 ms expected) | painterly's copy pass folded into its first sum pass: about 0.02-0.03 ms (below); the rest would couple separate effects, not done |
 | 4 | Lantern: 0.6-0.7 ms against 0.33-0.50 on the old map | cause found (below): its shadow is redrawn every frame where plants stand in range; no fix yet |
-| 5 | Sun shadow draws (1,900-3,300 a view, the largest block of draws left): larger Terrain3D cells, or a GPU-culled caster list | not started; needs a prototype |
+| 5 | Sun shadow draws (1,900-3,300 a view, the largest block of draws left): larger Terrain3D cells, or a GPU-culled caster list | checked on paper (below): neither is available without a cost; nothing built |
 
 Item 2: the patch already skips each of its three texture readings where its weight is under
 0.004, so flat ground reads its textures once. What it still does on every pixel is fetch eight
@@ -1386,8 +1386,87 @@ the shader still reads `TIME`. While walking the map was always redrawn each fra
 moves), so this is a cost of standing still only; what is larger than on 2026-10-06 either way
 is the redraw itself (then about 0.1 ms on the walk). A same-look remedy would be a caster list
 for the lantern holding only plants within its range -- the small case of item 5's caster list
--- and needs the lantern's shadow kept apart from the sun's casters (whether Godot 4.7's
-`Light3D.shadow_caster_mask` and Terrain3D's per-asset layers allow that is unchecked).
+-- and needs the lantern's shadow kept apart from the sun's casters. That part is possible:
+`Light3D.shadow_caster_mask` and `Terrain3DMeshAsset.visibility_layers` both exist (ClassDB of
+the running editor, 2026-10-11).
+
+Item 5, read from the running editor's ClassDB and reasoned through, nothing built:
+
+- **Larger instancer cells: not available.** Terrain3D 1.1 exposes no cell size (`Terrain3D` has
+  `instancer_mode` and `show_instancer_grid`, `Terrain3DInstancer` only `mode`); the 32 m cell is
+  fixed in the addon's C++. Changing it means building the addon from source. It would also move
+  every per-cell switch (shadow LOD ends, the understory's 60 m shadow limit) by up to half the
+  larger cell's diagonal, which is a visible change.
+- **A GPU-culled caster list, as `PlantField` draws the view: expected to cost GPU time.** Godot
+  draws an instance into every shadow pass its bounds touch, and one list has one set of bounds:
+  each of the sun's four cascades (and each of the lantern's six cube faces) would run every
+  listed caster through its vertex stage, where Terrain3D's cells are culled per cascade and per
+  face today. Nothing in Godot ties an instance to one cascade (`shadow_caster_mask` is per
+  light), so per-cascade lists cannot be expressed. For the sun the draws would fall from
+  1,900-3,300 to a few hundred, but the three near cascades would each process everything out to
+  150 m. For the lantern not even the draws fall: about 53 meshes x their surfaces x 6 faces is
+  more than the 324-420 it issues now. The rocks' result (item 1) points the same way: a fixed
+  set of draws that ignores what is in range is only a gain where the view pass was the cost.
+- So the shadow draws stay with Terrain3D. What would change this: an engine or addon change
+  (per-cascade instance masks, or a configurable cell), or a weaker-CPU measurement showing the
+  shadow draws' CPU time matters more than the extra shadow triangles.
+
+**What a frame costs looking at the sky, taken apart (2026-10-12).** `spawn_sky` reads 3.3 ms of
+GPU against 1.95 ms before the mountains, and step 11 left that open. Two runs with the ablation
+at that station (`..._sky_breakdown_1..2`, the new `--bench-ablate-at=spawn_sky`; the station
+sits on the 240 FPS limiter, so only GPU ms is read, and it may read a little low). GPU ms saved:
+
+| Switched off | GPU ms | Note |
+|---|---|---|
+| Post effects | 1.16 / 1.12 | per pixel, the same at every view |
+| Sun shadows | 0.99 / 1.00 | 303 draws, 2.3 M triangles: the cascades are drawn whatever the camera looks at |
+| Sky shader (new toggle `env:sky_shader`, a plain colour in its place) | 0.57 / 0.55 | the sky fills the screen here |
+| Displacement + shader patch | 0.59 / 0.45 | with no terrain in view (63 draws, 1.8 M triangles: not split further) |
+| Trees | 0.39 / 0.37 | 260 draws, nearly all shadow draws |
+| MSAA | 0.36 / 0.27 | |
+| Mountain cloud sheets | 0.36 / 0.28 | 15 see-through sheets, all in view here |
+| Lantern | 0.24 / 0.18 | |
+| Grass | 0.17 / 0.21 | its cull passes; nothing of it is in view |
+| Mountains | 0.22 / 0.13 | |
+| Understory | 0.10 / 0.25 | |
+
+(The rows overlap: trees and understory are part of the sun shadows.) So the 1.3 ms that came
+with the mountains is displacement, the cloud sheets, the mountain rows and the sky's clouds --
+features, each doing its work. No waste found. One suspect checked and cleared: `CloudSky` changes
+a sky material parameter every frame, which makes Godot rebuild the sky's radiance map
+continuously. Away from the sky view the sky toggle saves 0.06-0.13 ms (`..._sky_clouds`, five
+stations), and the same with `--no-clouds`, which stops those changes (`..._sky_noclouds`:
+0.07-0.13 ms). So the rebuild costs nothing measurable.
+
+**Who casts sun shadows, and what limiting it would save (2026-10-12, measured, not adopted).**
+Everything scattered casts, most of it from every LOD out to the 150 m shadow range: saplings
+from their impostor too, scree from all four LODs (to 128 m), sticks to 80 m, branches to 120 m.
+At forest_dense 3,347 of the frame's 4,273 draws are sun shadow draws. Tried for one run each
+with temporary arguments (removed again; `last_shadow_lod` set at startup, asset files
+untouched): saplings casting from the near mesh only (shadows to 80 m), and scree, sticks and
+branches from their two nearest LODs (64 / 25 / 40 m). Station-only runs
+`..._shadowtrial_base_1..2`, `_saplings`, `_debris`, `_both`, and at half render scale
+`..._shadowtrial_half_base`, `_half_base2`, `_half_both`:
+
+| | Saplings | Debris | Both |
+|---|---|---|---|
+| Draws at the valley stations (of 3,900-4,500) | -230 to -500 | -50 to -250 | -480 to -610 |
+| Draws at hub_overlook / mountain_foot / cliff_face | -331 / -159 / -180 | -3 / -190 / -115 | -334 / -349 / -295 |
+| Triangles | none | none | under 0.1 M |
+| GPU ms | no difference | no difference | no difference |
+| Render CPU ms | inside the spread of the two base runs (up to 0.7 ms apart) | same | same |
+| Frame ms, also at half render scale | no difference | -- | no difference |
+
+So the limits remove 8-15 % of the draws and nothing that can be measured: at about 0.5
+microseconds a shadow draw they are worth 0.15-0.3 ms of CPU, under the run-to-run spread.
+Side finding: at half render scale the heavy stations run at 6.9-7.8 ms with 6.2-7.1 ms of GPU
+and 4.2-4.9 ms of render CPU, so even with a quarter of the pixels the CPU is not the limit on
+this machine. Not adopted: it would change (if barely) what casts, for no measurable gain.
+
+**Where this leaves same-look work:** nothing on the list is expected to measure above the
+benchmark's noise any more. Untried and small: a tree shadow mesh with each leaf card flattened
+to 2-4 triangles (ceiling about 0.2-0.4 ms, risk of the visible card shading itself). Weaker
+machines are a matter of a settings preset, which the ablation tables already price.
 
 ## Research (2026-10-05)
 
