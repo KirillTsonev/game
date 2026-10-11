@@ -1113,6 +1113,78 @@ with the editor's executable. Same checksums as the editor's. Largest stages the
 1.43 s (both passes), the import with its join 1.34 s, ground paint 0.97 s, knots 0.78 s, road
 0.75 s; about 1.3 s is not in any stage (0.6 s after the import, the rest the loading frames).
 
+With erosion moved to compiled code the same day (`docs/native_kernels.md`): erosion 1.10 ->
+0.05 s, the export 8.6 s and first frame at 11.5 s, the editor's executable 10.3 s (11.75 s on
+seed 2415213935). Same checksums with the library and with `--no-native-kernels`.
+
+2026-10-11, more loops moved the same way (the table in `docs/native_kernels.md`): ground paint's
+majority filter and border pass, the road's obstacle distance and path search, the knots' flood,
+ramp pair test, occupancy and self-check. With the editor's executable a start that builds its
+world: 8.9 s on seed 3082472107 and 9.2 s on 2415213935 (heightmap build 2.5 and 2.6 s, ground
+paint 0.74 s). Same checksums and the same knot, ramp and road log lines as with
+`--no-native-kernels`, both seeds, world cache off. The export was not measured again.
+What is left in those stages, editor's executable: knot rows 0.42 s (the flatten and raise
+passes of `CliffDressing`), ground paint's main loop 0.22 s (threaded) and its preparation
+0.14 s, crease rounding 0.16 s, the road's bed 0.14 s and graded target 0.08 s. Note that the
+"road routing done" time also holds crease rounding and has done since that stage was added:
+the road by itself was about 0.5 s, and is about 0.3 s now.
+
+Later the same day, same checksums again on both seeds:
+
+| Change | Before | After |
+|---|---|---|
+| The village shoulder's loops on worker threads (`TerrainCastle._massif_apron_band`, `_west_strip_band`) | low-X apron 0.35 s, west strip 0.19 s (0.26 and 0.16 s in the export) | 0.20 s, 0.065 s (0.13 and 0.045 s) |
+| The raise pass's pixel loops as a kernel (`cliff_raise`) | knot rows 0.42 s, cliff dressing 0.23 s | 0.11 s, 0.04 s |
+
+Found by timing the parts of `_build_rows` for one run: the raise pass was 344 of its 423 ms
+(flatten 19, the lock blends 34, `_protect_entries` 16). The release export after this:
+world generation 6.9 - 7.7 s and first frame at 9.9 - 10.8 s over three runs (7.5 - 7.8 s and
+10.4 - 10.8 s before these two changes, 8.6 s and 11.5 s the day before). Its largest stages
+now: the import with its aprons 1.1 - 1.2 s (aprons and join 0.6 s of it, the north apron
+0.21 s), ground paint 0.65 - 0.75 s, about 0.6 s between the import and the boulders that no
+stage times (a loading frame and the terrain shader patch), deadfall 0.4 s, grass bake 0.37 s,
+knots 0.3 - 0.45 s, understory 0.3 s, trees 0.25 - 0.3 s, mountain walls 0.24 s.
+
+**A start from the editor is another matter** (found the same evening, when Kirill timed F5:
+11.8 - 12.4 s against 8.1 - 8.4 s from a command line). With the debugger attached GDScript
+runs 2-4 times slower, worker-thread loops most of all; compiled loops do not. So the loops
+that were already threaded, and not worth compiling for the export, were compiled for F5:
+ground paint's main pass, the grass bake with the distance stamping, the box smoothing, the
+road's raster and bed, the four apron band loops (table and notes in `docs/native_kernels.md`).
+Same checksums and the same log lines, both seeds, world cache off, against
+`--no-native-kernels`.
+
+| Start | Before the day | After the first kernels | Now |
+|---|---|---|---|
+| From the editor (F5) | not measured | 11.8 - 12.4 s | 8.97 s (one run) |
+| Command line, editor's executable | 11.1 / 11.8 s | 8.1 / 8.4 s | 7.2 / 7.4 s |
+| Release export | 8.6 s | 6.9 - 7.7 s | 6.05 - 6.33 s (first frame at 8.9 - 9.2 s) |
+
+The export's stages now: heightmap build 1.25 - 1.35 s, the import with its aprons 1.0 s
+(aprons and join 0.46 s), ground paint 0.45 - 0.48 s, deadfall 0.39 - 0.45 s, understory 0.3 s,
+trees 0.25 - 0.3 s, grass bake 0.17 - 0.19 s, flowers 0.15 s.
+
+#### Still slow in a start from the editor (open, as of 2026-10-11)
+
+From the one editor-launched run after the kernels above (8.97 s of world generation, random
+seed 4149582729). Nothing here has been started.
+
+| Piece | Time (F5) | Note |
+|---|---|---|
+| Between stages, untimed | about 1.3 s | The sum of the "untimed before it" figures in the log: 0.44 s before the boulders (a loading frame and the terrain shader patch), 0.23 s before deadfall, 0.23 s before ground paint, about 0.1 s each before understory, grass bake, outcrops and mountain walls. Not looked into: find out what it is first |
+| Understory | 0.74 s | Threaded script, random numbers per row |
+| Deadfall | 0.60 s | Script on the main thread, random numbers |
+| Knots | 0.50 s | What is left: rows 0.14 s, reach and ramps 0.15 s, clip + mark 0.08 s, placing and occupancy 0.11 s |
+| Trees | 0.47 s | Script, random numbers |
+| Flowers | 0.43 s | Threaded script, random numbers per row |
+| Ground paint's region write | about 0.4 s | `_region_band` (threaded script, calls `MountainWalls.mountain_depth` per pixel) and the image and map updates after it; the mountain band before it is another 0.06 s |
+| Village shoulder and the mountain's foot lines | 0.25 s | `TerrainCastle.raise_massif_on_map` 0.11 s, `MountainWalls.raise_foot` 0.15 s for the three sides |
+
+Suggested order: the untimed gap (the largest, and unknown), then ground paint's region
+write. The four scatter stages draw random numbers per row or per item, so a compiled copy of
+one must take them from the script's own generators in the same order: each is a larger and
+riskier port than any kernel so far.
+
 The first export, for comparison (`builds/startup_timing`, before the knot change): world
 generation 15.7 s and first frame at 19.0 s on the same seed, against 18.0 s and about 22 s with the
 editor's executable. Same checksums. That is the figure a player sees.

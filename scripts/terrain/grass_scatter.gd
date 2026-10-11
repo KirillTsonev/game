@@ -153,11 +153,20 @@ static func bake(_parent_node: Node, maps: Dictionary, corner: Vector3, rng: Ran
 	var heights: PackedFloat32Array = maps.heights
 	map_corner = corner
 	map_size = Vector2i(width, length)
+	# 2026-10-11: four of this function's loops have a copy in the native library (TerrainUtil.kernels();
+	# height_min_max, road_vertex_circles, stamp_circles, grass_bake in native/src/terrain_kernels.cpp).
+	# The script loops are the reference and the fallback: change both together.
+	var kernels := TerrainUtil.kernels()
 	height_min = INF
 	height_max = -INF
-	for h in heights:
-		height_min = minf(height_min, h)
-		height_max = maxf(height_max, h)
+	if kernels != null:
+		var height_range: PackedFloat64Array = kernels.call("height_min_max", heights)
+		height_min = height_range[0]
+		height_max = height_range[1]
+	else:
+		for h in heights:
+			height_min = minf(height_min, h)
+			height_max = maxf(height_max, h)
 	var hspan := maxf(height_max - height_min, 0.001)
 
 	# -- Rock distance field (m, capped at ROCK_FADE) --
@@ -216,13 +225,17 @@ static func bake(_parent_node: Node, maps: Dictionary, corner: Vector3, rng: Ran
 	var min_blend := int(ROAD_PAINT_MIN_BLEND * 255.0)
 	var painted := 0
 	var paint_circles := PackedFloat64Array()
-	for pz in length:
-		for px in width:
-			var c := road_control.decode_u32((pz * width + px) * 4)
-			# base = bits 27-31, overlay = 22-26, blend = 14-21
-			if ((c >> 27) & 0x1F) == TerrainRoad.ROAD_TEXTURE_ID or (((c >> 22) & 0x1F) == TerrainRoad.ROAD_TEXTURE_ID and ((c >> 14) & 0xFF) >= min_blend):
-				paint_circles.append_array(PackedFloat64Array([px, pz, 0.0]))
-				painted += 1
+	if kernels != null:
+		paint_circles = kernels.call("road_vertex_circles", road_control, width, length, TerrainRoad.ROAD_TEXTURE_ID, min_blend)
+		painted = paint_circles.size() / 3
+	else:
+		for pz in length:
+			for px in width:
+				var c := road_control.decode_u32((pz * width + px) * 4)
+				# base = bits 27-31, overlay = 22-26, blend = 14-21
+				if ((c >> 27) & 0x1F) == TerrainRoad.ROAD_TEXTURE_ID or (((c >> 22) & 0x1F) == TerrainRoad.ROAD_TEXTURE_ID and ((c >> 14) & 0xFF) >= min_blend):
+					paint_circles.append_array(PackedFloat64Array([px, pz, 0.0]))
+					painted += 1
 	paint_d = stamp_circles(paint_d, width, length, paint_circles, paint_cap)
 	if not road_path.is_empty():
 		var p0: Vector2 = road_path[0]
@@ -277,7 +290,25 @@ static func bake(_parent_node: Node, maps: Dictionary, corner: Vector3, rng: Ran
 		"height_min": height_min, "hspan": hspan, "road_lo": road_clear_distance(),
 		"out": band_out, "mutex": Mutex.new(),
 	}
-	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_bake_band.bind(ctx), bands, -1, true))
+	var native_bake: Dictionary = {}
+	if kernels != null: # (a constant _bake_band uses goes into this list too)
+		native_bake = kernels.call("grass_bake", ctx, {
+			"CURV_RADIUS": CURV_RADIUS, "CURV_FULL": CURV_FULL, "SLOPE_BARE_NY": SLOPE_BARE_NY, "SLOPE_FULL_NY": SLOPE_FULL_NY,
+			"ROCK_GAP": ROCK_GAP, "ROCK_FADE": ROCK_FADE, "VERGE_REACH_MAX": VERGE_REACH_MAX, "VERGE_NOISE_LO": VERGE_NOISE_LO,
+			"VERGE_NOISE_HI": VERGE_NOISE_HI, "VERGE_GRASS_GAP": VERGE_GRASS_GAP, "VERGE_GRASS_FADE": VERGE_GRASS_FADE,
+			"CANOPY_MIN_FACTOR": CANOPY_MIN_FACTOR, "MEADOW_VAR_MIN": MEADOW_VAR_MIN, "WORN_LO": WORN_LO, "WORN_HI": WORN_HI,
+			"OPEN_COVERAGE": OPEN_COVERAGE, "TUSSOCK_ROCK_CLEAR": TUSSOCK_ROCK_CLEAR,
+			"TUSSOCK_SLOPE_BARE_NY": TUSSOCK_SLOPE_BARE_NY, "TUSSOCK_SLOPE_FULL_NY": TUSSOCK_SLOPE_FULL_NY,
+			"DRY_BASE": DRY_BASE, "DRY_NOISE_WEIGHT": DRY_NOISE_WEIGHT, "DRY_CONVEX_WEIGHT": DRY_CONVEX_WEIGHT,
+			"DRY_CONCAVE_WEIGHT": DRY_CONCAVE_WEIGHT, "DRY_HEIGHT_WEIGHT": DRY_HEIGHT_WEIGHT, "DRY_EDGE_WEIGHT": DRY_EDGE_WEIGHT,
+			"DRY_SHADE_WEIGHT": DRY_SHADE_WEIGHT, "TALL_BASE": TALL_BASE, "TALL_CONCAVE_WEIGHT": TALL_CONCAVE_WEIGHT,
+			"TALL_CONVEX_WEIGHT": TALL_CONVEX_WEIGHT, "TALL_CLUMP_WEIGHT": TALL_CLUMP_WEIGHT, "TALL_EDGE_MIN": TALL_EDGE_MIN,
+			"BAKE_BAND_ROWS": BAKE_BAND_ROWS, "GRID_CELL": UnderstoryScatter.CELL,
+		})
+	if native_bake.has("bytes"):
+		band_out = [native_bake]
+	else:
+		WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_bake_band.bind(ctx), bands, -1, true))
 	var bytes := PackedByteArray()
 	worn = PackedByteArray()
 	verge_soil = PackedByteArray()
@@ -481,6 +512,11 @@ const STAMP_BAND_ROWS := 16
 static func stamp_circles(field: PackedFloat32Array, width: int, length: int, circles: PackedFloat64Array, cap: float) -> PackedFloat32Array:
 	if circles.is_empty():
 		return field
+	# 2026-10-11: the native library's copy when it is there (TerrainUtil.kernels(); stamp_circles
+	# in native/src/terrain_kernels.cpp). The bands below are the reference and the fallback.
+	var kernels := TerrainUtil.kernels()
+	if kernels != null:
+		return kernels.call("stamp_circles", field, width, length, circles, cap)
 	var bands := ceili(float(length) / STAMP_BAND_ROWS)
 	var per_band: Array = [] # per band: the offsets into `circles` of those that reach its rows
 	per_band.resize(bands)

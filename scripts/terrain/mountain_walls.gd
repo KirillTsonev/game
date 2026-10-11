@@ -762,9 +762,21 @@ static func apron_maps(maps: Dictionary, master_seed: int, side: int = 0) -> Dic
 		"rows": rows, "side": side, "master_seed": master_seed, "table_size": table_size, "ramp_tables": ramp_tables,
 		"grade": rim.grade, "edge_height": rim.height, "edge_grade": rim.local_grade, "base_height": rim.smooth_height,
 		"plan_noise": plan_noise, "envelope_noise": envelope_noise, "spur_noise": spur_noise, "relief_noise": relief_noise, "terrace_noise": terrace_noise,
+		"section_noise": _section_noise, # (for the native kernel: what _ledge_share reads)
 		"out": height_out, "mutex": Mutex.new(),
 	}
-	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_apron_height_band.bind(height_ctx), bands, TerrainUtil.object_call_threads(), true))
+	# 2026-10-11: both band loops of this function run in the native library when it is there
+	# (TerrainUtil.kernels(); apron_heights / apron_colors in native/src/terrain_kernels.cpp, the
+	# constants from kernel_consts()). The band functions are the reference and the fallback:
+	# change both together.
+	var kernels := TerrainUtil.kernels()
+	var native_heights: Dictionary = {}
+	if kernels != null:
+		native_heights = kernels.call("apron_heights", height_ctx, kernel_consts())
+	if native_heights.has("heights"):
+		height_out = [native_heights]
+	else:
+		WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_apron_height_band.bind(height_ctx), bands, TerrainUtil.object_call_threads(), true))
 	heights.clear()
 	var envelopes := PackedFloat32Array()
 	for b: Dictionary in height_out:
@@ -802,7 +814,13 @@ static func apron_maps(maps: Dictionary, master_seed: int, side: int = 0) -> Dic
 		"map_color": map_color, "shade_noise": shade_noise, "rock_id": rock_texture_id,
 		"out": color_out, "mutex": Mutex.new(),
 	}
-	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_apron_color_band.bind(color_ctx), bands, TerrainUtil.object_call_threads(), true))
+	var native_colors: Dictionary = {}
+	if kernels != null:
+		native_colors = kernels.call("apron_colors", color_ctx, kernel_consts())
+	if native_colors.has("control"):
+		color_out = [native_colors]
+	else:
+		WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_apron_color_band.bind(color_ctx), bands, TerrainUtil.object_call_threads(), true))
 	for b: Dictionary in color_out:
 		control.append_array(b.control)
 		color.append_array(b.color)
@@ -812,6 +830,31 @@ static func apron_maps(maps: Dictionary, master_seed: int, side: int = 0) -> Dic
 	return {"heights": heights, "control": control, "color": color}
 
 const APRON_BAND_ROWS := 32 ## rows per worker-thread task in apron_maps()
+
+## The constants the native apron kernels read, by name (apron_heights, apron_colors, and
+## TerrainCastle's north_heights / north_colors, which adds its own). A constant one of the band
+## functions starts to use goes in here and into the kernel's list.
+static func kernel_consts() -> Dictionary:
+	return {
+		"APRON_WIDTH": APRON_WIDTH, "APRON_PLAN_SHIFT": APRON_PLAN_SHIFT, "APRON_ENVELOPE_MIN": APRON_ENVELOPE_MIN,
+		"APRON_ENVELOPE_MAX": APRON_ENVELOPE_MAX, "APRON_CONNECT_ENVELOPE_NONE": APRON_CONNECT_ENVELOPE_NONE,
+		"APRON_CONNECT_ENVELOPE_FULL": APRON_CONNECT_ENVELOPE_FULL, "APRON_EDGE_BLEND": APRON_EDGE_BLEND,
+		"APRON_SPUR_HEIGHT": APRON_SPUR_HEIGHT, "APRON_RELIEF_START": APRON_RELIEF_START, "APRON_RELIEF_FULL": APRON_RELIEF_FULL,
+		"APRON_RELIEF": APRON_RELIEF, "APRON_ENVELOPE_FLOOR": APRON_ENVELOPE_FLOOR, "APRON_CONNECT_GRADE": APRON_CONNECT_GRADE,
+		"APRON_CONNECT_START": APRON_CONNECT_START, "APRON_TERRACE_WARP": APRON_TERRACE_WARP,
+		"APRON_TERRACE_HEIGHT": APRON_TERRACE_HEIGHT, "APRON_TERRACE_FACE": APRON_TERRACE_FACE,
+		"APRON_TERRACE_STRENGTH": APRON_TERRACE_STRENGTH, "APRON_TERRACE_TOP": APRON_TERRACE_TOP,
+		"APRON_COLOR_BLEND": APRON_COLOR_BLEND, "MAP_WIDTH": TerrainConfig.AREA_WIDTH, "MAP_LENGTH": TerrainConfig.AREA_LENGTH,
+		"APRON_TURF_NY_NONE": APRON_TURF_NY_NONE, "APRON_TURF_NY_FULL": APRON_TURF_NY_FULL, "APRON_TURF_TOP": APRON_TURF_TOP,
+		"APRON_TURF_FADE": APRON_TURF_FADE, "APRON_TURF_AMOUNT": APRON_TURF_AMOUNT, "APRON_TURF_ID": APRON_TURF_ID,
+		"APRON_SNOW_ID": APRON_SNOW_ID, "APRON_SNOW_FROM": APRON_SNOW_FROM, "APRON_SNOW_FULL": APRON_SNOW_FULL,
+		"APRON_SNOW_WANDER": APRON_SNOW_WANDER, "APRON_SNOW_NY_NONE": APRON_SNOW_NY_NONE, "APRON_SNOW_NY_FULL": APRON_SNOW_NY_FULL,
+		"APRON_CREASE_SHADE": APRON_CREASE_SHADE, "APRON_CREASE_MIN": APRON_CREASE_MIN, "APRON_CREASE_MAX": APRON_CREASE_MAX,
+		"APRON_STRATA_SHADE": APRON_STRATA_SHADE, "APRON_STRATA_PERIOD": APRON_STRATA_PERIOD, "APRON_SHADE_MIN": APRON_SHADE_MIN,
+		"TINT_R": MOUNTAIN_TINT.r, "TINT_G": MOUNTAIN_TINT.g, "TINT_B": MOUNTAIN_TINT.b,
+		"TURF_TINT_R": APRON_TURF_TINT.r, "TURF_TINT_G": APRON_TURF_TINT.g, "TURF_TINT_B": APRON_TURF_TINT.b,
+		"SNOW_TINT_R": APRON_SNOW_TINT.r, "SNOW_TINT_G": APRON_SNOW_TINT.g, "SNOW_TINT_B": APRON_SNOW_TINT.b,
+	}
 
 ## apron_maps()'s heights for rows [band * APRON_BAND_ROWS, +APRON_BAND_ROWS). Worker thread: reads
 ## the shared inputs in ctx, fills band-sized outputs of its own, stores them under ctx.mutex.

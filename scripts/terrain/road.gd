@@ -382,8 +382,9 @@ static func generate_road(heights: PackedFloat32Array, control: PackedInt32Array
 	var meander_phase := rng.randf_range(0.0, TAU)
 	# Distance to the obstacle mask, shared by routing clearance and the bed/bank levelling.
 	var obst_dist := _obstacle_distance(cliff_obstacle_mask, width, length, maxf(ROAD_OBSTACLE_SOFT_CLEARANCE, ROAD_BANK_OBSTACLE_FADE) + 1.0)
+	var t_obstacle := Time.get_ticks_msec() - t_road_stage
 	var raw_path := _find_road_path(heights, width, length, road_end, meander_phase, cliff_obstacle_mask, obst_dist)
-	print("TERRAIN_GEN:   pathfinding (%.3fs)" % ((Time.get_ticks_msec() - t_road_stage) / 1000.0))
+	print("TERRAIN_GEN:   pathfinding (%.3fs, of it obstacle distance %.3fs)" % [(Time.get_ticks_msec() - t_road_stage) / 1000.0, t_obstacle / 1000.0])
 	t_road_stage = Time.get_ticks_msec()
 	if raw_path.size() < 2:
 		print("TERRAIN_GEN: road pathfinding produced no usable path, skipping road")
@@ -446,14 +447,25 @@ static func generate_road(heights: PackedFloat32Array, control: PackedInt32Array
 	# the same order and keeps the strongest value per pixel, so the result is the single loop's.
 	var road_weight := PackedFloat32Array()
 	var road_blend := PackedFloat32Array()
-	var raster_bands := ceili(float(length) / ROAD_BAND_ROWS)
-	var raster_out: Array = []
-	raster_out.resize(raster_bands)
-	var raster_ctx := {"path": path, "width": width, "length": length, "edge_noise": edge_noise, "out": raster_out, "mutex": Mutex.new()}
-	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_raster_band.bind(raster_ctx), raster_bands, TerrainUtil.object_call_threads(), true))
-	for b: Dictionary in raster_out:
-		road_weight.append_array(b.weight)
-		road_blend.append_array(b.blend)
+	# 2026-10-11: in the native library when it is there (TerrainUtil.kernels(); road_raster in
+	# native/src/terrain_kernels.cpp). _raster_band is the reference and the fallback.
+	var raster_kernels := TerrainUtil.kernels()
+	var native_raster: Dictionary = {}
+	if raster_kernels != null:
+		native_raster = raster_kernels.call("road_raster", path, width, length, edge_noise, PackedFloat64Array([
+			ROAD_HALF_WIDTH, ROAD_EDGE_SOFTNESS, ROAD_TEXTURE_HALF_WIDTH, ROAD_EDGE_NOISE_STRENGTH, ROAD_TEXTURE_BLEND_WIDTH]))
+	if native_raster.has("weight"):
+		road_weight = native_raster.weight
+		road_blend = native_raster.blend
+	else:
+		var raster_bands := ceili(float(length) / ROAD_BAND_ROWS)
+		var raster_out: Array = []
+		raster_out.resize(raster_bands)
+		var raster_ctx := {"path": path, "width": width, "length": length, "edge_noise": edge_noise, "out": raster_out, "mutex": Mutex.new()}
+		WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_raster_band.bind(raster_ctx), raster_bands, TerrainUtil.object_call_threads(), true))
+		for b: Dictionary in raster_out:
+			road_weight.append_array(b.weight)
+			road_blend.append_array(b.blend)
 	print("TERRAIN_GEN:   segment rasterization (%.3fs)" % ((Time.get_ticks_msec() - t_road_stage) / 1000.0))
 	t_road_stage = Time.get_ticks_msec()
 
@@ -614,65 +626,82 @@ static func _grade_level_bed(heights: PackedFloat32Array, blurred: PackedFloat32
 				s += src[j]
 			prof[i] = s / float(hi - lo + 1)
 	var tilt_before := _cross_tilt_stats(heights, width, length, line)
-	var orig := heights.duplicate()
-
-	# Nearest centre-line point per pixel (within ROAD_BANK_REACH) and the bed height there.
-	var total := width * length
-	var reach := ROAD_BANK_REACH
-	# 2026-10-10: in row bands on worker threads (_bed_band); the nearest segment per pixel, the
-	# first one winning a tie, as in the single loop.
-	var best_d := PackedFloat32Array()
-	var bed_h := PackedFloat32Array()
-	var bed_bands := ceili(float(length) / ROAD_BAND_ROWS)
-	var bed_out: Array = []
-	bed_out.resize(bed_bands)
-	var bed_ctx := {"line": line, "prof": prof, "width": width, "length": length, "reach": reach, "out": bed_out, "mutex": Mutex.new()}
-	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_bed_band.bind(bed_ctx), bed_bands, -1, true))
-	for b: Dictionary in bed_out:
-		best_d.append_array(b.best_d)
-		bed_h.append_array(b.bed_h)
-	var zone := PackedInt32Array()
-	var mark := PackedByteArray()
-	mark.resize(total)
+	# 2026-10-11: from here to the crease smoothing in the native library when it is there
+	# (TerrainUtil.kernels(); road_bed in native/src/terrain_kernels.cpp). The branch below is the
+	# reference and the fallback: change both together.
 	var max_cut := 0.0
 	var max_fill := 0.0
-	for idx in total:
-		var d := best_d[idx]
-		if d == INF:
-			continue
-		var bed := bed_h[idx]
-		var slack := maxf(0.0, d - ROAD_BED_HALF_WIDTH) * ROAD_BANK_SLOPE
-		var shaped := clampf(orig[idx], bed - slack, bed + slack)
-		var fade := 1.0 - smoothstep(reach - 4.0, reach, d)
-		fade *= smoothstep(0.0, ROAD_BANK_OBSTACLE_FADE, obst[idx])
-		var nh := lerpf(orig[idx], shaped, fade)
-		if absf(nh - orig[idx]) < 0.001:
-			continue
-		heights[idx] = nh
-		max_cut = maxf(max_cut, orig[idx] - nh)
-		max_fill = maxf(max_fill, nh - orig[idx])
-		# smoothing zone: the changed pixel + 1 px rim, away from obstacles
-		var cx := idx % width
-		var cz := idx / width
-		for dz in range(-1, 2):
-			for dx in range(-1, 2):
-				var zx := cx + dx
-				var zz := cz + dz
-				if zx < 1 or zz < 1 or zx >= width - 1 or zz >= length - 1:
-					continue
-				var zi := zz * width + zx
-				if mark[zi] == 0 and obst[zi] >= 2.0:
-					mark[zi] = 1
-					zone.append(zi)
-	# Round the bed-edge / bank-top / bank-toe creases.
-	for _p in ROAD_BANK_SMOOTH_PASSES:
-		var prev := heights.duplicate()
-		for zi in zone:
-			var s := 0.0
+	var zone_count := 0
+	var bed_kernels := TerrainUtil.kernels()
+	var native_bed: Dictionary = {}
+	if bed_kernels != null:
+		native_bed = bed_kernels.call("road_bed", heights, obst, line, prof, width, length, PackedFloat64Array([
+			ROAD_BANK_REACH, ROAD_BED_HALF_WIDTH, ROAD_BANK_SLOPE, ROAD_BANK_OBSTACLE_FADE, ROAD_BANK_SMOOTH_PASSES]))
+	if native_bed.has("heights"):
+		heights.clear()
+		heights.append_array(native_bed.heights)
+		max_cut = native_bed.max_cut
+		max_fill = native_bed.max_fill
+		zone_count = native_bed.zone
+	else:
+		var orig := heights.duplicate()
+
+		# Nearest centre-line point per pixel (within ROAD_BANK_REACH) and the bed height there.
+		var total := width * length
+		var reach := ROAD_BANK_REACH
+		# 2026-10-10: in row bands on worker threads (_bed_band); the nearest segment per pixel, the
+		# first one winning a tie, as in the single loop.
+		var best_d := PackedFloat32Array()
+		var bed_h := PackedFloat32Array()
+		var bed_bands := ceili(float(length) / ROAD_BAND_ROWS)
+		var bed_out: Array = []
+		bed_out.resize(bed_bands)
+		var bed_ctx := {"line": line, "prof": prof, "width": width, "length": length, "reach": reach, "out": bed_out, "mutex": Mutex.new()}
+		WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_bed_band.bind(bed_ctx), bed_bands, -1, true))
+		for b: Dictionary in bed_out:
+			best_d.append_array(b.best_d)
+			bed_h.append_array(b.bed_h)
+		var zone := PackedInt32Array()
+		var mark := PackedByteArray()
+		mark.resize(total)
+		for idx in total:
+			var d := best_d[idx]
+			if d == INF:
+				continue
+			var bed := bed_h[idx]
+			var slack := maxf(0.0, d - ROAD_BED_HALF_WIDTH) * ROAD_BANK_SLOPE
+			var shaped := clampf(orig[idx], bed - slack, bed + slack)
+			var fade := 1.0 - smoothstep(reach - 4.0, reach, d)
+			fade *= smoothstep(0.0, ROAD_BANK_OBSTACLE_FADE, obst[idx])
+			var nh := lerpf(orig[idx], shaped, fade)
+			if absf(nh - orig[idx]) < 0.001:
+				continue
+			heights[idx] = nh
+			max_cut = maxf(max_cut, orig[idx] - nh)
+			max_fill = maxf(max_fill, nh - orig[idx])
+			# smoothing zone: the changed pixel + 1 px rim, away from obstacles
+			var cx := idx % width
+			var cz := idx / width
 			for dz in range(-1, 2):
 				for dx in range(-1, 2):
-					s += prev[zi + dz * width + dx]
-			heights[zi] = s / 9.0
+					var zx := cx + dx
+					var zz := cz + dz
+					if zx < 1 or zz < 1 or zx >= width - 1 or zz >= length - 1:
+						continue
+					var zi := zz * width + zx
+					if mark[zi] == 0 and obst[zi] >= 2.0:
+						mark[zi] = 1
+						zone.append(zi)
+		# Round the bed-edge / bank-top / bank-toe creases.
+		for _p in ROAD_BANK_SMOOTH_PASSES:
+			var prev := heights.duplicate()
+			for zi in zone:
+				var s := 0.0
+				for dz in range(-1, 2):
+					for dx in range(-1, 2):
+						s += prev[zi + dz * width + dx]
+				heights[zi] = s / 9.0
+		zone_count = zone.size()
 	var tilt_after := _cross_tilt_stats(heights, width, length, line)
 	# Diagnostic: where the bed is still tilted > 8 deg, and whether an obstacle (whose surroundings
 	# the levelling deliberately fades out of) is the reason. World = pixel - 256 on both axes.
@@ -691,7 +720,7 @@ static func _grade_level_bed(heights: PackedFloat32Array, blurred: PackedFloat32
 	if not left_tilted.is_empty():
 		print("TERRAIN_GEN_DEBUG road bed still tilted > 8 deg at: " + "; ".join(left_tilted))
 	print("TERRAIN_GEN:   road bed levelled: cross-tilt max %.1f deg (%.0f%% of road > 8 deg) -> max %.1f deg (%.0f%% > 8 deg); banks max cut %.1f m / fill %.1f m, %d px reshaped (%.2fs)" % [
-		tilt_before.x, tilt_before.y, tilt_after.x, tilt_after.y, max_cut, max_fill, zone.size(), (Time.get_ticks_msec() - t0) / 1000.0])
+		tilt_before.x, tilt_before.y, tilt_after.x, tilt_after.y, max_cut, max_fill, zone_count, (Time.get_ticks_msec() - t0) / 1000.0])
 
 ## Road cross-tilt along `line`: height difference 3 m either side of the centre line (the painted
 ## road's edges). Returns Vector2(max degrees, percent of samples steeper than 8 degrees).
@@ -721,6 +750,11 @@ static func _obstacle_distance(mask: PackedByteArray, width: int, length: int, c
 	if mask.is_empty():
 		dist.fill(cap)
 		return dist
+	# 2026-10-11: the native library's copy of the two passes below when it is there
+	# (TerrainUtil.kernels(); obstacle_distance in native/src/terrain_kernels.cpp). Change both together.
+	var kernels := TerrainUtil.kernels()
+	if kernels != null:
+		return kernels.call("obstacle_distance", mask, width, length, cap)
 	for i in dist.size():
 		dist[i] = 0.0 if mask[i] != 0 else cap
 	var diag := 1.4142135
@@ -898,6 +932,28 @@ static func _find_road_path(heights: PackedFloat32Array, width: int, length: int
 	g_score[start_node] = 0.0
 	heap_f.append(Vector2(start).distance_to(Vector2(goal)) * ROAD_PATH_GRID_STEP)
 	heap_n.append(start_node)
+
+	# 2026-10-11: the search loop below runs in the native library when it is there
+	# (TerrainUtil.kernels(); road_search in native/src/terrain_kernels.cpp -- the same heap, the
+	# same comparisons, the same path). The loop here is the reference and the fallback: change
+	# both together.
+	var kernels := TerrainUtil.kernels()
+	if kernels != null:
+		var offsets_flat := PackedInt32Array()
+		var side_flat := PackedFloat64Array()
+		for oi in 8:
+			offsets_flat.append_array(PackedInt32Array([neighbor_offsets[oi].x, neighbor_offsets[oi].y]))
+			side_flat.append_array(PackedFloat64Array([offset_side[oi].x, offset_side[oi].y]))
+		var found: PackedInt32Array = kernels.call("road_search", heights, width, length, cols, rows, start_node, goal_node,
+			node_h, node_blocked, node_od if has_od else PackedFloat32Array(), row_pref, offsets_flat, offset_dist, side_flat, PackedFloat64Array([
+			ROAD_PATH_GRID_STEP, ROAD_SLOPE_HARD_LIMIT, ROAD_SLOPE_PENALTY, ROAD_HALF_WIDTH, ROAD_CROSS_SLOPE_PENALTY,
+			ROAD_OBSTACLE_SOFT_CLEARANCE, ROAD_OBSTACLE_PROXIMITY_PENALTY, ROAD_MEANDER_COST_WEIGHT]))
+		if not found.is_empty():
+			var native_path := PackedVector2Array()
+			for node in found:
+				native_path.append(Vector2((node % cols) * ROAD_PATH_GRID_STEP, (node / cols) * ROAD_PATH_GRID_STEP))
+			return native_path
+		heap_f.clear() # no route: on to the fallback below
 
 	while not heap_f.is_empty():
 		# pop the smallest f

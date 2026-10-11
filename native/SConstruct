@@ -1,0 +1,17 @@
+#!/usr/bin/env python
+# Builds the TerrainKernels GDExtension (native versions of terrain generation's hot loops).
+# Run through build.sh, which puts the compiler on PATH and passes the options.
+
+env = SConscript("godot-cpp/SConstruct")
+
+env.Append(CPPPATH=["src/"])
+# The kernels must give the same numbers as the GDScript they replace: no fused multiply-add,
+# no reordering of floating-point operations.
+env.Append(CCFLAGS=["-ffp-contract=off", "-fno-fast-math"])
+
+sources = Glob("src/*.cpp")
+library = env.SharedLibrary(
+    "../addons/terrain_kernels/bin/libterrain_kernels{}{}".format(env["suffix"], env["SHLIBSUFFIX"]),
+    source=sources,
+)
+Default(library)

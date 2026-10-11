@@ -326,11 +326,15 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 	var bare_sum := 0.0
 	# Always built: the road distance also drives the bare verge (BARE_ROAD_*).
 	var road_circles := PackedFloat64Array()
-	for pz in length:
-		for px in width:
-			var c := old_control.decode_u32((pz * width + px) * 4)
-			if ((c >> 27) & 0x1F) == ROAD_ID or ((c >> 22) & 0x1F) == ROAD_ID: # base / overlay bits, see _paint_band
-				road_circles.append_array(PackedFloat64Array([px, pz, 0.0]))
+	var scan_kernels := TerrainUtil.kernels() # 2026-10-11: this scan in the native library when it is there
+	if scan_kernels != null:
+		road_circles = scan_kernels.call("road_vertex_circles", old_control, width, length, ROAD_ID, 0)
+	else:
+		for pz in length:
+			for px in width:
+				var c := old_control.decode_u32((pz * width + px) * 4)
+				if ((c >> 27) & 0x1F) == ROAD_ID or ((c >> 22) & 0x1F) == ROAD_ID: # base / overlay bits, see _paint_band
+					road_circles.append_array(PackedFloat64Array([px, pz, 0.0]))
 	road_d = GrassScatter.stamp_circles(road_d, width, length, road_circles, LITTER_ROAD_REACH)
 	var control := PackedInt32Array()
 	control.resize(n)
@@ -370,7 +374,41 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 		"patch_bytes": GrassScatter.patch_image.get_data(), "patch_nv": patch_nv,
 		"out": band_out, "mutex": Mutex.new(),
 	}
-	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_paint_band.bind(ctx), bands, -1, true))
+	# 2026-10-11: the whole pass in the native library when it is there (TerrainUtil.kernels();
+	# paint_main in native/src/terrain_kernels.cpp reads the same ctx). _paint_band is the reference
+	# and the fallback: change both together, and a constant the loop uses goes into this list.
+	var main_kernels := TerrainUtil.kernels()
+	var native_main: Dictionary = {}
+	if main_kernels != null:
+		native_main = main_kernels.call("paint_main", ctx, {
+			"GRASS_TEXTURE_GROW": GRASS_TEXTURE_GROW, "PATCH_SHADE": PATCH_SHADE, "GAP_SHADE": GAP_SHADE,
+			"STEEP_NY_FULL": STEEP_NY_FULL, "STEEP_NY_NONE": STEEP_NY_NONE, "ROCK_WARP_AMP": ROCK_WARP_AMP,
+			"CLIFF_REACH": CLIFF_REACH, "BOULDER_REACH": BOULDER_REACH, "BOULDER_STRENGTH": BOULDER_STRENGTH, "SCREE_REACH": SCREE_REACH,
+			"ROCKY_LO": ROCKY_LO, "ROCKY_HI": ROCKY_HI, "ROCKY_BASE": ROCKY_BASE, "ROCKY_BIG": ROCKY_BIG, "ROCKY_SMALL": ROCKY_SMALL, "ROCKY_MIN": ROCKY_MIN,
+			"LITTER_TREE_FADE": LITTER_TREE_FADE, "LITTER_EDGE_NOISE": LITTER_EDGE_NOISE, "LITTER_SUPPLY_LO": LITTER_SUPPLY_LO, "LITTER_SUPPLY_HI": LITTER_SUPPLY_HI,
+			"LITTER_UPHILL_STEP": LITTER_UPHILL_STEP, "LITTER_COLLAR_SIDE": LITTER_COLLAR_SIDE, "LITTER_COLLAR_REACH": LITTER_COLLAR_REACH,
+			"LITTER_CURV_LO": LITTER_CURV_LO, "LITTER_CURV_HI": LITTER_CURV_HI, "LITTER_DRIFT_LO": LITTER_DRIFT_LO, "LITTER_DRIFT_HI": LITTER_DRIFT_HI,
+			"LITTER_DRIFT_SUPPLY_LO": LITTER_DRIFT_SUPPLY_LO, "LITTER_DRIFT_SUPPLY_HI": LITTER_DRIFT_SUPPLY_HI,
+			"LITTER_ROAD_CLEAR": LITTER_ROAD_CLEAR, "LITTER_ROAD_REACH": LITTER_ROAD_REACH, "LITTER_NY_NONE": LITTER_NY_NONE, "LITTER_NY_FULL": LITTER_NY_FULL,
+			"LITTER_CLIFF_CLEAR": LITTER_CLIFF_CLEAR, "LITTER_CLIFF_REACH": LITTER_CLIFF_REACH, "LITTER_FULL": LITTER_FULL, "LITTER_MIN": LITTER_MIN,
+			"BARE_WORN_MAX": BARE_WORN_MAX, "BARE_NY_FULL": BARE_NY_FULL, "BARE_NY_NONE": BARE_NY_NONE,
+			"BARE_CLIFF_CLEAR": BARE_CLIFF_CLEAR, "BARE_CLIFF_REACH": BARE_CLIFF_REACH,
+			"FLAT_NY": FLAT_NY, "MOSS_SHADE_LO": MOSS_SHADE_LO, "MOSS_SHADE_HI": MOSS_SHADE_HI,
+			"PATCH_RES": GrassScatter.PATCH_RES, "PATCH_EDGE": GrassScatter.PATCH_EDGE, "CURV_RADIUS": GrassScatter.CURV_RADIUS,
+			"GRID_CELL": UnderstoryScatter.CELL, "PAINT_BAND_ROWS": PAINT_BAND_ROWS,
+			"GROUND_ID": GROUND_ID, "GRASS_ID": GRASS_ID, "ROAD_ID": ROAD_ID, "PINE_LITTER_ID": PINE_LITTER_ID,
+			"ROCK_FACE_ID": ROCK_FACE_ID, "AERIAL_ROCKS_ID": AERIAL_ROCKS_ID, "ROCKY_TRAIL_ID": ROCKY_TRAIL_ID,
+			"ROCKY_TERRAIN_ID": ROCKY_TERRAIN_ID, "COAST_SAND_ROCKS_ID": COAST_SAND_ROCKS_ID, "ROAD_MARK": ROAD_MARK,
+		})
+	if native_main.has("control"):
+		var native_types: PackedInt32Array = native_main.type_counts
+		var types_by_id := {}
+		for k in ROCK_TYPES.size():
+			types_by_id[ROCK_TYPES[k]] = native_types[k]
+		native_main["type_counts"] = types_by_id
+		band_out = [native_main]
+	else:
+		WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_paint_band.bind(ctx), bands, -1, true))
 	control.clear()
 	patch_shade.clear()
 	# Per vertex, from the bands: its largest texture (ROAD_MARK = a road vertex, packed in control).
@@ -412,7 +450,15 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 	dom = with_mountain
 	# Majority filter: each vertex takes the most common texture within DOM_MODE_RADIUS
 	# of it, DOM_MODE_PASSES times. Removes specks of a few vertices and rounds corners.
+	# 2026-10-11: the filter and the border pass run in the native library when it is there
+	# (TerrainUtil.kernels(); mode_filter / blend_borders in native/src/terrain_kernels.cpp). The
+	# band functions are the reference and the fallback: change both together.
+	var kernels := TerrainUtil.kernels()
+	var t_filter := Time.get_ticks_msec() - t0
 	for _mp in DOM_MODE_PASSES:
+		if kernels != null:
+			dom = kernels.call("mode_filter", dom, width, length, DOM_MODE_RADIUS, ROAD_MARK)
+			continue
 		var mode_out: Array = []
 		mode_out.resize(bands)
 		var mode_ctx := {"width": width, "length": length, "src": dom, "grid": _uniform_grid(dom, width, length), "out": mode_out, "mutex": Mutex.new()}
@@ -422,22 +468,29 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 			filtered.append_array(b)
 		dom = filtered
 	# Border pass: every vertex near a border gets the pair (its texture, the one across).
-	var blend_out: Array = []
-	blend_out.resize(bands)
-	var blend_ctx := {"width": width, "length": length, "dom": dom, "grid": _uniform_grid(dom, width, length), "spray_n": spray_n, "road_control": control, "out": blend_out, "mutex": Mutex.new()}
-	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_blend_band.bind(blend_ctx), bands, -1, true))
 	var blended := PackedInt32Array()
 	var n_border := 0
 	var n_third := 0
-	for b: Dictionary in blend_out:
-		blended.append_array(b.control)
-		n_border += b.border
-		n_third += b.third
+	if kernels != null:
+		var borders: Dictionary = kernels.call("blend_borders", dom, spray_n, control, width, length, PackedFloat64Array([
+			BORDER_RADIUS, BORDER_FADE, THIRD_FADE, SPRAY_AMP, SPRAY_FLOOR, ROAD_MARK]))
+		blended = borders.control
+		n_border = borders.border
+		n_third = borders.third
+	else:
+		var blend_out: Array = []
+		blend_out.resize(bands)
+		var blend_ctx := {"width": width, "length": length, "dom": dom, "grid": _uniform_grid(dom, width, length), "spray_n": spray_n, "road_control": control, "out": blend_out, "mutex": Mutex.new()}
+		WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_blend_band.bind(blend_ctx), bands, -1, true))
+		for b: Dictionary in blend_out:
+			blended.append_array(b.control)
+			n_border += b.border
+			n_third += b.third
 	control = blended
 	print("GROUND_PAINT v3: litter weight full on %.1f%% of vertices, partial on %.1f%%; mean bare-soil weight %.2f; %.1f%% of vertices within %d m of a border, %.1f%% of them near a third texture (blend held back there)" % [100.0 * litter_full / n, 100.0 * litter_ramp / n, bare_sum / n, 100.0 * n_border / n, BORDER_RADIUS, 100.0 * n_third / maxf(1.0, n_border)])
 	var t_px := Time.get_ticks_msec() - t0
 	# Output checksum: must stay the same across a change that is only meant to be faster.
-	print("GROUND_PAINT v3: checksum control %d, patch shade %d; timing prep %d ms, main loop %d ms, mountain + filter + borders %d ms" % [hash(control), hash(patch_shade), t_prep - t_dist, t_main - t_prep, t_px - t_main])
+	print("GROUND_PAINT v3: checksum control %d, patch shade %d; timing prep %d ms, main loop %d ms, mountain %d ms, filter + borders %d ms" % [hash(control), hash(patch_shade), t_prep - t_dist, t_main - t_prep, t_filter - t_main, t_px - t_filter])
 	# -- Write into each region's control image, then push to the GPU --
 	var data: Terrain3DData = terrain.get_data()
 	var rs := terrain.get_region_size()

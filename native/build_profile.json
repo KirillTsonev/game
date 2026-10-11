@@ -1,0 +1,17 @@
+{
+	"enabled_classes": [
+		"RefCounted",
+		"RandomNumberGenerator",
+		"Noise",
+		"FastNoiseLite",
+		"OS",
+		"Engine",
+		"ClassDB",
+		"FileAccess",
+		"Image",
+		"SceneTree",
+		"WorkerThreadPool",
+		"XMLParser",
+		"EditorPlugin"
+	]
+}

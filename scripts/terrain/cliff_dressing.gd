@@ -845,13 +845,23 @@ static func raise_terrain_behind_cliff_dressing(plan: Array[Dictionary], heights
 	# 2026-09-18 debug scaffolding -- see _raise_debug_heights' own comment near the top of the
 	# file. Same size/layout as `heights` itself, sentinel-filled so the surface builder later
 	# knows exactly which pixels this pass would have touched.
+	# 2026-10-11: the two pixel loops of this function run in the native library when it is there
+	# (TerrainUtil.kernels(); cliff_raise in native/src/terrain_kernels.cpp). This function still
+	# works out every entry's values; the loops below are the reference and the fallback: change
+	# both together. The debug surface needs the script's loops (the kernel keeps no debug maps).
+	var kernels: RefCounted = null if RAISE_DEBUG_SHOW_SURFACE else TerrainUtil.kernels()
+	var native_entries := PackedFloat64Array() # per entry, in the order of CLIFF_RAISE_ENTRY in the .cpp
+	var native_profiles: Array = [] # PackedFloat32Array per profile used
+	var native_profile_ranges := PackedFloat64Array() # x_min, x_max per profile
+	var native_profile_index: Dictionary = {} # def name -> index in the two above
+	var map_px := width * length if kernels == null else 0 # the full-map arrays below are the script loops' only
 	_raise_debug_heights = PackedFloat32Array()
-	_raise_debug_heights.resize(width * length)
+	_raise_debug_heights.resize(map_px)
 	# 2026-09-29 speed: native fill() -- these were per-element GDScript loops over the whole map
 	# (2 x 131k iterations) on EVERY call, and knots call this pass once per knot row (~13x a map).
 	_raise_debug_heights.fill(RAISE_DEBUG_UNSET)
 	_raise_debug_entry_index = PackedInt32Array()
-	_raise_debug_entry_index.resize(width * length)
+	_raise_debug_entry_index.resize(map_px)
 	_raise_debug_entry_index.fill(-1)
 	# 2026-09-28 (Kirill: "ridge of sharp protrusions" in the join gap between two
 	# namaqualand_cliff_01 placements, seed 4176228882, pixel ~(37, 452)): overlapping entries
@@ -873,19 +883,19 @@ static func raise_terrain_behind_cliff_dressing(plan: Array[Dictionary], heights
 	# plateau, coverage = its weight), so isolated placements are unchanged; overlaps of two
 	# different plateau heights now ramp between them instead of seaming.
 	var raise_w_sum := PackedFloat32Array()
-	raise_w_sum.resize(width * length)
+	raise_w_sum.resize(map_px)
 	raise_w_sum.fill(0.0)
 	var raise_wp_sum := PackedFloat32Array()
-	raise_wp_sum.resize(width * length)
+	raise_wp_sum.resize(map_px)
 	raise_wp_sum.fill(0.0)
 	var raise_wl_sum := PackedFloat32Array() ## same weighting as raise_wp_sum, for the per-def top lift (seam_only tolerance)
-	raise_wl_sum.resize(width * length)
+	raise_wl_sum.resize(map_px)
 	raise_wl_sum.fill(0.0)
 	var raise_keep := PackedFloat32Array() ## running prod(1 - w_i) per pixel
-	raise_keep.resize(width * length)
+	raise_keep.resize(map_px)
 	raise_keep.fill(1.0)
 	var raise_best_w := PackedFloat32Array() ## debug only: highest single-entry weight, for _raise_debug_entry_index
-	raise_best_w.resize(width * length)
+	raise_best_w.resize(map_px)
 	raise_best_w.fill(0.0)
 	# 2026-09-29 speed: bounding box of every pixel an entry touched, so the commit loop only walks
 	# that box instead of the whole map (identical result -- untouched pixels have w_sum 0 and were
@@ -1210,6 +1220,19 @@ static func raise_terrain_behind_cliff_dressing(plan: Array[Dictionary], heights
 		min_pz = maxi(min_pz, int(floor(box_lo.y)) - 1)
 		max_pz = mini(max_pz, int(ceil(box_hi.y)) + 1)
 
+		if kernels != null:
+			if not native_profile_index.has(entry.def_name):
+				native_profile_index[entry.def_name] = native_profiles.size()
+				native_profiles.append(top_profile.get("heights", PackedFloat32Array()))
+				native_profile_ranges.append_array(PackedFloat64Array([top_profile.get("x_min", 0.0), top_profile.get("x_max", 0.0)]))
+			native_entries.append_array(PackedFloat64Array([
+				px, pz, axis_local_x.x, axis_local_x.y, axis_local_z.x, axis_local_z.y, half_x, half_z,
+				plateau_depth, fade_distance, inner_ramp, 1.0 if joined_left else 0.0, 1.0 if joined_right else 0.0,
+				effective_edge_left, effective_edge_right, lateral_softness_left, lateral_softness_right,
+				scale_jitter, origin_y, top_lift, join_rise_left, join_rise_right, join_run_left, join_run_right,
+				nearest_gap_left, nearest_gap_right, min_px, max_px, min_pz, max_pz, native_profile_index[entry.def_name]]))
+			continue
+
 		for qz in range(min_pz, max_pz + 1):
 			for qx in range(min_px, max_px + 1):
 				var delta := Vector2(qx - px, qz - pz)
@@ -1349,6 +1372,16 @@ static func raise_terrain_behind_cliff_dressing(plan: Array[Dictionary], heights
 	# down -- the 2026-09-28 spike ridge), now weighted blend (continuous; see top of function).
 	# _raise_debug_heights still receives the final value so the optional RAISE_DEBUG_SHOW_SURFACE
 	# overlay keeps working unchanged.
+	if kernels != null:
+		var raised: Dictionary = kernels.call("cliff_raise", heights, width, length, native_entries, native_profiles, native_profile_ranges, raise_warp_noise, raise_bump_noise, PackedFloat64Array([
+			CLIFF_DRESSING_RAISE_EDGE_WARP, CLIFF_DRESSING_RAISE_JOIN_BRIDGE_FULL, CLIFF_DRESSING_RAISE_JOIN_BLEND, CLIFF_DRESSING_RAISE_JOIN_RAMP_BACK,
+			CLIFF_DRESSING_RAISE_MAX_SLOPE, CLIFF_DRESSING_RAISE_PROXIMITY_FALLOFF, CLIFF_DRESSING_FLANK_BAND_FRACTION,
+			CLIFF_DRESSING_SEAM_MIN_COVERAGE, CLIFF_DRESSING_SEAM_TOLERANCE, CLIFF_DRESSING_RAISE_BUMP_MAX, CLIFF_DRESSING_RAISE_BUMP_FRACTION]), seam_only)
+		if raised.has("heights"): # (empty = the kernel refused its arguments and said why)
+			heights.clear()
+			heights.append_array(raised.heights)
+			return int(raised.changed)
+		return 0
 	var changed := 0
 	for cz in range(touched_z0, touched_z1 + 1): # 2026-09-29: only the touched box (see touched_x0)
 		for cx in range(touched_x0, touched_x1 + 1):

@@ -18,3 +18,15 @@ desktop.ini
 # Common export output (uncomment if you export builds into the project)
 # /builds/
 # /export/
+
+# Native kernels (native/): the godot-cpp bindings are fetched, not versioned (see native/build.sh),
+# and the compiler's intermediate files are rebuilt. The built DLLs in addons/terrain_kernels/bin ARE versioned.
+native/godot-cpp/
+native/**/*.o
+native/**/*.obj
+native/.sconsign*.dblite
+native/.sconf_temp/
+native/config.log
+addons/terrain_kernels/bin/~*
+addons/terrain_kernels/bin/*.a
+native/build_*.log

@@ -267,7 +267,22 @@ static func build_maps(edge_row: PackedFloat32Array, edge_color: PackedByteArray
 	var height_out: Array = []
 	height_out.resize(bands)
 	var height_ctx := {"width": width, "edge_row": edge_row, "base": base, "ramp": ramp, "relief_noise": relief_noise, "out": height_out, "mutex": Mutex.new()}
-	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_north_height_band.bind(height_ctx), bands, TerrainUtil.object_call_threads(), true))
+	# 2026-10-11: both band loops of this function run in the native library when it is there
+	# (TerrainUtil.kernels(); north_heights / north_colors in native/src/terrain_kernels.cpp). The
+	# band functions are the reference and the fallback: change both together.
+	var kernels := TerrainUtil.kernels()
+	var kernel_consts := MountainWalls.kernel_consts()
+	kernel_consts.merge({
+		"NORTH_LENGTH": LENGTH, "WALL_RELIEF": WALL_RELIEF, "NORTH_EDGE_BLEND": EDGE_BLEND, "WALL_EDGE_GRADE": WALL_EDGE_GRADE,
+		"NORTH_COLOR_BLEND": COLOR_BLEND, "MAP_FROM": MountainWalls.MAP_OFFSET_X, "MAP_TO": MountainWalls.MAP_OFFSET_X + TerrainConfig.AREA_WIDTH,
+	})
+	var native_heights: Dictionary = {}
+	if kernels != null:
+		native_heights = kernels.call("north_heights", height_ctx, kernel_consts)
+	if native_heights.has("heights"):
+		height_out = [native_heights]
+	else:
+		WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_north_height_band.bind(height_ctx), bands, TerrainUtil.object_call_threads(), true))
 	for b: Dictionary in height_out:
 		heights.append_array(b.heights)
 		crest = maxf(crest, b.crest)
@@ -304,7 +319,13 @@ static func build_maps(edge_row: PackedFloat32Array, edge_color: PackedByteArray
 		"width": width, "heights": heights, "base": base, "on_shoulder": on_shoulder, "edge_color": edge_color,
 		"shade_noise": shade_noise, "rock_id": MountainWalls.rock_texture_id, "out": color_out, "mutex": Mutex.new(),
 	}
-	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_north_color_band.bind(color_ctx), bands, TerrainUtil.object_call_threads(), true))
+	var native_colors: Dictionary = {}
+	if kernels != null:
+		native_colors = kernels.call("north_colors", color_ctx, kernel_consts)
+	if native_colors.has("control"):
+		color_out = [native_colors]
+	else:
+		WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_north_color_band.bind(color_ctx), bands, TerrainUtil.object_call_threads(), true))
 	for b: Dictionary in color_out:
 		control.append_array(b.control)
 		color.append_array(b.color)
@@ -689,11 +710,46 @@ static func raise_massif_on_apron(heights: PackedFloat32Array, apron_width: int,
 	for row in rows:
 		natural_back_heights[row] = heights[row * apron_width]
 	var span := massif_rows()
-	for row in range(maxi(span.x, 0), mini(span.y, rows - 1) + 1):
+	var r_first := maxi(span.x, 0)
+	var r_last := mini(span.y, rows - 1)
+	if r_last < r_first:
+		return mask
+	# 2026-10-11: the rows in bands on worker threads (_massif_apron_band; the loop was about
+	# 0.17 s on the main thread). A pixel depends on nothing but its own height, so the result is
+	# the single loop's. Only the pixels a band changed are written back.
+	_ensure_massif_shape() # before the bands read it
+	var bands := ceili(float(r_last - r_first + 1) / MountainWalls.APRON_BAND_ROWS)
+	var out: Array = []
+	out.resize(bands)
+	var ctx := {"heights": heights, "apron_width": apron_width, "r_first": r_first, "r_last": r_last, "map_heights": map_heights, "out": out, "mutex": Mutex.new()}
+	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_massif_apron_band.bind(ctx), bands, TerrainUtil.object_call_threads(), true))
+	var base := r_first * apron_width
+	for b: Dictionary in out:
+		var band_heights: PackedFloat32Array = b.heights
+		var band_mask: PackedByteArray = b.mask
+		for k in band_mask.size():
+			if band_mask[k] == 1:
+				heights[base + k] = band_heights[k]
+				mask[base + k] = 1
+		base += band_mask.size()
+	return mask
+
+## raise_massif_on_apron()'s rows [r_first + band * APRON_BAND_ROWS, +APRON_BAND_ROWS), up to
+## r_last. Worker thread: reads ctx, works on its own copy of its rows, stores {heights, mask}.
+static func _massif_apron_band(band: int, ctx: Dictionary) -> void:
+	var all_heights: PackedFloat32Array = ctx.heights
+	var apron_width: int = ctx.apron_width
+	var map_heights: PackedFloat32Array = ctx.map_heights
+	var r_from: int = int(ctx.r_first) + band * MountainWalls.APRON_BAND_ROWS
+	var r_to := mini(r_from + MountainWalls.APRON_BAND_ROWS, int(ctx.r_last) + 1)
+	var heights := all_heights.slice(r_from * apron_width, r_to * apron_width)
+	var mask := PackedByteArray()
+	mask.resize(heights.size())
+	for row in range(r_from, r_to):
 		var edge := map_heights[mini(row, TerrainConfig.AREA_LENGTH - 1) * TerrainConfig.AREA_WIDTH]
 		for a in apron_width:
 			var x := float(a - apron_width)
-			var i := row * apron_width + a
+			var i := (row - r_from) * apron_width + a
 			# Cut back where the ridge stands higher than the village's ground allows ...
 			var ceiling := massif_ceiling(x, float(row))
 			if heights[i] > ceiling:
@@ -704,7 +760,10 @@ static func raise_massif_on_apron(heights: PackedFloat32Array, apron_width: int,
 			if target > heights[i]:
 				heights[i] = target
 				mask[i] = 1
-	return mask
+	var mutex: Mutex = ctx.mutex
+	mutex.lock()
+	(ctx.out as Array)[band] = {"heights": heights, "mask": mask}
+	mutex.unlock()
 
 ## The strip of the Terrain3D import west of the low-X apron (MountainWalls.WEST_EXTRA columns,
 ## one row per row of the map + hub, column 0 = the westmost): ground only where the shoulder
@@ -715,32 +774,26 @@ static func west_strip_maps(apron_heights: PackedFloat32Array, apron_width: int,
 	var t0 := Time.get_ticks_msec()
 	var width := MountainWalls.WEST_EXTRA
 	var heights := PackedFloat32Array()
-	heights.resize(width * rows)
 	var control := PackedInt32Array()
-	control.resize(width * rows)
 	var hole := TerrainHeightmap.pack_control_blend(TerrainConfig.GROUND_TEXTURE_ID, TerrainConfig.GROUND_TEXTURE_ID, 0.0) | Terrain3DUtil.enc_hole(true)
-	control.fill(hole)
 	var color := PackedByteArray()
 	color.resize(width * rows * 4)
 	color.fill(255)
 	var rock := TerrainHeightmap.pack_control_blend(MountainWalls.rock_texture_id, MountainWalls.rock_texture_id, 0.0)
 	var span := massif_rows()
 	var ground := 0
-	for row in rows:
-		var base := apron_heights[row * apron_width] # the apron's outer column (raised to the shoulder where that is higher)
-		var natural := natural_back_heights[row] if row < natural_back_heights.size() else base # ... and as it was before
-		var on_span := row >= span.x and row <= span.y
-		for a in width:
-			var i := row * width + a
-			var x := float(a - width - apron_width)
-			var target := massif_height(x, float(row)) if on_span else -INF
-			# Ground: on the shoulder's top, and where it stands above the ridge's own back edge.
-			if target > -INF and (target > natural + 0.5 or massif_distance(x, float(row)) <= 0.0):
-				heights[i] = target
-				control[i] = rock
-				ground += 1
-			else:
-				heights[i] = base
+	# 2026-10-11: the rows in bands on worker threads (_west_strip_band; the loop was about 0.1 s
+	# on the main thread). A pixel depends on its own position only: the single loop's result.
+	_ensure_massif_shape() # before the bands read it
+	var bands := ceili(float(rows) / MountainWalls.APRON_BAND_ROWS)
+	var band_out: Array = []
+	band_out.resize(bands)
+	var band_ctx := {"apron_heights": apron_heights, "apron_width": apron_width, "rows": rows, "width": width, "natural": natural_back_heights, "span": span, "hole": hole, "rock": rock, "out": band_out, "mutex": Mutex.new()}
+	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_west_strip_band.bind(band_ctx), bands, TerrainUtil.object_call_threads(), true))
+	for b: Dictionary in band_out:
+		heights.append_array(b.heights)
+		control.append_array(b.control)
+		ground += b.ground
 	# Colour, from the finished shape: the mountain's tint, creases darker.
 	for row in range(maxi(span.x, 0), mini(span.y, rows - 1) + 1):
 		for a in width:
@@ -756,6 +809,44 @@ static func west_strip_maps(apron_heights: PackedFloat32Array, apron_width: int,
 		color[i * 4 + 3] = 128 # roughness left as it is
 	print("TERRAIN_GEN: west strip -- %d x %d px west of the low-X apron, ground on %d of them (the village's shoulder), the rest holes (%d ms)" % [width, rows, ground, Time.get_ticks_msec() - t0])
 	return {"heights": heights, "control": control, "color": color}
+
+## west_strip_maps()'s heights and control pixels for rows [band * APRON_BAND_ROWS, +APRON_BAND_ROWS).
+## Worker thread: reads ctx, fills band-sized outputs of its own, stores them under ctx.mutex.
+static func _west_strip_band(band: int, ctx: Dictionary) -> void:
+	var apron_heights: PackedFloat32Array = ctx.apron_heights
+	var apron_width: int = ctx.apron_width
+	var rows: int = ctx.rows
+	var width: int = ctx.width
+	var natural_back: PackedFloat32Array = ctx.natural
+	var span: Vector2i = ctx.span
+	var rock: int = ctx.rock
+	var r_from := band * MountainWalls.APRON_BAND_ROWS
+	var r_to := mini(r_from + MountainWalls.APRON_BAND_ROWS, rows)
+	var heights := PackedFloat32Array()
+	heights.resize(width * (r_to - r_from))
+	var control := PackedInt32Array()
+	control.resize(width * (r_to - r_from))
+	control.fill(int(ctx.hole))
+	var ground := 0
+	for row in range(r_from, r_to):
+		var base := apron_heights[row * apron_width] # the apron's outer column (raised to the shoulder where that is higher)
+		var natural := natural_back[row] if row < natural_back.size() else base # ... and as it was before
+		var on_span := row >= span.x and row <= span.y
+		for a in width:
+			var i := (row - r_from) * width + a
+			var x := float(a - width - apron_width)
+			var target := massif_height(x, float(row)) if on_span else -INF
+			# Ground: on the shoulder's top, and where it stands above the ridge's own back edge.
+			if target > -INF and (target > natural + 0.5 or massif_distance(x, float(row)) <= 0.0):
+				heights[i] = target
+				control[i] = rock
+				ground += 1
+			else:
+				heights[i] = base
+	var mutex: Mutex = ctx.mutex
+	mutex.lock()
+	(ctx.out as Array)[band] = {"heights": heights, "control": control, "ground": ground}
+	mutex.unlock()
 
 ## Lit windows on one mesh of the village scan: small glowing panes on wall vertices picked at
 ## random (VILLAGE_WINDOW_*), as one MultiMesh under `mesh_instance`. Returns how many.

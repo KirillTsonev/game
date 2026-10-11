@@ -27,6 +27,16 @@ automatically) -- a local copy also lives at
   generation stage, scatter layer or model: the measure / checksum / fix / verify procedure, which
   reusable piece fits which cost (preload, disk caches, worker-thread bands, lookup grids), the
   rules for each, and how to hook a stage into the loading screen. Read before adding a layer.
+- `docs/native_kernels.md` -- (2026-10-10) the compiled C++ copies of generation's hottest loops
+  (`addons/terrain_kernels`, source in `native/`): how to build (`native/build.sh`, about 10 s),
+  where the compiler is, and the rules that keep a native loop's output identical to its
+  GDScript original, which stays as the fallback. Read before changing a loop that has a copy
+  there: `TerrainErosion.erode`, ground paint's `_mode_band` / `_blend_band`, the road's
+  `_obstacle_distance` and path search, the knots' `_flood`, `_segment_clear_top`, `_dilate`,
+  the pixel loops of `CliffDressing.raise_terrain_behind_cliff_dressing`, ground paint's
+  `_paint_band`, `GrassScatter._bake_band` and `stamp_circles`, `TerrainHeightmap.smooth`, the
+  road's `_raster_band` and bed levelling, the four apron band functions
+  (the list with times is in that file; each script loop has a comment naming its kernel).
 - This file stays the reference for pitfalls and _why_ things are done the way they are.
 
 ## Local tooling paths (this machine)
@@ -1004,6 +1014,11 @@ optimisation; never judge by GPU utilisation %.
   `TerrainUtil.object_call_threads()` (6 threads on a debug build). A new scatter layer that
   tests against cliffs and rocks uses `RockScatter.build_keep_grid` / `keep_grid_blocked`, not
   `boulder_blocked` per plant. Details: `docs/performance_findings.md` step 11.
+- **A start from the editor (F5) is slower than a command-line launch** (2026-10-11): with the
+  debugger attached GDScript runs 2-4 times slower, worker-thread loops most of all, compiled
+  kernels not at all. A stage timed from a command line says little about what Kirill waits
+  for: measure F5 with the Godot MCP's `run_scene` + `get_console_log` (after `is_playing`).
+  Details: `docs/native_kernels.md`, "Started from the editor".
 - Startup only: a 20-frame launch is enough (`... --path herald-of-oblivion --quit-after 20`,
   ~15 s) -- read the `TERRAIN_GEN` timing and checksum lines it prints.
 - A benchmark launch uses the Options menu's saved video settings (`user://settings.cfg`): a run

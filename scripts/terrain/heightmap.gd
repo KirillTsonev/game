@@ -636,8 +636,7 @@ static func build_heightmap(master_seed: int = TerrainConfig.MASTER_SEED) -> Dic
 	var control := PackedInt32Array()
 	control.resize(TerrainConfig.AREA_WIDTH * TerrainConfig.AREA_LENGTH)
 	var ground_packed := _pack_control(TerrainConfig.GROUND_TEXTURE_ID)
-	for i in control.size():
-		control[i] = ground_packed
+	control.fill(ground_packed)
 
 	var edge_noise := FastNoiseLite.new()
 	edge_noise.seed = seeds.edge
@@ -993,6 +992,14 @@ static func smooth(heights: PackedFloat32Array, width: int, length: int, passes:
 	# (slabs of columns, put back together row by row). This function was 0.9 s of a start in
 	# its three callers (the first smoothing, the road's graded target, the crease rounding).
 	if passes <= 0:
+		return
+	# 2026-10-11: the native library's copy when it is there (TerrainUtil.kernels(); smooth in
+	# native/src/terrain_kernels.cpp). The two band functions are the reference and the fallback.
+	var kernels := TerrainUtil.kernels()
+	if kernels != null:
+		var smoothed: PackedFloat32Array = kernels.call("smooth", heights, width, length, passes, radius)
+		heights.clear()
+		heights.append_array(smoothed)
 		return
 	var current := heights
 	var bands := ceili(float(length) / SMOOTH_BAND_ROWS)

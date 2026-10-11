@@ -27,6 +27,17 @@ const INITIAL_SPEED := 1.0
 ## sampling/deposit) to stay fast enough to run synchronously at this
 ## resolution.
 static func erode(heights: PackedFloat32Array, width: int, length: int, rng: RandomNumberGenerator, iterations: int) -> void:
+	# 2026-10-10: the native library's copy of this loop when it is there (TerrainUtil.kernels();
+	# native/src/terrain_kernels.cpp -- the same operations in the same order, the same heights).
+	# The loop below is the reference and the fallback: change both together.
+	var kernels := TerrainUtil.kernels()
+	if kernels != null:
+		var eroded: PackedFloat32Array = kernels.call("erode", heights, width, length, rng, iterations, PackedFloat64Array([
+			MAX_DROPLET_LIFETIME, INERTIA, SEDIMENT_CAPACITY_FACTOR, MIN_SEDIMENT_CAPACITY, ERODE_SPEED, DEPOSIT_SPEED,
+			EVAPORATE_SPEED, GRAVITY, INITIAL_WATER_VOLUME, INITIAL_SPEED]))
+		heights.clear()
+		heights.append_array(eroded)
+		return
 	for iter in iterations:
 		var pos_x := rng.randf_range(0.0, width - 1.001)
 		var pos_z := rng.randf_range(0.0, length - 1.001)

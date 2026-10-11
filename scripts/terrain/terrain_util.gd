@@ -187,3 +187,28 @@ static func sum_mesh_normals_recursive(node: Node, parent_transform: Transform3D
 const DEBUG_OBJECT_CALL_THREADS := 6 ## threads for such bands on a debug build; -1 = all
 static func object_call_threads() -> int:
 	return DEBUG_OBJECT_CALL_THREADS if OS.is_debug_build() else -1
+
+## The native kernels (2026-10-10): compiled copies of generation's hottest loops, in
+## addons/terrain_kernels (source and build script in native/). kernels() returns the library's
+## object, or null when the library is not there, is switched off here, has another version than
+## these scripts expect, or the game was started with the user argument --no-native-kernels -- the
+## caller then runs its own GDScript loop, which must give the same result.
+const NATIVE_KERNELS := true
+const NATIVE_KERNELS_VERSION := 9 ## what TerrainKernels.get_version() must return
+static var _kernels: RefCounted
+static var _kernels_checked := false
+static func kernels() -> RefCounted:
+	if not _kernels_checked:
+		_kernels_checked = true
+		var why := "switched off"
+		if NATIVE_KERNELS and not ("--no-native-kernels" in OS.get_cmdline_user_args()):
+			why = "library not loaded"
+			if ClassDB.class_exists(&"TerrainKernels"):
+				var k: RefCounted = ClassDB.instantiate(&"TerrainKernels")
+				var version := int(k.call("get_version")) if k != null else -1
+				if version == NATIVE_KERNELS_VERSION:
+					_kernels = k
+				else:
+					why = "library is version %d, the scripts expect %d (rebuild: native/build.sh)" % [version, NATIVE_KERNELS_VERSION]
+		print("TERRAIN_GEN: native kernels -- %s" % ("in use" if _kernels != null else "NOT in use (%s): GDScript loops" % why))
+	return _kernels
