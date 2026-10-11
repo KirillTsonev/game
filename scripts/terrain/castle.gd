@@ -50,48 +50,62 @@ const PLACEHOLDER_NAME := "CastlePlaceholder"
 const BRIDGE_DECK_HEIGHT := 240.0
 const BRIDGE_WIDTH := 6.0
 const BRIDGE_THICKNESS := 3.0
-## The village at the bridge's far end (2026-10-09): a photo scan of a hilltop village, cut down
-## by tools/blender/prepare_cliff_village.py, standing on a shoulder of the ridge (see
-## VILLAGE_BASE_RADII). It is only ever seen from the valley floor: no collision, and the scan is
-## far too rough to walk in. What it stands on went through three versions that day: a cone of
-## raised terrain under a 9 m landing pad (one stretched spire); a rock pillar built as a mesh
-## (a seam against the ridge, a repeating texture); the broad terrain shoulder there is now.
-const VILLAGE_SCENE := "res://assets/models/village/calcata/calcata_village.glb"
+## The village at the bridge's far end (2026-10-09): plain boxes standing on a shoulder of the
+## ridge (see VILLAGE_BASE_RADII). It is only ever seen from the valley floor: no collision.
+## Until 2026-10-11 it was a photo scan of a hilltop village (calcata, 90,000 triangles and a 2K
+## texture); Kirill: "we can just draw a couple of boxes there and call it a day, we'll never
+## get to see it up close". The numbers below that are not about the boxes were measured on
+## that scan and are kept, because the shoulder's terrain is built from them.
+## What it stands on went through three versions on its first day: a cone of raised terrain
+## under a 9 m landing pad (one stretched spire); a rock pillar built as a mesh (a seam against
+## the ridge, a repeating texture); the broad terrain shoulder there is now.
 const VILLAGE_NAME := "CliffVillage"
 ## Its middle, in the generated map's pixels (x < 0 = beyond the map's low-X edge, on the
-## mountain). The scan is the houses alone since its second cut: 114 m wide (x), 168 m long (z),
-## 31 m from its cut-off bottom to the highest roof, the middle of its surface 18 m up.
+## mountain).
 ## x: the shoulder's face toward the castle needs about 85 m of run from the top's rim to the
 ## ground beside the castle, and its far rim must stay on the import's west strip (-256).
 const VILLAGE_PX := Vector2(-140.0, 100.0)
-## Height of the bridge's deck above the scan's cut-off bottom: about street level.
+## Height of the bridge's deck above the village piece's origin (the old scan's cut-off bottom),
+## m before VILLAGE_SCALE: 2 m above the shoulder's top.
 const VILLAGE_DECK_ABOVE_BOTTOM := 15.0
 ## The beam runs this far in over the shoulder's rim, m: in among the first houses.
 const VILLAGE_BRIDGE_REACH := 14.0
-## The scan's colours are a sunny day's: multiplied by this toward the night's palette. TUNING.
-## (0.42, 0.48, 0.62 at first: with the houses that dark nothing told them from the rock.)
-const VILLAGE_TINT := Color(0.62, 0.66, 0.78)
+## The houses, all in m before VILLAGE_SCALE and all TUNING: this many boxes, the first
+## VILLAGE_TOWERS of them towers, the same on every run. Sides and heights are picked between
+## the two numbers of each range. Their middles stay VILLAGE_HOUSE_INSET inside the shoulder's
+## plain rim, they keep VILLAGE_HOUSE_GAP apart (measured between circles round them) and each
+## reaches VILLAGE_HOUSE_SINK below the shoulder's top.
+const VILLAGE_HOUSES := 40
+const VILLAGE_TOWERS := 3
+const VILLAGE_HOUSE_SIDE := Vector2(7.0, 14.0)
+const VILLAGE_HOUSE_HEIGHT := Vector2(7.0, 20.0)
+const VILLAGE_TOWER_SIDE := Vector2(6.0, 8.0)
+const VILLAGE_TOWER_HEIGHT := Vector2(26.0, 34.0)
+const VILLAGE_HOUSE_INSET := 12.0
+const VILLAGE_HOUSE_GAP := 1.0
+const VILLAGE_HOUSE_SINK := 2.0
+## (The scan was first tinted so dark that nothing told the houses from the rock.)
+const VILLAGE_HOUSE_COLOR := Color(0.22, 0.22, 0.26)
 ## Seen from the valley floor the life-size village did not read as one (Kirill, 2026-10-09:
 ## "can't really see any buildings from far away, doesn't look like there's a village there"):
-## a 15 m house 800 m away is about a degree tall. Three things answer that. TUNING, all of it.
-## 1. The whole piece -- scan, base and where the bridge meets it -- is drawn this many times its
-##    real size. Nothing stands next to it to give the scale away. 1 = life-size.
+## a 15 m house 800 m away is about a degree tall. Two things answer that. TUNING, all of it.
+## 1. The whole piece -- houses, shoulder and where the bridge meets it -- is drawn this many
+##    times its real size. Nothing stands next to it to give the scale away. 1 = life-size.
 const VILLAGE_SCALE := 1.5
-## 2. Lit windows: this many glowing panes (m, before VILLAGE_SCALE) on walls that face outward
-##    -- vertices whose normal.y is within VILLAGE_WINDOW_WALL_NY of level and that point at
-##    least VILLAGE_WINDOW_OUTWARD away from the village's middle -- no nearer to each other than
-##    VILLAGE_WINDOW_SPACING m and at least VILLAGE_WINDOW_MIN_ABOVE_ROCK m above the base's top.
+## 2. Lit windows: this many glowing panes (m, before VILLAGE_SCALE) on the houses' walls that
+##    face at least VILLAGE_WINDOW_OUTWARD away from the village's middle, no nearer to each
+##    other than VILLAGE_WINDOW_SPACING m, at least VILLAGE_WINDOW_MIN_ABOVE_ROCK m above the
+##    shoulder's top and VILLAGE_WINDOW_BELOW_ROOF m under the house's.
 ##    They always face the camera: from far away a window is a point of light.
 const VILLAGE_WINDOWS := 160
 const VILLAGE_WINDOW_SIZE := Vector2(1.6, 2.0)
 const VILLAGE_WINDOW_COLOR := Color(1.0, 0.62, 0.26)
 const VILLAGE_WINDOW_ENERGY := 6.0
-const VILLAGE_WINDOW_WALL_NY := 0.35
 const VILLAGE_WINDOW_OUTWARD := 0.15
 const VILLAGE_WINDOW_SPACING := 5.0
 const VILLAGE_WINDOW_MIN_ABOVE_ROCK := 2.5
+const VILLAGE_WINDOW_BELOW_ROOF := 1.5
 const VILLAGE_WINDOW_OFFSET := 0.35 ## m a pane stands off its wall
-## 3. The lighter tint above.
 ## More lights of the same kind (Kirill, 2026-10-09), all in m and all TUNING:
 ##  - round the rim of the shoulder's top, RIM_LIGHT_HEIGHT above it -- from close under it the
 ##    houses are hidden behind the rim, and these are what still shows;
@@ -120,9 +134,8 @@ const LIGHT_STAND_OFF := 0.6 ## m a light stands off the surface it is on
 ## (raise_massif_on_apron) and the north apron (build_maps). West of the low-X apron the import
 ## has MountainWalls.WEST_EXTRA more columns that are holes except where the shoulder stands
 ## (west_strip_maps; Kirill: "widen it only where the village is").
-## The top is an ellipse of VILLAGE_BASE_RADII (m, x / z, before VILLAGE_SCALE) -- 5 m wider than
-## the scan all round -- VILLAGE_BASE_TOP m above the scan's cut-off bottom: just under street
-## level, so it fills the scan's ragged underside and shows as rock ground round the houses.
+## The top is an ellipse of VILLAGE_BASE_RADII (m, x / z, before VILLAGE_SCALE), VILLAGE_BASE_TOP
+## m above the village piece's origin: the rock ground the houses stand on.
 const VILLAGE_BASE_RADII := Vector2(62.0, 89.0)
 const VILLAGE_BASE_TOP := 13.0
 ## Its shape, all in massif_height. TUNING.
@@ -473,10 +486,7 @@ static func spawn_placeholder(parent_node: Node, terrain: Terrain3D, heightmap_c
 	# height is the one the shoulder was built for (prepare_massif), measured from the ground
 	# under the castle before the road was graded beside it.
 	var deck_y := bridge_deck_y() if not is_nan(site_ground_y) else foot.y + BRIDGE_DECK_HEIGHT
-	var rim_radii := VILLAGE_BASE_RADII * VILLAGE_SCALE
-	var across := clampf((SITE_PX.y - VILLAGE_PX.y) / rim_radii.y, -0.95, 0.95)
-	var rim_x := heightmap_corner.x + VILLAGE_PX.x + rim_radii.x * sqrt(1.0 - across * across) # the plain ellipse on the bridge's row
-	var span := face_x - (rim_x - VILLAGE_BRIDGE_REACH)
+	var span := face_x - (heightmap_corner.x + VILLAGE_PX.x + _bridge_end_x())
 	var beam_size := Vector3(span, BRIDGE_THICKNESS, BRIDGE_WIDTH)
 	_add_box(body, "Bridge", beam_size, Vector3(face_x - beam_size.x * 0.5, deck_y - BRIDGE_THICKNESS * 0.5, foot.z) - body.position, material)
 	print("TERRAIN_GEN: castle bridge placeholder -- %.0f m span to the village, deck %.0f m above the castle's base (%.0f m below its top)" % [span, BRIDGE_DECK_HEIGHT, size.y - BRIDGE_DECK_HEIGHT])
@@ -508,44 +518,76 @@ static func spawn_placeholder(parent_node: Node, terrain: Terrain3D, heightmap_c
 	parent_node.add_child.call_deferred(body)
 	_spawn_village(parent_node, heightmap_corner, deck_y)
 
-## The village at the bridge's far end (VILLAGE_*): the scan standing on the shoulder's level
-## top (massif_top_y), with its windows and the lights round the top's rim. `deck_y` = world
+## Where the bridge's beam ends, m in +X from the village's middle: VILLAGE_BRIDGE_REACH inside
+## the shoulder's plain rim on the bridge's row.
+static func _bridge_end_x() -> float:
+	var rim_radii := VILLAGE_BASE_RADII * VILLAGE_SCALE
+	var across := clampf((SITE_PX.y - VILLAGE_PX.y) / rim_radii.y, -0.95, 0.95)
+	return rim_radii.x * sqrt(1.0 - across * across) - VILLAGE_BRIDGE_REACH
+
+## The village at the bridge's far end (VILLAGE_*): boxes for houses on the shoulder's level
+## top (massif_top_y), with their windows and the lights round the top's rim. `deck_y` = world
 ## height of the bridge's deck.
 static func _spawn_village(parent_node: Node, heightmap_corner: Vector3, deck_y: float) -> void:
 	var old := parent_node.get_node_or_null(VILLAGE_NAME)
 	if old:
 		old.name = VILLAGE_NAME + "_old"
 		old.queue_free()
-	var packed: PackedScene = null
-	if ResourceLoader.exists(VILLAGE_SCENE):
-		packed = load(VILLAGE_SCENE) as PackedScene
-	if packed == null:
-		push_warning("TERRAIN_GEN: %s could not be loaded -- no village at the bridge's end" % VILLAGE_SCENE)
-		return
 	var root := Node3D.new()
 	root.name = VILLAGE_NAME
 	var bottom_y := deck_y - VILLAGE_DECK_ABOVE_BOTTOM * VILLAGE_SCALE
 	root.position = Vector3(heightmap_corner.x + VILLAGE_PX.x, bottom_y, heightmap_corner.z + VILLAGE_PX.y)
 
-	var scan := packed.instantiate() as Node3D
-	scan.name = "Scan"
-	scan.scale = Vector3.ONE * VILLAGE_SCALE
-	root.add_child(scan)
-	var tris := 0
-	var windows := 0
-	for mesh_instance: MeshInstance3D in scan.find_children("*", "MeshInstance3D", true, false):
-		mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		windows += _add_village_windows(mesh_instance)
-		for surface in mesh_instance.mesh.get_surface_count():
-			var array_mesh := mesh_instance.mesh as ArrayMesh
-			if array_mesh:
-				var indices: int = array_mesh.surface_get_array_index_len(surface)
-				tris += (indices if indices > 0 else array_mesh.surface_get_array_len(surface)) / 3
-			var own := mesh_instance.get_active_material(surface)
-			if own is BaseMaterial3D: # a copy: the imported material itself is left as it is
-				var tinted := own.duplicate() as BaseMaterial3D
-				tinted.albedo_color = (own as BaseMaterial3D).albedo_color * VILLAGE_TINT
-				mesh_instance.set_surface_override_material(surface, tinted)
+	# The houses: one unit box per house, sized and turned by its transform. Everything here is
+	# in m before VILLAGE_SCALE, from the village's middle; the node carries the scale.
+	var house_rng := RandomNumberGenerator.new()
+	house_rng.seed = 0x484F5553 # 'HOUS': the same houses on every run
+	var bridge_end := Vector2(_bridge_end_x(), SITE_PX.y - VILLAGE_PX.y) / VILLAGE_SCALE
+	var bridge_half := BRIDGE_WIDTH * 0.5 / VILLAGE_SCALE
+	var radii := VILLAGE_BASE_RADII - Vector2.ONE * VILLAGE_HOUSE_INSET
+	var centres: Array[Vector2] = []
+	var reaches: Array[float] = []
+	var houses: Array[Transform3D] = []
+	for attempt in VILLAGE_HOUSES * 40:
+		if houses.size() >= VILLAGE_HOUSES:
+			break
+		var tower := houses.size() < VILLAGE_TOWERS
+		var side := VILLAGE_TOWER_SIDE if tower else VILLAGE_HOUSE_SIDE
+		var tall := VILLAGE_TOWER_HEIGHT if tower else VILLAGE_HOUSE_HEIGHT
+		var size := Vector3(house_rng.randf_range(side.x, side.y), house_rng.randf_range(tall.x, tall.y) + VILLAGE_HOUSE_SINK, house_rng.randf_range(side.x, side.y))
+		var turn := house_rng.randf() * TAU
+		var centre := Vector2(cos(turn) * radii.x, sin(turn) * radii.y) * sqrt(house_rng.randf())
+		var yaw := house_rng.randf() * TAU
+		var reach := maxf(size.x, size.z) * 0.5
+		# Not where the bridge comes in.
+		var clear := not (centre.x + reach > bridge_end.x and absf(centre.y - bridge_end.y) < reach + bridge_half)
+		for i in centres.size():
+			if not clear:
+				break
+			clear = centres[i].distance_to(centre) >= reaches[i] + reach + VILLAGE_HOUSE_GAP
+		if not clear:
+			continue
+		centres.append(centre)
+		reaches.append(reach)
+		houses.append(Transform3D(Basis(Vector3.UP, yaw) * Basis.from_scale(size), Vector3(centre.x, VILLAGE_BASE_TOP - VILLAGE_HOUSE_SINK + size.y * 0.5, centre.y)))
+	var wall := StandardMaterial3D.new()
+	wall.albedo_color = VILLAGE_HOUSE_COLOR
+	wall.roughness = 0.9
+	var box := BoxMesh.new() # 1 m a side
+	box.material = wall
+	var multimesh := MultiMesh.new()
+	multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	multimesh.mesh = box
+	multimesh.instance_count = houses.size()
+	for i in houses.size():
+		multimesh.set_instance_transform(i, houses[i])
+	var house_node := MultiMeshInstance3D.new()
+	house_node.name = "Houses"
+	house_node.multimesh = multimesh
+	house_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	house_node.scale = Vector3.ONE * VILLAGE_SCALE
+	root.add_child(house_node)
+	var windows := _add_village_windows(house_node, houses)
 
 	# Lights round the rim of the shoulder's top: from close under it the houses are hidden
 	# behind the rim, and these are what still shows.
@@ -559,8 +601,8 @@ static func _spawn_village(parent_node: Node, heightmap_corner: Vector3, deck_y:
 		rim_points.append(Vector3(at.x, rim_y, at.y))
 	_add_glow_points(root, "RimLights", rim_points, RIM_LIGHT_SIZE * VILLAGE_SCALE, light_rng)
 	parent_node.add_child.call_deferred(root)
-	print("TERRAIN_GEN: cliff village -- %d triangles, %d lit window(s) and %d rim light(s), drawn at %.1f x its real size, at map pixel (%.0f, %.0f), its bottom %.0f m above the valley floor (the shoulder's top: %.0f m)" % [
-		tris, windows, rim_points.size(), VILLAGE_SCALE, VILLAGE_PX.x, VILLAGE_PX.y, bottom_y - TerrainHeightmap.BASE_LEVEL, massif_top_y - TerrainHeightmap.BASE_LEVEL])
+	print("TERRAIN_GEN: cliff village -- %d box(es) of %d, %d lit window(s) and %d rim light(s), drawn at %.1f x its real size, at map pixel (%.0f, %.0f), the shoulder's top %.0f m above the valley floor" % [
+		houses.size(), VILLAGE_HOUSES, windows, rim_points.size(), VILLAGE_SCALE, VILLAGE_PX.x, VILLAGE_PX.y, massif_top_y - TerrainHeightmap.BASE_LEVEL])
 
 # ---------------------------------------------------------------------------------------------
 # The village's shoulder: terrain
@@ -577,7 +619,7 @@ static func prepare_massif(map_heights: PackedFloat32Array) -> void:
 			var pz := clampi(int(SITE_PX.y) + dz, 0, TerrainConfig.AREA_LENGTH - 1)
 			ground = minf(ground, map_heights[pz * TerrainConfig.AREA_WIDTH + px])
 	site_ground_y = ground
-	# Level with the rock the scan's houses stand on: VILLAGE_BASE_TOP above its cut-off bottom.
+	# Level with the rock the houses stand on: VILLAGE_BASE_TOP above the village piece's origin.
 	massif_top_y = bridge_deck_y() - (VILLAGE_DECK_ABOVE_BOTTOM - VILLAGE_BASE_TOP) * VILLAGE_SCALE
 	_ensure_massif_shape()
 
@@ -847,37 +889,34 @@ static func _west_strip_band(band: int, ctx: Dictionary) -> void:
 	(ctx.out as Array)[band] = {"heights": heights, "control": control, "ground": ground}
 	mutex.unlock()
 
-## Lit windows on one mesh of the village scan: small glowing panes on wall vertices picked at
-## random (VILLAGE_WINDOW_*), as one MultiMesh under `mesh_instance`. Returns how many.
-static func _add_village_windows(mesh_instance: MeshInstance3D) -> int:
-	var array_mesh := mesh_instance.mesh as ArrayMesh
-	if array_mesh == null or VILLAGE_WINDOWS <= 0:
-		return 0
-	# Wall vertices that face away from the village's middle, above the rock base's top.
-	var spots: Array[Vector3] = []
-	for surface in array_mesh.get_surface_count():
-		var arrays := array_mesh.surface_get_arrays(surface)
-		var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-		if arrays[Mesh.ARRAY_NORMAL] == null:
-			continue
-		var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
-		for i in vertices.size():
-			var v := vertices[i]
-			var n := normals[i]
-			if absf(n.y) > VILLAGE_WINDOW_WALL_NY or v.y < VILLAGE_BASE_TOP + VILLAGE_WINDOW_MIN_ABOVE_ROCK:
-				continue
-			if Vector2(n.x, n.z).dot(Vector2(v.x, v.z).normalized()) < VILLAGE_WINDOW_OUTWARD:
-				continue
-			spots.append(v + n * VILLAGE_WINDOW_OFFSET)
-	if spots.is_empty():
+## Lit windows on the village's houses: small glowing panes at random spots on the walls of
+## `houses` (each a unit box's transform, in `house_node`'s space) that face away from the
+## village's middle (VILLAGE_WINDOW_*), as one MultiMesh under `house_node`. Returns how many.
+static func _add_village_windows(house_node: Node3D, houses: Array[Transform3D]) -> int:
+	if houses.is_empty() or VILLAGE_WINDOWS <= 0:
 		return 0
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 0x57494E44 # 'WIND': the same windows on every run
+	var low := VILLAGE_BASE_TOP + VILLAGE_WINDOW_MIN_ABOVE_ROCK
 	var chosen: Array[Vector3] = []
-	for attempt in VILLAGE_WINDOWS * 6:
+	for attempt in VILLAGE_WINDOWS * 20:
 		if chosen.size() >= VILLAGE_WINDOWS:
 			break
-		var spot := spots[rng.randi_range(0, spots.size() - 1)]
+		var house := houses[rng.randi_range(0, houses.size() - 1)]
+		var face := rng.randi_range(0, 3)
+		var along := rng.randf_range(-0.42, 0.42)
+		var height := house.basis.y.length()
+		var up := rng.randf()
+		var high := house.origin.y + height * 0.5 - VILLAGE_WINDOW_BELOW_ROOF
+		if high <= low:
+			continue
+		var out := (Vector3.RIGHT if face < 2 else Vector3.BACK) * (1.0 if face % 2 == 0 else -1.0)
+		var on_wall := out * 0.5 + (Vector3.BACK if face < 2 else Vector3.RIGHT) * along
+		on_wall.y = (lerpf(low, high, up) - house.origin.y) / height
+		var normal := (house.basis * out).normalized()
+		var spot := house * on_wall + normal * VILLAGE_WINDOW_OFFSET
+		if Vector2(normal.x, normal.z).dot(Vector2(spot.x, spot.z).normalized()) < VILLAGE_WINDOW_OUTWARD:
+			continue
 		var clear := true
 		for other in chosen:
 			if other.distance_to(spot) < VILLAGE_WINDOW_SPACING:
@@ -886,7 +925,7 @@ static func _add_village_windows(mesh_instance: MeshInstance3D) -> int:
 		if clear:
 			chosen.append(spot)
 
-	_add_glow_points(mesh_instance, "Windows", chosen, VILLAGE_WINDOW_SIZE, rng)
+	_add_glow_points(house_node, "Windows", chosen, VILLAGE_WINDOW_SIZE, rng)
 	return chosen.size()
 
 ## Points of light: one glowing pane of `pane_size` m (x 0.75..1.25 each) at every one of

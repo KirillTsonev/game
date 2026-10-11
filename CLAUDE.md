@@ -1165,7 +1165,14 @@ and functions called across modules lost their leading underscore
     at the top"). The bridge's far end is a separate piece, not terrain: a village on a rock
     base (`TerrainCastle._spawn_village`, `VILLAGE_*`), the same on every seed, with only the
     depth its base is sunk to following the ground (150 and 182 m deep on the two seeds tried).
-    The village is a photo scan (`D:\Downloads\calcata.glb`, 1.4 M triangles, 8K texture,
+    **Since 2026-10-11 the village is about 40 plain boxes** in one MultiMesh (`VILLAGE_HOUSES`,
+    `VILLAGE_HOUSE_*`, `VILLAGE_TOWER_*`, a fixed seed), with the lit windows placed on the
+    boxes' outward walls -- Kirill: "we can just draw a couple of boxes there and call it a day,
+    we'll never get to see it up close". The scan described next, its folder and
+    `tools/blender/prepare_cliff_village.py` were deleted (in git up to `de432d1`); the
+    shoulder's terrain still uses the constants measured on it (`VILLAGE_BASE_RADII`,
+    `VILLAGE_BASE_TOP`, `VILLAGE_DECK_ABOVE_BOTTOM`, `VILLAGE_SCALE`), so do not "tidy" those.
+    The village was a photo scan (`D:\Downloads\calcata.glb`, 1.4 M triangles, 8K texture,
     licence unchecked) cut down by `tools/blender/prepare_cliff_village.py` to the houses
     alone: 90,000 triangles, a 2K texture, 114 x 168 m and 31 m tall, in
     `assets/models/village/calcata/`. (Its first cut kept 52 m of the scan's own cliff and was
