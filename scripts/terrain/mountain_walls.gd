@@ -769,10 +769,9 @@ static func apron_maps(maps: Dictionary, master_seed: int, side: int = 0) -> Dic
 	# (TerrainUtil.kernels(); apron_heights / apron_colors in native/src/terrain_kernels.cpp, the
 	# constants from kernel_consts()). The band functions are the reference and the fallback:
 	# change both together.
-	var kernels := TerrainUtil.kernels()
 	var native_heights: Dictionary = {}
-	if kernels != null:
-		native_heights = kernels.call("apron_heights", height_ctx, kernel_consts())
+	if TerrainUtil.kernel(&"apron_heights") != null:
+		native_heights = TerrainUtil.kernel(&"apron_heights").call("apron_heights", height_ctx, kernel_consts())
 	if native_heights.has("heights"):
 		height_out = [native_heights]
 	else:
@@ -815,8 +814,8 @@ static func apron_maps(maps: Dictionary, master_seed: int, side: int = 0) -> Dic
 		"out": color_out, "mutex": Mutex.new(),
 	}
 	var native_colors: Dictionary = {}
-	if kernels != null:
-		native_colors = kernels.call("apron_colors", color_ctx, kernel_consts())
+	if TerrainUtil.kernel(&"apron_colors") != null:
+		native_colors = TerrainUtil.kernel(&"apron_colors").call("apron_colors", color_ctx, kernel_consts())
 	if native_colors.has("control"):
 		color_out = [native_colors]
 	else:

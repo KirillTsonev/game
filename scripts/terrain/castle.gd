@@ -270,15 +270,14 @@ static func build_maps(edge_row: PackedFloat32Array, edge_color: PackedByteArray
 	# 2026-10-11: both band loops of this function run in the native library when it is there
 	# (TerrainUtil.kernels(); north_heights / north_colors in native/src/terrain_kernels.cpp). The
 	# band functions are the reference and the fallback: change both together.
-	var kernels := TerrainUtil.kernels()
 	var kernel_consts := MountainWalls.kernel_consts()
 	kernel_consts.merge({
 		"NORTH_LENGTH": LENGTH, "WALL_RELIEF": WALL_RELIEF, "NORTH_EDGE_BLEND": EDGE_BLEND, "WALL_EDGE_GRADE": WALL_EDGE_GRADE,
 		"NORTH_COLOR_BLEND": COLOR_BLEND, "MAP_FROM": MountainWalls.MAP_OFFSET_X, "MAP_TO": MountainWalls.MAP_OFFSET_X + TerrainConfig.AREA_WIDTH,
 	})
 	var native_heights: Dictionary = {}
-	if kernels != null:
-		native_heights = kernels.call("north_heights", height_ctx, kernel_consts)
+	if TerrainUtil.kernel(&"north_heights") != null:
+		native_heights = TerrainUtil.kernel(&"north_heights").call("north_heights", height_ctx, kernel_consts)
 	if native_heights.has("heights"):
 		height_out = [native_heights]
 	else:
@@ -320,8 +319,8 @@ static func build_maps(edge_row: PackedFloat32Array, edge_color: PackedByteArray
 		"shade_noise": shade_noise, "rock_id": MountainWalls.rock_texture_id, "out": color_out, "mutex": Mutex.new(),
 	}
 	var native_colors: Dictionary = {}
-	if kernels != null:
-		native_colors = kernels.call("north_colors", color_ctx, kernel_consts)
+	if TerrainUtil.kernel(&"north_colors") != null:
+		native_colors = TerrainUtil.kernel(&"north_colors").call("north_colors", color_ctx, kernel_consts)
 	if native_colors.has("control"):
 		color_out = [native_colors]
 	else:

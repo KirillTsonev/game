@@ -37,6 +37,9 @@ automatically) -- a local copy also lives at
   `_paint_band`, `GrassScatter._bake_band` and `stamp_circles`, `TerrainHeightmap.smooth`, the
   road's `_raster_band` and bed levelling, the four apron band functions
   (the list with times is in that file; each script loop has a comment naming its kernel).
+  **Before editing such a loop, put its kernel's name into `TerrainUtil.NATIVE_KERNELS_OFF`**, or
+  the compiled copy keeps running and the edit does nothing; afterwards update the kernel and
+  run `native/check_parity.sh` (both described there under "Changing a loop that has a kernel").
 - This file stays the reference for pitfalls and _why_ things are done the way they are.
 
 ## Local tooling paths (this machine)

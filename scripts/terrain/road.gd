@@ -449,7 +449,7 @@ static func generate_road(heights: PackedFloat32Array, control: PackedInt32Array
 	var road_blend := PackedFloat32Array()
 	# 2026-10-11: in the native library when it is there (TerrainUtil.kernels(); road_raster in
 	# native/src/terrain_kernels.cpp). _raster_band is the reference and the fallback.
-	var raster_kernels := TerrainUtil.kernels()
+	var raster_kernels := TerrainUtil.kernel(&"road_raster")
 	var native_raster: Dictionary = {}
 	if raster_kernels != null:
 		native_raster = raster_kernels.call("road_raster", path, width, length, edge_noise, PackedFloat64Array([
@@ -632,7 +632,7 @@ static func _grade_level_bed(heights: PackedFloat32Array, blurred: PackedFloat32
 	var max_cut := 0.0
 	var max_fill := 0.0
 	var zone_count := 0
-	var bed_kernels := TerrainUtil.kernels()
+	var bed_kernels := TerrainUtil.kernel(&"road_bed")
 	var native_bed: Dictionary = {}
 	if bed_kernels != null:
 		native_bed = bed_kernels.call("road_bed", heights, obst, line, prof, width, length, PackedFloat64Array([
@@ -752,9 +752,8 @@ static func _obstacle_distance(mask: PackedByteArray, width: int, length: int, c
 		return dist
 	# 2026-10-11: the native library's copy of the two passes below when it is there
 	# (TerrainUtil.kernels(); obstacle_distance in native/src/terrain_kernels.cpp). Change both together.
-	var kernels := TerrainUtil.kernels()
-	if kernels != null:
-		return kernels.call("obstacle_distance", mask, width, length, cap)
+	if TerrainUtil.kernel(&"obstacle_distance") != null:
+		return TerrainUtil.kernel(&"obstacle_distance").call("obstacle_distance", mask, width, length, cap)
 	for i in dist.size():
 		dist[i] = 0.0 if mask[i] != 0 else cap
 	var diag := 1.4142135
@@ -937,7 +936,7 @@ static func _find_road_path(heights: PackedFloat32Array, width: int, length: int
 	# (TerrainUtil.kernels(); road_search in native/src/terrain_kernels.cpp -- the same heap, the
 	# same comparisons, the same path). The loop here is the reference and the fallback: change
 	# both together.
-	var kernels := TerrainUtil.kernels()
+	var kernels := TerrainUtil.kernel(&"road_search")
 	if kernels != null:
 		var offsets_flat := PackedInt32Array()
 		var side_flat := PackedFloat64Array()

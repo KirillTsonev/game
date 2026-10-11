@@ -210,5 +210,29 @@ static func kernels() -> RefCounted:
 					_kernels = k
 				else:
 					why = "library is version %d, the scripts expect %d (rebuild: native/build.sh)" % [version, NATIVE_KERNELS_VERSION]
-		print("TERRAIN_GEN: native kernels -- %s" % ("in use" if _kernels != null else "NOT in use (%s): GDScript loops" % why))
+		var off_note := ""
+		if _kernels != null and not NATIVE_KERNELS_OFF.is_empty():
+			var unknown: Array[String] = []
+			for off_name in NATIVE_KERNELS_OFF:
+				if not _kernels.has_method(off_name):
+					unknown.append(off_name)
+			off_note = "; left to their GDScript loops (NATIVE_KERNELS_OFF): %s" % ", ".join(NATIVE_KERNELS_OFF)
+			if not unknown.is_empty():
+				off_note += " -- NOT a kernel's name: %s" % ", ".join(unknown)
+		print("TERRAIN_GEN: native kernels -- %s%s" % ["in use" if _kernels != null else "NOT in use (%s): GDScript loops" % why, off_note])
 	return _kernels
+
+## Kernels to leave to their GDScript loops although the library is there, by the name the script
+## calls them with ("paint_main", "cliff_raise" ...; the table in docs/native_kernels.md). Put a
+## kernel here BEFORE changing the script loop it copies: the game then runs the script, and the
+## change shows. Take it out again once the kernel has been brought in line and
+## native/check_parity.sh passes. The log's "native kernels" line lists what is switched off.
+const NATIVE_KERNELS_OFF: Array[String] = []
+
+## The library's object for one kernel: kernels(), or null when that kernel is in
+## NATIVE_KERNELS_OFF. What every call site asks, so each kernel can be switched off by itself.
+static func kernel(kernel_name: StringName) -> RefCounted:
+	var library := kernels()
+	if library == null or NATIVE_KERNELS_OFF.has(String(kernel_name)):
+		return null
+	return library

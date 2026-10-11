@@ -237,7 +237,7 @@ static func build_knots(heights: PackedFloat32Array, width: int, length: int, rn
 	tt = Time.get_ticks_usec()
 	var outside := 0
 	# 2026-10-11: the native library's copy of this count when it is there (count_changed_outside).
-	var check_kernels := TerrainUtil.kernels()
+	var check_kernels := TerrainUtil.kernel(&"count_changed_outside")
 	if check_kernels != null:
 		var circles := PackedFloat64Array()
 		for k in knots:
@@ -413,9 +413,8 @@ static func restore_knot_ground(knots: Array, heights: PackedFloat32Array, snaps
 static func _build_occupancy(heights: PackedFloat32Array, pre: PackedFloat32Array, width: int, length: int, cliff_plan: Array[Dictionary], outcrop_plan: Array[Dictionary]) -> PackedByteArray:
 	var occ := PackedByteArray()
 	# 2026-10-11: the native library's copy of this loop when it is there (height_diff_mask).
-	var kernels := TerrainUtil.kernels()
-	if kernels != null:
-		occ = kernels.call("height_diff_mask", heights, pre, KNOT_OCCUPIED_DIFF)
+	if TerrainUtil.kernel(&"height_diff_mask") != null:
+		occ = TerrainUtil.kernel(&"height_diff_mask").call("height_diff_mask", heights, pre, KNOT_OCCUPIED_DIFF)
 	else:
 		occ.resize(width * length)
 		for i in heights.size():
@@ -462,9 +461,8 @@ static func _fill_circle(grid: PackedByteArray, width: int, length: int, cx: flo
 ## Square dilation by r pixels, separable sliding-window count (O(1) per pixel per pass).
 static func _dilate(src: PackedByteArray, width: int, length: int, r: int) -> PackedByteArray:
 	# 2026-10-11: the native library's copy when it is there (dilate in native/src/terrain_kernels.cpp).
-	var kernels := TerrainUtil.kernels()
-	if kernels != null:
-		return kernels.call("dilate", src, width, length, r)
+	if TerrainUtil.kernel(&"dilate") != null:
+		return TerrainUtil.kernel(&"dilate").call("dilate", src, width, length, r)
 	var tmp := PackedByteArray()
 	tmp.resize(src.size())
 	for pz in length:
@@ -963,9 +961,8 @@ static func _flood(knot: Dictionary, heights: PackedFloat32Array, width: int, le
 	var bh := z1 - z0 + 1
 	# 2026-10-11: the native library's copy of the rest of this function when it is there
 	# (TerrainUtil.kernels(); knot_flood in native/src/terrain_kernels.cpp). Change both together.
-	var kernels := TerrainUtil.kernels()
-	if kernels != null:
-		return {"visited": kernels.call("knot_flood", heights, width, length, mesh_block, x0, z0, bw, bh, KNOT_WALK_STEP), "x0": x0, "z0": z0, "w": bw, "h": bh}
+	if TerrainUtil.kernel(&"knot_flood") != null:
+		return {"visited": TerrainUtil.kernel(&"knot_flood").call("knot_flood", heights, width, length, mesh_block, x0, z0, bw, bh, KNOT_WALK_STEP), "x0": x0, "z0": z0, "w": bw, "h": bh}
 	var visited := PackedByteArray()
 	visited.resize(bw * bh)
 	# 2026-09-29 speed: slope per pixel computed ONCE per flood (inline central differences, same
@@ -1422,7 +1419,7 @@ static func _carve_ramp(knot: Dictionary, b: Dictionary, heights: PackedFloat32A
 	# (TerrainUtil.kernels(); knot_first_clear_pair in native/src/terrain_kernels.cpp, with its
 	# own copy of _segment_clear_top). The loop below is the reference and the fallback: change
 	# both together.
-	var kernels := TerrainUtil.kernels()
+	var kernels := TerrainUtil.kernel(&"knot_first_clear_pair")
 	if kernels != null:
 		var first: PackedInt32Array = kernels.call("knot_first_clear_pair", keys, low_pts, PackedVector2Array(highs), mesh_block, top_mask, width, length, KNOT_RAMP_BED_HALF, KNOT_RAMP_ROCK_CLEAR)
 		n_rock = first[1]

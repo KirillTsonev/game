@@ -13,6 +13,29 @@ GDScript. This file says what is there, how to build it, and the rules for movin
   `TerrainUtil.NATIVE_KERNELS` is false, the library's `get_version()` is not
   `NATIVE_KERNELS_VERSION`, or the game was started with `-- --no-native-kernels`.
 - The log says which it is: `TERRAIN_GEN: native kernels -- in use` / `NOT in use (...)`.
+- A call site asks for its own kernel, `TerrainUtil.kernel(&"paint_main")`, which is `kernels()`
+  unless that name is in `TerrainUtil.NATIVE_KERNELS_OFF`.
+
+## Changing a loop that has a kernel
+
+Every compiled loop exists twice, and nothing but these two tools keeps the copies together
+(both since 2026-10-11):
+
+1. **Before the change, switch its kernel off:** add its name to `NATIVE_KERNELS_OFF` in
+   `scripts/terrain/terrain_util.gd` (the name the script calls it with: the first column of the
+   table below). The game then runs the script loop and the change shows. Without this the
+   compiled copy keeps running and the change appears to do nothing. The log's
+   `native kernels` line lists what is off, and says so if a name is not a kernel's.
+2. Change the script loop until it is right. The other kernels stay in use meanwhile.
+3. Bring the kernel in line (`native/src/terrain_kernels.cpp`), bump the two version numbers
+   (rule 8 below), `native/build.sh`, take the name out of `NATIVE_KERNELS_OFF`.
+4. **`native/check_parity.sh`** (Git Bash, about a minute, not while a game is running): starts
+   the game on the two test seeds with the library and with `--no-native-kernels`, world cache
+   off, and compares every checksum line and every other untimed log line. `PASS` per seed, or
+   the first differing lines. Other seeds: `native/check_parity.sh 123 456`. A run with names in
+   `NATIVE_KERNELS_OFF` still passes and says which were off: it has not checked those.
+
+A stage still being designed can simply stay in `NATIVE_KERNELS_OFF` until it settles.
 
 Moved so far:
 
@@ -137,6 +160,7 @@ A new Godot minor version: fetch a godot-cpp release that lists it and change `a
 6. `SConstruct` switches off fused multiply-add and fast-math. Leave that.
 7. Verify like any speed-only change: two seeds, with and without `--no-native-kernels`, every
    checksum equal (`docs/startup_optimisation.md`). If they differ, the port is wrong.
+   `native/check_parity.sh` does exactly this.
 8. When a kernel's signature or behaviour changes, bump `get_version()` and
    `TerrainUtil.NATIVE_KERNELS_VERSION` together, so an old DLL is refused, not misused.
 

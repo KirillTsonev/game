@@ -995,7 +995,7 @@ static func smooth(heights: PackedFloat32Array, width: int, length: int, passes:
 		return
 	# 2026-10-11: the native library's copy when it is there (TerrainUtil.kernels(); smooth in
 	# native/src/terrain_kernels.cpp). The two band functions are the reference and the fallback.
-	var kernels := TerrainUtil.kernels()
+	var kernels := TerrainUtil.kernel(&"smooth")
 	if kernels != null:
 		var smoothed: PackedFloat32Array = kernels.call("smooth", heights, width, length, passes, radius)
 		heights.clear()

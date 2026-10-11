@@ -849,7 +849,7 @@ static func raise_terrain_behind_cliff_dressing(plan: Array[Dictionary], heights
 	# (TerrainUtil.kernels(); cliff_raise in native/src/terrain_kernels.cpp). This function still
 	# works out every entry's values; the loops below are the reference and the fallback: change
 	# both together. The debug surface needs the script's loops (the kernel keeps no debug maps).
-	var kernels: RefCounted = null if RAISE_DEBUG_SHOW_SURFACE else TerrainUtil.kernels()
+	var kernels: RefCounted = null if RAISE_DEBUG_SHOW_SURFACE else TerrainUtil.kernel(&"cliff_raise")
 	var native_entries := PackedFloat64Array() # per entry, in the order of CLIFF_RAISE_ENTRY in the .cpp
 	var native_profiles: Array = [] # PackedFloat32Array per profile used
 	var native_profile_ranges := PackedFloat64Array() # x_min, x_max per profile

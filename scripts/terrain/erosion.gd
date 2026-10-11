@@ -30,7 +30,7 @@ static func erode(heights: PackedFloat32Array, width: int, length: int, rng: Ran
 	# 2026-10-10: the native library's copy of this loop when it is there (TerrainUtil.kernels();
 	# native/src/terrain_kernels.cpp -- the same operations in the same order, the same heights).
 	# The loop below is the reference and the fallback: change both together.
-	var kernels := TerrainUtil.kernels()
+	var kernels := TerrainUtil.kernel(&"erode")
 	if kernels != null:
 		var eroded: PackedFloat32Array = kernels.call("erode", heights, width, length, rng, iterations, PackedFloat64Array([
 			MAX_DROPLET_LIFETIME, INERTIA, SEDIMENT_CAPACITY_FACTOR, MIN_SEDIMENT_CAPACITY, ERODE_SPEED, DEPOSIT_SPEED,

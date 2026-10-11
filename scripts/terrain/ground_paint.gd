@@ -326,7 +326,7 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 	var bare_sum := 0.0
 	# Always built: the road distance also drives the bare verge (BARE_ROAD_*).
 	var road_circles := PackedFloat64Array()
-	var scan_kernels := TerrainUtil.kernels() # 2026-10-11: this scan in the native library when it is there
+	var scan_kernels := TerrainUtil.kernel(&"road_vertex_circles") # 2026-10-11: this scan in the native library when it is there
 	if scan_kernels != null:
 		road_circles = scan_kernels.call("road_vertex_circles", old_control, width, length, ROAD_ID, 0)
 	else:
@@ -377,7 +377,7 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 	# 2026-10-11: the whole pass in the native library when it is there (TerrainUtil.kernels();
 	# paint_main in native/src/terrain_kernels.cpp reads the same ctx). _paint_band is the reference
 	# and the fallback: change both together, and a constant the loop uses goes into this list.
-	var main_kernels := TerrainUtil.kernels()
+	var main_kernels := TerrainUtil.kernel(&"paint_main")
 	var native_main: Dictionary = {}
 	if main_kernels != null:
 		native_main = main_kernels.call("paint_main", ctx, {
@@ -453,11 +453,10 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 	# 2026-10-11: the filter and the border pass run in the native library when it is there
 	# (TerrainUtil.kernels(); mode_filter / blend_borders in native/src/terrain_kernels.cpp). The
 	# band functions are the reference and the fallback: change both together.
-	var kernels := TerrainUtil.kernels()
 	var t_filter := Time.get_ticks_msec() - t0
 	for _mp in DOM_MODE_PASSES:
-		if kernels != null:
-			dom = kernels.call("mode_filter", dom, width, length, DOM_MODE_RADIUS, ROAD_MARK)
+		if TerrainUtil.kernel(&"mode_filter") != null:
+			dom = TerrainUtil.kernel(&"mode_filter").call("mode_filter", dom, width, length, DOM_MODE_RADIUS, ROAD_MARK)
 			continue
 		var mode_out: Array = []
 		mode_out.resize(bands)
@@ -471,8 +470,8 @@ static func paint(parent_node: Node, terrain: Terrain3D, maps: Dictionary, corne
 	var blended := PackedInt32Array()
 	var n_border := 0
 	var n_third := 0
-	if kernels != null:
-		var borders: Dictionary = kernels.call("blend_borders", dom, spray_n, control, width, length, PackedFloat64Array([
+	if TerrainUtil.kernel(&"blend_borders") != null:
+		var borders: Dictionary = TerrainUtil.kernel(&"blend_borders").call("blend_borders", dom, spray_n, control, width, length, PackedFloat64Array([
 			BORDER_RADIUS, BORDER_FADE, THIRD_FADE, SPRAY_AMP, SPRAY_FLOOR, ROAD_MARK]))
 		blended = borders.control
 		n_border = borders.border

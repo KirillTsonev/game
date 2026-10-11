@@ -156,11 +156,10 @@ static func bake(_parent_node: Node, maps: Dictionary, corner: Vector3, rng: Ran
 	# 2026-10-11: four of this function's loops have a copy in the native library (TerrainUtil.kernels();
 	# height_min_max, road_vertex_circles, stamp_circles, grass_bake in native/src/terrain_kernels.cpp).
 	# The script loops are the reference and the fallback: change both together.
-	var kernels := TerrainUtil.kernels()
 	height_min = INF
 	height_max = -INF
-	if kernels != null:
-		var height_range: PackedFloat64Array = kernels.call("height_min_max", heights)
+	if TerrainUtil.kernel(&"height_min_max") != null:
+		var height_range: PackedFloat64Array = TerrainUtil.kernel(&"height_min_max").call("height_min_max", heights)
 		height_min = height_range[0]
 		height_max = height_range[1]
 	else:
@@ -225,8 +224,8 @@ static func bake(_parent_node: Node, maps: Dictionary, corner: Vector3, rng: Ran
 	var min_blend := int(ROAD_PAINT_MIN_BLEND * 255.0)
 	var painted := 0
 	var paint_circles := PackedFloat64Array()
-	if kernels != null:
-		paint_circles = kernels.call("road_vertex_circles", road_control, width, length, TerrainRoad.ROAD_TEXTURE_ID, min_blend)
+	if TerrainUtil.kernel(&"road_vertex_circles") != null:
+		paint_circles = TerrainUtil.kernel(&"road_vertex_circles").call("road_vertex_circles", road_control, width, length, TerrainRoad.ROAD_TEXTURE_ID, min_blend)
 		painted = paint_circles.size() / 3
 	else:
 		for pz in length:
@@ -291,8 +290,8 @@ static func bake(_parent_node: Node, maps: Dictionary, corner: Vector3, rng: Ran
 		"out": band_out, "mutex": Mutex.new(),
 	}
 	var native_bake: Dictionary = {}
-	if kernels != null: # (a constant _bake_band uses goes into this list too)
-		native_bake = kernels.call("grass_bake", ctx, {
+	if TerrainUtil.kernel(&"grass_bake") != null: # (a constant _bake_band uses goes into this list too)
+		native_bake = TerrainUtil.kernel(&"grass_bake").call("grass_bake", ctx, {
 			"CURV_RADIUS": CURV_RADIUS, "CURV_FULL": CURV_FULL, "SLOPE_BARE_NY": SLOPE_BARE_NY, "SLOPE_FULL_NY": SLOPE_FULL_NY,
 			"ROCK_GAP": ROCK_GAP, "ROCK_FADE": ROCK_FADE, "VERGE_REACH_MAX": VERGE_REACH_MAX, "VERGE_NOISE_LO": VERGE_NOISE_LO,
 			"VERGE_NOISE_HI": VERGE_NOISE_HI, "VERGE_GRASS_GAP": VERGE_GRASS_GAP, "VERGE_GRASS_FADE": VERGE_GRASS_FADE,
@@ -514,7 +513,7 @@ static func stamp_circles(field: PackedFloat32Array, width: int, length: int, ci
 		return field
 	# 2026-10-11: the native library's copy when it is there (TerrainUtil.kernels(); stamp_circles
 	# in native/src/terrain_kernels.cpp). The bands below are the reference and the fallback.
-	var kernels := TerrainUtil.kernels()
+	var kernels := TerrainUtil.kernel(&"stamp_circles")
 	if kernels != null:
 		return kernels.call("stamp_circles", field, width, length, circles, cap)
 	var bands := ceili(float(length) / STAMP_BAND_ROWS)
