@@ -218,7 +218,10 @@ static func scatter_trees(parent_node: Node, terrain: Terrain3D, heights: Packed
 			tree_total += 1
 
 	for id in active_ids:
-		if not transforms_by_mesh[id].is_empty():
+		if transforms_by_mesh[id].is_empty():
+			continue
+		# PlantField draws the view; the instancer's copy only casts the shadows (claimed in terrain_gen.gd).
+		if not PlantField.submit(&"trees", id, assets.get_mesh_asset(id), transforms_by_mesh[id]):
 			instancer.add_transforms(id, transforms_by_mesh[id], colors_by_mesh[id], true)
 
 	print("TERRAIN_GEN: scattered %d tree(s) across %d stand(s) + %d lone (%d with trunk colliders, %d variant id(s) active)" % [tree_total, stand_count, lone_count, collider_container.get_child_count(), active_ids.size()])

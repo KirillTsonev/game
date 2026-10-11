@@ -63,7 +63,16 @@ uniform float wind_fade_end = 80.0;
 // the shadow would then sway differently from the plant casting it.
 uniform vec3 sway_camera_position = vec3(0.0);
 
+// LOD cross-fade (trees, 2026-10-11): the plant dissolves away between these two distances from the
+// camera, measured to the plant's root, so a whole tree fades together while its impostor is
+// already drawn behind it. Set at run time by PlantField; end <= start = off. Not in the shadow
+// pass (there CAMERA_POSITION_WORLD is the light's camera, and the shadows end before the fade).
+uniform float lod_fade_start = 0.0;
+uniform float lod_fade_end = 0.0;
+varying float lod_fade_dist;
+
 void vertex() {
+	lod_fade_dist = distance(MODEL_MATRIX[3].xyz, CAMERA_POSITION_WORLD);
 	if (sway_amount > 0.0) {
 		vec3 root = MODEL_MATRIX[3].xyz;
 		float fade = 1.0 - smoothstep(wind_fade_start, wind_fade_end, distance(root, sway_camera_position));
@@ -111,6 +120,13 @@ float foliage_mip_level(vec2 uv, vec2 size) {
 }
 
 void fragment() {
+	if (!IN_SHADOW_PASS && lod_fade_end > lod_fade_start) {
+		float keep = 1.0 - smoothstep(lod_fade_start, lod_fade_end, lod_fade_dist);
+		// Interleaved gradient noise: a fixed screen pattern, so the dissolve does not shimmer.
+		if (keep < 1.0 && keep <= fract(52.9829189 * fract(dot(FRAGCOORD.xy, vec2(0.06711056, 0.00583715))))) {
+			discard;
+		}
+	}
 	vec4 tex = texture(albedo_tex, UV);
 	if (use_vertex_color) {
 		tex *= COLOR;

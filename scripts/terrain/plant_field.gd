@@ -14,10 +14,12 @@
 ## exactly the asset's range. Terrain3D measures to each 32 m cell's centre, so there a whole cell
 ## switches together, anywhere from about 22 m short of the range to 22 m past it.
 ##
-## Phase 1 limits (see submit()): only assets that cast no shadows, with single-surface LOD meshes,
-## no material override and at most MAX_LODS LODs. Anything else stays with Terrain3D. Shadows
-## need a path of their own: a plant outside the view must still cast into it, and these buffers
-## hold only what the camera sees.
+## Limits (see submit()): at most MAX_LODS LODs of at most MAX_SURFACES
+## surfaces each; a LOD cross-fade only for two-LOD assets with a fade_margin (the trees, see
+## FADE_PER_MARGIN), every other switch is hard. A shadow caster is only drawn here
+## if claim_shadow_casters() claimed it: its shadows stay with Terrain3D, because a plant outside
+## the view must still cast into it, and these buffers hold only what the camera sees.
+## Trees and saplings since 2026-10-11 (--plants-no-trees leaves those two with Terrain3D).
 ##
 ## Compare / switch off: set_gpu_driven() moves the plants back to Terrain3D and here again in a running
 ## game; the user argument --plants-terrain3d starts the game with everything on Terrain3D (for
@@ -27,7 +29,12 @@ extends Node3D
 
 const NODE_NAME := "PlantField"
 const CULL_SHADER_PATH := "res://shaders/foliage/plant_cull.glsl"
-const MAX_LODS := 3 ## LOD outputs in plant_cull.glsl
+const MAX_LODS := 4 ## LOD outputs in plant_cull.glsl
+const MAX_SURFACES := 4 ## surfaces per LOD mesh (one draw command each, see plant_cull.glsl)
+## Cross-fade band each side of a LOD range, x the asset's fade_margin (trees: 10 -> the impostor
+## dissolves in over 155-175 m, the tree out over 175-195 m). 0 = hard switch.
+const FADE_PER_MARGIN := 2.0
+const CMD_STRIDE := 20## bytes per surface in a MultiMesh's indirect command buffer; the instance count is at +4
 const NEVER_CULLED := 1.0e9 ## range for a last LOD whose asset range is 0 (= drawn at any distance)
 const CULL_MARGIN := 0.5 ## m added to each plant's bounding sphere for the frustum test
 const FRAME_VEC4 := 7 ## plant_cull.glsl's frame buffer: 6 frustum planes + the camera position
@@ -82,7 +89,10 @@ static func claim_shadow_casters(assets: Terrain3DAssets, ids: Array[int]) -> vo
 		return
 	for id in ids:
 		var asset := assets.get_mesh_asset(id)
-		if asset == null or asset.get_material_override() != null:
+		if asset == null or _claimed_shadow_modes.has(id):
+			continue
+		if not _drawable(asset):
+			print("PLANTS: mesh %d (%s) stays with Terrain3D -- more than %d LODs or %d surfaces" % [id, asset.get_name(), MAX_LODS, MAX_SURFACES])
 			continue
 		var mode := asset.get_cast_shadows()
 		if mode == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF or mode == RenderingServer.SHADOW_CASTING_SETTING_SHADOWS_ONLY:
@@ -155,6 +165,18 @@ static func _white(count: int) -> PackedColorArray:
 	colors.fill(Color.WHITE)
 	return colors
 
+## Whether PlantField can draw this asset as Terrain3D would: 1 to MAX_LODS LODs in use, each a
+## mesh of 1 to MAX_SURFACES surfaces.
+static func _drawable(asset: Terrain3DMeshAsset) -> bool:
+	var lods := mini(asset.get_lod_count(), asset.get_last_lod() + 1)
+	if lods < 1 or lods > MAX_LODS:
+		return false
+	for i in lods:
+		var mesh := asset.get_mesh(i) as Mesh
+		if mesh == null or mesh.get_surface_count() < 1 or mesh.get_surface_count() > MAX_SURFACES:
+			return false
+	return true
+
 ## Takes over the drawing of one mesh asset's plants. Returns TRUE if the caller must NOT add them
 ## to the Terrain3D instancer, FALSE if it still must:
 ## - the asset cannot be drawn here as Terrain3D would (see the header): nothing is taken over;
@@ -163,22 +185,16 @@ static func _white(count: int) -> PackedColorArray:
 static func submit(layer: StringName, id: int, asset: Terrain3DMeshAsset, transforms: Array[Transform3D]) -> bool:
 	if not enabled or asset == null or transforms.is_empty():
 		return false
-	if asset.get_material_override() != null:
-		return false
 	var shadow_mode: int = _claimed_shadow_modes.get(id, asset.get_cast_shadows())
 	if shadow_mode != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF and not _claimed_shadow_modes.has(id):
 		return false # a shadow caster nobody claimed: Terrain3D draws it in full
-	var lods := mini(asset.get_lod_count(), asset.get_last_lod() + 1)
-	var drawable := lods >= 1 and lods <= MAX_LODS
-	for i in (lods if drawable else 0):
-		var mesh := asset.get_mesh(i) as Mesh
-		if mesh == null or mesh.get_surface_count() != 1:
-			drawable = false
-	if not drawable:
-		if _claimed_shadow_modes.has(id):
-			push_error("PLANTS: mesh %d (%s) was claimed as a shadow caster but cannot be drawn by PlantField -- it will cast shadows and not be visible" % [id, asset.get_name()])
-		return false
-	_submitted[id] = {"layer": layer, "id": id, "asset": asset, "transforms": transforms, "shadow_mode": shadow_mode}
+	if not _drawable(asset):
+		return false # claim_shadow_casters() claims nothing that is not drawable
+	if _submitted.has(id):
+		# A second stage using the same mesh (the mountain's foot debris reuses the rocks' ids).
+		(_submitted[id].transforms as Array[Transform3D]).append_array(transforms)
+	else:
+		_submitted[id] = {"layer": layer, "id": id, "asset": asset, "transforms": transforms.duplicate(), "shadow_mode": shadow_mode}
 	if _shadow_twins.has(id):
 		_twin_layers[id] = layer
 		if reduced_shadows_on and _terrain_ref:
@@ -216,7 +232,8 @@ func _ready() -> void:
 	var bytes := 0
 	for s in _sets:
 		plants += s.count
-		draws += (s.lods as Array).size()
+		for l: Dictionary in s.lods:
+			draws += int(l.surfaces)
 		bytes += s.count * 48 * ((s.lods as Array).size() + 1)
 	print("PLANTS: field ready (GPU-culled) -- %d plants of %d meshes in %d draws, buffers %.1f MB" % [plants, _sets.size(), draws, bytes / 1048576.0])
 	if "--plants-debug" in OS.get_cmdline_user_args():
@@ -282,31 +299,68 @@ func _add_set(sub: Dictionary) -> void:
 			radius = maxf(radius, aabb.get_endpoint(c).length())
 		var r := asset.get_lod_range(i)
 		ranges[i] = r if r > 0.0 else NEVER_CULLED
+	# Cross-fade (trees): the asset's fade_margin, as Godot drew it for Terrain3D -- the next LOD
+	# dissolves in over the band before each range and this one dissolves out over the band after
+	# it, both whole in between. plant_cull.glsl writes a plant in a band to both LODs; the
+	# dissolve itself is in the leaf and impostor shaders, by the plant's own distance. Bark (a
+	# StandardMaterial3D) does not dissolve: it ends with the band, behind the finished impostor.
+	# Only where both LODs' shaders can dissolve; an asset with a fade_margin and other materials
+	# switches hard here (printed, since Terrain3D would have faded it).
+	var override := asset.get_material_override()
+	var fade := asset.get_fade_margin() * FADE_PER_MARGIN if lod_count == 2 and override == null else 0.0
+	var fade_width := 0.0
+	if fade > 0.0 and _set_fade_uniforms(meshes[1], &"fade_in_start", &"fade_in_end", ranges[0] - fade, ranges[0]) \
+			and _set_fade_uniforms(meshes[0], &"lod_fade_start", &"lod_fade_end", ranges[0], ranges[0] + fade):
+		fade_width = fade
+	elif asset.get_fade_margin() > 0.0 and lod_count > 1:
+		print("PLANTS: mesh %d (%s) has a fade margin of %.0f m that PlantField does not draw -- its LODs switch hard" % [sub.id, asset.get_name(), asset.get_fade_margin()])
 	# The plants' real extent: the scatter scales them up, so pad by a generous multiple of the radius.
 	var pad := Vector3.ONE * (radius * 4.0 + 1.0)
 	var bounds := AABB(lo - pad, hi - lo + pad * 2.0)
 
 	var lods: Array[Dictionary] = []
+	var surfaces_packed := 0
 	for i in lod_count:
+		surfaces_packed |= meshes[i].get_surface_count() << (i * 8)
 		var mm := RenderingServer.multimesh_create()
 		RenderingServer.multimesh_allocate_data(mm, count, RenderingServer.MULTIMESH_TRANSFORM_3D, false, false, true)
 		RenderingServer.multimesh_set_mesh(mm, meshes[i].get_rid())
 		RenderingServer.multimesh_set_custom_aabb(mm, bounds)
 		var inst := RenderingServer.instance_create2(mm, get_world_3d().scenario)
 		RenderingServer.instance_geometry_set_cast_shadows_setting(inst, RenderingServer.SHADOW_CASTING_SETTING_OFF)
-		lods.append({"mesh": meshes[i], "mm": mm, "inst": inst, "range": ranges[i]})
+		if override: # rocks, deadfall: one material for every LOD, as Terrain3D applies it
+			RenderingServer.instance_geometry_set_material_override(inst, override.get_rid())
+		lods.append({"mesh": meshes[i], "mm": mm, "inst": inst, "range": ranges[i], "surfaces": meshes[i].get_surface_count()})
 
 	var push := PackedByteArray()
-	push.resize(32)
+	push.resize(48)
 	push.encode_u32(0, count)
 	push.encode_u32(4, lod_count)
 	push.encode_float(8, radius + CULL_MARGIN)
-	push.encode_float(12, 0.0)
+	push.encode_u32(12, surfaces_packed)
 	for k in 4:
 		push.encode_float(16 + k * 4, ranges[k])
+	push.encode_float(32, fade_width)
 
 	_sets.append({"layer": sub.layer, "id": sub.id, "name": asset.get_name(), "asset": asset, "shadow_mode": sub.shadow_mode, "transforms": transforms, "count": count,
 		"radius": radius, "lods": lods, "push": push, "src_bytes": src.to_byte_array()})
+
+## Sets a cross-fade's two distances on every surface material of `mesh` whose shader has them.
+## The materials are shared resources: this lasts for the run, the files are not touched.
+## Returns whether any had.
+func _set_fade_uniforms(mesh: Mesh, start_name: StringName, end_name: StringName, start: float, end: float) -> bool:
+	var found := false
+	for si in mesh.get_surface_count():
+		var mat := mesh.surface_get_material(si) as ShaderMaterial
+		if mat == null or mat.shader == null:
+			continue
+		for u: Dictionary in mat.shader.get_shader_uniform_list():
+			if u.name == start_name:
+				mat.set_shader_parameter(start_name, start)
+				mat.set_shader_parameter(end_name, end)
+				found = true
+				break
+	return found
 
 func _process(_delta: float) -> void:
 	_update()
@@ -514,7 +568,8 @@ func _rt_dispatch(frame: PackedByteArray, active: PackedInt32Array) -> void:
 	_rd.buffer_update(_frame_buf, 0, frame.size(), frame)
 	for i in active:
 		for l: Dictionary in _sets[i].lods:
-			_rd.buffer_clear(l.cmd_buf, 4, 4) # the draw command's instance count; the shader counts it up
+			for k in int(l.surfaces): # each surface's draw command: its instance count; the shader counts it up
+				_rd.buffer_clear(l.cmd_buf, k * CMD_STRIDE + 4, 4)
 	var cl := _rd.compute_list_begin()
 	_rd.compute_list_bind_compute_pipeline(cl, _pipeline)
 	for i in active:
@@ -561,10 +616,10 @@ func _rt_read_counts() -> void:
 	var by_layer := {} # layer -> [plants, drawn LOD 0, 1, 2]
 	for s in _sets:
 		if not by_layer.has(s.layer):
-			by_layer[s.layer] = [0, 0, 0, 0]
+			by_layer[s.layer] = [0, 0, 0, 0, 0]
 		by_layer[s.layer][0] += s.count
 		for k in (s.lods as Array).size():
 			by_layer[s.layer][1 + k] += _rd.buffer_get_data(s.lods[k].cmd_buf, 4, 4).decode_u32(0)
 	for layer: StringName in by_layer:
 		var c: Array = by_layer[layer]
-		print("[Plants] %s: drawn %d of %d plants (LOD 0 / 1 / 2: %d / %d / %d)" % [layer, c[1] + c[2] + c[3], c[0], c[1], c[2], c[3]])
+		print("[Plants] %s: drawn %d of %d plants (LOD 0 / 1 / 2 / 3: %d / %d / %d / %d)" % [layer, c[1] + c[2] + c[3] + c[4], c[0], c[1], c[2], c[3], c[4]])

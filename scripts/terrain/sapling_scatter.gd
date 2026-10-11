@@ -172,7 +172,10 @@ static func scatter_saplings(terrain: Terrain3D, heights: PackedFloat32Array, wi
 			counts["pine" if pine else "decid"] += 1
 
 	for id in SAPLING_MESH_IDS:
-		if not (transforms_by_mesh[id] as Array).is_empty():
+		if (transforms_by_mesh[id] as Array).is_empty():
+			continue
+		# PlantField draws the view; the instancer's copy only casts the shadows (claimed in terrain_gen.gd).
+		if not PlantField.submit(&"saplings", id, assets.get_mesh_asset(id), transforms_by_mesh[id]):
 			instancer.add_transforms(id, transforms_by_mesh[id], colors_by_mesh[id], true)
 
 	last_counts = counts

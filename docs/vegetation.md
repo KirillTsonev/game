@@ -28,6 +28,18 @@ realistic too.
   LOD0 = full tree to **175 m** (`TREE_IMPOSTOR_RANGE`; was 150 until 2026-09-29), LOD1 =
   impostor to 100 km (never culled), 10 m cross-fade, `last_shadow_lod = 0`. Without one it
   falls back to a single LOD visible to `PACK_LOD0_RANGE` = 600 m.
+- **Drawn by `PlantField` since 2026-10-11** (trees and saplings; see "Flowers" for how it
+  works, `docs/performance_findings.md` step 8 for the measurements). The view switches LOD per
+  tree, by the tree's own distance. A hard switch at 175 m was "really noticeable" (Kirill), so
+  the cross-fade is rebuilt with the old distances (`PlantField.FADE_PER_MARGIN` x the asset's
+  10 m `fade_margin`): the impostor dissolves in over 155-175 m (`fade_in_start` / `_end` in
+  `foliage_impostor.gdshader`), the leaf cards dissolve out over 175-195 m (`lod_fade_start` /
+  `_end` in `foliage_cutout.gdshaderinc`), and `plant_cull.glsl` writes a tree inside 155-195 m
+  to both LODs. It is a screen-pattern dissolve in the solid pass, not Godot's transparent
+  fade. The bark does not dissolve: it ends at 195 m behind the finished impostor. The
+  distances are set on the materials at run time by `PlantField`, not saved. Terrain3D's copy
+  casts the shadows per 32 m cell as before. `--plants-no-trees` starts the game with both
+  layers drawn by Terrain3D.
 - **Duplicate leaf cards dropped** (2026-10-05). The pack stores every leaf card twice, back
   to back, and the bake makes the leaf material double-sided, so the second copy only doubled
   the leaf triangles and overdraw, in the view and in every shadow cascade.

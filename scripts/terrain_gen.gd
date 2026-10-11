@@ -157,6 +157,11 @@ func _ready() -> void:
 	# Shadow-casting plants PlantField will draw: their instancer copies become shadow casters only.
 	# Here, while the instancer is still empty -- each change makes Terrain3D rebuild its nodes.
 	PlantField.claim_shadow_casters(terrain.get_assets(), FlowerScatter.POPPY_IDS + UnderstoryScatter.UNDERSTORY_MESH_IDS)
+	# Trees and saplings too since 2026-10-11 (--plants-no-trees: Terrain3D draws them, for benchmark pairs).
+	if not ("--plants-no-trees" in OS.get_cmdline_user_args()):
+		PlantField.claim_shadow_casters(terrain.get_assets(), TreeScatter.TREE_MESH_IDS + SaplingScatter.SAPLING_MESH_IDS)
+	# Rocks, scree, deadfall and the mountain's foot debris stay with Terrain3D: tried the same day
+	# and taken back (80-190 fewer draws, no CPU gain, GPU 0.2-0.6 ms higher; docs/performance_findings.md step 8).
 	# Ferns, lady ferns and elderberries cast their sun shadows from their reduced mesh (2026-10-06,
 	# Kirill compared both in game: "no significant difference"). --plants-full-shadows starts the
 	# game with the full meshes casting; PerfDebug O switches it in a running game.

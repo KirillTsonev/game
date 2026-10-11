@@ -374,7 +374,7 @@ left blank where nothing supports an estimate yet.
 | 5   | Cheaper screen-space settings                                           | conclusion 6           | SSAO off and painterly rewritten (-0.6 ms) 2026-10-05; MSAA and the other five effects open |
 | 6   | Startup time                                                            | conclusion 8           | cheap wins done: 16.3 s -> 8.8 s to first frame |
 | 7   | Cheaper leaf shading                                                    | conclusions 2, 6       | worth a trial (step 1: part of the view cost is per pixel) |
-| 8   | GPU-driven drawing for the understory view pass                         | conclusion 7           | started 2026-10-06: `PlantField` built, flowers without shadows moved to it; not yet checked in game or benchmarked |
+| 8   | GPU-driven drawing for the understory view pass                         | conclusion 7           | flowers and understory 2026-10-06, trees and saplings 2026-10-11 (walk 12.4 -> 9.5 ms; the trees' dissolve cross-fade awaits Kirill's check); tree shadow draws open |
 
 Steps 1-3 were revised and steps 7-8 added on 2026-10-05, after the web research recorded under
 "Research" below.
@@ -664,7 +664,7 @@ Look-versus-speed choices, each independent:
   The figures are the same within 0.05 ms at all three stations (pixel work only).
 - **Painterly sum passes rewritten 2026-10-05: 0.94 -> 0.34 ms.** The summed-area table's two
   build passes walked a whole row / column per GPU thread (0.69 ms). They are replaced by two
-  separable box-sum passes, each pixel independent (`box_sum_h.glsl`, `box_sum_v.glsl`,
+  separable box-sum passes, each pixel independent (`box_sum_h.glsl` -- `box_sum_h_copy.glsl` since 2026-10-11, step 12 -- `box_sum_v.glsl`,
   `kuwahara_box.glsl` in `addons/compositor_effects/painterly_sat/`; 0.08 + 0.11 ms, filter
   0.10 ms). Cost now grows with `stroke_radius` (4 here). All six effects together: about 1.6 ->
   1.0 ms.
@@ -1008,10 +1008,66 @@ game by Kirill and measured with alternating benchmark pairs before the next:
      of GPU looking at the sky).
    - The old side's draws are 288 lower than in `full_after_trees` (8,213): that is the poppy
      shadow limit.
-3. Trees and saplings, view pass. Their meshes have 2-3 surfaces, and an indirect MultiMesh has
-   one draw command per surface: `plant_cull.glsl` writes only the first one's instance count, so
-   this needs a second pass that copies it to the others.
-4. Tree shadow draws (2,000 or more remain after phase 3). Open design question: one buffer of
+3. Trees and saplings, view pass. **Built and measured 2026-10-11** (19 meshes, 2,412 trees and
+   1,671 saplings on seed 3082472107; `PlantField` now 89,889 plants of 53 meshes in 151 draws).
+   Their meshes have 2-3 surfaces, and an indirect MultiMesh has one draw command per surface
+   (5 uints each): `plant_cull.glsl` takes the slot from the first surface's instance count and
+   raises the others' by one per surviving plant, so no second pass was needed. Their Terrain3D
+   copies stay as shadow casters (claimed in `terrain_gen.gd`); `--plants-no-trees` leaves these
+   two layers with Terrain3D, which is the "old" side below. Two alternating targeted pairs
+   (`..._trees_pf_old_1..2`, `..._trees_pf_new_1..2`, `--bench-only=layer:trees,layer:saplings`,
+   world cache read), old -> new per pair:
+
+   | Station        | Frame ms (pair 1) | Frame ms (pair 2) | Render CPU ms              | Draws          |
+   | -------------- | ----------------- | ----------------- | -------------------------- | -------------- |
+   | spawn_ahead    | 12.35 -> 9.32     | 16.23 -> 10.06    | 8.79 -> 4.62, 11.75 -> 5.73 | 7,299 -> 4,134 |
+   | exit_look_back | 13.32 -> 10.21    | 12.88 -> 10.43    | 9.57 -> 5.35, 9.04 -> 5.66 | 7,209 -> 4,499 |
+   | hub_overlook   | 9.67 -> 6.87      | 12.04 -> 6.74     | 6.65 -> 2.95, 8.47 -> 3.48 | 5,456 -> 2,374 |
+   | forest_dense   | 9.54 -> 9.59      | 11.33 -> 9.44     | 6.33 -> 5.32, 7.66 -> 4.96 | 5,981 -> 4,273 |
+   | road_mid       | 9.54 -> 9.27      | 10.64 -> 9.05     | 6.48 -> 4.66, 7.02 -> 4.84 | 6,049 -> 4,172 |
+   | valley_north   | 9.42 -> 9.31      | 9.85 -> 9.07      | 5.70 -> 4.17, 5.98 -> 5.05 | 4,995 -> 3,870 |
+   | cliff_face     | 8.85 -> 9.04      | 8.97 -> 9.12      | 4.02 -> 3.45, 4.05 -> 3.85 | 3,122 -> 2,598 |
+
+   Road walk 12.37 -> 9.51 and 12.85 -> 9.79 ms (p99 18.5 -> 11.5, 19.1 -> 14.2; frames over
+   16.7 ms 33 -> 0 and 60 -> 3). The second old run was noisier than the first; the new side
+   agrees within 0.75 ms between the pairs. **Every station is now within about 1.4 ms of its GPU
+   time**, so the CPU limits no view any more. GPU ms reads 0.1-1.1 ms higher at the stations that
+   were CPU-limited before -- the reading's property described under phase 2, not checked again
+   with a GPU-limited pair. Still drawn by Terrain3D for these layers: the shadow draws (hiding
+   the trees removes 1,263-1,976 draws, the saplings 244-721). `--plants-debug-toggle` passed
+   with the 19 new meshes. These runs had a hard, per-tree switch to the impostor at 175 m;
+   Kirill found it "really noticeable", so a dissolve cross-fade over 155-195 m was added the
+   same evening (`docs/vegetation.md`, "Drawn by `PlantField`"). The fade's look is not yet
+   checked in game and its cost not measured (about 110 of 2,412 trees were in the band at the
+   spawn view, each drawn as tree and impostor).
+   **Full run after it, with the cross-fade: `20261011_213415_f9204b28_full_trees_pf`** (seed
+   3082472107 through `--seed`, world cache read) -- the baseline from here on. Stations within
+   0.1 ms of `trees_pf_new_1`, so the fade costs nothing measurable. Frame is 0.5-0.9 ms above
+   GPU at every station and render CPU is 2.8-4.8 ms against frames of 6.9-10.2 ms: **draw calls
+   no longer cost frame time anywhere**, only GPU work does. The ablation's own baseline drifted
+   0.3-0.6 ms within a pass in this run, so figures under about 0.5 ms are noise. GPU ms saved,
+   forest_dense / hub_overlook / mountain_foot: sun shadows 1.76 / 1.02 / 0.96, half
+   render scale 2.28 / 2.57 / 2.67, understory 1.23 / 0.26 / 0.24, grass 1.12 / 0.22 / 0.05, post
+   effects 0.89 / 0.88 / 0.94, trees 0.65 / 1.00 / 0.61, lantern 0.58 / 0.08 / 0.70 (324-420
+   draws where it has anything to light; 0.33-0.50 on the old map, 0.8-0.9 in
+   `mountains_baseline`; not looked into), displacement + shader patch 0.12 / 0.96 / 1.18. Road
+   walk 10.21 ms, p99 14.15, GPU 9.28, 5 frames of 1,960 over 16.7 ms. `layer:SMALL` (rocks, deadfall,
+   flowers, cliffs, outcrops; 557-910 draws) and the saplings: nothing measurable. **Rocks, scree, deadfall and foot debris on `PlantField`: tried the same evening and taken
+   back** (Kirill's goal covers CPU cost on weaker machines too, so it was worth a measurement).
+   30 meshes, 7,021 pieces; two alternating targeted pairs, `..._rocks_pf_old_1..2` /
+   `..._rocks_pf_new_1..2`. Draws fell by only 80-190 at the valley stations (4,134 -> 4,011 at
+   spawn_ahead) and ROSE by 44-87 where few are in view (spawn_sky 562 -> 649): most of these
+   layers' draws are shadow draws, which stay with Terrain3D, and `PlantField` issues its 68
+   draws for them whatever the camera sees. Render CPU: no difference (new_2 against the two old
+   runs, within 0.3 ms either way). GPU: 0.2-0.6 ms HIGHER in new_2 at nine of twelve stations
+   (road_mid 9.75 against 8.95 / 9.06, valley_north 9.38 against 8.64 / 9.04); cause not
+   established (new_1 was a disturbed run, higher everywhere). What stays in `PlantField` from
+   the attempt, tested and unused: four LODs (`MAX_LODS`), material overrides, two stages
+   submitting one mesh id, and `claim_shadow_casters` skipping what cannot be drawn. Startup:
+   each claimed asset costs about 9 ms at the claim (the gap before boulder scattering read
+   0.64 s with the trees claimed, 0.71 s with these 30 more).
+4. Tree shadow draws (2,000 or more remain after phase 3). Since the run above their draw count
+   is no longer a cost; what a new shadow path could still save is GPU work in the shadow passes. Open design question: one buffer of
    all casters makes every cascade draw every tree in range. Prototype before deciding.
 
 What changes visually: LODs switch per plant at exactly the asset's range instead of per 32 m
@@ -1276,6 +1332,62 @@ the three changes above, which do not touch what is drawn). Against the older ma
 GPU time is up by 1 to 1.5 ms at every station, the sky included (3.25 ms against 1.95); of that,
 the shader patch measures 0.2-0.7 ms and displacement about 0.6-0.7 ms where terrain fills the
 view. What is paid when looking at the sky is not pinned down yet.
+
+### 12. Same-look work after the trees (2026-10-11, open)
+
+Kirill's goal, restated: as fast as possible with the same picture, for weaker machines and later
+content too, whether or not it shows on his laptop. Look-versus-speed settings (render scale,
+shadow distance, MSAA, displacement level) are not part of it. The list, with what is known:
+
+| # | Item | Status |
+|---|---|---|
+| 1 | Rocks, scree, deadfall to `PlantField` | tried, taken back: no CPU gain, GPU higher (step 8, phase 3) |
+| 2 | Terrain shader patch: skip the smooth slope's eight height fetches under `PROJECTION_NO_SIDE_BELOW` | tried, taken back: no measurable gain (below) |
+| 3 | Post effects: merge passes that only hand a texture on (about 0.1-0.15 ms expected) | painterly's copy pass folded into its first sum pass: about 0.02-0.03 ms (below); the rest would couple separate effects, not done |
+| 4 | Lantern: 0.6-0.7 ms against 0.33-0.50 on the old map | cause found (below): its shadow is redrawn every frame where plants stand in range; no fix yet |
+| 5 | Sun shadow draws (1,900-3,300 a view, the largest block of draws left): larger Terrain3D cells, or a GPU-culled caster list | not started; needs a prototype |
+
+Item 2: the patch already skips each of its three texture readings where its weight is under
+0.004, so flat ground reads its textures once. What it still does on every pixel is fetch eight
+more heights for the smooth slope; under 35 deg the side's share is clamped to 0 whatever that
+slope says, so there the fetches can be skipped with an identical result. Two alternating pairs
+(`..._patch_skip_old_1..2` / `..._patch_skip_new_1..2`, `--bench-only=terrain:shader_patch`):
+station GPU within +-0.15 ms at eleven of twelve stations with no direction, and the patch's own
+cost (GPU saved by switching it off) unchanged -- forest_dense 0.25 / 0.18 against -0.10 / 0.22,
+hub_overlook 0.36 / 0.33 against 0.37 / 0.45, mountain_foot 0.66 / 0.67 against 0.69 / 0.64. So
+the height fetches are not where the patch's 0.2-0.7 ms goes; where it does go is not known
+(candidates: the second and third texture readings on slopes, the detail layer's three reads on
+rock). Removed again to keep the patch as it was.
+
+Item 3: the painterly effect copied the frame in a pass of its own (`shared/copy.glsl`, 0.04-0.06
+ms) so its last pass could read neighbours while writing. The horizontal sum pass reads every
+pixel anyway and now stores that copy as well (`box_sum_h_copy.glsl` replaces `box_sum_h.glsl`;
+identical values, so identical output). Per-pass GPU timestamps, three stations each, before
+(`full_trees_pf`) against two runs after (`..._painterly_nocopy_1..2`): copy + horizontal sum
+0.14 / 0.11 / 0.16 ms -> horizontal sum alone 0.10-0.11; the effect's four passes 0.35 -> 0.33 ms
+on average. So the store costs most of what the copy did: 0.02-0.03 ms saved. Kept (one pass and
+one pipeline fewer). The editor survived the rescan after the `@tool` script changed (new shader
+under a new file name, so a half-updated state fails its `load()` and the effect skips a frame).
+What is left of this kind needs one effect to write into the next one's input texture (painterly
+-> radial blur would drop radial blur's copy, about 0.05 ms): it ties two separately switchable
+effects together. Not done.
+
+Item 4: `--bench-only=lantern` (`..._lantern_wind`), GPU ms saved / draws, forest_dense /
+hub_overlook / mountain_foot: lantern 0.84 / 0.35 / 0.79; its shadow alone 0.74 / 0.08 / 0.55
+with 420 / 0 / 324 draws and 2.43 / 0 / 1.57 M triangles; the ground pool 0.28 / 0.08 / 0.17.
+On 2026-10-06 the shadow alone read 0.02 / 0.01 / 0.12 standing still. So the lantern's shadow
+map is now redrawn every frame while the player stands still wherever plants are within its
+13 m (on the bare plateau it is not), and each redraw draws whole instancer cells' worth of
+casters into up to six cube faces. Not confirmed, the likely reason: the foliage shaders have
+used `TIME` in `vertex()` since the wind sway (2026-10-06), and Godot redraws a cached omni
+shadow every frame when a caster's material is animated. `--no-foliage-wind` does not change it
+(`..._lantern_nowind`: 0.67 / 0.12 / 0.56, same draws) -- that argument only zeroes a uniform,
+the shader still reads `TIME`. While walking the map was always redrawn each frame (the light
+moves), so this is a cost of standing still only; what is larger than on 2026-10-06 either way
+is the redraw itself (then about 0.1 ms on the walk). A same-look remedy would be a caster list
+for the lantern holding only plants within its range -- the small case of item 5's caster list
+-- and needs the lantern's shadow kept apart from the sun's casters (whether Godot 4.7's
+`Light3D.shadow_caster_mask` and Terrain3D's per-asset layers allow that is unchecked).
 
 ## Research (2026-10-05)
 

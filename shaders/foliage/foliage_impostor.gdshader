@@ -42,7 +42,15 @@ varying vec3 mv_x;
 varying vec3 mv_y;
 varying vec3 mv_z;
 
+// LOD cross-fade (trees, 2026-10-11): the impostor dissolves in between these two distances from
+// the camera, measured to the plant's root, while the real tree is still drawn in front of it.
+// Set at run time by PlantField; end <= start = off. The other half is in foliage_cutout.gdshaderinc.
+uniform float fade_in_start = 0.0;
+uniform float fade_in_end = 0.0;
+varying float fade_in_dist;
+
 void vertex() {
+	fade_in_dist = distance(MODEL_MATRIX[3].xyz, CAMERA_POSITION_WORLD);
 	mv_x = MODELVIEW_MATRIX[0].xyz;
 	mv_y = MODELVIEW_MATRIX[1].xyz;
 	mv_z = MODELVIEW_MATRIX[2].xyz;
@@ -56,6 +64,12 @@ float impostor_mip_level(vec2 uv, vec2 size) {
 }
 
 void fragment() {
+	if (!IN_SHADOW_PASS && fade_in_end > fade_in_start) {
+		float keep = smoothstep(fade_in_start, fade_in_end, fade_in_dist);
+		if (keep < 1.0 && keep <= fract(52.9829189 * fract(dot(FRAGCOORD.xy, vec2(0.06711056, 0.00583715))))) {
+			discard;
+		}
+	}
 	vec4 tex = texture(albedo_tex, UV);
 	// saturation < 1 pulls the baked colour toward its grey (trees 2026-09-25: the unlit bake came
 	// out more saturated than the lit real crowns at the 150 m switch, 0.66 vs 0.58 measured).

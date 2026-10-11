@@ -2,7 +2,7 @@
 #version 450
 
 // Classic 4-region Kuwahara filter (2026-10-05). Each region's sum is ONE read of the box-sum
-// image (box_sum_h.glsl + box_sum_v.glsl), where the summed-area table this replaced
+// image (box_sum_h_copy.glsl + box_sum_v.glsl), where the summed-area table this replaced
 // (kuwahara_sat.glsl, deleted; in git before 2026-10-05) needed four: box_img(x, y) = the sum over the (r+1) x (r+1) box whose
 // bottom-right corner is pixel (x, y), and the image is r pixels larger than the frame on both
 // axes so the boxes reaching right / down from a pixel are stored at x + r / y + r.

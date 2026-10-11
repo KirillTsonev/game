@@ -138,7 +138,8 @@ automatically) -- a local copy also lives at
     projection while this was tuned; removed the same day (F3 is the rock detail layer now, see
     `ROCK_DETAIL_*` in `terrain_gen.gd`: the same patch reads RockFace and the mountain's rock a
     second time at a small tile for grain, because their 13 m tile is soft up close).
-    The patch's GPU cost is not measured yet. A sharp line still shows where a flat
+    The patch's GPU cost is 0.2-0.7 ms (2026-10-11); skipping its smooth-slope height fetches on
+    flat ground gained nothing (`docs/performance_findings.md` step 12). A sharp line still shows where a flat
     floor meets a wall: that is the heightmap's crease. Displacement does not hide it (Kirill).
   - Crease rounding (same day): `TerrainHeightmap.round_creases`, the last shaping stage before
     the road (`CREASE_ROUND_*` constants, 0 passes = off). It moves a pixel toward a lightly
@@ -971,6 +972,10 @@ optimisation; never judge by GPU utilisation %.
   `..._123501_..._mountains_layers.json` is a targeted run of the same state for the four new
   layers, which the baseline's switching left out through a bug fixed right after it. The
   three `terrain:` toggles switched and restored cleanly (start / end baselines within 0.1 ms).
+- BASELINE since 2026-10-11: `20261011_213415_f9204b28_full_trees_pf.json` (same seed through
+  `--seed`, world cache read; trees and saplings drawn by `PlantField`). Every station is
+  GPU-limited in it (frame 0.5-0.9 ms above GPU, render CPU 2.8-4.8 ms), so draw calls no
+  longer cost frame time; `docs/performance_findings.md` step 8, phase 3.
 - The same day the ablation was TRIMMED (Kirill: the runs were heading for half an hour): three
   ablation stations (`hub_overlook`, `forest_dense`, `mountain_foot`) and about 22 switches
   instead of about 50 at four. Out of a normal run: the per-LOD plant switches, the per-band
@@ -1337,7 +1342,11 @@ on; V is fly mode (no gravity, no collision). Behind the apron, three rows
   indirect MultiMesh per mesh and LOD, LOD and frustum culling per plant in a compute shader. These
   plants have no `MMI3D_*` nodes, so code that hides a layer must also call
   `PlantField.set_layer_shown()` (the J panel and the benchmark do). `submit()` refuses shadow
-  casters and multi-surface meshes. `--plants-terrain3d` starts the game without it. See
+  casters nobody claimed (`claim_shadow_casters`) and meshes of more than 4 surfaces.
+  `--plants-terrain3d` starts the game without it. Since 2026-10-11 it also draws the trees and
+  saplings (`--plants-no-trees` leaves those with Terrain3D); their instancer copies only cast
+  shadows, and the tree-to-impostor cross-fade is `PlantField`'s own: a per-tree dissolve in the
+  leaf and impostor shaders over 155-195 m (`FADE_PER_MARGIN`; `docs/vegetation.md`). See
   `docs/vegetation.md` ("Flowers") and `docs/performance_findings.md` step 8.
 - Since 2026-10-05 some stages run their hot loop in row bands on `WorkerThreadPool`
   (ground paint, grass bake, understory, flowers), noise images are rendered together

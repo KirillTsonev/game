@@ -5,7 +5,7 @@ class_name PostProcessPainterlySAT
 ## Classic 4-region Kuwahara filter. Each pixel takes the mean colour of whichever of its four
 ## (stroke_radius + 1)^2 corner regions has the lowest luma variance.
 ##
-## Since 2026-10-05 the region sums come from two separable box-sum passes (box_sum_h.glsl,
+## Since 2026-10-05 the region sums come from two separable box-sum passes (box_sum_h_copy.glsl,
 ## box_sum_v.glsl: stroke_radius + 1 reads per pixel each) and kuwahara_box.glsl reads one value
 ## per region. Before that they came from a summed-area table (prefix_sum_h/v.glsl +
 ## kuwahara_sat.glsl, hence the class name, kept so compositor.tres still points here): its two
@@ -42,8 +42,6 @@ class_name PostProcessPainterlySAT
 var timestamps := false
 
 var rd: RenderingDevice
-var _shader_copy: RID
-var _pipe_copy: RID
 var _shader_h: RID
 var _pipe_h: RID
 var _shader_v: RID
@@ -75,10 +73,7 @@ func _load_compute(path: String) -> Array[RID]:
 
 func _create_pipeline() -> void:
 	var dir := "res://addons/compositor_effects/painterly_sat/"
-	var loaded := _load_compute("res://addons/compositor_effects/shared/copy.glsl")
-	_shader_copy = loaded[0]
-	_pipe_copy = loaded[1]
-	loaded = _load_compute(dir + "box_sum_h.glsl")
+	var loaded := _load_compute(dir + "box_sum_h_copy.glsl")
 	_shader_h = loaded[0]
 	_pipe_h = loaded[1]
 	loaded = _load_compute(dir + "box_sum_v.glsl")
@@ -128,7 +123,7 @@ func _render_callback(
 ) -> void:
 	if rd == null:
 		return
-	if not _pipe_copy.is_valid() or not _pipe_h.is_valid() or not _pipe_v.is_valid() or not _pipe_kuwahara.is_valid():
+	if not _pipe_h.is_valid() or not _pipe_v.is_valid() or not _pipe_kuwahara.is_valid():
 		return
 
 	var render_scene_buffers: RenderSceneBuffersRD = p_render_data.get_render_scene_buffers()
@@ -163,15 +158,11 @@ func _render_callback(
 		if not color_image.is_valid():
 			continue
 
-		# 0) Preserve an untouched copy of the frame -- needed so the final
-		#    pass's edge detection can safely read neighboring pixels while
-		#    other invocations are writing their own result into color_image.
-		_dispatch(_shader_copy, _pipe_copy, [color_image, _original], _groups(size, local))
-		if timestamps:
-			rd.capture_timestamp("painterly_sat/copy")
-
-		# 1) Horizontal box sums: color_image -> _box_h.
-		_dispatch(_shader_h, _pipe_h, [color_image, _box_h], _groups(size + Vector2i(radius, 0), local), push_constant)
+		# 1) Horizontal box sums: color_image -> _box_h. The same pass keeps an untouched copy of
+		#    the frame in _original (a pass of its own until 2026-10-11): the final pass's edge
+		#    detection reads neighbouring pixels while other invocations write their own result
+		#    into color_image.
+		_dispatch(_shader_h, _pipe_h, [color_image, _box_h, _original], _groups(size + Vector2i(radius, 0), local), push_constant)
 		if timestamps:
 			rd.capture_timestamp("painterly_sat/sum_h")
 
