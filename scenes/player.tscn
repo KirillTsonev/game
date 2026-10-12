@@ -2,22 +2,26 @@
 
 [ext_resource type="Script" uid="uid://cb6l31e0oa14a" path="res://scripts/player.gd" id="1"]
 [ext_resource type="Script" uid="uid://c5o4g3fv2ko8m" path="res://scripts/lantern_flicker.gd" id="2"]
+[ext_resource type="PackedScene" path="res://scenes/player_body.tscn" id="3"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
 radius = 0.4
-height = 1.8
+height = 1.85
 
 [node name="Player" type="CharacterBody3D" unique_id=779426116]
 script = ExtResource("1")
-speed = 6.0
+speed = 4.0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1762986721]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.925, 0)
 shape = SubResource("CapsuleShape3D_1")
 
 [node name="Camera3D" type="Camera3D" parent="." unique_id=678708874]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.73, 0)
 current = true
+
+[node name="Body" parent="." instance=ExtResource("3")]
+eye_look_down_forward = 0.05
 
 [node name="Lantern" type="OmniLight3D" parent="." unique_id=413361556]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.22, 1.15, -0.12)

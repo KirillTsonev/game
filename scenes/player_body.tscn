@@ -1,0 +1,25 @@
+[gd_scene format=3 uid="uid://b7yotyr4ys65k"]
+
+[ext_resource type="Script" uid="uid://qkss66mhiuuv" path="res://scripts/player_body.gd" id="1"]
+[ext_resource type="PackedScene" uid="uid://bttlw4yuvt5hs" path="res://assets/models/characters/rogue/rogue.fbx" id="2"]
+[ext_resource type="PackedScene" uid="uid://drgbx6bjiswmt" path="res://assets/models/props/lantern/lantern.glb" id="3"]
+
+[node name="Body" type="Node3D" unique_id=1812307067]
+script = ExtResource("1")
+body_shadow_reach = 3.25
+
+[node name="Rogue" parent="." unique_id=1635915260 instance=ExtResource("2")]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0)
+
+[node name="HipsAttachment" type="BoneAttachment3D" parent="." unique_id=388493804]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0.98417926, 0)
+bone_name = "Hips"
+bone_idx = 1
+use_external_skeleton = true
+external_skeleton = NodePath("../Rogue/GeneralSkeleton")
+
+[node name="LanternHook" type="Marker3D" parent="HipsAttachment" unique_id=1912927929]
+transform = Transform3D(-0.91863865, 0.3827425, 0.0980365, 0.3920663, 0.9137622, 0.106404476, -0.048856165, 0.13618399, -0.9894784, -0.16205941, 0.12581074, 0.010349229)
+
+[node name="LanternModel" parent="HipsAttachment/LanternHook" unique_id=1815547301 instance=ExtResource("3")]
+transform = Transform3D(0.089155585, 0.0072300956, -0.9959919, -0.18287387, 0.98309326, -0.009233338, 0.9790859, 0.18296403, 0.08897045, 0.00082701445, 0, 0.016209066)

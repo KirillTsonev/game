@@ -61,6 +61,14 @@ func _process(delta: float) -> void:
 	elif position != _rest_position:
 		position = _rest_position
 
+## Moves the light's resting place (its position in its parent). PlayerBody calls this every
+## frame to keep the light in the flame of the lantern model on the belt; the sway, when on,
+## is added round it.
+func set_rest_position(rest: Vector3) -> void:
+	_rest_position = rest
+	if shadow_sway <= 0.0:
+		position = rest
+
 ## Back to the scene's resting values. The benchmark calls this: it stops the player's processing,
 ## which would otherwise leave the lantern at whatever brightness it had at that moment.
 func hold_steady() -> void:

@@ -1,0 +1,11 @@
+[gd_resource type="ORMMaterial3D" load_steps=4 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/models/characters/rogue/textures/rogue_leathera_albedo.png" id="albedo"]
+[ext_resource type="Texture2D" path="res://assets/models/characters/rogue/textures/rogue_leathera_orm.png" id="orm"]
+[ext_resource type="Texture2D" path="res://assets/models/characters/rogue/textures/rogue_leathera_normal.png" id="normal"]
+
+[resource]
+albedo_texture = ExtResource("albedo")
+orm_texture = ExtResource("orm")
+normal_enabled = true
+normal_texture = ExtResource("normal")

@@ -8,9 +8,17 @@ extends CharacterBody3D
 @export var gravity: float = 9.8
 @export var jump_velocity: float = 4.5 ## about 1 m of height at gravity 9.8
 @export var sprint_multiplier: float = 1.6
+## Speed straight sideways and in the three backward directions, as a share of the forward
+## speed; not while crouched. 1 = the same speed everywhere. It was 0.67 for an afternoon,
+## while the pace was 6 m/s and the body's sideways and backward run clips, made for 4 m/s,
+## played at 1.5 times their pace; the pace is 4 m/s now (player.tscn, Kirill, 2026-10-12)
+## and one set of run clips covers all eight directions.
+@export var off_forward_multiplier: float = 1.0
 @export var crouch_multiplier: float = 0.5
-@export var crouch_height: float = 1.1 ## capsule height while crouched (standing: the scene's capsule)
-@export var crouch_camera_height: float = 0.95
+## Capsule height while crouched (standing: the scene's capsule). The body's crouch clip keeps
+## the hood under about 1.05 m and the eyes at about 0.9 m; the camera must stay inside the capsule.
+@export var crouch_height: float = 1.1
+@export var crouch_camera_height: float = 0.95 ## only without a Body node: with one the camera follows its head
 @export var crouch_time: float = 0.15 ## seconds to ease between standing and crouched
 @export var dash_distance: float = 5.0 ## metres covered by one dash on open ground
 @export var dash_time: float = 0.2 ## seconds a dash lasts
@@ -19,6 +27,8 @@ extends CharacterBody3D
 
 @onready var camera: Camera3D = $Camera3D
 @onready var collision: CollisionShape3D = $CollisionShape3D
+## The visible body (scripts/player_body.gd). Without the node the player is a bare camera, as before.
+@onready var body: PlayerBody = get_node_or_null("Body") as PlayerBody
 
 var pitch: float = 0.0
 
@@ -93,7 +103,7 @@ func _snap_to_ground() -> void:
 	var ground_height: float = data.get_height(global_position)
 	if is_nan(ground_height):
 		return # spawn XZ falls outside any generated region -- leave the scene's baked position alone rather than guess
-	# player.tscn's CollisionShape3D sits at local y=0.9 -- exactly the
+	# player.tscn's CollisionShape3D sits at local y=0.925 -- exactly the
 	# capsule's own half-height -- so the capsule's bottom lines up with the
 	# CharacterBody3D's own origin. In other words global_position.y IS foot
 	# level already; only a small clearance is needed so it doesn't spawn
@@ -188,8 +198,11 @@ func _physics_process(delta: float) -> void:
 	var move_speed := speed
 	if _crouching:
 		move_speed *= crouch_multiplier
-	elif _sprinting:
-		move_speed *= sprint_multiplier
+	else:
+		if input_dir.y >= 0.0: # not forward at all (W not held, or cancelled by S)
+			move_speed *= off_forward_multiplier
+		elif _sprinting: # sprinting is forward and diagonally forward only: there is no clip for the rest
+			move_speed *= sprint_multiplier
 
 	_dash_cooldown_left = maxf(_dash_cooldown_left - delta, 0.0)
 	var dash_ended := false
@@ -226,6 +239,9 @@ func _physics_process(delta: float) -> void:
 	var pos_before := global_position
 	move_and_slide()
 	_log_if_stuck(direction, velocity_before_slide, delta, pos_before)
+	if body:
+		# The velocity after the slide: walking into a wall plays the idle clip.
+		body.set_motion(transform.basis.inverse() * velocity, is_on_floor(), _crouching, _sprinting, delta)
 	if dash_ended:
 		# No slide past the dash's distance: the next frame starts from the WASD velocity.
 		velocity.x = 0.0
@@ -296,7 +312,16 @@ func _update_crouch(delta: float) -> void:
 	_crouch_t = move_toward(_crouch_t, target, delta / maxf(crouch_time, 0.001))
 	_capsule.height = lerpf(_stand_height, crouch_height, _crouch_t)
 	collision.position.y = _capsule.height * 0.5
-	camera.position.y = lerpf(_stand_camera_height, crouch_camera_height, _crouch_t)
+	if body == null:
+		camera.position.y = lerpf(_stand_camera_height, crouch_camera_height, _crouch_t)
+
+## With a body the camera sits at its eyes, which move with the clip being played (lower and
+## further forward when jogging, lower still when sneaking).
+func _process(delta: float) -> void:
+	if body:
+		body.advance(delta, pitch)
+		if body.has_eye_position():
+			camera.position = body.eye_position()
 
 func _log_if_stuck(direction: Vector3, velocity_before_slide: Vector3, delta: float, pos_before: Vector3) -> void:
 	var actual_move := global_position - pos_before

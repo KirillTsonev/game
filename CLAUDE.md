@@ -1071,6 +1071,76 @@ optimisation; never judge by GPU utilisation %.
   (`application/boot_splash/*`). The Godot MCP's `update_project_settings` cannot write a `Color`
   (it stores a string or a dictionary): the colour line was fixed in `project.godot` by hand.
 
+## The player's body (since 2026-10-12)
+
+- `scripts/player_body.gd` (node `Body` in `player.tscn`) shows the rogue model in first person and
+  picks one clip from how the Player moves. Model, clips, textures:
+  `tools/blender/import_rogue_character.py` (its header has the import pitfalls).
+- The clips are Quaternius' Universal Animation Library 1 + 2 (CC0, 43 clips each in
+  `animations/ual1.glb` / `ual2.glb`) and, for running sideways and backward, seven files of
+  Kevin Iglesias' Human Basic Motions FREE. The rogue and both packs have different skeletons:
+  each is imported with a bone map onto Godot's humanoid profile ("fix silhouette" on, so
+  every rest pose is the T-pose), after which any clip plays on the rogue. A new clip of the
+  library = one line in the script's `CLIPS`; a new file = one in the tool's `ANIMATION_FILES` too.
+  - A bone a clip has no track for keeps the pose of the clip played before (one pack has no
+    UpperChest): `PlayerBody._add_missing_tracks` gives it a rest-pose track. A check that
+    plays clips one after another without this reads wrong poses.
+  - The rogue's twist and corrective bones get no tracks from these packs.
+  - **The Player's speeds are chosen to fit the clips** (2026-10-12, Kirill found 6 m/s too
+    fast): 4 m/s in every direction = the Human Basic Motions run (eight clips, 2.4 m a
+    cycle), sprint 6.4 m/s forward and diagonally forward only = the library's `Jog_Fwd`
+    (5.3 m a cycle on the rogue), crouch 2 m/s (its clip covers 0.8: it slides). A clip played
+    far off its speed either races (1.5 x looked "more than twice as fast" beside a clip of
+    twice the stride) or slides: after changing a speed, check `CLIPS`' speeds in
+    `player_body.gd`.
+  - Dropped the same day: Epic's Paragon clips (on the rogue's own skeleton, twist bones
+    animated; Unreal-only licence), `Humane-Basics` (Mixamo, no licence file, clips travel),
+    `motifect_locomotion` (generated: no loops, drift, no rest pose). All still in `raw-assets/animations/`.
+- **The camera follows the body's head, slowly** (`eye_*` exports), so the eye height is the
+  clip's, not a constant: about 1.66 m standing (the model is 1.85 m standing straight),
+  1.5-1.6 m jogging, 0.93 m crouched. `Camera3D`'s height in `player.tscn` and
+  `crouch_camera_height` only apply without the `Body` node.
+- The head and hood meshes are shadows-only (the camera is inside them). Seeing the open
+  neck means the camera is not at the eyes. Three causes found (Kirill saw each): an offset
+  measured in world "up" instead of along the head's own axes (a crouched head is tipped
+  50 deg forward); the slow follow trailing a fast head (now at most `eye_max_lag` behind);
+  and frame order -- the Player drives the clips itself (`PlayerBody.advance`, the
+  AnimationPlayer is in manual mode), or the camera is two frames behind the pose.
+- The lantern model (`assets/models/props/lantern/`, `tools/blender/import_lantern.py`) hangs
+  from `HipsAttachment/LanternHook` of `scenes/player_body.tscn` (the body's own scene: open
+  it to move the hook by eye; the lantern shown there is rigid, and at run time the script
+  reads the hook's place once and places the lantern itself, because a BoneAttachment3D
+  follows its bone a frame late). It swings there as a pendulum pushed out of three capsules
+  on the left leg (`PlayerBody._swing_lantern`, worked out in the Player's own space). Its
+  swing is bounded by a speed limit and a tilt limit (`lantern_max_speed`, `lantern_max_angle`):
+  without them a leg's hit and the hips' jolts sent it over its own handle (up to 170 deg
+  measured). The `Lantern` light of `player.tscn` is moved
+  into its flame every frame -- through `lantern_flicker.gd`'s `set_rest_position`, because
+  that script puts the light back at its resting place each frame. The node itself stays where
+  it is in the tree (`perf_bench.gd` and the L key find it by name); its `GroundPool` spot is
+  held where it was, over the Player's head. The light is therefore the hips' height minus
+  0.14 m: 0.77 m standing (was fixed at 1.15 m), 0.26 m crouched, and behind the body in the
+  sideways run, whose clip turns the hips.
+- The body and the lantern model are on render layer 12 alone (`PlayerBody`): the `Lantern`
+  light skips it and a child light `OnBody` (made in code, no shadows) lights only it, at
+  `lantern_light_on_body` of its energy -- a point light strengthens toward itself, and the
+  cloth a hand's width from it burnt out white and fed the bloom (threshold 0.6). The flame's
+  glow is `lantern_flame_glow` (1, the model came with 4), `body_specular` is 0.2. A new light
+  meant to light the player's body must include layer 12.
+- **The body's shadow in the lantern's light fades out with distance** (`body_shadow_reach`,
+  1.7 m; Kirill: the leg shadows sweeping the ground ahead were annoying, half-strength
+  shadows were tried and taken back, none from legs and arms was "too drastic"). A light
+  cannot do that, so there are three in one place: `Lantern` (the body does not shadow it),
+  and its children `NearMinus` (NEGATIVE, same energy, range = the reach) and
+  `NearWithBodyShadow` (the same, positive, shadowed by the body too). Unshadowed, the two
+  cancel. Both copy the `Lantern`'s energy and colour every frame; they keep their shadows
+  when the benchmark's `lantern_shadow` switch turns the `Lantern`'s off. Their cost is not
+  measured yet.
+- A clip's speed goes into `AnimationPlayer.play()`'s custom speed, not `speed_scale`: a
+  cross-fade advances by `speed_scale`, so a clip frozen through it never fades in.
+- A headless check of a scene (`--headless --script`) that hits a script error never reaches
+  `quit()` and hangs: run it with a time limit.
+
 ## Terrain generation code layout (since 2026-09-25)
 
 `scripts/terrain_gen.gd` (the WorldGenerator node) is only the orchestrator; every system is a

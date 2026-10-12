@@ -1,0 +1,14 @@
+[gd_resource type="ORMMaterial3D" load_steps=5 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/models/characters/rogue/textures/rogue_head_albedo.png" id="albedo"]
+[ext_resource type="Texture2D" path="res://assets/models/characters/rogue/textures/rogue_head_orm.png" id="orm"]
+[ext_resource type="Texture2D" path="res://assets/models/characters/rogue/textures/rogue_head_normal.png" id="normal"]
+[ext_resource type="Texture2D" path="res://assets/models/characters/rogue/textures/rogue_head_emission.png" id="emission"]
+
+[resource]
+albedo_texture = ExtResource("albedo")
+orm_texture = ExtResource("orm")
+normal_enabled = true
+normal_texture = ExtResource("normal")
+emission_enabled = true
+emission_texture = ExtResource("emission")
