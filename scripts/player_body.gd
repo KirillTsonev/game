@@ -246,8 +246,11 @@ const TOGGLE_LEFT_ELBOW := Vector3(-0.5, -0.5, -0.7)
 ## The slowest fall (m/s at touching down) that plays the landing clip, where the body sinks
 ## into a crouch and rises again. A jump on level ground lands at the Player's jump_velocity
 ## (4.5 m/s, from 1 m up): at 6 that passes without it, and a drop of 1.8 m or more plays
-## it. As before, only when landing nearly still; moving, the run takes over at once.
+## it. It plays whatever keys are held: the Player stands still meanwhile (holds_player()).
 @export var hard_landing_speed: float = 6.0
+## The share of the landing clip for which the Player is held in place (1 = all of it). Below
+## 1, movement is given back early and a held direction key cuts the clip's end short.
+@export_range(0.0, 1.0) var hard_landing_hold: float = 1.0
 ## How far the body turns toward the way it sprints when that is diagonally forward (radians;
 ## 0.785 = 45 degrees, facing where it goes), and how quickly it turns there (per second).
 @export var diagonal_turn: float = 0.785
@@ -341,6 +344,7 @@ var _turn_wanted: float = 0.0
 var _clip_speed: float = 1.0
 var _was_on_floor: bool = true
 var _landing_left: float = 0.0
+var _landing_length: float = 0.0 ## the landing clip's length, set when one starts
 var _fall_speed: float = 0.0 ## m/s downward on the last frame in the air
 var _hips_bone: int = -1
 var _legs: Array[Dictionary] = [] ## per leg: its bones, and how far its foot is moved just now (_setup_legs)
@@ -543,6 +547,11 @@ func start_dash(local_direction: Vector3, duration: float) -> void:
 	_animations.play(clip, dash_blend_time, _clip_speed)
 	_animations.seek(float(part[0]))
 
+## True while a hard landing holds the Player in place: it ignores the movement keys, the jump
+## and the dash until the body has risen again (hard_landing_hold of the clip).
+func holds_player() -> bool:
+	return _landing_left > _landing_length * (1.0 - hard_landing_hold)
+
 ## local_velocity: the Player's velocity in its own axes (-Z forward, +X right).
 func set_motion(local_velocity: Vector3, on_floor: bool, crouching: bool, sprinting: bool, delta: float) -> void:
 	if _dash_left > 0.0:
@@ -562,8 +571,9 @@ func set_motion(local_velocity: Vector3, on_floor: bool, crouching: bool, sprint
 	if not on_floor:
 		_fall_speed = maxf(-local_velocity.y, 0.0)
 	elif not _was_on_floor:
-		if _fall_speed >= hard_landing_speed and speed < 1.0:
-			_landing_left = _animations.get_animation(&"jump_land").length
+		if _fall_speed >= hard_landing_speed:
+			_landing_length = _animations.get_animation(&"jump_land").length
+			_landing_left = _landing_length
 		_fall_speed = 0.0
 	_was_on_floor = on_floor
 	_landing_left = maxf(_landing_left - delta, 0.0)
@@ -571,7 +581,8 @@ func set_motion(local_velocity: Vector3, on_floor: bool, crouching: bool, sprint
 	if not on_floor:
 		_landing_left = 0.0
 		_play(&"jump_air", 1.0)
-	elif _landing_left > 0.0 and speed < 1.0:
+	elif _landing_left > 0.0 and (speed < 1.0 or holds_player()):
+		# On the frame it touches down the Player still has the speed it fell with.
 		_play(&"jump_land", 1.0)
 	elif crouching:
 		if speed <= still_speed:

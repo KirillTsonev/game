@@ -179,10 +179,13 @@ func _physics_process(delta: float) -> void:
 	if not is_on_floor():
 		velocity.y -= gravity * delta
 
+	# A hard landing holds the player where it came down until the body has risen again.
+	var landing_hard: bool = body != null and body.holds_player()
+
 	# Jump: held Space jumps again on landing. Not while crouched or still standing up.
 	if not Input.is_key_pressed(KEY_SPACE):
 		_jump_held_from_crouch = false
-	elif is_on_floor() and not _crouching and not _jump_held_from_crouch:
+	elif is_on_floor() and not _crouching and not _jump_held_from_crouch and not landing_hard:
 		velocity.y = jump_velocity
 
 	_update_crouch(delta)
@@ -198,6 +201,8 @@ func _physics_process(delta: float) -> void:
 	if Input.is_key_pressed(KEY_D):
 		input_dir.x += 1
 	input_dir = input_dir.normalized()
+	if landing_hard:
+		input_dir = Vector2.ZERO
 
 	var direction := (transform.basis * Vector3(input_dir.x, 0, input_dir.y)).normalized()
 
@@ -291,6 +296,8 @@ func _tap_for_dash(key: Key, local_direction: Vector3) -> void:
 		return
 	_last_tap_key = KEY_NONE # a third quick press starts a new double tap, not another dash
 	if _dash_left > 0.0 or _dash_cooldown_left > 0.0 or not is_on_floor():
+		return
+	if body and body.holds_player():
 		return
 	_set_crouching(false)
 	if _crouching:

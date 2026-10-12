@@ -22,7 +22,9 @@ automatically) -- a local copy also lives at
   colour matching, litter, moss, gap cover, grounding, cones and the mid-storey.
 - `docs/performance_findings.md` -- (2026-10-05) what the first uncapped benchmark showed (where
   the frame goes, per layer and per effect) and the ordered remedy plan with a status column.
-  Update it with the measured saving after each optimisation step.
+  Update it with the measured saving after each optimisation step. Its step 13 (2026-10-12):
+  the CPU's heat in play is the GPU's (shared cooling), and what a longer valley will cost /
+  why a plain draw radius gains little (sections proposed, nothing measured).
 - `docs/startup_optimisation.md` -- (2026-10-05) how to keep startup fast when adding a
   generation stage, scatter layer or model: the measure / checksum / fix / verify procedure, which
   reusable piece fits which cost (preload, disk caches, worker-thread bands, lookup grids), the

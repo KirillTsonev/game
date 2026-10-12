@@ -1468,6 +1468,59 @@ benchmark's noise any more. Untried and small: a tree shadow mesh with each leaf
 to 2-4 triangles (ceiling about 0.2-0.4 ms, risk of the visible card shading itself). Weaker
 machines are a matter of a settings preset, which the ablation tables already price.
 
+### 13. Heat, and what a longer valley will cost (2026-10-12, open)
+
+**The CPU running hot in play is the GPU's heat.** Kirill's readings, standing in the middle of
+the map, CPU usage 5-10 % in both views (overall 10-20 %, "same as always"):
+
+| View | GPU | CPU |
+|---|---|---|
+| Sky | 61 deg, about 40 % | 70 deg |
+| Forward | 78 deg, about 60 % | 81 deg |
+
+Same CPU work, CPU temperature following the GPU's: the two share the laptop's cooling. Before
+the mountains both read about 70 deg under load (Kirill). The reports agree with more GPU work
+per frame at the fixed 60 FPS: `full_plantfield` (2026-10-06, old map) against `full_trees_pf`
+(2026-10-11), GPU ms: spawn_ahead 7.58 -> 8.87, forest_dense 7.13 -> 9.06, road_mid 6.62 ->
+8.74, cliff_face 6.27 -> 8.44, spawn_sky about 1.95 -> 3.29 (different maps: kinds of view, not
+the same spots). Known parts: displacement + shader patch up to 1.2 ms where terrain fills the
+view, mountain rows / cloud sheets / sky clouds 0.2-0.4 ms each in view, the lantern 0.6-0.8 ms
+against 0.33-0.50. Render CPU is 2.8-4.8 ms and physics 0.1-0.3 ms a frame, so the CPU side has
+nothing to fix. Not a fault: both temperatures are ordinary for a laptop under load.
+
+- Not measured: the player body's two extra shadowed lights at the lantern (`NearMinus`,
+  `NearWithBodyShadow`), added after the last benchmark. The lantern's own shadow is 0.55-0.74 ms
+  because a redraw takes in whole 32 m instancer cells; these two may do the same. To price it:
+  `--bench-only=lantern` on seed 3082472107 against `..._lantern_wind`.
+- Cooler only by less GPU work per second (render scale, sun shadows, post effects, a lower
+  frame cap), all look-or-smoothness choices.
+
+**Would a draw radius help? (Kirill, with the biome valley plan in mind: much more terrain.)**
+Reasoned from the reports and the code, nothing built or measured.
+
+- Today, little. The frame is spent near the camera and most of it already ends at a distance:
+  sun shadows at 150 m, grass within `GrassField.RADIUS` 250 m (its cost within 100 m),
+  understory shadows to 60-80 m, trees as 8-triangle impostors past 175 m; post effects, MSAA
+  and render scale are per pixel. A cutoff at, say, 300 m would remove impostors and distant
+  terrain: a few tenths of a millisecond at most, and it needs thicker fog to hide the edge
+  (`SCENE_FOG_BEGIN` is 150 m).
+- What grows with the map's size whatever the view:
+  - Impostors have no far limit (the last LOD's range is 0 = never ends), so a look down a
+    long valley draws every tree in the frustum. Here a far cutoff does pay; bends and fog
+    would hide it.
+  - `PlantField` runs every plant through its cull pass every frame (about 90,000 now) and
+    issues its 151 draws whatever is in view; its instance buffers grow with the map.
+  - Terrain3D's instancer cells to cull: render CPU was 5.4 ms for 6,007 draws on 4 regions and
+    8.9 ms for 6,483 on 10 (step 10; never separated from the other changes).
+  - Startup: 7-9 s for 384 x 1024 m, roughly with area.
+  - Collision for every trunk, rock and cliff is built up front.
+- Proposed for the biome valley: sections, with only the player's and its neighbours alive
+  (plants submitted, collision built, shadow casters registered); beyond them terrain and fog
+  only; the next section generated in the background. It is a restructuring: every scatter
+  stage runs once over the whole map and assumes it stays.
+- First, measure: one launch at double map length with the benchmark, to see which of the
+  costs above grows and by how much.
+
 ## Research (2026-10-05)
 
 A web search for optimisation guidance, read against the findings above.
