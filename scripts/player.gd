@@ -20,8 +20,10 @@ extends CharacterBody3D
 @export var crouch_height: float = 1.1
 @export var crouch_camera_height: float = 0.95 ## only without a Body node: with one the camera follows its head
 @export var crouch_time: float = 0.15 ## seconds to ease between standing and crouched
-@export var dash_distance: float = 5.0 ## metres covered by one dash on open ground
-@export var dash_time: float = 0.2 ## seconds a dash lasts
+## 4 m in 0.4 s since 2026-10-12 (was 5 m in 0.2 s), for the body's dash clips: they are hops
+## of about 2 m in a second, and over 0.2 s one would have played at five times its pace.
+@export var dash_distance: float = 4.0 ## metres covered by one dash on open ground
+@export var dash_time: float = 0.4 ## seconds a dash lasts
 @export var dash_cooldown: float = 0.8 ## seconds after a dash ends before the next one
 @export var dash_double_tap_time: float = 0.25 ## longest gap between the two presses of a double tap
 
@@ -295,6 +297,8 @@ func _tap_for_dash(key: Key, local_direction: Vector3) -> void:
 		return
 	_dash_direction = (transform.basis * local_direction).normalized()
 	_dash_left = dash_time
+	if body:
+		body.start_dash(local_direction, dash_time)
 
 ## Standing up is refused while something is overhead: the body's current shape is swept up
 ## by the height it still has to grow.

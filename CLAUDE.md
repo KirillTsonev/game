@@ -1191,6 +1191,16 @@ optimisation; never judge by GPU utilisation %.
   the swung lantern must be led back to how it hung, or it comes down in front of the thigh
   and stays there. Anything else that switches the light (`perf_bench.gd`) still sets
   `Lantern.visible` directly.
+- **The dash plays Mixamo's "Standing Dodge" hops** (`animations/dodge_*.fbx`, `dash_*` in
+  `CLIPS`, `PlayerBody.start_dash`, called by the Player's `_tap_for_dash`; 2026-10-12, TRIAL,
+  not judged in game). A clip is a hop of about 2 m in a second; the dash was 5 m in 0.2 s,
+  which would have played one at five times its pace, so the dash is 4 m in 0.4 s now
+  (Kirill chose that over keeping the dash or matching the clip). Only the part where the
+  hips travel is played (`DASH_PARTS`, about 0.6-0.7 s of each clip, so about 1.5-1.9 x):
+  the sinking into the knees before it is left out so the dash answers the key at once, and
+  the landing is the fade to the next clip. The clips are NOT in place: `_hold_in_place`
+  takes their hips' travel out. While a dash runs `set_motion` picks no clip. The eyes dip
+  11 cm in the forward and sideways hops and 22 cm in the backward one.
 - **The idle has a mirror image** (`idle_mirror`, built in code by `PlayerBody._mirrored`;
   2026-10-12, Kirill: stopping always ended "with left leg sticking forward"). The library's
   idle stands with the left foot 43 cm ahead of the right; coming to a stand, `set_motion`

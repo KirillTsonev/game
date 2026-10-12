@@ -44,6 +44,22 @@ const CLIPS := {
 	&"crouch_fwd": [UAL1, "Crouch_Fwd", true, 0.8],
 	&"jump_air": [UAL1, "Jump", true, 0.0],
 	&"jump_land": [UAL1, "Jump_Land", false, 0.0],
+	# Mixamo's "Standing Dodge" hops, for the dash: see DASH_PARTS.
+	&"dash_fwd": ["dodge_fwd.fbx", "", false, 0.0],
+	&"dash_bwd": ["dodge_bwd.fbx", "", false, 0.0],
+	&"dash_left": ["dodge_left.fbx", "", false, 0.0],
+	&"dash_right": ["dodge_right.fbx", "", false, 0.0],
+}
+## The part of each dash clip that is played, in seconds of the clip: from where its hips set
+## off to where they have arrived. A clip is a hop of about a second -- 0.1 to 0.2 s of sinking
+## into the knees first, which is left out so that the dash answers the key at once, then the
+## travel, then a landing, which the fade to the next clip stands in for. The part is played
+## over the dash's own time (the Player's dash_time), so at 0.4 s about 1.5 times its pace.
+const DASH_PARTS := {
+	&"dash_fwd": [0.23, 0.83],
+	&"dash_bwd": [0.2, 0.9],
+	&"dash_left": [0.1, 0.87],
+	&"dash_right": [0.07, 0.77],
 }
 ## The eight ways to move, clockwise from straight ahead, as they appear in the clips' names.
 const DIRECTIONS: Array[String] = ["fwd", "fwd_right", "right", "bwd_right", "bwd", "bwd_left", "left", "fwd_left"]
@@ -225,6 +241,7 @@ const TOGGLE_LEFT_ELBOW := Vector3(-0.5, -0.5, -0.7)
 @export var min_playback_speed: float = 0.6
 @export var max_playback_speed: float = 1.6
 @export var blend_time: float = 0.2 ## seconds to cross-fade from one clip to the next
+@export var dash_blend_time: float = 0.08 ## seconds to fade into a dash's hop (out of it: blend_time)
 @export var still_speed: float = 0.3 ## m/s below which the Player counts as standing
 ## The slowest fall (m/s at touching down) that plays the landing clip, where the body sinks
 ## into a crouch and rises again. A jump on level ground lands at the Player's jump_velocity
@@ -307,6 +324,7 @@ var _player_velocity_before: Vector3
 var _eye: Vector3
 var _eye_valid: bool = false
 var _clip: StringName = &""
+var _dash_left: float = 0.0 ## seconds of a dash's hop still to play (start_dash)
 var _idle_mirrored: bool = false ## standing with the right foot forward (the idle's mirror image)
 var _arms: Dictionary = {} ## "Left" / "Right" -> that arm's bones and hand points (_setup_arms)
 var _toggle_at: float = -1.0 ## seconds into turning the lantern on / off, below 0 = not doing it
@@ -400,6 +418,8 @@ func _ready() -> void:
 		_add_missing_tracks(animation)
 		if CLIPS[clip][2]:
 			_take_out_travel(animation)
+		elif DASH_PARTS.has(clip):
+			_hold_in_place(animation)
 		library.add_animation(clip, animation)
 	for source: AnimationPlayer in sources.values():
 		source.owner.free()
@@ -442,6 +462,18 @@ func _take_out_travel(animation: Animation) -> void:
 		for key in keys:
 			var value: Vector3 = animation.track_get_key_value(track, key)
 			animation.track_set_key_value(track, key, value - travel * ((animation.track_get_key_time(track, key) - first) / span))
+		return
+
+## Takes a clip's travel out altogether: its hips keep the place they start at, sideways and
+## forward (not the height). For the dash's hops, which cover 2 m: the Player does the moving.
+func _hold_in_place(animation: Animation) -> void:
+	for track in animation.get_track_count():
+		if animation.track_get_type(track) != Animation.TYPE_POSITION_3D or String(animation.track_get_path(track).get_concatenated_subnames()) != "Hips":
+			continue
+		var first: Vector3 = animation.track_get_key_value(track, 0)
+		for key in animation.track_get_key_count(track):
+			var value: Vector3 = animation.track_get_key_value(track, key)
+			animation.track_set_key_value(track, key, Vector3(first.x, value.y, first.z))
 		return
 
 ## A clip's mirror image, left and right changed over. On the humanoid skeleton the two sides'
@@ -494,8 +526,32 @@ func _add_missing_tracks(animation: Animation) -> void:
 		animation.track_set_path(track, NodePath("%s:%s" % [skeleton_path, bone_name]))
 		animation.rotation_track_insert_key(track, 0.0, _skeleton.get_bone_rest(bone).basis.get_rotation_quaternion())
 
+## The Player starts a dash: its hop is played over `duration` seconds, whatever set_motion()
+## hears meanwhile. local_direction: in the Player's axes (-Z forward, +X right), one of the
+## four ways.
+func start_dash(local_direction: Vector3, duration: float) -> void:
+	var clip := &"dash_fwd"
+	if absf(local_direction.x) > absf(local_direction.z):
+		clip = &"dash_right" if local_direction.x > 0.0 else &"dash_left"
+	elif local_direction.z > 0.0:
+		clip = &"dash_bwd"
+	var part: Array = DASH_PARTS[clip]
+	_dash_left = duration
+	_turn_wanted = 0.0
+	_clip = clip
+	_clip_speed = (float(part[1]) - float(part[0])) / maxf(duration, 0.01)
+	_animations.play(clip, dash_blend_time, _clip_speed)
+	_animations.seek(float(part[0]))
+
 ## local_velocity: the Player's velocity in its own axes (-Z forward, +X right).
 func set_motion(local_velocity: Vector3, on_floor: bool, crouching: bool, sprinting: bool, delta: float) -> void:
+	if _dash_left > 0.0:
+		# A dash's hop plays through; only the fall's speed is still followed.
+		_dash_left -= delta
+		_was_on_floor = on_floor
+		_fall_speed = maxf(-local_velocity.y, 0.0) if not on_floor else 0.0
+		_landing_left = 0.0
+		return
 	var flat := Vector2(local_velocity.x, local_velocity.z)
 	var speed := flat.length()
 	var direction := _direction(flat)

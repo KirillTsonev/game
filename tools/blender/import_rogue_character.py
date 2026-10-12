@@ -80,6 +80,10 @@ for clip, source in (("jog_fwd", "Jog Forward"), ("jog_bwd", "Jog Backward"),
                      ("jog_fwd_left", "Jog Forward Diagonal(1)"), ("jog_fwd_right", "Jog Forward Diagonal"),
                      ("jog_bwd_left", "Jog Backward Diagonal"), ("jog_bwd_right", "Jog Backward Diagonal(1)")):
     ANIMATION_FILES[clip + ".fbx"] = (os.path.join(ANIM_ROOT, source + ".fbx"), "mixamo", "Skeleton3D")
+# Mixamo's "Standing Dodge" hops, for the dash (raw-assets/animations/dodge; "Without Skin", 30
+# frames a second, NOT in place: each travels about 2 m, which the script takes out).
+for clip, source in (("dodge_fwd", "Forward"), ("dodge_bwd", "Backward"), ("dodge_left", "Left"), ("dodge_right", "Right")):
+    ANIMATION_FILES[clip + ".fbx"] = (os.path.join(ANIM_ROOT, "dodge", "Standing Dodge %s.fbx" % source), "mixamo", "Skeleton3D")
 
 
 def humanoid_map(fixed, side_bones, fingers, side_name, finger_name):
