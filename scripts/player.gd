@@ -114,7 +114,9 @@ func _snap_to_ground() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	# Mouse look, only while the cursor is captured.
-	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+	# Not while the body has the view (turning the lantern on / off): the mouse is ignored
+	# then, and the view comes back to where it was (Kirill, 2026-10-12).
+	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not (body and body.has_the_view()):
 		rotate_y(-event.relative.x * mouse_sensitivity)
 		pitch = clamp(pitch - event.relative.y * mouse_sensitivity, -1.4, 1.4)
 		camera.rotation.x = pitch
@@ -126,7 +128,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	# "GroundPool" (the overhead spot that lights the ground) hides with it.
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_L:
 		var lantern := get_node_or_null("Lantern") as Light3D
-		if lantern:
+		if body:
+			body.toggle_lantern() # the view dips, and the light changes part-way through
+		elif lantern:
 			lantern.visible = not lantern.visible
 
 	# Shift = sprint on/off, Ctrl = crouch on/off, Space while crouched = stand up (no jump).
@@ -322,6 +326,8 @@ func _process(delta: float) -> void:
 		body.advance(delta, pitch)
 		if body.has_eye_position():
 			camera.position = body.eye_position()
+		# `pitch` stays the Player's own: the look at the lantern is added for as long as it lasts.
+		camera.rotation = Vector3(pitch, 0.0, 0.0) + body.view_offset()
 
 func _log_if_stuck(direction: Vector3, velocity_before_slide: Vector3, delta: float, pos_before: Vector3) -> void:
 	var actual_move := global_position - pos_before

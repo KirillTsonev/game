@@ -40,6 +40,11 @@ automatically) -- a local copy also lives at
   **Before editing such a loop, put its kernel's name into `TerrainUtil.NATIVE_KERNELS_OFF`**, or
   the compiled copy keeps running and the edit does nothing; afterwards update the kernel and
   run `native/check_parity.sh` (both described there under "Changing a loop that has a kernel").
+- `docs/custom_animations.md` -- (2026-10-12) how to build an action the animation packs do
+  not have (hands reaching to things, as in turning the lantern on / off): what to write down
+  first, how to find real points on the meshes, the pieces in `scripts/player_body.gd`
+  (`_reach`, `_set_fingers`, the timeline), the rules each learnt from a fault, and how to
+  check it headless. Read before adding or changing such an action.
 - This file stays the reference for pitfalls and _why_ things are done the way they are.
 
 ## Local tooling paths (this machine)
@@ -1136,6 +1141,41 @@ optimisation; never judge by GPU utilisation %.
   cancel. Both copy the `Lantern`'s energy and colour every frame; they keep their shadows
   when the benchmark's `lantern_shadow` switch turns the `Lantern`'s off. Their cost is not
   measured yet.
+- **L turns the lantern on / off through `PlayerBody.toggle_lantern`** (1.5 s; not in the air; the Player can
+  keep moving). The lantern STAYS ON THE BELT (Kirill: taking it off each time "doesn't seem
+  logical"; the first version lifted it before the chest). The view goes 78 deg down, 15 deg
+  right and tilts (`view_offset`, added to the Player's `pitch`; the mouse is ignored meanwhile, `has_the_view`), spine and chest bend right
+  and turn right, the open right hand cups the lantern and swings it 75 deg forward on its
+  hook, the left tugs its knob, the light changes at the tug, and all goes back. The arms
+  are not keyframed: `_reach` solves each (two bones, elbow toward `TOGGLE_ELBOW`) to a point
+  every frame after the clip, so it runs over any clip. It also turns the hand so its palm
+  faces a given way with the fingers running on from the forearm (wrist bend capped at
+  `TOGGLE_WRIST_MAX`), and `_set_fingers` replaces the clip's fingers -- which are near fists
+  (77 deg a joint standing, 105 running) -- with open ones that close on arrival, one after
+  another. Timing is the `TOGGLE_*` shares of `toggle_time`. The left hand pinches the end
+  of the wick's rod with thumb, forefinger and middle finger and TURNS the pinch about the
+  rod (Kirill: a pull "looks like hitting a switch", and so did a 0.2 s turn with the light
+  snapping over half-way). The pinch is real: with the fingers closed 1.0 rad a joint, the
+  thumb 0.5 and swung in 0.4 (`toggle_pinch_*`), the three tips are 1-2 cm apart (measured;
+  closing alone never brought them nearer than 3 cm). The hand is turned so that the line
+  from its middle to the tips points at the lantern -- pointing the fingers' own line there
+  put the closed fingers' knuckles inside the mesh -- and the grip found before the turn is
+  KEPT and only rolled about the rod during it (`_pinch_grip`): worked out afresh each frame,
+  it shifted with the forearm and a quarter turn swung the hand through 180-220 deg. The
+  turn is 0.9 rad because the wrist alone makes it (at 1.6 the hand folded over 100 deg back
+  on the forearm). The parts OVERLAP (hands set off as the view starts down, the view starts back as the turn ends): one after another it was "3 different actions" and 2.0 s (Kirill). The turn takes 0.4 s, one way to light and the
+  other to put out, and the light rises or falls with it: `lantern_flicker.gd` has a `level`
+  (0-1) that `PlayerBody` moves during the turn; the light is `visible` from the turn's start
+  when lighting and until the sequence's end when putting out. The rod's end on the model is at
+  (0.021, -0.242, 0.04) from the handle's top (`toggle_knob`); the mesh is one welded piece
+  with split vertices, so it was found as the only thing reaching 0.04 m from the middle
+  line at that height, not as a separate part. The left arm goes round the front of the body
+  (`toggle_left_around`, elbow forward): straight across, it passed through the belly. What the numbers
+  taught: the lantern at the hip is almost straight below the eyes, so a 38 deg dip never
+  showed it; bending the body FORWARD carries the eyes past it (bend sideways instead); and
+  the swung lantern must be led back to how it hung, or it comes down in front of the thigh
+  and stays there. Anything else that switches the light (`perf_bench.gd`) still sets
+  `Lantern.visible` directly.
 - A clip's speed goes into `AnimationPlayer.play()`'s custom speed, not `speed_scale`: a
   cross-fade advances by `speed_scale`, so a clip frozen through it never fades in.
 - A headless check of a scene (`--headless --script`) that hits a script error never reaches

@@ -27,6 +27,10 @@ const SWAY_HZ := 3.0
 ## get_noise_1d() stays within about +-0.6: this brings the swing up to flicker_amount.
 const NOISE_GAIN := 1.6
 
+## How far up the flame is turned, 0-1: multiplies the energy of this light and of its pool, on
+## top of the flicker. PlayerBody moves it while the knob is turned (L); 1 otherwise.
+var level: float = 1.0
+
 var _noise := FastNoiseLite.new()
 var _time: float = 0.0
 var _pool: Light3D
@@ -77,8 +81,8 @@ func hold_steady() -> void:
 
 func _apply(factor: float) -> void:
 	var ember := clampf((1.0 - factor) * colour_shift, 0.0, 1.0)
-	light_energy = _rest_energy * factor
+	light_energy = _rest_energy * factor * level
 	light_color = _rest_color.lerp(EMBER, ember)
 	if _pool:
-		_pool.light_energy = _pool_rest_energy * factor
+		_pool.light_energy = _pool_rest_energy * factor * level
 		_pool.light_color = _pool_rest_color.lerp(EMBER, ember)
