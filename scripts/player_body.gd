@@ -7,9 +7,9 @@ extends Node3D
 ## is the node "Body" of player.tscn; the Player calls set_motion() every physics frame and
 ## advance() every frame.
 ##
-## The clips come from two packs with skeletons of their own (Quaternius' Universal Animation
-## Library, CC0, and Kevin Iglesias' Human Basic Motions). Each pack and the rogue are imported
-## onto Godot's humanoid bone names, so any clip plays on the rogue:
+## The clips come from two sources with skeletons of their own (Quaternius' Universal Animation
+## Library, CC0, and Mixamo's jogs). Each and the rogue are imported onto Godot's humanoid
+## bone names, so any clip plays on the rogue:
 ## tools/blender/import_rogue_character.py.
 ##
 ## Not done yet: blending between directions (the nearest of eight is played), an animation
@@ -21,18 +21,22 @@ const CLIP_DIR := "res://assets/models/characters/rogue/animations/"
 const UAL1 := "ual1.glb" ## Universal Animation Library 1: 43 clips in one file
 ## Clip -> [file, clip in the file ("" = its only one), loops, the speed over the ground (m/s)
 ## at which its feet match the ground on the rogue at playback speed 1 (0 = not a moving clip)].
-## Measured on the packs' root-motion versions; the library's are times 1.07, the rogue's
-## legs being that much longer than its mannequin's.
+## The library's are measured on its root-motion version, times 1.07, the rogue's legs being
+## that much longer than its mannequin's. Mixamo's jogs are in place: theirs is the speed of
+## a foot against the hips while it is on the ground, measured on the rogue itself with the
+## clip playing (the middle value over a cycle). They are jogs of 2.3 to 3.0 m/s and the eight
+## differ: at the Player's 3 m/s they play at 1.0 to 1.3 times their pace. (At 4 m/s it was
+## 1.3 to 1.6, with right, backward and back-right at the playback limit and 3 to 8 % short.)
 const CLIPS := {
 	&"idle": [UAL1, "Idle", true, 0.0],
-	&"jog_fwd": ["run_fwd.fbx", "", true, 4.0],
-	&"jog_fwd_left": ["run_fwd_left.fbx", "", true, 4.0],
-	&"jog_fwd_right": ["run_fwd_right.fbx", "", true, 4.0],
-	&"jog_left": ["run_left.fbx", "", true, 4.0],
-	&"jog_right": ["run_right.fbx", "", true, 4.0],
-	&"jog_bwd": ["run_bwd.fbx", "", true, 4.0],
-	&"jog_bwd_left": ["run_bwd_left.fbx", "", true, 4.0],
-	&"jog_bwd_right": ["run_bwd_right.fbx", "", true, 4.0],
+	&"jog_fwd": ["jog_fwd.fbx", "", true, 2.63],
+	&"jog_fwd_left": ["jog_fwd_left.fbx", "", true, 2.79],
+	&"jog_fwd_right": ["jog_fwd_right.fbx", "", true, 2.9],
+	&"jog_left": ["jog_left.fbx", "", true, 3.0],
+	&"jog_right": ["jog_right.fbx", "", true, 2.44],
+	&"jog_bwd": ["jog_bwd.fbx", "", true, 2.38],
+	&"jog_bwd_left": ["jog_bwd_left.fbx", "", true, 2.56],
+	&"jog_bwd_right": ["jog_bwd_right.fbx", "", true, 2.31],
 	# The library's jog: a long bounding stride, the Player's default pace while that was
 	# 6 m/s. (Its "Sprint" covers 8.8 m/s, for the 9.6 m/s the sprint was then.)
 	&"sprint": [UAL1, "Jog_Fwd", true, 5.6],
@@ -222,6 +226,11 @@ const TOGGLE_LEFT_ELBOW := Vector3(-0.5, -0.5, -0.7)
 @export var max_playback_speed: float = 1.6
 @export var blend_time: float = 0.2 ## seconds to cross-fade from one clip to the next
 @export var still_speed: float = 0.3 ## m/s below which the Player counts as standing
+## The slowest fall (m/s at touching down) that plays the landing clip, where the body sinks
+## into a crouch and rises again. A jump on level ground lands at the Player's jump_velocity
+## (4.5 m/s, from 1 m up): at 6 that passes without it, and a drop of 1.8 m or more plays
+## it. As before, only when landing nearly still; moving, the run takes over at once.
+@export var hard_landing_speed: float = 6.0
 ## How far the body turns toward the way it sprints when that is diagonally forward (radians;
 ## 0.785 = 45 degrees, facing where it goes), and how quickly it turns there (per second).
 @export var diagonal_turn: float = 0.785
@@ -286,6 +295,7 @@ var _turn_wanted: float = 0.0
 var _clip_speed: float = 1.0
 var _was_on_floor: bool = true
 var _landing_left: float = 0.0
+var _fall_speed: float = 0.0 ## m/s downward on the last frame in the air
 
 func _ready() -> void:
 	_skeleton = _model.find_children("*", "Skeleton3D", true, false)[0] as Skeleton3D
@@ -355,6 +365,8 @@ func _ready() -> void:
 		var animation := source.get_animation(in_file if in_file != "" else String(source.get_animation_list()[0]))
 		animation.loop_mode = Animation.LOOP_LINEAR if CLIPS[clip][2] else Animation.LOOP_NONE
 		_add_missing_tracks(animation)
+		if CLIPS[clip][2]:
+			_take_out_travel(animation)
 		library.add_animation(clip, animation)
 	for source: AnimationPlayer in sources.values():
 		source.owner.free()
@@ -374,6 +386,27 @@ func _apply_body_specular() -> void:
 			var material := mesh.mesh.surface_get_material(surface) as BaseMaterial3D
 			if material:
 				material.metallic_specular = body_specular
+
+## Makes a looping clip stay in place: if its hips end somewhere else than they start, that
+## travel is taken out evenly over the clip's length (sideways and forward, not the height).
+## One of the Mixamo jogs was downloaded without "In Place" and walks 1.5 m off.
+func _take_out_travel(animation: Animation) -> void:
+	for track in animation.get_track_count():
+		if animation.track_get_type(track) != Animation.TYPE_POSITION_3D or String(animation.track_get_path(track).get_concatenated_subnames()) != "Hips":
+			continue
+		var keys := animation.track_get_key_count(track)
+		if keys < 2:
+			return
+		var travel: Vector3 = animation.track_get_key_value(track, keys - 1) - animation.track_get_key_value(track, 0)
+		travel.y = 0.0
+		if travel.length() < 0.02:
+			return
+		var first := animation.track_get_key_time(track, 0)
+		var span := maxf(animation.track_get_key_time(track, keys - 1) - first, 0.001)
+		for key in keys:
+			var value: Vector3 = animation.track_get_key_value(track, key)
+			animation.track_set_key_value(track, key, value - travel * ((animation.track_get_key_time(track, key) - first) / span))
+		return
 
 ## A bone a clip has no track for keeps the pose of the clip played before. One pack has two
 ## spine bones and the other three, so each such bone of the humanoid set gets a track holding
@@ -403,8 +436,14 @@ func set_motion(local_velocity: Vector3, on_floor: bool, crouching: bool, sprint
 	var direction := _direction(flat)
 	_turn_wanted = 0.0
 	_sprinting = sprinting and speed > still_speed
-	if on_floor and not _was_on_floor and speed < 1.0:
-		_landing_left = _animations.get_animation(&"jump_land").length
+	# The landing clip (the body sinks into a crouch and rises) only after a fall harder
+	# than an ordinary jump's: the speed it was falling at just before it touched down.
+	if not on_floor:
+		_fall_speed = maxf(-local_velocity.y, 0.0)
+	elif not _was_on_floor:
+		if _fall_speed >= hard_landing_speed and speed < 1.0:
+			_landing_left = _animations.get_animation(&"jump_land").length
+		_fall_speed = 0.0
 	_was_on_floor = on_floor
 	_landing_left = maxf(_landing_left - delta, 0.0)
 

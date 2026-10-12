@@ -7,9 +7,9 @@
 #
 # Written 2026-10-12. Sources, all under raw-assets/: models/rogue (rogue_all.fbx +
 # textures_and_weapons/) and, in animations/, Quaternius' Universal Animation Library 1 and 2
-# (CC0) and Kevin Iglesias' Human Basic Motions FREE (Unity Asset Store).
+# (CC0) and eight jog clips from Mixamo (free with an Adobe account, any engine).
 #
-# The character and the two packs have three different skeletons. Each is imported with a bone
+# The character and the two sources have three different skeletons. Each is imported with a bone
 # map (bone_maps/*.tres) onto Godot's humanoid profile, which renames the mapped bones (Hips,
 # LeftUpperArm ...), turns their axes the profile's way and, with "fix silhouette", makes every
 # rest pose the profile's T-pose -- the rogue's is an A-pose. After that a clip from either
@@ -27,7 +27,10 @@
 #    maps and one material per source material. The .import files must exist BEFORE the editor
 #    first scans the folder. To change an import setting later, delete the .import and re-run.
 #
-# Tried before, 2026-10-12: Epic's Paragon clips (5,385 of them, on the rogue's own skeleton,
+# Tried before, 2026-10-12: Kevin Iglesias' Human Basic Motions FREE for the run in eight
+# directions. Its sideways clips are forward runs with the hips turned 90 degrees and the
+# shoulders 42, not sidesteps (Kirill: the body faces fully sideways); Mixamo's keep the body
+# within 25 degrees of straight ahead. Also Epic's Paragon clips (5,385 of them, on the rogue's own skeleton,
 # so no bone map was needed and the twist bones were animated). Dropped: licensed for Unreal
 # Engine projects only. Also tried: converting the rogue to glb in Blender -- its FBX import
 # misplaces six bones of this rig (right forearm, left shin and their helpers); Godot's does not.
@@ -61,18 +64,22 @@ def pack_dir(start, *more):
     return os.path.join(path, *more)
 
 
-HBM_RUN = pack_dir("Human Basic Motions", "Animations", "Male", "Movement", "Run")
 # File in animations/ -> (source file, bone map, path of its Skeleton3D in the imported scene).
-# The two libraries hold 43 clips each (the versions without root motion); a Human Basic
-# Motions file holds one, in place.
+# The two libraries hold 43 clips each (the versions without root motion); a Mixamo file holds
+# one. The Mixamo jogs lie loose in raw-assets/animations as downloaded ("Without Skin", 30
+# frames a second, "In Place" ticked, all from one of Mixamo's own characters). Which file is
+# which way was read from the feet: "Forward Diagonal(1)" goes forward-LEFT and the plain one
+# forward-right; "Backward Diagonal(1)" goes back-right. The plain "Backward Diagonal" is the
+# back-left one and was downloaded WITHOUT "In Place" (twice): the script takes its travel out.
 ANIMATION_FILES = {
     "ual1.glb": (pack_dir("Universal Animation Library[", "Unreal-Godot", "UAL1_Standard.glb"), "ual", "Armature/Skeleton3D"),
     "ual2.glb": (pack_dir("Universal Animation Library 2", "Unreal-Godot", "UAL2_Standard.glb"), "ual", "Armature/Skeleton3D"),
 }
-for clip, source in (("run_fwd", "Forward"), ("run_bwd", "Backward"), ("run_left", "Left"), ("run_right", "Right"),
-                     ("run_fwd_left", "ForwardLeft"), ("run_fwd_right", "ForwardRight"),
-                     ("run_bwd_left", "BackwardLeft"), ("run_bwd_right", "BackwardRight")):
-    ANIMATION_FILES[clip + ".fbx"] = (os.path.join(HBM_RUN, "HumanM@Run01_%s.fbx" % source), "hbm", "Skeleton3D")
+for clip, source in (("jog_fwd", "Jog Forward"), ("jog_bwd", "Jog Backward"),
+                     ("jog_left", "Jog Strafe Left"), ("jog_right", "Jog Strafe Right"),
+                     ("jog_fwd_left", "Jog Forward Diagonal(1)"), ("jog_fwd_right", "Jog Forward Diagonal"),
+                     ("jog_bwd_left", "Jog Backward Diagonal"), ("jog_bwd_right", "Jog Backward Diagonal(1)")):
+    ANIMATION_FILES[clip + ".fbx"] = (os.path.join(ANIM_ROOT, source + ".fbx"), "mixamo", "Skeleton3D")
 
 
 def humanoid_map(fixed, side_bones, fingers, side_name, finger_name):
@@ -104,14 +111,15 @@ BONE_MAPS = {
          "Neck": "neck_01", "Head": "Head"},
         UNREAL_SIDE, UNREAL_FINGERS,
         lambda name, side: "%s_%s" % (name, side[0].lower()), lambda finger, n: "%s_0%d" % (finger, n)),
-    # Two spine bones: no UpperChest.
-    "hbm": humanoid_map(
-        {"Root": "B-root", "Hips": "B-hips", "Spine": "B-spine", "Chest": "B-chest", "Neck": "B-neck",
-         "Head": "B-head", "Jaw": "B-jaw"},
-        {"Shoulder": "shoulder", "UpperArm": "upperArm", "LowerArm": "forearm", "Hand": "hand",
-         "UpperLeg": "thigh", "LowerLeg": "shin", "Foot": "foot", "Toes": "toe"},
-        {"Thumb": "thumb", "Index": "indexFinger", "Middle": "middleFinger", "Ring": "ringFinger", "Little": "pinky"},
-        lambda name, side: "B-%s.%s" % (name, side[0]), lambda finger, n: "%s0%d" % (finger, n)),
+    # Mixamo's rig: "mixamorig:Hips" in the file, which Godot reads as "mixamorig_Hips". It has
+    # no root bone above the hips.
+    "mixamo": humanoid_map(
+        {"Hips": "mixamorig_Hips", "Spine": "mixamorig_Spine", "Chest": "mixamorig_Spine1",
+         "UpperChest": "mixamorig_Spine2", "Neck": "mixamorig_Neck", "Head": "mixamorig_Head"},
+        {"Shoulder": "Shoulder", "UpperArm": "Arm", "LowerArm": "ForeArm", "Hand": "Hand",
+         "UpperLeg": "UpLeg", "LowerLeg": "Leg", "Foot": "Foot", "Toes": "ToeBase"},
+        {"Thumb": "HandThumb", "Index": "HandIndex", "Middle": "HandMiddle", "Ring": "HandRing", "Little": "HandPinky"},
+        lambda name, side: "mixamorig_%s%s" % (side, name), lambda finger, n: "%s%d" % (finger, n)),
 }
 # Source material -> size of its reduced textures.
 TEXTURE_SIZES = {"Cloth": 2048, "LeatherA": 2048, "LeatherB": 2048, "Head": 1024, "Metal": 1024,

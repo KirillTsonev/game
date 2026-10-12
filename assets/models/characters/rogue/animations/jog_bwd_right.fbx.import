@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://0xk2gys877bd"
-path="res://.godot/imported/run_right.fbx-c3f1d59a7f2a30706492da97e96135b5.scn"
+uid="uid://b4qcxddxaso2x"
+path="res://.godot/imported/jog_bwd_right.fbx-a8856598b394ea00998a5de706aaa795.scn"
 
 [deps]
 
-source_file="res://assets/models/characters/rogue/animations/run_right.fbx"
-dest_files=["res://.godot/imported/run_right.fbx-c3f1d59a7f2a30706492da97e96135b5.scn"]
+source_file="res://assets/models/characters/rogue/animations/jog_bwd_right.fbx"
+dest_files=["res://.godot/imported/jog_bwd_right.fbx-a8856598b394ea00998a5de706aaa795.scn"]
 
 [params]
 
@@ -42,7 +42,7 @@ materials/extract_path=""
 _subresources={
 "nodes": {
 "PATH:Skeleton3D": {
-"retarget/bone_map": Resource("res://assets/models/characters/rogue/bone_maps/hbm.tres"),
+"retarget/bone_map": Resource("res://assets/models/characters/rogue/bone_maps/mixamo.tres"),
 "retarget/remove_tracks/unmapped_bones": true,
 "retarget/rest_fixer/fix_silhouette/enable": true,
 "retarget/rest_fixer/fix_silhouette/threshold": 1

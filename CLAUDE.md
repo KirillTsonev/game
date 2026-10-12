@@ -1082,19 +1082,28 @@ optimisation; never judge by GPU utilisation %.
   picks one clip from how the Player moves. Model, clips, textures:
   `tools/blender/import_rogue_character.py` (its header has the import pitfalls).
 - The clips are Quaternius' Universal Animation Library 1 + 2 (CC0, 43 clips each in
-  `animations/ual1.glb` / `ual2.glb`) and, for running sideways and backward, seven files of
-  Kevin Iglesias' Human Basic Motions FREE. The rogue and both packs have different skeletons:
+  `animations/ual1.glb` / `ual2.glb`) and, for the default pace in all eight directions, eight
+  Mixamo jogs (`animations/jog_*.fbx`; loose in `raw-assets/animations` as downloaded). The
+  jogs replaced Kevin Iglesias' Human Basic Motions run on 2026-10-12: that pack's sideways
+  clips are forward runs with the hips turned 90 deg and the shoulders 42, not sidesteps
+  (Kirill: the body faced fully sideways; turning the model part-way back made the feet run
+  diagonally). The rogue and both sources have different skeletons:
   each is imported with a bone map onto Godot's humanoid profile ("fix silhouette" on, so
   every rest pose is the T-pose), after which any clip plays on the rogue. A new clip of the
   library = one line in the script's `CLIPS`; a new file = one in the tool's `ANIMATION_FILES` too.
-  - A bone a clip has no track for keeps the pose of the clip played before (one pack has no
-    UpperChest): `PlayerBody._add_missing_tracks` gives it a rest-pose track. A check that
+  - A bone a clip has no track for keeps the pose of the clip played before (Mixamo's rig has
+    no root bone): `PlayerBody._add_missing_tracks` gives it a rest-pose track. A check that
     plays clips one after another without this reads wrong poses.
   - The rogue's twist and corrective bones get no tracks from these packs.
-  - **The Player's speeds are chosen to fit the clips** (2026-10-12, Kirill found 6 m/s too
-    fast): 4 m/s in every direction = the Human Basic Motions run (eight clips, 2.4 m a
-    cycle), sprint 6.4 m/s forward and diagonally forward only = the library's `Jog_Fwd`
-    (5.3 m a cycle on the rogue), crouch 2 m/s (its clip covers 0.8: it slides). A clip played
+  - A Mixamo clip downloaded without "In Place" walks off: `PlayerBody._take_out_travel`
+    takes the hips' net travel out of every looping clip (`jog_bwd_left` needed it). An
+    in-place clip carries no speed: measure it as the speed of a foot against the hips while
+    it is on the ground, on the rogue with the clip playing (the Mixamo jogs: 2.3-3.0 m/s).
+  - **The Player's speeds and the clips** (all 2026-10-12): Kirill found 6 m/s too fast,
+    tried 4 m/s, and settled on 3 m/s (`speed` in `player.tscn`) once the Mixamo jogs were
+    in: they are made for 2.3-3.0 m/s and play at 1.0-1.3 x there (at 4 m/s: 1.3-1.6 x).
+    Sprint is 4.8 m/s (1.6 x), forward and diagonally forward only = the library's `Jog_Fwd`
+    (5.3 m a cycle on the rogue, made for 5.6 m/s), crouch 1.5 m/s (its clip covers 0.8: it slides). A clip played
     far off its speed either races (1.5 x looked "more than twice as fast" beside a clip of
     twice the stride) or slides: after changing a speed, check `CLIPS`' speeds in
     `player_body.gd`.

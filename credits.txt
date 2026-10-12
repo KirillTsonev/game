@@ -24,6 +24,7 @@ davidbryanroberson - https://www.fab.com/sellers/davidbryanroberson
 Zygomir - https://www.fab.com/sellers/Zygomir
 Taber Noble - https://www.fab.com/sellers/Taber%20Noble
 Abdu11ah - https://www.fab.com/sellers/Abdu11ah
+Khempavee - https://www.fab.com/sellers/Khempavee
 
 --- Code ---
 
@@ -32,3 +33,8 @@ Ethan Truong - https://github.com/2Retr0/GodotGrass
 --- Post-processing ---
 
 AtSaturn's Mind - https://www.patreon.com/SaturnsMind
+
+--- Animations ---
+
+Mixamo
+Quaternius - https://quaternius.com/
