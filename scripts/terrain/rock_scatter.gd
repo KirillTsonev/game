@@ -682,6 +682,11 @@ static func scatter_scree(terrain: Terrain3D, heights: PackedFloat32Array, width
 		transforms_by_mesh[mesh_id] = [] as Array[Transform3D]
 		colors_by_mesh[mesh_id] = PackedColorArray()
 	var scree_total := 0
+	# The stones stand on the ground as it is DRAWN (TerrainDisplacement), not on the heightmap:
+	# these are 4-23 cm tall, and the displaced textures at a cliff's foot move the ground up to
+	# 36 cm from it, so they hung in the air or were swallowed (Kirill, 2026-10-12).
+	var drawn_shift_most := 0.0
+	var t_scree := Time.get_ticks_msec()
 
 	for feature in cliff_features:
 		# Same archetype subset as _scatter_boulders (single-sided step faces only).
@@ -743,7 +748,8 @@ static func scatter_scree(terrain: Terrain3D, heights: PackedFloat32Array, width
 			if not found_clear_spot:
 				continue
 
-			var pos := Vector3(import_position.x + px, height - SCREE_EMBED_DEPTH, import_position.z + pz)
+			var pos := TerrainDisplacement.drawn(Vector3(import_position.x + px, height, import_position.z + pz)) - Vector3(0.0, SCREE_EMBED_DEPTH, 0.0)
+			drawn_shift_most = maxf(drawn_shift_most, absf(pos.y + SCREE_EMBED_DEPTH - height))
 			var align := Quaternion(Vector3.UP, normal)
 			var spin := Quaternion(normal, rng.randf_range(0.0, TAU))
 			# Weighted pool pick: mostly fine gravel, a scatter of larger chips.
@@ -793,7 +799,8 @@ static func scatter_scree(terrain: Terrain3D, heights: PackedFloat32Array, width
 					break
 				if not found_clear_spot:
 					continue
-				var pos := Vector3(import_position.x + px, TerrainUtil.sample_height_bilinear(heights, width, length, px, pz) - SCREE_EMBED_DEPTH, import_position.z + pz)
+				# On the ground as drawn, like the stones above.
+				var pos := TerrainDisplacement.drawn(Vector3(import_position.x + px, TerrainUtil.sample_height_bilinear(heights, width, length, px, pz), import_position.z + pz)) - Vector3(0.0, SCREE_EMBED_DEPTH, 0.0)
 				var mesh_id: int
 				if rng.randf() < SCREE_GRAVEL_FRACTION:
 					mesh_id = SCREE_GRAVEL_MESH_IDS[rng.randi() % SCREE_GRAVEL_MESH_IDS.size()]
@@ -808,7 +815,7 @@ static func scatter_scree(terrain: Terrain3D, heights: PackedFloat32Array, width
 		if not transforms_by_mesh[mesh_id].is_empty():
 			instancer.add_transforms(mesh_id, transforms_by_mesh[mesh_id], colors_by_mesh[mesh_id], true)
 
-	print("TERRAIN_GEN: scattered %d scree stone(s) across %d cliff feature(s) + %d at %d knot(s)" % [scree_total + knot_scree_total, cliff_features.size(), knot_scree_total, knots.size()])
+	print("TERRAIN_GEN: scattered %d scree stone(s) across %d cliff feature(s) + %d at %d knot(s); placed on the drawn ground: %s (moved up or down by at most %.2f m, detiling %s; %d ms)" % [scree_total + knot_scree_total, cliff_features.size(), knot_scree_total, knots.size(), TerrainDisplacement.is_ready(), drawn_shift_most, "exact" if TerrainDisplacement.exact_detiling else "NOT exact", Time.get_ticks_msec() - t_scree])
 
 ## Knot rows for the knot talus/scree passes: one {knot, center, face, along, half_len, front} per
 ## (knot, knot_row) group of knot meshes in cliff_plan, pixel space. face = mean mesh facing (the

@@ -254,6 +254,33 @@ const TOGGLE_LEFT_ELBOW := Vector3(-0.5, -0.5, -0.7)
 @export var eye_max_lag: float = 0.03
 
 ## The model, turned half round in the scene: it faces +Z, the Player looks along -Z.
+## The feet are put on the ground under them (_place_feet): a clip is made for level ground,
+## and the Player's capsule only knows the ground under its middle, so on a slope the uphill
+## foot went into the ground and the downhill one hung in the air.
+@export var feet_on_ground: bool = true
+## The feet follow the ground as it is DRAWN where the terrain's textures are displaced
+## (TerrainDisplacement), not only the collision under it. The Player itself still stands on
+## the collision: on a bump its legs fold, over a hollow they stretch.
+@export var feet_on_drawn_ground: bool = true
+@export var feet_max_up: float = 0.35 ## m a foot may be raised above where the clip has it
+@export var feet_max_down: float = 0.45 ## m it may be lowered
+## m/s at most that a foot follows a change of the ground's height under it. Up to that speed
+## it follows at once: easing it instead left a foot swinging forward up a slope 13 cm behind
+## the ground it landed on. The limit only softens a step or a stone's edge.
+@export var feet_max_speed: float = 5.0
+@export var feet_smoothing: float = 0.06 ## seconds a foot takes to follow a change of the ground's slope
+@export var feet_blend_time: float = 0.15 ## seconds to fade it out on leaving the ground, and back in
+@export var feet_max_tilt: float = 35.0 ## degrees a foot may be tilted to the ground's slope
+## A foot is tilted to the slope fully while it is on the ground and not at all once the clip
+## has lifted it this far (m).
+@export var feet_tilt_lift: float = 0.12
+## The share of its full length a leg may be stretched to before the hips come down for it,
+## and the seconds the hips take to do so.
+@export_range(0.8, 1.0, 0.005) var feet_leg_stretch: float = 0.985
+@export var feet_hips_smoothing: float = 0.1
+const FEET_RAY_UP := 0.6 ## m above the Player's feet level from where the ground is looked for
+const KNEE_FORWARD := 0.03 ## m: a nearly straight leg bends forward, whichever way the clip's hair of a bend goes
+
 @onready var _model: Node3D = $Rogue
 ## Where the lantern's handle hangs: a marker under a BoneAttachment3D, placed in the editor.
 @onready var _lantern_hook: Node3D = $HipsAttachment/LanternHook
@@ -280,6 +307,7 @@ var _player_velocity_before: Vector3
 var _eye: Vector3
 var _eye_valid: bool = false
 var _clip: StringName = &""
+var _idle_mirrored: bool = false ## standing with the right foot forward (the idle's mirror image)
 var _arms: Dictionary = {} ## "Left" / "Right" -> that arm's bones and hand points (_setup_arms)
 var _toggle_at: float = -1.0 ## seconds into turning the lantern on / off, below 0 = not doing it
 var _toggle_lighting: bool = false ## the turn under way lights the lantern (false: puts it out)
@@ -296,6 +324,10 @@ var _clip_speed: float = 1.0
 var _was_on_floor: bool = true
 var _landing_left: float = 0.0
 var _fall_speed: float = 0.0 ## m/s downward on the last frame in the air
+var _hips_bone: int = -1
+var _legs: Array[Dictionary] = [] ## per leg: its bones, and how far its foot is moved just now (_setup_legs)
+var _feet_weight: float = 0.0 ## 0-1: how far the feet are placed (0 in the air)
+var _hips_drop: float = 0.0 ## how far the hips are lowered for the feet just now (the skeleton's units)
 
 func _ready() -> void:
 	_skeleton = _model.find_children("*", "Skeleton3D", true, false)[0] as Skeleton3D
@@ -311,6 +343,7 @@ func _ready() -> void:
 
 	_apply_body_specular()
 	_setup_arms()
+	_setup_legs()
 
 	# The hook's place is read once; from then on the lantern is placed by this script, in
 	# the same frame as the pose (the attachment node itself follows the bone a frame late).
@@ -370,6 +403,9 @@ func _ready() -> void:
 		library.add_animation(clip, animation)
 	for source: AnimationPlayer in sources.values():
 		source.owner.free()
+	# The idle stands with the left foot forward; its mirror image is for stopping with the
+	# right foot forward (set_motion).
+	library.add_animation(&"idle_mirror", _mirrored(library.get_animation(&"idle")))
 	_animations = AnimationPlayer.new()
 	_model.add_child(_animations) # its tracks ("%GeneralSkeleton:<bone>") start at the model's root
 	_animations.add_animation_library(&"", library)
@@ -407,6 +443,35 @@ func _take_out_travel(animation: Animation) -> void:
 			var value: Vector3 = animation.track_get_key_value(track, key)
 			animation.track_set_key_value(track, key, value - travel * ((animation.track_get_key_time(track, key) - first) / span))
 		return
+
+## A clip's mirror image, left and right changed over. On the humanoid skeleton the two sides'
+## rest poses mirror each other across the plane x = 0, so a bone's turn goes to the bone of
+## the other side with its y and z parts negated, and a position with its x negated.
+func _mirrored(animation: Animation) -> Animation:
+	var mirror := animation.duplicate(true) as Animation
+	for track in mirror.get_track_count():
+		var path := mirror.track_get_path(track)
+		var bone := String(path.get_concatenated_subnames())
+		if bone.begins_with("Left"):
+			bone = "Right" + bone.substr(4)
+		elif bone.begins_with("Right"):
+			bone = "Left" + bone.substr(5)
+		mirror.track_set_path(track, NodePath("%s:%s" % [String(path.get_concatenated_names()), bone]))
+		var type := mirror.track_get_type(track)
+		for key in mirror.track_get_key_count(track):
+			if type == Animation.TYPE_ROTATION_3D:
+				var turn: Quaternion = mirror.track_get_key_value(track, key)
+				mirror.track_set_key_value(track, key, Quaternion(turn.x, -turn.y, -turn.z, turn.w))
+			elif type == Animation.TYPE_POSITION_3D:
+				var place: Vector3 = mirror.track_get_key_value(track, key)
+				mirror.track_set_key_value(track, key, Vector3(-place.x, place.y, place.z))
+	return mirror
+
+## True while the right foot is further forward than the left (the skeleton's +Z is its front).
+func _right_foot_ahead() -> bool:
+	if _legs.size() < 2:
+		return false
+	return _skeleton.get_bone_global_pose(_legs[1]["foot"]).origin.z > _skeleton.get_bone_global_pose(_legs[0]["foot"]).origin.z
 
 ## A bone a clip has no track for keeps the pose of the clip played before. One pack has two
 ## spine bones and the other three, so each such bone of the humanoid set gets a track holding
@@ -459,7 +524,12 @@ func set_motion(local_velocity: Vector3, on_floor: bool, crouching: bool, sprint
 			# One clip for every direction; moving backward plays it in reverse.
 			_play(&"crouch_fwd", _playback_speed(speed, &"crouch_fwd") * (-1.0 if direction.begins_with("bwd") else 1.0))
 	elif speed <= still_speed:
-		_play(&"idle", 1.0)
+		# Coming to a stand, the foot that is forward stays forward: the idle has the left one
+		# there, its mirror image the right. (Always the left: stopping on the right foot, the
+		# legs changed places.)
+		if _clip != &"idle" and _clip != &"idle_mirror":
+			_idle_mirrored = _right_foot_ahead()
+		_play(&"idle_mirror" if _idle_mirrored else &"idle", 1.0)
 	elif sprinting and direction.begins_with("fwd"):
 		# There is one sprint clip, straight ahead: sprinting diagonally forward is that clip
 		# with the whole body turned the way it goes.
@@ -546,6 +616,7 @@ func advance(delta: float, camera_pitch: float) -> void:
 	# Half a turn (the model faces +Z, the Player looks along -Z) plus the turn into a diagonal.
 	_turn = lerp_angle(_turn, _turn_wanted, 1.0 - exp(-delta * diagonal_turn_rate))
 	_model.rotation.y = PI + _turn
+	_place_feet(player, delta) # before the eyes are found: it can lower the hips, and the head with them
 	# The head bone in the Player's space. On the humanoid skeleton its +Y runs up the skull
 	# and its +Z out of the face, so the eyes are found along the head's own axes: a crouched
 	# body carries the head tipped far forward, and "up" from the bone is then the back of the
@@ -830,6 +901,142 @@ func _reach(arm: Dictionary, point: String, bones: Transform3D, target: Vector3,
 		hand = _skeleton.get_bone_global_pose(arm["hand"])
 		lower.basis = Basis(Quaternion((hand.origin - lower.origin).normalized(), (upper.origin + toward * distance - lower.origin).normalized())) * lower.basis
 		_skeleton.set_bone_global_pose(arm["lower"], lower)
+
+func _setup_legs() -> void:
+	_hips_bone = _skeleton.find_bone("Hips")
+	for side: String in ["Left", "Right"]:
+		var foot := _skeleton.find_bone(side + "Foot")
+		_legs.append({
+			"upper": _skeleton.find_bone(side + "UpperLeg"), "lower": _skeleton.find_bone(side + "LowerLeg"), "foot": foot, "toes": _skeleton.find_bone(side + "Toes"),
+			"ankle": _skeleton.get_bone_global_rest(foot).origin.y, # the ankle's height standing on level ground
+			"ground": 0.0, # the ground's height under the foot (world), followed at feet_max_speed
+			"offset": 0.0, # m the foot is moved up just now (negative: down)
+			"normal": Vector3.UP, # the ground's normal under it, in the Player's space
+		})
+
+## The ground's height (world) and normal straight under a place, by a ray against the
+## collision from FEET_RAY_UP above the Player's feet level to feet_max_down below it; an
+## empty array where there is none.
+func _ground_under(player: Node3D, at: Vector3) -> Array:
+	var level := player.global_position.y
+	var query := PhysicsRayQueryParameters3D.create(Vector3(at.x, level + FEET_RAY_UP, at.z), Vector3(at.x, level - feet_max_down - 0.1, at.z))
+	if player is CollisionObject3D:
+		query.collision_mask = (player as CollisionObject3D).collision_mask
+		query.exclude = [(player as CollisionObject3D).get_rid()]
+	var hit := player.get_world_3d().direct_space_state.intersect_ray(query)
+	if hit.is_empty():
+		return []
+	var found: Vector3 = hit["position"]
+	# The collision is the plain heightmap; where a texture's relief moves the drawn ground off
+	# it, the foot goes to the drawn ground.
+	if feet_on_drawn_ground:
+		found.y += TerrainDisplacement.lift_at(found)
+	return [found.y, hit["normal"]]
+
+## Puts both feet on the ground under them, after the clip. The ground's height under each
+## ankle is looked up with a ray against the collision, and the foot is moved up or down by
+## how far that is from the level the Player stands at -- so a foot the clip has lifted stays
+## lifted by as much. The hips come down only when a leg could not reach its foot's place
+## otherwise (feet_leg_stretch): coming down as far as the lower foot goes, they sank 16 cm
+## jogging up a 20 degree slope, for the foot trailing behind. A foot on the ground is tilted to the
+## slope; a lifted one is not, and is raised instead by what the ground under its toes is
+## higher than under its ankle. All of it fades out in the air.
+func _place_feet(player: Node3D, delta: float) -> void:
+	if not feet_on_ground or _hips_bone < 0 or _legs.is_empty():
+		return
+	var weight_before := _feet_weight
+	_feet_weight = move_toward(_feet_weight, 1.0 if _was_on_floor else 0.0, delta / maxf(feet_blend_time, 0.001))
+	if _feet_weight <= 0.0:
+		for leg in _legs:
+			leg["offset"] = 0.0
+			leg["normal"] = Vector3.UP
+		_hips_drop = 0.0
+		return
+	var bones := player.global_transform.affine_inverse() * _skeleton.global_transform
+	var to_skeleton := bones.affine_inverse()
+	var up := to_skeleton.basis * Vector3.UP # one metre up, in the skeleton's space
+	var level := player.global_position.y
+	var follow := 1.0 - exp(-delta / maxf(feet_smoothing, 0.001))
+	var feet_in_clip: Array[Transform3D] = []
+	var planted_shares: Array[float] = []
+	for leg in _legs:
+		var foot := _skeleton.get_bone_global_pose(leg["foot"])
+		feet_in_clip.append(foot)
+		# How far the clip has the foot off the ground decides how much of the slope it takes.
+		var lift: float = ((bones * foot.origin).y - _model.position.y) - (leg["ankle"] as float) * bones.basis.y.length()
+		var planted := 1.0 - clampf(lift / maxf(feet_tilt_lift, 0.001), 0.0, 1.0)
+		planted_shares.append(planted)
+		var ground := level
+		var normal := Vector3.UP
+		var under_ankle := _ground_under(player, player.global_transform * (bones * foot.origin))
+		if not under_ankle.is_empty():
+			ground = under_ankle[0]
+			normal = player.global_basis.inverse() * (under_ankle[1] as Vector3)
+			if planted < 1.0 and (leg["toes"] as int) >= 0:
+				var under_toes := _ground_under(player, player.global_transform * (bones * _skeleton.get_bone_global_pose(leg["toes"]).origin))
+				if not under_toes.is_empty():
+					ground += (1.0 - planted) * maxf((under_toes[0] as float) - ground, 0.0)
+		# The height is followed in the world, not against the Player: under a foot that stands
+		# it does not change, however fast the Player climbs past it.
+		leg["ground"] = ground if weight_before <= 0.0 else move_toward(leg["ground"], ground, feet_max_speed * delta)
+		leg["normal"] = (leg["normal"] as Vector3).lerp(normal, follow).normalized()
+		leg["offset"] = clampf((leg["ground"] as float) - level, -feet_max_down, feet_max_up) * _feet_weight
+	# The hips come down only as far as a leg needs to reach its foot's place.
+	var straight := up.normalized()
+	var drop := 0.0
+	for i in _legs.size():
+		var leg := _legs[i]
+		var hip := _skeleton.get_bone_global_pose(leg["upper"]).origin
+		var knee := _skeleton.get_bone_global_pose(leg["lower"]).origin
+		var reach := ((knee - hip).length() + (feet_in_clip[i].origin - knee).length()) * feet_leg_stretch
+		var to_foot := feet_in_clip[i].origin + up * (leg["offset"] as float) - hip
+		var below := -to_foot.dot(straight)
+		var aside := to_foot.length_squared() - below * below
+		drop = maxf(drop, below - sqrt(maxf(reach * reach - aside, 0.0)))
+	_hips_drop = lerpf(_hips_drop, minf(drop, feet_max_down * up.length()), 1.0 - exp(-delta / maxf(feet_hips_smoothing, 0.001)))
+	var hips := _skeleton.get_bone_global_pose(_hips_bone)
+	hips.origin -= straight * _hips_drop
+	_skeleton.set_bone_global_pose(_hips_bone, hips)
+	for i in _legs.size():
+		var leg := _legs[i]
+		var foot := feet_in_clip[i]
+		var normal := (to_skeleton.basis * (leg["normal"] as Vector3)).normalized()
+		var tilt := Quaternion.IDENTITY
+		var axis := straight.cross(normal)
+		if axis.length_squared() > 0.000001:
+			tilt = Quaternion(axis.normalized(), minf(straight.angle_to(normal), deg_to_rad(feet_max_tilt)) * planted_shares[i] * _feet_weight)
+		_solve_leg(leg, foot, foot.origin + up * (leg["offset"] as float), tilt)
+
+## Bends one leg so that its ankle is at `goal` (the skeleton's space), the knee to the side
+## the clip has it, and gives the foot the turn it has in the clip (`foot_in_clip`) with `tilt`
+## on top.
+func _solve_leg(leg: Dictionary, foot_in_clip: Transform3D, goal: Vector3, tilt: Quaternion) -> void:
+	var upper := _skeleton.get_bone_global_pose(leg["upper"])
+	var lower := _skeleton.get_bone_global_pose(leg["lower"])
+	var foot := _skeleton.get_bone_global_pose(leg["foot"])
+	var upper_length := (lower.origin - upper.origin).length()
+	var lower_length := (foot.origin - lower.origin).length()
+	var to_goal := goal - upper.origin
+	var distance := clampf(to_goal.length(), absf(upper_length - lower_length) + 0.001, upper_length + lower_length - 0.001)
+	var toward := to_goal.normalized()
+	# The knee's side: where the clip has it, with the body's front (+Z of the skeleton) added
+	# so that a leg the clip holds straight does not bend backward or sideways.
+	var knee := lower.origin - upper.origin + Vector3.BACK * KNEE_FORWARD
+	var sideways := knee - toward * knee.dot(toward)
+	if sideways.length_squared() < 0.000001:
+		sideways = Vector3.BACK - toward * Vector3.BACK.dot(toward)
+	# The triangle hip - knee - ankle with its three sides known.
+	var cosine := clampf((upper_length * upper_length + distance * distance - lower_length * lower_length) / (2.0 * upper_length * distance), -1.0, 1.0)
+	var knee_at := upper.origin + toward * (upper_length * cosine) + sideways.normalized() * (upper_length * sqrt(1.0 - cosine * cosine))
+	upper.basis = Basis(Quaternion((lower.origin - upper.origin).normalized(), (knee_at - upper.origin).normalized())) * upper.basis
+	_skeleton.set_bone_global_pose(leg["upper"], upper)
+	lower = _skeleton.get_bone_global_pose(leg["lower"])
+	foot = _skeleton.get_bone_global_pose(leg["foot"])
+	lower.basis = Basis(Quaternion((foot.origin - lower.origin).normalized(), (upper.origin + toward * distance - lower.origin).normalized())) * lower.basis
+	_skeleton.set_bone_global_pose(leg["lower"], lower)
+	foot = _skeleton.get_bone_global_pose(leg["foot"])
+	foot.basis = Basis(tilt) * foot_in_clip.basis
+	_skeleton.set_bone_global_pose(leg["foot"], foot)
 
 ## Sets how far each finger of a hand is closed: `closed` holds radians per joint for the
 ## thumb, forefinger, middle, ring and little finger (the order of FINGERS), 0 = flat as in the

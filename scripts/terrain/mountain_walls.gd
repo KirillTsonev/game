@@ -1223,7 +1223,8 @@ static func scatter_foot_debris(parent_node: Node, terrain: Terrain3D, maps: Dic
 			var height := TerrainUtil.sample_height_bilinear(heights, width, length, px, pz)
 			var basis := Basis(Quaternion(normal, spin) * Quaternion(Vector3.UP, normal)).scaled(Vector3.ONE * scale)
 			# Boulders are sunk by a quarter of their size, so their downhill side does not float.
-			var xform := Transform3D(basis, Vector3(heightmap_corner.x + px, height - (0.25 * scale if is_boulder else 0.02), heightmap_corner.z + pz))
+			# The scree stones stand on the ground as drawn (TerrainDisplacement, as RockScatter's do).
+			var xform := Transform3D(basis, Vector3(heightmap_corner.x + px, height - 0.25 * scale, heightmap_corner.z + pz) if is_boulder else TerrainDisplacement.drawn(Vector3(heightmap_corner.x + px, height, heightmap_corner.z + pz)) - Vector3(0.0, 0.02, 0.0))
 			if not transforms.has(mesh_id):
 				transforms[mesh_id] = [] as Array[Transform3D]
 			transforms[mesh_id].append(xform)

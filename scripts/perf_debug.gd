@@ -152,6 +152,13 @@ func _input(event: InputEvent) -> void:
 			print(GrassScatter.debug_probe(player.global_position))
 	elif event.physical_keycode == KEY_M:
 		_toggle_church_preview()
+	elif event.physical_keycode == KEY_F1:
+		# Markers on the ground as TerrainDisplacement computes it, to compare with what is drawn.
+		# (Not F8: that is the editor's "stop the running project" key and closes the game.)
+		var scene := get_tree().current_scene
+		var player := scene.get_node_or_null("Player") as Node3D
+		if player:
+			print(TerrainDisplacement.toggle_debug_markers(scene, scene.get_node_or_null("Terrain3D") as Terrain3D, player.global_position))
 	elif event.physical_keycode == KEY_F7:
 		print(MountainWalls.toggle_fog())
 	elif event.physical_keycode == KEY_F6:

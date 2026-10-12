@@ -906,6 +906,12 @@ placed at`res://compositor_effects/`directly, every effect throws
   nothing). Compare with `int(x) == id` in any @tool method that takes id lists (see
   `setup_rock_assets.gd`'s `only_ids`). Also: after editing a @tool script, `rescan_filesystem`
   before calling it, or the first call can still run the old version.
+- **Never bind a debug key to F8.** In a game started from the editor F8 is the editor's
+  "stop the running project" shortcut: the game closes at once, with no error, before the
+  script's own handler does anything (Kirill, 2026-10-12: "f8 closes the game" -- the
+  `TerrainDisplacement` markers were on it and moved to F1). F5 / F6 / F7 are editor run keys
+  too but do not reach a running game (F6 and F7 are in use by PerfDebug and work). The keys
+  PerfDebug already uses are listed in `scripts/perf_debug.gd`'s `_unhandled_input`.
 - User preference: do not call `take_screenshot` -- screenshots are
   user-provided only. Verify changes via console logs, diagnostic stats
   (e.g. `_print_roughness_stats`), and raycasts (`get_intersection`)
@@ -1185,6 +1191,75 @@ optimisation; never judge by GPU utilisation %.
   the swung lantern must be led back to how it hung, or it comes down in front of the thigh
   and stays there. Anything else that switches the light (`perf_bench.gd`) still sets
   `Lantern.visible` directly.
+- **The idle has a mirror image** (`idle_mirror`, built in code by `PlayerBody._mirrored`;
+  2026-10-12, Kirill: stopping always ended "with left leg sticking forward"). The library's
+  idle stands with the left foot 43 cm ahead of the right; coming to a stand, `set_motion`
+  picks the idle or its mirror by which foot is forward at that moment. Mirroring a clip on
+  the humanoid skeleton = each track to the other side's bone, a turn's y and z negated, a
+  position's x negated (checked: within 0.1 mm of a true mirror image). The crouch idle is
+  not mirrored. Code that tests for the idle must test for both names.
+- **The feet are placed on the ground** (`PlayerBody._place_feet`, `feet_*` exports,
+  2026-10-12; Kirill: "the feet clip even without displacement on slopes"). A clip is made
+  for level ground and the capsule knows only the ground under its middle: on 20 deg the
+  uphill ankle was 4-10 cm in the ground and the other as far above it. After the clip, a ray
+  per ankle finds the collision's height there, the foot is moved by its difference from the
+  Player's level (a lifted foot stays lifted), the leg is solved with the knee where the clip
+  has it (`_solve_leg`), and a foot on the ground is tilted to the slope. Off in the air.
+  Not judged in game yet. What the headless check (a tilted box, the Player moved along it)
+  taught:
+  - Follow the ground's height in the WORLD and with a speed limit (`feet_max_speed`), not
+    eased: eased against the Player a standing foot lags while the Player climbs, eased in
+    the world a foot swinging forward up a slope lands 13 cm under it.
+  - Lower the hips only by what a leg cannot reach (`feet_leg_stretch`): lowering them as
+    far as the lower foot goes sank the eyes 16 cm jogging up 20 deg and bobbed them 22 cm
+    crouch-walking. They still come down standing on a slope (12 cm on 20 deg: the idle
+    stance is 0.4 m long) and jogging straight up one (8 cm on 20 deg).
+  - A lifted foot is not tilted, so it is raised by what the ground under its toes is higher
+    than under its ankle, or the toes of the foot coming forward go in.
+  - On displaced ground the foot goes to the DRAWN surface (`feet_on_drawn_ground`,
+    `TerrainDisplacement.lift_at`, added to the ray's height where the ray hit the terrain
+    itself; one to four lookups a frame, about 50 microseconds each on a debug build).
+    Written while Kirill's game was running: not run yet. The Player still stands on the
+    collision, so on a bump the legs fold and the eyes stay where they were; a foot is moved
+    at most `feet_max_up` / `feet_max_down` (0.35 / 0.45 m; the rock face's relief is 0.53).
+    With this the `displacement_offset`s of the next note are no longer needed for the feet.
+- **The scree stones stand on the DRAWN ground** (2026-10-12; Kirill: "scree floating in the
+  air on steep slopes"): `RockScatter.scatter_scree` and the stones of
+  `MountainWalls.scatter_foot_debris` move each stone by `TerrainDisplacement.drawn()`. The
+  boulders (which have collision) do not. For that the detiling's random number per cell had
+  to be one a script can repeat: `_apply_projection_override` replaces the shaders' `random()`
+  (a `fract(sin())` in 32-bit floats) by whole-number steps (`CELL_RANDOM_SHADER`), in the
+  terrain shader and the displacement buffer shader, and sets
+  `TerrainDisplacement.exact_detiling`. Without the patch (`PROJECTION_PER_PIXEL` off, or the
+  benchmark's `terrain:shader_patch` switch) stones on a detiled texture are placed wrong.
+  PerfDebug F4 (displacement off) leaves the stones where the displaced ground was. Written
+  while Kirill's game was running: NOT run yet, not even parsed (the Godot MCP's
+  `validate_script` reports error 43 for every `class_name` script, changed or not, so it
+  proves nothing). The scree line of the startup log says how far stones were moved and how
+  long it took.
+- **Feet and displacement** (TRIAL 2026-10-12; ENDED the same evening: the three offsets
+  named here are 0 again, because the feet are placed on the drawn ground, which Kirill
+  confirmed -- "yeah feet work". The constants stay as the place to try it again): collision is on the undisplaced ground, so a
+  relief centred on it has half of every bump above the player's feet. The walkable
+  displaced textures now have a `displacement_offset` like the road's
+  (`DISPLACEMENT_SMALL_ROCK_OFFSET` -0.5, `DISPLACEMENT_LITTER_OFFSET` / `_SCREE_OFFSET` -0.25
+  in `terrain_gen.gd`), which moves the relief down. Everything placed on the ground stands
+  at collision height and so shows above the lowered ground by the same amount; the litter's
+  relief is 30 cm each way and the scree's 24, which is why those two are only half-way.
+  Not judged in game yet. The other ways considered: flatten the displacement near the
+  player in the patched terrain shader; place the feet on the drawn ground (needs the
+  displaced height in script, which Terrain3D does not give).
+- **`TerrainDisplacement`** (`scripts/terrain/terrain_displacement.gd`, STAGE 1 of collision
+  on the displaced rock face, 2026-10-12): a script copy of Terrain3D's displacement buffer
+  shader, giving where the DRAWN ground is at a point. Nothing uses it yet; PerfDebug F1 puts
+  markers on the computed surface round the player for Kirill to compare with the rock (not
+  yet confirmed). The shader's source is not in the addon's files: it is text inside
+  `libterrain.windows.release.x86_64.dll` (search it for "IS_DISPLACEMENT_BUFFER"). Known
+  differences from the shader are listed in the script's header; the one that matters is
+  detiling, which is why RockFace has none now (`DETILING_BY_ID`). Planned next: a fine
+  collider over the walkable rock built from it, rocks and scree placed with it, and the
+  rock's relief moved above the heightmap (offset +0.5) so Terrain3D's own collision never
+  sits above the new one.
 - A clip's speed goes into `AnimationPlayer.play()`'s custom speed, not `speed_scale`: a
   cross-fade advances by `speed_scale`, so a clip frozen through it never fades in.
 - A headless check of a scene (`--headless --script`) that hits a script error never reaches

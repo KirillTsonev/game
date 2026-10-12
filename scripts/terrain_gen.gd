@@ -42,6 +42,7 @@ func _ready() -> void:
 	FoliageWind.reset_run_state()
 	DeadfallScatter.reset_run_state()
 	GrassScatter.reset_run_state()
+	TerrainDisplacement.reset_run_state()
 	# Whole-_ready() timing (2026-09-16): the earlier per-stage prints only
 	# covered _build_heightmap (noise/erosion/smoothing/road) -- this covers
 	# the REST of _ready() too (Terrain3D import, boulder scattering, player
@@ -235,6 +236,8 @@ func _ready() -> void:
 	# generated for the displacement settings (the function checks that displacement is in them).
 	if PROJECTION_PER_PIXEL and DISPLACEMENT_TESSELLATION > 0:
 		_apply_projection_override(terrain)
+	# From here on things can be placed on the drawn ground (the scree stones are).
+	TerrainDisplacement.setup(terrain)
 	t_ready_stage = Time.get_ticks_msec()
 	var boulder_rng := RandomNumberGenerator.new()
 	# Independent stream from the main pipeline's _derive_seeds -- purely
@@ -688,6 +691,23 @@ const DISPLACEMENT_COAST_SAND_ROCKS_SCALE := 1.0
 ## DISPLACEMENT_TEXTURE_IDS above.)
 const DISPLACEMENT_ROCKY_TRAIL_SCALE := 3.0
 const DISPLACEMENT_ROCKY_TERRAIN_SCALE := 3.0
+## TRIAL (2026-10-12, Kirill: the player's feet "clip through texture displacement"). Collision
+## is on the undisplaced ground, so a relief centred on it (offset 0) has half of every bump
+## above the feet. An offset moves a texture's whole relief down, as the road's does: -0.5 puts
+## every top on the collision surface (feet never sink, they stand over the hollows), -0.25
+## half-way (only the highest quarter is above the feet). The price: everything placed on the
+## ground (trunks, rocks, grass, deadfall) stands at collision height, so it shows above the
+## lowered ground by the same amount.
+##   AerialRocks, CoastSandRocks: 8 cm each way -> at -0.5 the ground is 0 to 16 cm lower.
+##   PineLitter: 30 cm each way (scale 1.2 on a 1.6 m tile) -> at -0.25 from 15 cm above to
+##     45 cm below; at -0.5 it would be 0 to 60 cm below, 30 on average.
+##   RockyTrail, RockyTerrain: 24 cm each way -> at -0.25 from 12 cm above to 36 cm below.
+## 0 = as before. Not the walkable RockFace (about a metre each way): props on it would hang.
+## All three are 0 again since the same evening: the feet are placed on the drawn ground now
+## (PlayerBody._place_feet), and the offsets left trunks, rocks and grass standing above it.
+const DISPLACEMENT_SMALL_ROCK_OFFSET := 0.0
+const DISPLACEMENT_LITTER_OFFSET := 0.0
+const DISPLACEMENT_SCREE_OFFSET := 0.0
 ## The Ground (soil) and Grass textures stay flat: both were tried the same day at about 8 cm
 ## each way and removed again (Kirill: "grass is definitely off", then "remove soil too").
 
@@ -713,7 +733,11 @@ const DISPLACEMENT_TOGGLE := {
 ## edges). PerfDebug F2 switches between these values and the file's 1.0 / 1.0. TUNING.
 const DETILING_ROTATION := 0.1
 const DETILING_SHIFT := 1.0
-const DETILING_BY_ID := {}
+## RockFace (id 2, the walkable rock at the valley's cliffs): none, since 2026-10-12. Its drawn
+## surface is being reproduced in script (TerrainDisplacement) to build collision on it, and the
+## shader's per-cell random number cannot be repeated there. Its tile is 13 m; the mountain's
+## copy of the texture has its own id and keeps the values above.
+const DETILING_BY_ID := {2: [0.0, 0.0]}
 var _detiling_old := false
 func toggle_detiling() -> String:
 	var terrain: Terrain3D = get_parent().get_node_or_null("Terrain3D")
@@ -814,20 +838,25 @@ func _apply_displacement(terrain: Terrain3D) -> void:
 	var litter_asset: Terrain3DTextureAsset = terrain.get_assets().get_texture_asset(TerrainGroundPaint.PINE_LITTER_ID)
 	if DISPLACEMENT_LITTER_SCALE > 0.0 and litter_asset:
 		litter_asset.displacement_scale = DISPLACEMENT_LITTER_SCALE
+		litter_asset.displacement_offset = DISPLACEMENT_LITTER_OFFSET
 		print("TERRAIN_GEN: displacement -- pine litter texture: uv_scale %.2f, scale %.2f, relief about +-%.1f cm" % [litter_asset.uv_scale, DISPLACEMENT_LITTER_SCALE, DISPLACEMENT_LITTER_SCALE * 0.04 / (0.5 * litter_asset.uv_scale) * DISPLACEMENT_SCALE * 100.0])
 	var aerial_asset: Terrain3DTextureAsset = terrain.get_assets().get_texture_asset(TerrainGroundPaint.AERIAL_ROCKS_ID)
 	if DISPLACEMENT_AERIAL_ROCKS_SCALE > 0.0 and aerial_asset:
 		aerial_asset.displacement_scale = DISPLACEMENT_AERIAL_ROCKS_SCALE
+		aerial_asset.displacement_offset = DISPLACEMENT_SMALL_ROCK_OFFSET
 		print("TERRAIN_GEN: displacement -- aerial rocks texture: uv_scale %.2f, scale %.2f, relief about +-%.1f cm" % [aerial_asset.uv_scale, DISPLACEMENT_AERIAL_ROCKS_SCALE, DISPLACEMENT_AERIAL_ROCKS_SCALE * 0.04 / (0.5 * aerial_asset.uv_scale) * DISPLACEMENT_SCALE * 100.0])
 	var coast_asset: Terrain3DTextureAsset = terrain.get_assets().get_texture_asset(TerrainGroundPaint.COAST_SAND_ROCKS_ID)
 	if DISPLACEMENT_COAST_SAND_ROCKS_SCALE > 0.0 and coast_asset:
 		coast_asset.displacement_scale = DISPLACEMENT_COAST_SAND_ROCKS_SCALE
+		coast_asset.displacement_offset = DISPLACEMENT_SMALL_ROCK_OFFSET
 		print("TERRAIN_GEN: displacement -- coast sand rocks texture: uv_scale %.2f, scale %.2f, relief about +-%.1f cm" % [coast_asset.uv_scale, DISPLACEMENT_COAST_SAND_ROCKS_SCALE, DISPLACEMENT_COAST_SAND_ROCKS_SCALE * 0.04 / (0.5 * coast_asset.uv_scale) * DISPLACEMENT_SCALE * 100.0])
 	for scree: Array in [[TerrainGroundPaint.ROCKY_TRAIL_ID, DISPLACEMENT_ROCKY_TRAIL_SCALE], [TerrainGroundPaint.ROCKY_TERRAIN_ID, DISPLACEMENT_ROCKY_TERRAIN_SCALE]]:
 		var scree_asset: Terrain3DTextureAsset = terrain.get_assets().get_texture_asset(int(scree[0]))
 		if float(scree[1]) > 0.0 and scree_asset:
 			scree_asset.displacement_scale = float(scree[1])
+			scree_asset.displacement_offset = DISPLACEMENT_SCREE_OFFSET
 			print("TERRAIN_GEN: displacement -- %s texture: uv_scale %.2f, scale %.2f, relief about +-%.1f cm" % [scree_asset.name, scree_asset.uv_scale, float(scree[1]), float(scree[1]) * 0.04 / (0.5 * scree_asset.uv_scale) * DISPLACEMENT_SCALE * 100.0])
+	print("TERRAIN_GEN: displacement -- offsets (the relief moved down, for the player's feet): small rock %.2f, litter %.2f, scree %.2f" % [DISPLACEMENT_SMALL_ROCK_OFFSET, DISPLACEMENT_LITTER_OFFSET, DISPLACEMENT_SCREE_OFFSET])
 	print("TERRAIN_GEN: displacement -- Terrain3D %s, tessellation %d, displacement scale %.2f, mesh_size %d" % [terrain.version, terrain.tessellation_level, terrain.displacement_scale, terrain.mesh_size])
 
 ## PROJECTION_PER_PIXEL: takes the two shaders Terrain3D has generated for the current settings
@@ -913,6 +942,7 @@ func _apply_projection_override(terrain: Terrain3D) -> void:
 		cos(deg_to_rad(PROJECTION_BLEND_FLAT)), cos(deg_to_rad(PROJECTION_NO_SIDE_BELOW)),
 		PROJECTION_SIDE_SHARPNESS]
 	var shaders: Array[Shader] = []
+	var exact_cells := 0
 	for rid: RID in [mat.get_shader_rid(), mat.get_buffer_shader_rid()]:
 		var code := RenderingServer.shader_get_code(rid) if rid.is_valid() else ""
 		if code.count(anchor) != 1 or calls.search_all(code).size() != 4 or not code.contains("i_normal.y <= 0.7071067811865475"):
@@ -923,6 +953,13 @@ func _apply_projection_override(terrain: Terrain3D) -> void:
 			return
 		var define := slope.replace("OPEN", "if (bilerp) {" if code.contains("bool bilerp") else "{").replace("CLOSE", "}")
 		code = calls.sub(code, three_calls, true)
+		# The detiling's random number per cell, in whole-number steps a script can repeat
+		# (TerrainDisplacement). Every cell's turn and shift changes with it, none of the look.
+		if code.count(TerrainDisplacement.CELL_RANDOM_ORIGINAL) == 1:
+			code = code.replace(TerrainDisplacement.CELL_RANDOM_ORIGINAL, TerrainDisplacement.CELL_RANDOM_SHADER)
+			exact_cells += 1
+		else:
+			push_warning("TERRAIN_GEN: detiling's random number NOT replaced in a terrain shader (found x%d)" % code.count(TerrainDisplacement.CELL_RANDOM_ORIGINAL))
 		code = code.insert(code.rfind("\n", code.find(anchor)) + 1, define + blend)
 		# The rock's detail layer (see ROCK_DETAIL_TILES): the terrain shader only, where each of
 		# a vertex's two textures has just been read -- the line that tints it follows.
@@ -959,6 +996,7 @@ func _apply_projection_override(terrain: Terrain3D) -> void:
 	mat.set_shader_override_enabled(true)
 	mat.set_buffer_shader_override(shaders[1])
 	mat.set_buffer_shader_override_enabled(true)
+	TerrainDisplacement.exact_detiling = exact_cells == 2
 	print("TERRAIN_GEN: projection per pixel -- terrain shader and displacement buffer shader overridden (%d and %d chars), blended between %.0f and %.0f deg" % [shaders[0].code.length(), shaders[1].code.length(), PROJECTION_BLEND_FLAT, PROJECTION_BLEND_STEEP])
 
 ## DEBUG (PerfDebug F3; not saved): the rock's detail layer off / on, to compare (ROCK_DETAIL_*).
