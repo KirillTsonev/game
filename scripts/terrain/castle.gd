@@ -5,11 +5,17 @@
 ## a separate fixed block of terrain with a bay and a crag; Kirill: "I don't think we need an
 ## actual separate chunk ... extend the rng terrain to cover that area as well and use the castle
 ## as a landmark that just always stays at the same place"). What is fixed is only WHERE the
-## castle stands, in heightmap pixels (SITE_PX): the low-X (western) corner of the valley's end,
-## at the edge of the floor, close under the mountain on two sides -- a bridge will join it to the
-## western ridge. Its ground is whatever this run generated; the shaping stages keep clear of it
-## (filter_plan, SITE_KEEP_RADIUS), nothing grows in it (covers, through MountainWalls.on_mountain)
-## and the valley's road ends at its foot (road_end).
+## castle stands, in heightmap pixels (SITE_PX): the middle of the valley's width at its north
+## end, straight ahead of the walk up the valley, in front of the mountain that closes it. Its
+## ground is whatever this run generated; the shaping stages keep clear of it (filter_plan,
+## SITE_KEEP_RADIUS), nothing grows in it (covers, through MountainWalls.on_mountain) and the
+## valley's road ends in front of it (road_end).
+##
+## 2026-10-12: until then it stood in the low-X corner of the valley's end, and a bridge 240 m up
+## joined it to a village of boxes on a terrain "shoulder" raised on the western ridge. All three
+## went with the zone plan they belonged to (the castle entered from the top, through the
+## mountains; Kirill: "we don't need the bridge, the village, and the mountain pillar now, also
+## move the castle to be in the center of the valley"). They are in git up to `4d30d31`.
 ##
 ## The mountain closes the valley inside the map (MountainWalls.raise_foot, side 2). Beyond the
 ## map's north edge its ground carries on as LENGTH m of terrain, the "north apron" (build_maps):
@@ -18,8 +24,7 @@
 ## stand on its far edge. Its rows come first in the import, so the generated map's pixel (0, 0)
 ## is LENGTH m in +Z from the corner Terrain3D reports.
 ##
-## The mountain area around the castle is to become playable; until that zone is built all of
-## this is a blockout (Kirill, 2026-10-09): a plain block for the castle, a beam for the bridge.
+## The castle itself is a blockout: a plain block with lit windows.
 ##
 ## Static-only: never instantiated; call as TerrainCastle.some_func(...).
 class_name TerrainCastle
@@ -27,12 +32,13 @@ extends RefCounted
 
 ## -- The castle's site --
 ## Its centre, in heightmap pixels of the generated map (x from the low-X edge, y = pz from the
-## north edge). The floor's low-X edge is at px 69.5; the mountain's foot lies up to 34 m inside
-## the low-X edge and up to MountainWalls.NORTH_FOOT_MAX m inside the north edge. TUNING.
-const SITE_PX := Vector2(72.0, 78.0)
+## north edge): the middle of the map's width (the floor's edges are held straight beside it,
+## TerrainHeightmap.build_valley_shape, so that is the middle of the floor too). The mountain's
+## foot lies up to MountainWalls.NORTH_FOOT_MAX m inside the north edge, behind it. TUNING.
+const SITE_PX := Vector2(192.0, 78.0)
 ## Knots, cliff meshes and outcrops keep this far from the centre, m.
 const SITE_KEEP_RADIUS := 40.0
-## The valley's road ends this far outside the castle's high-X / south corner, m.
+## The valley's road ends this far in front of the middle of the castle's south face, m.
 const ROAD_END_GAP := 8.0
 ## The stand-in for the castle, m (x, height, z). The height is fixed (Kirill, 2026-10-09:
 ## "hardcode tower standin height at 150m", then "let's make tower 200m"; before, its top followed
@@ -43,147 +49,15 @@ const PLACEHOLDER_SIZE := Vector3(30.0, 250.0, 24.0)
 const PLACEHOLDER_SINK := 1.0
 const SITE_GROUND_STEP := 3
 const PLACEHOLDER_NAME := "CastlePlaceholder"
-## The stand-in for the bridge: a plain beam from the castle's low-X face due west (-X) into the
-## village. Its deck is BRIDGE_DECK_HEIGHT m above the castle's base (Kirill, 2026-10-09: the
-## drawbridge has to be at the top -- "hardcode bridge at 240m, tower is 250m"; before, the deck
-## followed the ridge's height and changed with the seed).
-const BRIDGE_DECK_HEIGHT := 240.0
-const BRIDGE_WIDTH := 6.0
-const BRIDGE_THICKNESS := 3.0
-## The village at the bridge's far end (2026-10-09): plain boxes standing on a shoulder of the
-## ridge (see VILLAGE_BASE_RADII). It is only ever seen from the valley floor: no collision.
-## Until 2026-10-11 it was a photo scan of a hilltop village (calcata, 90,000 triangles and a 2K
-## texture); Kirill: "we can just draw a couple of boxes there and call it a day, we'll never
-## get to see it up close". The numbers below that are not about the boxes were measured on
-## that scan and are kept, because the shoulder's terrain is built from them.
-## What it stands on went through three versions on its first day: a cone of raised terrain
-## under a 9 m landing pad (one stretched spire); a rock pillar built as a mesh (a seam against
-## the ridge, a repeating texture); the broad terrain shoulder there is now.
-const VILLAGE_NAME := "CliffVillage"
-## Its middle, in the generated map's pixels (x < 0 = beyond the map's low-X edge, on the
-## mountain).
-## x: the shoulder's face toward the castle needs about 85 m of run from the top's rim to the
-## ground beside the castle, and its far rim must stay on the import's west strip (-256).
-const VILLAGE_PX := Vector2(-140.0, 100.0)
-## Height of the bridge's deck above the village piece's origin (the old scan's cut-off bottom),
-## m before VILLAGE_SCALE: 2 m above the shoulder's top.
-const VILLAGE_DECK_ABOVE_BOTTOM := 15.0
-## The beam runs this far in over the shoulder's rim, m: in among the first houses.
-const VILLAGE_BRIDGE_REACH := 14.0
-## The houses, all in m before VILLAGE_SCALE and all TUNING: this many boxes, the first
-## VILLAGE_TOWERS of them towers, the same on every run. Sides and heights are picked between
-## the two numbers of each range. Their middles stay VILLAGE_HOUSE_INSET inside the shoulder's
-## plain rim, they keep VILLAGE_HOUSE_GAP apart (measured between circles round them) and each
-## reaches VILLAGE_HOUSE_SINK below the shoulder's top.
-const VILLAGE_HOUSES := 40
-const VILLAGE_TOWERS := 3
-const VILLAGE_HOUSE_SIDE := Vector2(7.0, 14.0)
-const VILLAGE_HOUSE_HEIGHT := Vector2(7.0, 20.0)
-const VILLAGE_TOWER_SIDE := Vector2(6.0, 8.0)
-const VILLAGE_TOWER_HEIGHT := Vector2(26.0, 34.0)
-const VILLAGE_HOUSE_INSET := 12.0
-const VILLAGE_HOUSE_GAP := 1.0
-const VILLAGE_HOUSE_SINK := 2.0
-## (The scan was first tinted so dark that nothing told the houses from the rock.)
-const VILLAGE_HOUSE_COLOR := Color(0.22, 0.22, 0.26)
-## Seen from the valley floor the life-size village did not read as one (Kirill, 2026-10-09:
-## "can't really see any buildings from far away, doesn't look like there's a village there"):
-## a 15 m house 800 m away is about a degree tall. Two things answer that. TUNING, all of it.
-## 1. The whole piece -- houses, shoulder and where the bridge meets it -- is drawn this many
-##    times its real size. Nothing stands next to it to give the scale away. 1 = life-size.
-const VILLAGE_SCALE := 1.5
-## 2. Lit windows: this many glowing panes (m, before VILLAGE_SCALE) on the houses' walls that
-##    face at least VILLAGE_WINDOW_OUTWARD away from the village's middle, no nearer to each
-##    other than VILLAGE_WINDOW_SPACING m, at least VILLAGE_WINDOW_MIN_ABOVE_ROCK m above the
-##    shoulder's top and VILLAGE_WINDOW_BELOW_ROOF m under the house's.
-##    They always face the camera: from far away a window is a point of light.
-const VILLAGE_WINDOWS := 160
-const VILLAGE_WINDOW_SIZE := Vector2(1.6, 2.0)
-const VILLAGE_WINDOW_COLOR := Color(1.0, 0.62, 0.26)
-const VILLAGE_WINDOW_ENERGY := 6.0
-const VILLAGE_WINDOW_OUTWARD := 0.15
-const VILLAGE_WINDOW_SPACING := 5.0
-const VILLAGE_WINDOW_MIN_ABOVE_ROCK := 2.5
-const VILLAGE_WINDOW_BELOW_ROOF := 1.5
-const VILLAGE_WINDOW_OFFSET := 0.35 ## m a pane stands off its wall
-## More lights of the same kind (Kirill, 2026-10-09), all in m and all TUNING:
-##  - round the rim of the shoulder's top, RIM_LIGHT_HEIGHT above it -- from close under it the
-##    houses are hidden behind the rim, and these are what still shows;
-##  - on the castle: windows on all four faces from CASTLE_LIGHT_FROM m above its base, more
-##    of them toward the top;
-##  - along the bridge: a lantern on each side every BRIDGE_LIGHT_SPACING m, BRIDGE_LIGHT_HEIGHT
-##    above the deck.
-## The rim lights' size and height are before VILLAGE_SCALE.
-const RIM_LIGHTS := 44
-const RIM_LIGHT_HEIGHT := 1.2
-const RIM_LIGHT_SIZE := Vector2(1.5, 1.5)
+## Its lit windows (Kirill, 2026-10-09), all in m and all TUNING: this many glowing panes on its
+## four faces from CASTLE_LIGHT_FROM m above its base, more of them toward the top. They always
+## face the camera: from far away a window is a point of light.
 const CASTLE_LIGHTS := 110
 const CASTLE_LIGHT_FROM := 20.0
 const CASTLE_LIGHT_SIZE := Vector2(1.6, 2.4)
-const BRIDGE_LIGHT_SPACING := 8.0
-const BRIDGE_LIGHT_HEIGHT := 1.6
-const BRIDGE_LIGHT_SIZE := Vector2(1.1, 1.1)
+const LIGHT_COLOR := Color(1.0, 0.62, 0.26)
+const LIGHT_ENERGY := 6.0
 const LIGHT_STAND_OFF := 0.6 ## m a light stands off the surface it is on
-## The village's shoulder (2026-10-09): the rock the village stands on is TERRAIN -- the ridge
-## itself, raised into a level-topped shoulder under it (massif_height). Before, the same day,
-## it was a rock pillar built as a mesh: Kirill, "there's still a very obvious seam where the
-## stone pillar connects and it has an obvious texture pattern, let's make it an extension of
-## the terrain instead". Being terrain it is drawn, shaded and textured exactly like the ridge.
-## Three owners of ground each take the higher of their own height and the shoulder's: the
-## generated map past its foot line (raise_massif_on_map), the low-X apron
-## (raise_massif_on_apron) and the north apron (build_maps). West of the low-X apron the import
-## has MountainWalls.WEST_EXTRA more columns that are holes except where the shoulder stands
-## (west_strip_maps; Kirill: "widen it only where the village is").
-## The top is an ellipse of VILLAGE_BASE_RADII (m, x / z, before VILLAGE_SCALE), VILLAGE_BASE_TOP
-## m above the village piece's origin: the rock ground the houses stand on.
-const VILLAGE_BASE_RADII := Vector2(62.0, 89.0)
-const VILLAGE_BASE_TOP := 13.0
-## Its shape, all in massif_height. TUNING.
-##  - outline: lobes push the rim outward by up to MASSIF_BULGE of its radius (never inward:
-##    the village must fit on top), cut to MASSIF_CASTLE_SIDE of that toward the castle;
-##  - outside the rim the ground falls MASSIF_GRADE m per m, MASSIF_GRADE_CASTLE toward the
-##    castle (the top's rim is about 85 m from the ground it must reach there; 2.6 = 69 deg);
-##  - buttresses and gullies: the face stands up to MASSIF_RIBS m further out or in;
-##  - MASSIF_LEDGE_STRENGTH of the fall is taken in steps MASSIF_LEDGE_EVERY m tall: a steep
-##    face, then a ledge;
-##  - MASSIF_ROUGH m of finer unevenness;
-##  - on the map it fades in over the first MASSIF_FOOT_FADE m past the foot line.
-## MASSIF_REACH: how far it can reach, in radii of the top's ellipse (a quick test).
-const MASSIF_BULGE := 0.22
-const MASSIF_CASTLE_SIDE := 0.3
-const MASSIF_GRADE := 1.6
-const MASSIF_GRADE_CASTLE := 2.6
-const MASSIF_RIBS := 14.0
-const MASSIF_LEDGE_EVERY := 30.0
-const MASSIF_LEDGE_STRENGTH := 0.55
-const MASSIF_LEDGE_WANDER := 22.0
-## Within MASSIF_KEEP m of the top's rim nothing else may shape the generated map: no knots, no
-## cliff meshes (shoulder_keepout), and the mountain's foot line there is at least
-## MASSIF_MAP_FOOT m inside the map's edge. A cliff or knot at the edge used to hold the foot
-## line at 0 on its rows; the map was then not raised there while the apron beside it was, and
-## the shoulder had a canyon cut into it from the map's edge (Kirill: "huge cut in the terrain").
-const MASSIF_KEEP := 95.0
-const MASSIF_MAP_FOOT := 40.0
-const MASSIF_ROUGH := 2.0
-const MASSIF_FOOT_FADE := 6.0
-const MASSIF_CUT_GRADE := 1.2 ## how steeply the ridge's own ground may rise from the top's rim, m per m (massif_ceiling)
-const MASSIF_EDGE_GRADE := 3.0 ## the steepest the shoulder may leave the generated map's edge, m per m (see raise_massif_on_apron)
-const MASSIF_REACH := 3.2
-const MASSIF_OUTLINE_STEPS := 360
-## A mountain row's mesh is kept this far under the shoulder's ground (MountainWalls._seat_lift).
-const MASSIF_MESH_UNDER := 3.0
-
-## World height of the shoulder's level top, and of the lowest ground under the castle (what
-## the bridge's height is measured from). Set by prepare_massif; NAN before.
-static var massif_top_y := NAN
-static var site_ground_y := NAN
-## The low-X apron's outer column per row as MountainWalls built it, before the shoulder was
-## raised on it: where the shoulder stands higher than this there is ground west of the apron
-## (west_strip_maps), and a mountain row's mesh is kept under it (MountainWalls._seat_lift).
-static var natural_back_heights := PackedFloat32Array()
-static var _massif_outline := PackedFloat32Array()
-static var _massif_ribs: FastNoiseLite
-static var _massif_fine: FastNoiseLite
 
 ## -- The north apron --
 ## Its length (Z), m. Terrain3D takes whole regions: with AREA_LENGTH and the hub's length it
@@ -235,14 +109,10 @@ static func north_apron_height(c: float, d: float) -> float:
 static func covers(px: float, pz: float, pad: float = 0.0) -> bool:
 	return absf(px - SITE_PX.x) <= PLACEHOLDER_SIZE.x * 0.5 + pad and absf(pz - SITE_PX.y) <= PLACEHOLDER_SIZE.z * 0.5 + pad
 
-## True within MASSIF_KEEP + `pad` m of the rim of the village's shoulder (heightmap pixels):
-## the generated map's shaping stages place nothing there.
-static func shoulder_keepout(px: float, pz: float, pad: float = 0.0) -> bool:
-	return massif_distance(px, pz) < MASSIF_KEEP + pad
-
-## Where the valley's road ends, in heightmap pixels: off the castle's high-X / south corner.
+## Where the valley's road ends, in heightmap pixels: in front of the middle of the castle's
+## south face.
 static func road_end() -> Vector2:
-	return SITE_PX + Vector2(PLACEHOLDER_SIZE.x * 0.5 + ROAD_END_GAP, PLACEHOLDER_SIZE.z * 0.5 + ROAD_END_GAP)
+	return SITE_PX + Vector2(0.0, PLACEHOLDER_SIZE.z * 0.5 + ROAD_END_GAP)
 
 ## Drops the entries of `plan` (planned cliff meshes or outcrops, each with px / pz) that reach
 ## into the castle's site; `reach` gives an entry's radius. Returns how many were dropped.
@@ -250,7 +120,7 @@ static func filter_plan(plan: Array, reach: Callable) -> int:
 	var removed := 0
 	for i in range(plan.size() - 1, -1, -1):
 		var e: Dictionary = plan[i]
-		if Vector2(float(e.px), float(e.pz)).distance_to(SITE_PX) < SITE_KEEP_RADIUS + float(reach.call(e)) or shoulder_keepout(float(e.px), float(e.pz), float(reach.call(e))):
+		if Vector2(float(e.px), float(e.pz)).distance_to(SITE_PX) < SITE_KEEP_RADIUS + float(reach.call(e)):
 			plan.remove_at(i)
 			removed += 1
 	return removed
@@ -298,17 +168,10 @@ static func build_maps(edge_row: PackedFloat32Array, edge_color: PackedByteArray
 	for b: Dictionary in height_out:
 		heights.append_array(b.heights)
 		crest = maxf(crest, b.crest)
-	# -- The village's shoulder, where it reaches north of the map: the higher of the two --
-	var on_shoulder := PackedByteArray() # 1 = bare rock there (no turf, no snow)
+	# No pixel is forced bare any more (2026-10-12; it was the village's shoulder where that
+	# reached north of the map). The colour band and its native copy still take the mask.
+	var on_shoulder := PackedByteArray()
 	on_shoulder.resize(width * LENGTH)
-	var shoulder_rows := massif_rows()
-	var x_origin := float(MountainWalls.MAP_OFFSET_X) # this import column is the map's px 0
-	for j in range(maxi(LENGTH + shoulder_rows.x, 0), LENGTH): # z = -(LENGTH - j) >= shoulder_rows.x
-		for c in mini(int(x_origin) + int(MountainWalls.FOOT_MAX) + 2, width):
-			var target := minf(massif_height(float(c) - x_origin, -float(LENGTH - j)), edge_row[c] + MASSIF_EDGE_GRADE * float(LENGTH - j))
-			if target > heights[j * width + c]:
-				heights[j * width + c] = target
-				on_shoulder[j * width + c] = 1
 
 	# -- The outer edges, for the mountain rows seated on them --
 	var low_x_edge := PackedFloat32Array()
@@ -446,10 +309,10 @@ static func _noise(noise_seed: int, frequency: float, fractal: int, octaves: int
 	noise.frequency = frequency
 	return noise
 
-## The stand-ins for the castle and its bridge: a plain dark block standing in the ground at
-## SITE_PX and a beam from it into the western ridge, both with collision (reachable, not
-## enterable). Their heights are read from the terrain as imported (`terrain`), so this runs
-## after the import. Added to `parent_node` (deferred, like the other generated bodies).
+## The stand-in for the castle: a plain dark block standing in the ground at SITE_PX, with
+## collision (reachable, not enterable) and lit windows. Its height is read from the terrain as
+## imported (`terrain`), so this runs after the import. Added to `parent_node` (deferred, like
+## the other generated bodies).
 static func spawn_placeholder(parent_node: Node, terrain: Terrain3D, heightmap_corner: Vector3) -> void:
 	var old := parent_node.get_node_or_null(PLACEHOLDER_NAME)
 	if old:
@@ -470,8 +333,6 @@ static func spawn_placeholder(parent_node: Node, terrain: Terrain3D, heightmap_c
 		push_warning("TERRAIN_GEN: castle placeholder -- no terrain at its site, skipped")
 		return
 	var foot := Vector3(centre.x, ground - PLACEHOLDER_SINK, centre.z)
-
-	var face_x := centre.x - size.x * 0.5
 	print("TERRAIN_GEN: castle placeholder -- %.0f x %.0f m at map pixel (%.0f, %.0f), %.0f m tall, top %.0f m above the valley floor" % [size.x, size.z, SITE_PX.x, SITE_PX.y, size.y, foot.y + size.y - TerrainHeightmap.BASE_LEVEL])
 
 	var body := StaticBody3D.new()
@@ -482,19 +343,10 @@ static func spawn_placeholder(parent_node: Node, terrain: Terrain3D, heightmap_c
 	material.roughness = 0.9
 	_add_box(body, "Castle", size, Vector3.ZERO, material)
 
-	# The bridge: from the castle's low-X face over the shoulder's rim into the village. Its
-	# height is the one the shoulder was built for (prepare_massif), measured from the ground
-	# under the castle before the road was graded beside it.
-	var deck_y := bridge_deck_y() if not is_nan(site_ground_y) else foot.y + BRIDGE_DECK_HEIGHT
-	var span := face_x - (heightmap_corner.x + VILLAGE_PX.x + _bridge_end_x())
-	var beam_size := Vector3(span, BRIDGE_THICKNESS, BRIDGE_WIDTH)
-	_add_box(body, "Bridge", beam_size, Vector3(face_x - beam_size.x * 0.5, deck_y - BRIDGE_THICKNESS * 0.5, foot.z) - body.position, material)
-	print("TERRAIN_GEN: castle bridge placeholder -- %.0f m span to the village, deck %.0f m above the castle's base (%.0f m below its top)" % [span, BRIDGE_DECK_HEIGHT, size.y - BRIDGE_DECK_HEIGHT])
-
-	# Lights (in the body's own space: its origin is the middle of the castle block).
+	# Windows on its four faces, more of them toward the top (in the body's own space: its
+	# origin is the middle of the block).
 	var light_rng := RandomNumberGenerator.new()
 	light_rng.seed = 0x43534C54 # 'CSLT': the same on every run
-	# The castle: windows on its four faces, more of them toward the top.
 	var castle_points: Array[Vector3] = []
 	for i in CASTLE_LIGHTS:
 		var up := lerpf(-size.y * 0.5 + CASTLE_LIGHT_FROM, size.y * 0.5 - 3.0, sqrt(light_rng.randf()))
@@ -505,428 +357,8 @@ static func spawn_placeholder(parent_node: Node, terrain: Terrain3D, heightmap_c
 		else:
 			castle_points.append(Vector3(along * size.x, up, (size.z * 0.5 + LIGHT_STAND_OFF) * (1.0 if face == 2 else -1.0)))
 	_add_glow_points(body, "CastleLights", castle_points, CASTLE_LIGHT_SIZE, light_rng)
-	# The bridge: a lantern on each side every BRIDGE_LIGHT_SPACING m.
-	var bridge_points: Array[Vector3] = []
-	var lantern_y := deck_y + BRIDGE_LIGHT_HEIGHT - body.position.y
-	var lanterns := maxi(int(span / BRIDGE_LIGHT_SPACING), 1)
-	for i in lanterns + 1:
-		var x := face_x - span * float(i) / float(lanterns) - body.position.x
-		for side: float in [-1.0, 1.0]:
-			bridge_points.append(Vector3(x, lantern_y, side * (BRIDGE_WIDTH * 0.5 + LIGHT_STAND_OFF)))
-	_add_glow_points(body, "BridgeLights", bridge_points, BRIDGE_LIGHT_SIZE, light_rng)
-	print("TERRAIN_GEN: lights -- %d on the castle, %d along the bridge" % [castle_points.size(), bridge_points.size()])
+	print("TERRAIN_GEN: lights -- %d on the castle" % castle_points.size())
 	parent_node.add_child.call_deferred(body)
-	_spawn_village(parent_node, heightmap_corner, deck_y)
-
-## Where the bridge's beam ends, m in +X from the village's middle: VILLAGE_BRIDGE_REACH inside
-## the shoulder's plain rim on the bridge's row.
-static func _bridge_end_x() -> float:
-	var rim_radii := VILLAGE_BASE_RADII * VILLAGE_SCALE
-	var across := clampf((SITE_PX.y - VILLAGE_PX.y) / rim_radii.y, -0.95, 0.95)
-	return rim_radii.x * sqrt(1.0 - across * across) - VILLAGE_BRIDGE_REACH
-
-## The village at the bridge's far end (VILLAGE_*): boxes for houses on the shoulder's level
-## top (massif_top_y), with their windows and the lights round the top's rim. `deck_y` = world
-## height of the bridge's deck.
-static func _spawn_village(parent_node: Node, heightmap_corner: Vector3, deck_y: float) -> void:
-	var old := parent_node.get_node_or_null(VILLAGE_NAME)
-	if old:
-		old.name = VILLAGE_NAME + "_old"
-		old.queue_free()
-	var root := Node3D.new()
-	root.name = VILLAGE_NAME
-	var bottom_y := deck_y - VILLAGE_DECK_ABOVE_BOTTOM * VILLAGE_SCALE
-	root.position = Vector3(heightmap_corner.x + VILLAGE_PX.x, bottom_y, heightmap_corner.z + VILLAGE_PX.y)
-
-	# The houses: one unit box per house, sized and turned by its transform. Everything here is
-	# in m before VILLAGE_SCALE, from the village's middle; the node carries the scale.
-	var house_rng := RandomNumberGenerator.new()
-	house_rng.seed = 0x484F5553 # 'HOUS': the same houses on every run
-	var bridge_end := Vector2(_bridge_end_x(), SITE_PX.y - VILLAGE_PX.y) / VILLAGE_SCALE
-	var bridge_half := BRIDGE_WIDTH * 0.5 / VILLAGE_SCALE
-	var radii := VILLAGE_BASE_RADII - Vector2.ONE * VILLAGE_HOUSE_INSET
-	var centres: Array[Vector2] = []
-	var reaches: Array[float] = []
-	var houses: Array[Transform3D] = []
-	for attempt in VILLAGE_HOUSES * 40:
-		if houses.size() >= VILLAGE_HOUSES:
-			break
-		var tower := houses.size() < VILLAGE_TOWERS
-		var side := VILLAGE_TOWER_SIDE if tower else VILLAGE_HOUSE_SIDE
-		var tall := VILLAGE_TOWER_HEIGHT if tower else VILLAGE_HOUSE_HEIGHT
-		var size := Vector3(house_rng.randf_range(side.x, side.y), house_rng.randf_range(tall.x, tall.y) + VILLAGE_HOUSE_SINK, house_rng.randf_range(side.x, side.y))
-		var turn := house_rng.randf() * TAU
-		var centre := Vector2(cos(turn) * radii.x, sin(turn) * radii.y) * sqrt(house_rng.randf())
-		var yaw := house_rng.randf() * TAU
-		var reach := maxf(size.x, size.z) * 0.5
-		# Not where the bridge comes in.
-		var clear := not (centre.x + reach > bridge_end.x and absf(centre.y - bridge_end.y) < reach + bridge_half)
-		for i in centres.size():
-			if not clear:
-				break
-			clear = centres[i].distance_to(centre) >= reaches[i] + reach + VILLAGE_HOUSE_GAP
-		if not clear:
-			continue
-		centres.append(centre)
-		reaches.append(reach)
-		houses.append(Transform3D(Basis(Vector3.UP, yaw) * Basis.from_scale(size), Vector3(centre.x, VILLAGE_BASE_TOP - VILLAGE_HOUSE_SINK + size.y * 0.5, centre.y)))
-	var wall := StandardMaterial3D.new()
-	wall.albedo_color = VILLAGE_HOUSE_COLOR
-	wall.roughness = 0.9
-	var box := BoxMesh.new() # 1 m a side
-	box.material = wall
-	var multimesh := MultiMesh.new()
-	multimesh.transform_format = MultiMesh.TRANSFORM_3D
-	multimesh.mesh = box
-	multimesh.instance_count = houses.size()
-	for i in houses.size():
-		multimesh.set_instance_transform(i, houses[i])
-	var house_node := MultiMeshInstance3D.new()
-	house_node.name = "Houses"
-	house_node.multimesh = multimesh
-	house_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	house_node.scale = Vector3.ONE * VILLAGE_SCALE
-	root.add_child(house_node)
-	var windows := _add_village_windows(house_node, houses)
-
-	# Lights round the rim of the shoulder's top: from close under it the houses are hidden
-	# behind the rim, and these are what still shows.
-	var light_rng := RandomNumberGenerator.new()
-	light_rng.seed = 0x52494D4C # 'RIML': the same on every run
-	var rim_points: Array[Vector3] = []
-	var rim_y := VILLAGE_BASE_TOP * VILLAGE_SCALE + RIM_LIGHT_HEIGHT * VILLAGE_SCALE
-	for i in RIM_LIGHTS:
-		var t := TAU * (float(i) + light_rng.randf_range(-0.3, 0.3)) / float(RIM_LIGHTS)
-		var at := _massif_outline_point(t) + Vector2(cos(t), sin(t)) * LIGHT_STAND_OFF
-		rim_points.append(Vector3(at.x, rim_y, at.y))
-	_add_glow_points(root, "RimLights", rim_points, RIM_LIGHT_SIZE * VILLAGE_SCALE, light_rng)
-	parent_node.add_child.call_deferred(root)
-	print("TERRAIN_GEN: cliff village -- %d box(es) of %d, %d lit window(s) and %d rim light(s), drawn at %.1f x its real size, at map pixel (%.0f, %.0f), the shoulder's top %.0f m above the valley floor" % [
-		houses.size(), VILLAGE_HOUSES, windows, rim_points.size(), VILLAGE_SCALE, VILLAGE_PX.x, VILLAGE_PX.y, massif_top_y - TerrainHeightmap.BASE_LEVEL])
-
-# ---------------------------------------------------------------------------------------------
-# The village's shoulder: terrain
-# ---------------------------------------------------------------------------------------------
-
-## Works out the shoulder for this run from the generated map's `map_heights` (AREA_WIDTH wide):
-## the castle's base (the lowest ground under its footprint, the sample points spawn_placeholder
-## reads too), the height of the shoulder's top, its outline. Before any massif_height call.
-static func prepare_massif(map_heights: PackedFloat32Array) -> void:
-	var ground := INF
-	for dz in range(-int(PLACEHOLDER_SIZE.z * 0.5), int(PLACEHOLDER_SIZE.z * 0.5) + 1, SITE_GROUND_STEP):
-		for dx in range(-int(PLACEHOLDER_SIZE.x * 0.5), int(PLACEHOLDER_SIZE.x * 0.5) + 1, SITE_GROUND_STEP):
-			var px := clampi(int(SITE_PX.x) + dx, 0, TerrainConfig.AREA_WIDTH - 1)
-			var pz := clampi(int(SITE_PX.y) + dz, 0, TerrainConfig.AREA_LENGTH - 1)
-			ground = minf(ground, map_heights[pz * TerrainConfig.AREA_WIDTH + px])
-	site_ground_y = ground
-	# Level with the rock the houses stand on: VILLAGE_BASE_TOP above the village piece's origin.
-	massif_top_y = bridge_deck_y() - (VILLAGE_DECK_ABOVE_BOTTOM - VILLAGE_BASE_TOP) * VILLAGE_SCALE
-	_ensure_massif_shape()
-
-## The shoulder's outline and noises: the same on every seed, needed (for massif_distance) before
-## its height is known.
-static func _ensure_massif_shape() -> void:
-	if not _massif_outline.is_empty():
-		return
-	_massif_ribs = _noise(0x56494C4D, 1.0 / 70.0, FastNoiseLite.FRACTAL_FBM, 3) # 'VILM'
-	_massif_fine = _noise(0x56494C4E, 1.0 / 18.0, FastNoiseLite.FRACTAL_FBM, 3)
-	var lobes := _noise(0x56494C4C, 1.0 / 160.0, FastNoiseLite.FRACTAL_FBM, 2) # 'VILL'
-	_massif_outline = PackedFloat32Array()
-	_massif_outline.resize(MASSIF_OUTLINE_STEPS)
-	for step in MASSIF_OUTLINE_STEPS:
-		var t := TAU * float(step) / float(MASSIF_OUTLINE_STEPS)
-		# Toward the castle (+X) the lobes are held back: the face there has the least room.
-		var held := lerpf(1.0, MASSIF_CASTLE_SIDE, smoothstep(0.2, 0.9, cos(t)))
-		_massif_outline[step] = 1.0 + MASSIF_BULGE * held * smoothstep(0.3, 0.8, 0.5 + 0.5 * lobes.get_noise_2d(cos(t) * 100.0, sin(t) * 100.0))
-
-## World height of the bridge's deck (valid once prepare_massif has run).
-static func bridge_deck_y() -> float:
-	return site_ground_y - PLACEHOLDER_SINK + BRIDGE_DECK_HEIGHT
-
-## How far out the top's rim is at ellipse parameter `t`, as a share of the plain ellipse.
-static func _massif_bulge(t: float) -> float:
-	var at := fposmod(t / TAU, 1.0) * float(MASSIF_OUTLINE_STEPS)
-	var s0 := int(at) % MASSIF_OUTLINE_STEPS
-	return lerpf(_massif_outline[s0], _massif_outline[(s0 + 1) % MASSIF_OUTLINE_STEPS], at - floorf(at))
-
-## The top's rim at ellipse parameter `t`, in m from the village's middle (x, z).
-static func _massif_outline_point(t: float) -> Vector2:
-	var radii := VILLAGE_BASE_RADII * VILLAGE_SCALE
-	return Vector2(cos(t) * radii.x, sin(t) * radii.y) * (_massif_bulge(t) if not _massif_outline.is_empty() else 1.0)
-
-## World height of the shoulder at (x, z) in the generated map's pixels (x < 0 = beyond its low-X
-## edge, z < 0 = beyond its north edge): level inside the rim, falling away outside it; -INF
-## where the shoulder is not (and before prepare_massif). Whoever owns the ground there takes
-## the higher of this and its own height. Read-only: safe from worker threads.
-static func massif_height(x: float, z: float) -> float:
-	if is_nan(massif_top_y):
-		return -INF
-	var d := massif_distance(x, z)
-	if d == INF:
-		return -INF
-	if d <= 0.0:
-		return massif_top_y
-	var rel := Vector2(x - VILLAGE_PX.x, z - VILLAGE_PX.y)
-	var toward_castle := smoothstep(0.2, 0.9, rel.x / maxf(rel.length(), 0.001))
-	# Buttresses and gullies: the face stands further out or in (not toward the castle).
-	d = maxf(d + MASSIF_RIBS * (1.0 - 0.8 * toward_castle) * smoothstep(0.0, 25.0, d) * _massif_ribs.get_noise_2d(x, z), 0.0)
-	var fall := lerpf(MASSIF_GRADE, MASSIF_GRADE_CASTLE, toward_castle) * d
-	# Taken partly in steps: a steep face, then a ledge. Never the same twice (Kirill: "even,
-	# identical, step-like ridges, look unnatural"): the steps' height changes from place to
-	# place, noise moves where each one falls by up to MASSIF_LEDGE_WANDER m, and whole stretches
-	# of the face have none.
-	var every := MASSIF_LEDGE_EVERY * (0.65 + 0.7 * (0.5 + 0.5 * _massif_ribs.get_noise_2d(x * 0.3 - 50.0, z * 0.3 + 210.0)))
-	var wander := MASSIF_LEDGE_WANDER * _massif_ribs.get_noise_2d(x * 0.6 + 300.0, z * 0.6 - 120.0)
-	var bands := maxf(fall + wander, 0.0) / every
-	var stepped := maxf((floorf(bands) + smoothstep(0.0, 0.65, bands - floorf(bands))) * every - wander, 0.0)
-	fall = lerpf(fall, stepped, MASSIF_LEDGE_STRENGTH * smoothstep(-0.15, 0.35, _massif_fine.get_noise_2d(x * 0.25 + 77.0, z * 0.25)))
-	fall += MASSIF_ROUGH * smoothstep(0.0, 10.0, d) * _massif_fine.get_noise_2d(x, z)
-	var height := massif_top_y - maxf(fall, 0.0)
-	return height if height > TerrainHeightmap.BASE_LEVEL - 20.0 else -INF
-
-## How far outside the rim of the shoulder's top (x, z) lies, m along the ray from the village's
-## middle: 0 or less on the top itself, INF beyond the shoulder's reach (and before
-## prepare_massif). Read-only: safe from worker threads.
-static func massif_distance(x: float, z: float) -> float:
-	if _massif_outline.is_empty():
-		_ensure_massif_shape() # (only ever from the main thread, early in the heightmap build)
-	var rel := Vector2(x - VILLAGE_PX.x, z - VILLAGE_PX.y)
-	var radii := VILLAGE_BASE_RADII * VILLAGE_SCALE
-	var e := Vector2(rel.x / radii.x, rel.y / radii.y)
-	var q := e.length()
-	if q > MASSIF_REACH:
-		return INF
-	var along := q / _massif_bulge(atan2(e.y, e.x)) # 1 on the rim
-	return rel.length() * (1.0 - 1.0 / maxf(along, 0.001)) if along > 1.0 else along - 1.0
-
-## The highest the ridge's own ground may stand at (x, z) next to the village: level with the
-## shoulder's top on it, MASSIF_CUT_GRADE m higher per m outside its rim. INF beyond its reach.
-## (On a seed whose ridge is taller than the shoulder the ridge would otherwise stand in the
-## middle of the village.)
-static func massif_ceiling(x: float, z: float) -> float:
-	var d := massif_distance(x, z)
-	return INF if d == INF else massif_top_y + MASSIF_CUT_GRADE * maxf(d, 0.0)
-
-## The rows (z, in the generated map's pixels) the shoulder can reach: [first, last].
-static func massif_rows() -> Vector2i:
-	var reach := VILLAGE_BASE_RADII.y * VILLAGE_SCALE * MASSIF_REACH
-	return Vector2i(int(floorf(VILLAGE_PX.y - reach)), int(ceilf(VILLAGE_PX.y + reach)))
-
-## Raises the generated map's `heights` to the shoulder where its ground is the mountain's rock
-## (past the foot line, fading in over the first MASSIF_FOOT_FADE m of it). After
-## MountainWalls.raise_foot, before the road and all scattering. Returns the pixels raised.
-static func raise_massif_on_map(heights: PackedFloat32Array) -> int:
-	var t0 := Time.get_ticks_msec()
-	prepare_massif(heights)
-	var width := TerrainConfig.AREA_WIDTH
-	var rows := massif_rows()
-	var raised := 0
-	for pz in range(maxi(rows.x, 0), mini(rows.y, TerrainConfig.AREA_LENGTH - 1) + 1):
-		for px in mini(int(MountainWalls.FOOT_MAX + TerrainHeightmap.VALLEY_MEANDER_IN) + 2, width):
-			var depth := MountainWalls.mountain_depth(px, pz)
-			if depth <= 0.0:
-				continue
-			var target := massif_height(px, pz)
-			var i := pz * width + px
-			if target > heights[i]:
-				heights[i] = lerpf(heights[i], target, smoothstep(0.0, MASSIF_FOOT_FADE, depth))
-				raised += 1
-	print("TERRAIN_GEN: village shoulder -- top %.0f m above the valley floor (the castle's base at %.1f m); %d px of the map's rock raised (%d ms)" % [
-		massif_top_y - TerrainHeightmap.BASE_LEVEL, site_ground_y - TerrainHeightmap.BASE_LEVEL, raised, Time.get_ticks_msec() - t0])
-	return raised
-
-## Raises the low-X mountain apron's `heights` (`apron_width` columns x `rows` rows, column 0 =
-## its outer edge, row = the generated map's row) to the shoulder. Returns a mask, 1 where it
-## did: MountainWalls.apron_maps paints those pixels bare rock (no turf, no snow).
-## `map_heights` = the generated map's finished heights: the map is only raised where its ground
-## is the mountain's rock (raise_massif_on_map), so next to the map's edge the apron may stand
-## no higher than MASSIF_EDGE_GRADE x its distance above the edge -- or a wall of any height
-## could stand on the edge itself (96 m on one seed, before this).
-## Also records the apron's outer column as it was before (natural_back_heights).
-static func raise_massif_on_apron(heights: PackedFloat32Array, apron_width: int, rows: int, map_heights: PackedFloat32Array) -> PackedByteArray:
-	var mask := PackedByteArray()
-	mask.resize(apron_width * rows)
-	natural_back_heights = PackedFloat32Array()
-	natural_back_heights.resize(rows)
-	for row in rows:
-		natural_back_heights[row] = heights[row * apron_width]
-	var span := massif_rows()
-	var r_first := maxi(span.x, 0)
-	var r_last := mini(span.y, rows - 1)
-	if r_last < r_first:
-		return mask
-	# 2026-10-11: the rows in bands on worker threads (_massif_apron_band; the loop was about
-	# 0.17 s on the main thread). A pixel depends on nothing but its own height, so the result is
-	# the single loop's. Only the pixels a band changed are written back.
-	_ensure_massif_shape() # before the bands read it
-	var bands := ceili(float(r_last - r_first + 1) / MountainWalls.APRON_BAND_ROWS)
-	var out: Array = []
-	out.resize(bands)
-	var ctx := {"heights": heights, "apron_width": apron_width, "r_first": r_first, "r_last": r_last, "map_heights": map_heights, "out": out, "mutex": Mutex.new()}
-	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_massif_apron_band.bind(ctx), bands, TerrainUtil.object_call_threads(), true))
-	var base := r_first * apron_width
-	for b: Dictionary in out:
-		var band_heights: PackedFloat32Array = b.heights
-		var band_mask: PackedByteArray = b.mask
-		for k in band_mask.size():
-			if band_mask[k] == 1:
-				heights[base + k] = band_heights[k]
-				mask[base + k] = 1
-		base += band_mask.size()
-	return mask
-
-## raise_massif_on_apron()'s rows [r_first + band * APRON_BAND_ROWS, +APRON_BAND_ROWS), up to
-## r_last. Worker thread: reads ctx, works on its own copy of its rows, stores {heights, mask}.
-static func _massif_apron_band(band: int, ctx: Dictionary) -> void:
-	var all_heights: PackedFloat32Array = ctx.heights
-	var apron_width: int = ctx.apron_width
-	var map_heights: PackedFloat32Array = ctx.map_heights
-	var r_from: int = int(ctx.r_first) + band * MountainWalls.APRON_BAND_ROWS
-	var r_to := mini(r_from + MountainWalls.APRON_BAND_ROWS, int(ctx.r_last) + 1)
-	var heights := all_heights.slice(r_from * apron_width, r_to * apron_width)
-	var mask := PackedByteArray()
-	mask.resize(heights.size())
-	for row in range(r_from, r_to):
-		var edge := map_heights[mini(row, TerrainConfig.AREA_LENGTH - 1) * TerrainConfig.AREA_WIDTH]
-		for a in apron_width:
-			var x := float(a - apron_width)
-			var i := (row - r_from) * apron_width + a
-			# Cut back where the ridge stands higher than the village's ground allows ...
-			var ceiling := massif_ceiling(x, float(row))
-			if heights[i] > ceiling:
-				heights[i] = ceiling
-				mask[i] = 1
-			# ... and raised to the shoulder where it is lower.
-			var target := minf(massif_height(x, float(row)), edge + MASSIF_EDGE_GRADE * float(apron_width - a))
-			if target > heights[i]:
-				heights[i] = target
-				mask[i] = 1
-	var mutex: Mutex = ctx.mutex
-	mutex.lock()
-	(ctx.out as Array)[band] = {"heights": heights, "mask": mask}
-	mutex.unlock()
-
-## The strip of the Terrain3D import west of the low-X apron (MountainWalls.WEST_EXTRA columns,
-## one row per row of the map + hub, column 0 = the westmost): ground only where the shoulder
-## stands, holes everywhere else (Kirill: "widen it only where the village is"). `apron_heights`
-## = the low-X apron's heights (`apron_width` columns): a hole repeats its outer column's height.
-## {heights: PackedFloat32Array, control: PackedInt32Array, color: PackedByteArray (RGBA8)}.
-static func west_strip_maps(apron_heights: PackedFloat32Array, apron_width: int, rows: int) -> Dictionary:
-	var t0 := Time.get_ticks_msec()
-	var width := MountainWalls.WEST_EXTRA
-	var heights := PackedFloat32Array()
-	var control := PackedInt32Array()
-	var hole := TerrainHeightmap.pack_control_blend(TerrainConfig.GROUND_TEXTURE_ID, TerrainConfig.GROUND_TEXTURE_ID, 0.0) | Terrain3DUtil.enc_hole(true)
-	var color := PackedByteArray()
-	color.resize(width * rows * 4)
-	color.fill(255)
-	var rock := TerrainHeightmap.pack_control_blend(MountainWalls.rock_texture_id, MountainWalls.rock_texture_id, 0.0)
-	var span := massif_rows()
-	var ground := 0
-	# 2026-10-11: the rows in bands on worker threads (_west_strip_band; the loop was about 0.1 s
-	# on the main thread). A pixel depends on its own position only: the single loop's result.
-	_ensure_massif_shape() # before the bands read it
-	var bands := ceili(float(rows) / MountainWalls.APRON_BAND_ROWS)
-	var band_out: Array = []
-	band_out.resize(bands)
-	var band_ctx := {"apron_heights": apron_heights, "apron_width": apron_width, "rows": rows, "width": width, "natural": natural_back_heights, "span": span, "hole": hole, "rock": rock, "out": band_out, "mutex": Mutex.new()}
-	WorkerThreadPool.wait_for_group_task_completion(WorkerThreadPool.add_group_task(_west_strip_band.bind(band_ctx), bands, TerrainUtil.object_call_threads(), true))
-	for b: Dictionary in band_out:
-		heights.append_array(b.heights)
-		control.append_array(b.control)
-		ground += b.ground
-	# Colour, from the finished shape: the mountain's tint, creases darker.
-	for row in range(maxi(span.x, 0), mini(span.y, rows - 1) + 1):
-		for a in width:
-			var i := row * width + a
-			var shade := 1.0
-			if control[i] == rock:
-				var curvature := heights[row * width + maxi(a - 1, 0)] + heights[row * width + mini(a + 1, width - 1)] + heights[maxi(row - 1, 0) * width + a] + heights[mini(row + 1, rows - 1) * width + a] - 4.0 * heights[i]
-				shade = clampf(1.0 - curvature * MountainWalls.APRON_CREASE_SHADE, MountainWalls.APRON_CREASE_MIN, MountainWalls.APRON_CREASE_MAX) / MountainWalls.APRON_CREASE_MAX
-			color[i * 4] = int(255.0 * shade * MountainWalls.MOUNTAIN_TINT.r)
-			color[i * 4 + 1] = int(255.0 * shade * MountainWalls.MOUNTAIN_TINT.g)
-			color[i * 4 + 2] = int(255.0 * shade * MountainWalls.MOUNTAIN_TINT.b)
-	for i in width * rows:
-		color[i * 4 + 3] = 128 # roughness left as it is
-	print("TERRAIN_GEN: west strip -- %d x %d px west of the low-X apron, ground on %d of them (the village's shoulder), the rest holes (%d ms)" % [width, rows, ground, Time.get_ticks_msec() - t0])
-	return {"heights": heights, "control": control, "color": color}
-
-## west_strip_maps()'s heights and control pixels for rows [band * APRON_BAND_ROWS, +APRON_BAND_ROWS).
-## Worker thread: reads ctx, fills band-sized outputs of its own, stores them under ctx.mutex.
-static func _west_strip_band(band: int, ctx: Dictionary) -> void:
-	var apron_heights: PackedFloat32Array = ctx.apron_heights
-	var apron_width: int = ctx.apron_width
-	var rows: int = ctx.rows
-	var width: int = ctx.width
-	var natural_back: PackedFloat32Array = ctx.natural
-	var span: Vector2i = ctx.span
-	var rock: int = ctx.rock
-	var r_from := band * MountainWalls.APRON_BAND_ROWS
-	var r_to := mini(r_from + MountainWalls.APRON_BAND_ROWS, rows)
-	var heights := PackedFloat32Array()
-	heights.resize(width * (r_to - r_from))
-	var control := PackedInt32Array()
-	control.resize(width * (r_to - r_from))
-	control.fill(int(ctx.hole))
-	var ground := 0
-	for row in range(r_from, r_to):
-		var base := apron_heights[row * apron_width] # the apron's outer column (raised to the shoulder where that is higher)
-		var natural := natural_back[row] if row < natural_back.size() else base # ... and as it was before
-		var on_span := row >= span.x and row <= span.y
-		for a in width:
-			var i := (row - r_from) * width + a
-			var x := float(a - width - apron_width)
-			var target := massif_height(x, float(row)) if on_span else -INF
-			# Ground: on the shoulder's top, and where it stands above the ridge's own back edge.
-			if target > -INF and (target > natural + 0.5 or massif_distance(x, float(row)) <= 0.0):
-				heights[i] = target
-				control[i] = rock
-				ground += 1
-			else:
-				heights[i] = base
-	var mutex: Mutex = ctx.mutex
-	mutex.lock()
-	(ctx.out as Array)[band] = {"heights": heights, "control": control, "ground": ground}
-	mutex.unlock()
-
-## Lit windows on the village's houses: small glowing panes at random spots on the walls of
-## `houses` (each a unit box's transform, in `house_node`'s space) that face away from the
-## village's middle (VILLAGE_WINDOW_*), as one MultiMesh under `house_node`. Returns how many.
-static func _add_village_windows(house_node: Node3D, houses: Array[Transform3D]) -> int:
-	if houses.is_empty() or VILLAGE_WINDOWS <= 0:
-		return 0
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 0x57494E44 # 'WIND': the same windows on every run
-	var low := VILLAGE_BASE_TOP + VILLAGE_WINDOW_MIN_ABOVE_ROCK
-	var chosen: Array[Vector3] = []
-	for attempt in VILLAGE_WINDOWS * 20:
-		if chosen.size() >= VILLAGE_WINDOWS:
-			break
-		var house := houses[rng.randi_range(0, houses.size() - 1)]
-		var face := rng.randi_range(0, 3)
-		var along := rng.randf_range(-0.42, 0.42)
-		var height := house.basis.y.length()
-		var up := rng.randf()
-		var high := house.origin.y + height * 0.5 - VILLAGE_WINDOW_BELOW_ROOF
-		if high <= low:
-			continue
-		var out := (Vector3.RIGHT if face < 2 else Vector3.BACK) * (1.0 if face % 2 == 0 else -1.0)
-		var on_wall := out * 0.5 + (Vector3.BACK if face < 2 else Vector3.RIGHT) * along
-		on_wall.y = (lerpf(low, high, up) - house.origin.y) / height
-		var normal := (house.basis * out).normalized()
-		var spot := house * on_wall + normal * VILLAGE_WINDOW_OFFSET
-		if Vector2(normal.x, normal.z).dot(Vector2(spot.x, spot.z).normalized()) < VILLAGE_WINDOW_OUTWARD:
-			continue
-		var clear := true
-		for other in chosen:
-			if other.distance_to(spot) < VILLAGE_WINDOW_SPACING:
-				clear = false
-				break
-		if clear:
-			chosen.append(spot)
-
-	_add_glow_points(house_node, "Windows", chosen, VILLAGE_WINDOW_SIZE, rng)
-	return chosen.size()
 
 ## Points of light: one glowing pane of `pane_size` m (x 0.75..1.25 each) at every one of
 ## `points` (in `parent`'s own space), as one MultiMesh named `node_name` under `parent`. The
@@ -939,8 +371,8 @@ static func _add_glow_points(parent: Node3D, node_name: String, points: Array[Ve
 	var glow := StandardMaterial3D.new()
 	glow.albedo_color = Color.BLACK
 	glow.emission_enabled = true
-	glow.emission = VILLAGE_WINDOW_COLOR
-	glow.emission_energy_multiplier = VILLAGE_WINDOW_ENERGY
+	glow.emission = LIGHT_COLOR
+	glow.emission_energy_multiplier = LIGHT_ENERGY
 	glow.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
 	glow.billboard_keep_scale = true
 	pane.material = glow

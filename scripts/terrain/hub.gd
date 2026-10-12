@@ -190,14 +190,6 @@ static func join_images(maps: Dictionary, hub_heights: PackedFloat32Array, regio
 		control_bytes = _join_columns(control_bytes, width, (right_maps.control as PackedInt32Array).to_byte_array(), apron, total_length)
 		color_bytes = _join_columns(color_bytes, width, right_maps.color, apron, total_length)
 		width += apron
-		# ... and west of the low-X apron MountainWalls.WEST_EXTRA more columns: holes, except
-		# where the village's shoulder stands (TerrainCastle.west_strip_maps).
-		var west_maps := TerrainCastle.west_strip_maps(apron_maps.heights, apron, total_length)
-		var west := MountainWalls.WEST_EXTRA
-		height_bytes = _join_columns((west_maps.heights as PackedFloat32Array).to_byte_array(), west, height_bytes, width, total_length)
-		control_bytes = _join_columns((west_maps.control as PackedInt32Array).to_byte_array(), west, control_bytes, width, total_length)
-		color_bytes = _join_columns(west_maps.color, west, color_bytes, width, total_length)
-		width += west
 	# The north apron: TerrainCastle.LENGTH rows of mountain north of the map, as wide as map + aprons. They come
 	# first in the image (row 0 = northmost), so the generated map's pixel (0, 0) is then that many
 	# rows in +Z from the corner Terrain3D reports (WorldGenerator adds it to heightmap_corner).

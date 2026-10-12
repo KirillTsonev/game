@@ -69,7 +69,7 @@ const ABLATION_STATIONS := ["hub_overlook", "forest_dense", "mountain_foot"]
 ##                                the others under 1 -- now one switch, layer:SMALL
 ## Kept as before: layer:trees / understory / saplings (2 ms of CPU) / grass / ALL, sun_shadows,
 ## post:ALL, lantern, msaa_3d, render_scale_50, terrain_texturing, the env: switches, and every
-## layer or switch added since (mountains, mountain_clouds, village, castle, terrain:*).
+## layer or switch added since (mountains, mountain_clouds, castle, terrain:*).
 const SMALL_LAYERS: Array[StringName] = [&"cliffs", &"outcrops", &"flowers", &"deadfall", &"rocks", &"instanced_other"]
 const DETAIL_TOGGLES: Array[String] = ["lantern_shadow", "lantern_ground_pool", "sun_shadow_100m", "screen_space_aa", "terrain_shadows"]
 const DETAIL_PREFIXES: Array[String] = ["plants:", "grass:", "post:"] # except post:ALL
@@ -450,8 +450,9 @@ func _build_stations() -> Array[Dictionary]:
 	# valley_north: from the road at 70 % of its length toward the castle and the north rows.
 	var north_p := path[int(n * 0.7)]
 	stations.append(_station("valley_north", north_p, TerrainCastle.SITE_PX - north_p, 0.15))
-	# castle_foot: the road's end, looking up at the village on the shoulder.
-	stations.append(_station("castle_foot", exit, TerrainCastle.VILLAGE_PX - exit, 0.6))
+	# castle_foot: the road's end, looking up at the castle. (Until 2026-10-12 it looked west, up
+	# at the village on its shoulder: not comparable with runs from before.)
+	stations.append(_station("castle_foot", exit, TerrainCastle.SITE_PX - exit, 0.6))
 	return stations
 
 func _station(station_name: String, px: Vector2, dir: Vector2, pitch: float) -> Dictionary:
@@ -832,8 +833,6 @@ func _classify(node: Node, layer_by_id: Dictionary) -> Array:
 	# node, and are two layers here.
 	if top == MountainWalls.NODE_NAME:
 		layer = &"mountain_clouds" if str(node.name).begins_with("Cloud_") else &"mountains"
-	elif top == TerrainCastle.VILLAGE_NAME:
-		layer = &"village"
 	elif top == TerrainCastle.PLACEHOLDER_NAME:
 		layer = &"castle"
 	var label := str(node.name)
@@ -876,7 +875,7 @@ func _audit_layers() -> Array:
 		if not LayerTogglePanel.mesh_ids(spec[0]).is_empty() and not _layer_nodes.has(spec[0]):
 			_layer_nodes[spec[0]] = []
 	for key: StringName in _layer_nodes.keys():
-		if not (key in [&"grass", &"cliffs", &"outcrops", &"instanced_other", &"mountains", &"mountain_clouds", &"village", &"castle"] or not LayerTogglePanel.mesh_ids(key).is_empty()):
+		if not (key in [&"grass", &"cliffs", &"outcrops", &"instanced_other", &"mountains", &"mountain_clouds", &"castle"] or not LayerTogglePanel.mesh_ids(key).is_empty()):
 			_layer_nodes.erase(key) # player, road, ...: listed in the audit, not switched off
 	var layers: Array = []
 	for key: StringName in _layer_assets:

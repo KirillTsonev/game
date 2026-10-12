@@ -437,12 +437,6 @@ static func _build_occupancy(heights: PackedFloat32Array, pre: PackedFloat32Arra
 		_fill_circle(occ, width, length, landmark_centre.x, landmark_centre.y, TerrainLandmarks.RADIUS)
 	# 2026-10-09: and the castle's site at the valley's north end (TerrainCastle).
 	_fill_circle(occ, width, length, TerrainCastle.SITE_PX.x, TerrainCastle.SITE_PX.y, TerrainCastle.SITE_KEEP_RADIUS)
-	# ... and the ground the village's shoulder comes down onto, along the low-X edge beside it.
-	var shoulder_rows := TerrainCastle.massif_rows()
-	for pz in range(maxi(shoulder_rows.x, 0), mini(shoulder_rows.y, length - 1) + 1):
-		for px in mini(int(TerrainCastle.MASSIF_KEEP) + 2, width):
-			if TerrainCastle.shoulder_keepout(px, pz):
-				occ[pz * width + px] = 1
 	return _dilate(occ, width, length, int(KNOT_OCCUPIED_MARGIN))
 
 static func _fill_circle(grid: PackedByteArray, width: int, length: int, cx: float, cz: float, r: float) -> void:

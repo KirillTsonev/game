@@ -143,7 +143,7 @@ func _ready() -> void:
 	else:
 		images.assign(cached.images)
 	# Output checksums (2026-10-10): must stay the same across a change that is only meant to be
-	# faster. The import's cover the hub, the three aprons and the west strip as well.
+	# faster. The import's cover the hub and the three aprons as well.
 	print("TERRAIN_GEN: checksum heightmap %d; import height %d, control %d, colour %d (hub + aprons + join %d ms)" % [hash(maps.heights), hash(images[0].get_data()), hash(images[1].get_data()), hash(images[2].get_data()), Time.get_ticks_msec() - t_join])
 	data.import_images(images, import_position, 0.0, 1.0)
 	data.calc_height_range(true)
@@ -198,14 +198,12 @@ func _ready() -> void:
 	# The generated map's pixel (0, 0): past the mountain apron, which takes the import's first
 	# APRON_WIDTH columns (MountainWalls.apron_maps), and past the castle end, which takes its first
 	# TerrainCastle.LENGTH rows (TerrainCastle.build_maps).
-	# 2026-10-09: and past MountainWalls.WEST_EXTRA more columns west of that apron (MAP_OFFSET_X
-	# in all): holes, except where the village's shoulder stands.
 	var heightmap_corner := Vector3(min_region_x * region_size + MountainWalls.MAP_OFFSET_X, 0, min_region_z * region_size + TerrainCastle.LENGTH)
-	# The west strip must be a hole away from the village and ground under it.
-	var strip_x := -float(MountainWalls.APRON_WIDTH) - float(MountainWalls.WEST_EXTRA) * 0.5
-	print("TERRAIN_GEN: west strip check -- hole in it far from the village: %s (must be true), under the village: %s (must be false), just inside the map: %s (must be false)" % [
-		data.get_control_hole(heightmap_corner + Vector3(strip_x, 0.0, TerrainConfig.AREA_LENGTH * 0.75)),
-		data.get_control_hole(heightmap_corner + Vector3(TerrainCastle.VILLAGE_PX.x, 0.0, TerrainCastle.VILLAGE_PX.y)),
+	# The import is padded with holes to whole regions on its +X side, beyond the high-X apron.
+	var padding_x := float(TerrainConfig.AREA_WIDTH + MountainWalls.APRON_WIDTH) + 32.0
+	print("TERRAIN_GEN: padding check -- hole beyond the high-X apron: %s (must be true), on the low-X apron: %s (must be false), just inside the map: %s (must be false)" % [
+		data.get_control_hole(heightmap_corner + Vector3(padding_x, 0.0, TerrainConfig.AREA_LENGTH * 0.75)),
+		data.get_control_hole(heightmap_corner + Vector3(-float(MountainWalls.APRON_WIDTH) * 0.5, 0.0, TerrainConfig.AREA_LENGTH * 0.75)),
 		data.get_control_hole(heightmap_corner + Vector3(TerrainConfig.AREA_WIDTH - 2.0, 0.0, 10.0))])
 
 	# 2026-09-28: world coordinates of each verticality knot (knots.gd), so they can be found in-game.
@@ -351,7 +349,7 @@ func _ready() -> void:
 
 	# Invisible walls just inside the map's edges, so the player cannot walk off it.
 	WorldBounds.build(get_parent(), heightmap_corner)
-	# The stand-ins for the castle and its bridge, at the valley's north end.
+	# The stand-in for the castle, at the valley's north end.
 	TerrainCastle.spawn_placeholder(get_parent(), terrain, heightmap_corner)
 	# The mountain walls that carry the valley's slopes on beyond the map's edge (scenery only).
 	t_ready_stage = Time.get_ticks_msec()
@@ -367,7 +365,7 @@ func _ready() -> void:
 			var at_edge := float(maps.heights[row * TerrainConfig.AREA_WIDTH + int(edge[0])])
 			edge_mismatch = maxf(edge_mismatch, absf(data.get_height(heightmap_corner + Vector3(float(edge[0]), 0.0, row)) - at_edge))
 			edge_step = maxf(edge_step, absf(data.get_height(heightmap_corner + Vector3(float(edge[0]) + float(edge[1]), 0.0, row)) - at_edge))
-	print("TERRAIN_GEN: mountain walls -- drawn terrain vs generated heights along both long edges: largest difference %.3f m (must be ~0); largest step onto the mountain strips %.2f m (must be under 1.4; up to TerrainCastle.MASSIF_EDGE_GRADE beside the village's shoulder)" % [edge_mismatch, edge_step])
+	print("TERRAIN_GEN: mountain walls -- drawn terrain vs generated heights along both long edges: largest difference %.3f m (must be ~0); largest step onto the mountain strips %.2f m (must be under 1.4)" % [edge_mismatch, edge_step])
 	_log_stage("mountain walls", t_ready_stage)
 	t_ready_stage = Time.get_ticks_msec()
 
@@ -489,7 +487,7 @@ var startup_timings: Dictionary = {}
 ## understory, grass, flowers, ground paint) between a first and a second start to check.
 ## WORLD_CACHE_KEEP files are kept (about 6 MB each); the oldest go.
 const WORLD_CACHE := true
-const WORLD_CACHE_VERSION := 1 ## bump to throw every cached world away
+const WORLD_CACHE_VERSION := 2 ## bump to throw every cached world away
 const WORLD_CACHE_KEEP := 4
 const WORLD_CACHE_DIR := "user://world_cache"
 const WORLD_CACHE_DOWNSTREAM: Array[String] = [
@@ -523,8 +521,7 @@ static func _world_statics() -> Dictionary:
 		"valley_floor_lo": TerrainHeightmap.valley_floor_lo, "valley_floor_hi": TerrainHeightmap.valley_floor_hi,
 		"foot_lines": MountainWalls.foot_lines, "foot_rise": MountainWalls._foot_rise,
 		"apron_back_heights": MountainWalls.apron_back_heights, "apron_envelope": MountainWalls.apron_envelope,
-		"massif_top_y": TerrainCastle.massif_top_y, "site_ground_y": TerrainCastle.site_ground_y,
-		"natural_back_heights": TerrainCastle.natural_back_heights, "side_edge_heights": TerrainCastle.side_edge_heights,
+		"side_edge_heights": TerrainCastle.side_edge_heights,
 		"north_apron_heights": TerrainCastle.north_apron_heights, "north_apron_width": TerrainCastle.north_apron_width,
 	}
 
@@ -535,9 +532,6 @@ static func _world_statics_restore(d: Dictionary) -> void:
 	MountainWalls._foot_rise = d.foot_rise
 	MountainWalls.apron_back_heights.assign(d.apron_back_heights)
 	MountainWalls.apron_envelope.assign(d.apron_envelope)
-	TerrainCastle.massif_top_y = d.massif_top_y
-	TerrainCastle.site_ground_y = d.site_ground_y
-	TerrainCastle.natural_back_heights = d.natural_back_heights
 	TerrainCastle.side_edge_heights.assign(d.side_edge_heights)
 	TerrainCastle.north_apron_heights = d.north_apron_heights
 	TerrainCastle.north_apron_width = d.north_apron_width

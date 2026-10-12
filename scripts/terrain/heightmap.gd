@@ -191,9 +191,10 @@ const VALLEY_MIN_FLOOR := 120.0 ## the floor is never narrower than this, m
 ## VALLEY_SOUTH_TAPER m further north.
 const VALLEY_SOUTH_HOLD := 40.0
 const VALLEY_SOUTH_TAPER := 120.0
-## The low-X edge is also straight beside the two things placed against it -- the castle
-## (TerrainCastle.SITE_PX) and the fixed landmark (TerrainLandmarks) -- for VALLEY_SITE_HOLD m
-## along the valley beyond each, full wander VALLEY_SITE_TAPER m further.
+## Both edges are also straight beside the castle (TerrainCastle.SITE_PX, in the middle of the
+## map's width: so it stands in the middle of the floor), and the low-X edge beside the fixed
+## landmark (TerrainLandmarks), which is placed against it -- for VALLEY_SITE_HOLD m along the
+## valley beyond each, full wander VALLEY_SITE_TAPER m further.
 const VALLEY_SITE_HOLD := 60.0
 const VALLEY_SITE_TAPER := 120.0
 
@@ -264,8 +265,9 @@ static func build_valley_shape(master_seed: int) -> void:
 	var widest := 0.0
 	for pz in length:
 		var south := smoothstep(VALLEY_SOUTH_HOLD, VALLEY_SOUTH_HOLD + VALLEY_SOUTH_TAPER, float(length - 1 - pz))
-		# The low-X edge: also straight beside the castle and the landmark.
-		var held := south * smoothstep(VALLEY_SITE_HOLD, VALLEY_SITE_HOLD + VALLEY_SITE_TAPER, float(pz) - castle_end)
+		# Both edges: also straight beside the castle. The low-X edge: and beside the landmark.
+		south *= smoothstep(VALLEY_SITE_HOLD, VALLEY_SITE_HOLD + VALLEY_SITE_TAPER, float(pz) - castle_end)
+		var held := south
 		if TerrainLandmarks.is_active():
 			held *= smoothstep(VALLEY_SITE_HOLD, VALLEY_SITE_HOLD + VALLEY_SITE_TAPER, absf(float(pz) - TerrainLandmarks.center().y) - TerrainLandmarks.RADIUS)
 		# Stretched so an edge spends time at both ends of its range: bays and narrows, not a wobble.
@@ -609,8 +611,6 @@ static func build_heightmap(master_seed: int = TerrainConfig.MASTER_SEED) -> Dic
 	var mountain_foot_right := MountainWalls.raise_foot(heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, cliff_obstacle_mask, master_seed, 1)
 	# 2026-10-09: and across the north end, where the mountain closes the valley (one entry per column).
 	var mountain_foot_north := MountainWalls.raise_foot(heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, cliff_obstacle_mask, master_seed, 2)
-	# The village's shoulder (TerrainCastle): where it reaches onto the map's rock, beside the castle.
-	TerrainCastle.raise_massif_on_map(heights)
 
 	# 2026-10-10: round the creases every stage above left (see round_creases). Last of the
 	# shaping, before the road, which grades its own bed. The knots' levels are flooded before and

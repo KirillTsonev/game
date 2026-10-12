@@ -1152,14 +1152,33 @@ and functions called across modules lost their leading underscore
     their row; code that picks a column by zone before it knows the row (cliff features,
     erratics, outcrops) moves it with `TerrainHeightmap.warp_x(px, pz)`; the road's preferred
     line follows the floor's middle. Both edges are straight near the south end (the hub's
-    walls are straight), and the low-X edge beside the castle and the fixed landmark, which are
-    placed against it. `valley_profile()` is the straight cross-section and is only right for
+    walls are straight), both beside the castle (in the middle of the width since 2026-10-12)
+    and the low-X edge beside the fixed landmark, which is placed against it. `valley_profile()` is the straight cross-section and is only right for
     the hub. A first attempt the same day widened only the rock's foot line (4..115 m) over a
     straight valley: rejected by Kirill, and cliffs and knots held that line back on half its
     length. On the two seeds tried the floor came out 130..250 and 132..293 m wide and the road needed
     deeper cuts and fills at narrows (up to 5.7 m, was 1.9 m). `edge_rock_circles` is gone:
     `MountainWalls.stamp_rock_distance` writes the rock's distance field for the grass bake and
     the ground paint.
+  - **UPDATE 2026-10-12: the bridge, the village and its terrain shoulder are gone, and the
+    castle stands in the middle of the valley's width** (`SITE_PX` (192, 78), still at the north
+    end). Kirill, with the zone plan changed to one long valley of biomes ending at the castle:
+    "we don't need the bridge, the village, and the mountain pillar now, also move the castle to
+    be in the center of the valley". What that changed:
+    - `castle.gd` keeps only the site, the block with its 110 lights and the north apron. All
+      `VILLAGE_*`, `BRIDGE_*`, `MASSIF_*`, `massif_*`, `shoulder_keepout`, `west_strip_maps` are
+      deleted (in git up to `4d30d31`). The next bullet describes them as they were.
+    - `MountainWalls.WEST_EXTRA` is gone and **`MAP_OFFSET_X` is 128 again** (= `APRON_WIDTH`).
+      The import is 640 px wide, padded with holes to 768 on the +X side; `_ready()` prints a
+      "padding check" line.
+    - Both floor edges are held straight beside the castle (`build_valley_shape`), so the map's
+      middle column is the floor's middle there. The north foot line is kept
+      `FOOT_CASTLE_GAP` behind the castle's north face; the west one no longer bends round it.
+    - The road ends in front of the middle of the castle's south face (`road_end()`).
+    - The apron colour bands and their native kernels still take an `on_shoulder` mask (now
+      always empty / zero): the kernels were not rebuilt for this.
+    - Benchmark: the `village` layer is gone and `castle_foot` looks at the castle. Every seed's
+      north end changed, so runs from before are not comparable at the northern stations.
   - The castle stands at `TerrainCastle.SITE_PX` (heightmap pixels: the low-X corner of the
     valley's end, at the floor's edge), on the ground as generated -- no pedestal (Kirill).
     Knots, cliff meshes and outcrops keep `SITE_KEEP_RADIUS` clear of it; its footprint is in the

@@ -307,13 +307,11 @@ const ROWS: Array[Dictionary] = [
 ## Width of the terrain added on the low-X side of the import, m. With AREA_WIDTH it should come to
 ## a multiple of the region size (128 + 384 = 512), or the rest is padded with holes.
 const APRON_WIDTH := 128
-## West of the low-X apron the Terrain3D import has this many more columns (2026-10-09): holes,
-## except where the village's shoulder stands (TerrainCastle.west_strip_maps). With the two
-## aprons and the map they come to 768, three whole regions -- the place of the hole padding the
-## import had on its other side before. So the generated map's pixel (0, 0) is MAP_OFFSET_X m in
-## +X from the corner Terrain3D reports, no longer APRON_WIDTH.
-const WEST_EXTRA := 128
-const MAP_OFFSET_X := APRON_WIDTH + WEST_EXTRA
+## The generated map's pixel (0, 0) is this far in +X from the corner Terrain3D reports: the
+## low-X apron's width. (From 2026-10-09 to 2026-10-12 the import had 128 more columns west of
+## that apron, holes except under the village's shoulder, and this was 256. Without them the two
+## aprons and the map come to 640, padded with holes to 768 on the +X side.)
+const MAP_OFFSET_X := APRON_WIDTH
 ## Its ramp, as [m out from the map's edge, rise per metre]: it leaves the edge at the terrain's
 ## own grade there (measured, replacing the first entry's value -- already steep, the foot line
 ## lies inside the map), holds a grade the player cannot walk (45 deg = 1.0), eases off and falls
@@ -334,15 +332,15 @@ const RAMP_GRADE_SMOOTH_RADIUS := 6 ## rows on each side averaged into that grad
 ## forested slope. (A first attempt widened this range to 4..115 m over a straight valley:
 ## rejected.) Guards, all in raise_foot: the line turns by at most FOOT_LINE_SLOPE m per m along
 ## the valley; both sides together leave FOOT_MIN_OPEN m of floor; near the map's south end it
-## is back within FOOT_END_MAX (the hub's walls carry straight on from there); the castle's
-## corner stays open. A cliff, knot or outcrop still pulls it back to its own footprint.
+## is back within FOOT_END_MAX (the hub's walls carry straight on from there); the north end's
+## line stays behind the castle. A cliff, knot or outcrop still pulls it back to its own footprint.
 const FOOT_MIN := 4.0
 const FOOT_MAX := 34.0
 const FOOT_LINE_SLOPE := 1.5
 const FOOT_MIN_OPEN := 120.0
 const FOOT_END_MAX := 34.0
 const FOOT_END_TAPER_START := 30.0 ## m from the south edge up to which FOOT_END_MAX holds; 1 m more per m beyond
-const FOOT_CASTLE_GAP := 10.0 ## m of open ground kept between the rock and the castle's low-X face
+const FOOT_CASTLE_GAP := 10.0 ## m of open ground kept between the rock and the castle's north face
 ## Deep inside a headland the ground's extra grade (FOOT_EXTRA_GRADE) eases to FOOT_DEEP_GRADE,
 ## from FOOT_DEEP_RUN m past the line -- or a 115 m headland would stand 85 m high at the map's edge.
 const FOOT_DEEP_RUN := 40.0
@@ -784,11 +782,9 @@ static func apron_maps(maps: Dictionary, master_seed: int, side: int = 0) -> Dic
 		crest_min = minf(crest_min, b.crest_min)
 		crest_max = maxf(crest_max, b.crest_max)
 	apron_envelope[side] = envelopes
-	# The village's shoulder, on the low-X side (TerrainCastle): the higher of the two heights,
-	# before anything is derived from the shape. Bare rock where it is: no turf, no snow.
+	# No pixel is forced bare any more (2026-10-12; it was the village's shoulder on the low-X
+	# side). The colour band and its native copy still take the mask: empty = none.
 	var on_shoulder := PackedByteArray()
-	if side == 0:
-		on_shoulder = TerrainCastle.raise_massif_on_apron(heights, APRON_WIDTH, rows, maps.heights)
 
 	var back := PackedFloat32Array()
 	back.resize(rows)
@@ -1042,11 +1038,12 @@ static func raise_foot(heights: PackedFloat32Array, width: int, length: int, obs
 	var foot := PackedFloat32Array()
 	foot.resize(count)
 	var reach := mini(int(foot_max + TerrainHeightmap.VALLEY_MEANDER_IN + FOOT_OBSTACLE_GAP) + 1, depth)
-	# The long sides' guards (see FOOT_MAX): each side's share of the floor, the south end, the castle.
+	# The long sides' guards (see FOOT_MAX): each side's share of the floor, the south end.
 	var floor_edge := (0.5 - TerrainConfig.VALLEY_FLOOR_WIDTH_FRACTION * 0.5) * float(width - 1)
 	var open_cap := floor_edge + maxf(float(width - 1) - 2.0 * floor_edge - FOOT_MIN_OPEN, 0.0) * 0.5
-	var castle_cap := TerrainCastle.SITE_PX.x - TerrainCastle.PLACEHOLDER_SIZE.x * 0.5 - FOOT_CASTLE_GAP
-	var castle_half := TerrainCastle.PLACEHOLDER_SIZE.z * 0.5 + FOOT_CASTLE_GAP
+	# The north end's: the line stays behind the castle's north face.
+	var castle_cap := TerrainCastle.SITE_PX.y - TerrainCastle.PLACEHOLDER_SIZE.z * 0.5 - FOOT_CASTLE_GAP
+	var castle_half := TerrainCastle.PLACEHOLDER_SIZE.x * 0.5 + FOOT_CASTLE_GAP
 	var clipped := 0
 	for row in count:
 		# Stretched so the line spends time at both ends of its range, like a shore with headlands.
@@ -1056,11 +1053,8 @@ static func raise_foot(heights: PackedFloat32Array, width: int, length: int, obs
 			wanted = maxf(wanted + TerrainHeightmap.floor_shift(side, float(row)), FOOT_MIN)
 			wanted = minf(wanted, open_cap)
 			wanted = minf(wanted, FOOT_END_MAX + maxf(float(count - 1 - row) - FOOT_END_TAPER_START, 0.0))
-			if side == 0:
-				wanted = minf(wanted, castle_cap + maxf(absf(float(row) - TerrainCastle.SITE_PX.y) - castle_half, 0.0))
-				# Beside the village's shoulder the map's edge is always the mountain's rock.
-				if TerrainCastle.shoulder_keepout(0.0, float(row)):
-					wanted = maxf(wanted, TerrainCastle.MASSIF_MAP_FOOT)
+		else:
+			wanted = minf(wanted, castle_cap + maxf(absf(float(row) - TerrainCastle.SITE_PX.x) - castle_half, 0.0))
 		for px in reach:
 			if float(px) - FOOT_OBSTACLE_GAP >= wanted:
 				break
@@ -1446,19 +1440,7 @@ static func _seat_lift(v: Vector3, z_origin: float, foot_x: float, side: int) ->
 	if north > 0.0:
 		back = lerpf(back, _edge_height(TerrainCastle.side_edge_heights[side], float(TerrainCastle.LENGTH) - north, back), smoothstep(0.0, TerrainCastle.EDGE_BLEND, north))
 	var beyond := maxf(foot_x - v.x if side == 0 else v.x - foot_x, 0.0)
-	var lift := back - SEAT_SINK + SEAT_GRADE * SEAT_RUN * (1.0 - exp(-beyond / SEAT_RUN))
-	if side == 0:
-		# The village's shoulder (TerrainCastle) reaches out under this row: where it is ground
-		# -- on the import's west strip, or anywhere on its level top -- the mesh stays under it
-		# (`v.y` is the vertex's own height before the lift). Beyond it the row rises behind
-		# the village as everywhere else.
-		var map_x := v.x - (foot_x + float(APRON_WIDTH) - SEAT_OVERLAP) # in the generated map's pixels
-		var shoulder := TerrainCastle.massif_height(map_x, v.z - z_origin)
-		var natural := TerrainCastle.natural_back_heights
-		var natural_back := natural[clampi(int(v.z - z_origin), 0, natural.size() - 1)] if not natural.is_empty() else back
-		if shoulder > -INF and (shoulder >= TerrainCastle.massif_top_y - 0.01 or (map_x >= -float(MAP_OFFSET_X) and shoulder > natural_back + 0.5)):
-			lift = minf(lift, shoulder - TerrainCastle.MASSIF_MESH_UNDER - v.y)
-	return lift
+	return back - SEAT_SINK + SEAT_GRADE * SEAT_RUN * (1.0 - exp(-beyond / SEAT_RUN))
 
 ## The same for the row seated on the castle block's north edge (END_ROWS, "seat"): that edge's
 ## height at the vertex's place along it. `x_origin` = world x of the block's column 0, `foot_z` =
