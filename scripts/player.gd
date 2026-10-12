@@ -12,6 +12,10 @@ extends CharacterBody3D
 @export var crouch_height: float = 1.1 ## capsule height while crouched (standing: the scene's capsule)
 @export var crouch_camera_height: float = 0.95
 @export var crouch_time: float = 0.15 ## seconds to ease between standing and crouched
+@export var dash_distance: float = 5.0 ## metres covered by one dash on open ground
+@export var dash_time: float = 0.2 ## seconds a dash lasts
+@export var dash_cooldown: float = 0.8 ## seconds after a dash ends before the next one
+@export var dash_double_tap_time: float = 0.25 ## longest gap between the two presses of a double tap
 
 @onready var camera: Camera3D = $Camera3D
 @onready var collision: CollisionShape3D = $CollisionShape3D
@@ -33,6 +37,14 @@ var _stand_height: float
 var _stand_camera_height: float
 ## Space stood the player up from a crouch: no jump until the key is released.
 var _jump_held_from_crouch: bool = false
+
+## Dash: W / A / S / D pressed twice within dash_double_tap_time, on the ground only. Its
+## direction is fixed when it starts; a crouched player stands up first (no headroom = no dash).
+var _dash_direction: Vector3 = Vector3.ZERO
+var _dash_left: float = 0.0 ## seconds of the running dash still to go, 0 = not dashing
+var _dash_cooldown_left: float = 0.0
+var _last_tap_key: Key = KEY_NONE
+var _last_tap_msec: int = 0
 
 ## Stall detector: logs a diagnostic entry (with the actual colliders
 ## involved) whenever the player is trying to move but barely progressing,
@@ -120,6 +132,14 @@ func _unhandled_input(event: InputEvent) -> void:
 				if _crouching:
 					_set_crouching(false)
 					_jump_held_from_crouch = true
+			KEY_W:
+				_tap_for_dash(KEY_W, Vector3.FORWARD)
+			KEY_S:
+				_tap_for_dash(KEY_S, Vector3.BACK)
+			KEY_A:
+				_tap_for_dash(KEY_A, Vector3.LEFT)
+			KEY_D:
+				_tap_for_dash(KEY_D, Vector3.RIGHT)
 
 	# Left click only (2026-09-27): the mouse WHEEL is also an InputEventMouseButton, and
 	# re-capturing on it stole the cursor from UI like the grass tuning panel.
@@ -171,7 +191,20 @@ func _physics_process(delta: float) -> void:
 	elif _sprinting:
 		move_speed *= sprint_multiplier
 
-	if direction:
+	_dash_cooldown_left = maxf(_dash_cooldown_left - delta, 0.0)
+	var dash_ended := false
+	if _dash_left > 0.0:
+		# The dash replaces the WASD velocity; walls still stop it in move_and_slide().
+		_dash_left -= delta
+		direction = _dash_direction
+		var dash_speed := dash_distance / maxf(dash_time, 0.001)
+		velocity.x = direction.x * dash_speed
+		velocity.z = direction.z * dash_speed
+		if _dash_left <= 0.0:
+			_dash_left = 0.0
+			_dash_cooldown_left = dash_cooldown
+			dash_ended = true
+	elif direction:
 		velocity.x = direction.x * move_speed
 		velocity.z = direction.z * move_speed
 	else:
@@ -193,6 +226,10 @@ func _physics_process(delta: float) -> void:
 	var pos_before := global_position
 	move_and_slide()
 	_log_if_stuck(direction, velocity_before_slide, delta, pos_before)
+	if dash_ended:
+		# No slide past the dash's distance: the next frame starts from the WASD velocity.
+		velocity.x = 0.0
+		velocity.z = 0.0
 
 	if is_on_floor():
 		last_safe_transform = global_transform
@@ -220,6 +257,24 @@ func _fly(delta: float) -> void:
 	if move.length_squared() > 0.0:
 		global_position += move.normalized() * fly_speed * delta
 	velocity = Vector3.ZERO
+
+## One press of a movement key: the second press of the same key in time starts a dash along
+## local_direction (the body's own axes).
+func _tap_for_dash(key: Key, local_direction: Vector3) -> void:
+	var now := Time.get_ticks_msec()
+	var is_double := key == _last_tap_key and now - _last_tap_msec <= int(dash_double_tap_time * 1000.0)
+	_last_tap_key = key
+	_last_tap_msec = now
+	if not is_double:
+		return
+	_last_tap_key = KEY_NONE # a third quick press starts a new double tap, not another dash
+	if _dash_left > 0.0 or _dash_cooldown_left > 0.0 or not is_on_floor():
+		return
+	_set_crouching(false)
+	if _crouching:
+		return
+	_dash_direction = (transform.basis * local_direction).normalized()
+	_dash_left = dash_time
 
 ## Standing up is refused while something is overhead: the body's current shape is swept up
 ## by the height it still has to grow.
