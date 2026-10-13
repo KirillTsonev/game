@@ -47,9 +47,12 @@ automatically) -- a local copy also lives at
   first, how to find real points on the meshes, the pieces in `scripts/player_body.gd`
   (`_reach`, `_set_fingers`, the timeline), the rules each learnt from a fault, and how to
   check it headless. Read before adding or changing such an action.
-- `docs/weapons.md` -- (2026-10-13) how a weapon gets into a hand (`WeaponData`, `WeaponHold`,
-  the hand's socket), the checklist for adding a weapon and for giving one to a body, and the
-  pitfalls of the first sword hold. Read before adding a weapon or touching the hold.
+- `docs/weapons.md` -- (2026-10-14) sword and shield in first person: the pieces
+  (`WeaponData`, `WeaponHold`, `WeaponStance`), workflows for adding a weapon or a shield and
+  editing a stance, the arms drawn apart from the body, the draw from the back, the shield's
+  keep-off and relaxed carry, the lantern action with weapons, the headless probes in
+  `tools/weapon_probes/`, what is still fitted to the one sword and shield, the plan for
+  per-weapon setups, and the rules learnt. Read before adding a weapon or touching any of it.
 - This file stays the reference for pitfalls and _why_ things are done the way they are.
 
 ## Local tooling paths (this machine)
@@ -1275,6 +1278,15 @@ optimisation; never judge by GPU utilisation %.
   collider over the walkable rock built from it, rocks and scree placed with it, and the
   rock's relief moved above the heightmap (offset +0.5) so Terrain3D's own collision never
   sits above the new one.
+- **UPDATE 2026-10-14 to the next note:** the hold was rebuilt on 2026-10-13 / 14 and judged
+  in game. The sword arm and the shield arm are stances edited with gizmos (`WeaponStance`
+  nodes under the Body; `hand_socket.gd` and `WeaponSocket` are gone), drawn as copies of the
+  arms apart from the body and turned with the view; the sword is sheathed on the back; the
+  lantern can be turned on / off with both in hand. `docs/weapons.md` is the reference for
+  all of it. Three things to know before touching `player_body.gd`: the body's own arms are
+  shrunk at the end of `advance()` (read an arm from `_apart[side]["skeleton"]`); values
+  Kirill set by hand live in `scenes/player_body.tscn` and must be kept; and he rejected any
+  visible body turn added to an action. The note below is the first day's history.
 - **Weapons in hands** (2026-10-13; step by step in `docs/weapons.md`; not judged in game):
   a weapon is a `WeaponData` resource (model, where the fist goes on its handle, the handle's
   thickness) and the hand's socket is worked out from the hand's bones by `WeaponHold`

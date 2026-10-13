@@ -233,3 +233,10 @@ When it is accepted, add what was learnt to section 5 and to `CLAUDE.md`.
   for reaching but not for playing an upper-body clip over the legs.
 - The spine does not bend with the camera's pitch outside an action.
 - Feet are not placed on slopes.
+
+## With a sword and a shield in the hands
+
+(2026-10-14) The lantern action runs with both held: the left hand stays in the shield's
+strap and pinches with three fingers, the sword fist comes in behind the lantern and pushes
+it with its knuckles. What was tried, the values, the probes and the rules are in
+`docs/weapons.md`, sections 6, 7 and 10.
