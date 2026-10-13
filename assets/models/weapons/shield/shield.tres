@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1"]
+[ext_resource type="PackedScene" path="res://assets/models/weapons/shield/shield.glb" id="2"]
+
+[resource]
+script = ExtResource("1")
+scene = ExtResource("2")
+grip = Transform3D(0, -1, 0, 0, 0, -1, 1, 0, 0, 0, 0, 0)
+on_forearm = true

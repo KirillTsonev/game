@@ -310,6 +310,8 @@ const TOGGLE_LEFT_ELBOW := Vector3(-0.5, -0.5, -0.7)
 ## and the seconds the hips take to do so.
 @export_range(0.8, 1.0, 0.005) var feet_leg_stretch: float = 0.985
 @export var feet_hips_smoothing: float = 0.1
+## The model's meshes that have any of the right arm: all the arm's copy draws.
+const ARM_APART_MESHES: Array[String] = ["topA_geo", "gloves_geo", "elbowPads_geo", "shoulderPad_geo"]
 const FEET_RAY_UP := 0.6 ## m above the Player's feet level from where the ground is looked for
 const KNEE_FORWARD := 0.03 ## m: a nearly straight leg bends forward, whichever way the clip's hair of a bend goes
 
@@ -321,10 +323,39 @@ const KNEE_FORWARD := 0.03 ## m: a nearly straight leg bends forward, whichever 
 ## in the editor (weapon_stance.gd). Without the node the weapon is in the fist as WeaponHold
 ## works it out and the arm is the clip's.
 @onready var _stance: WeaponStance = get_node_or_null("WeaponStance")
+## The same for the left arm and the shield on it (a WeaponStance with side Left, holds shield).
+@onready var _shield_stance: WeaponStance = get_node_or_null("ShieldStance")
+var _shield_node: Node3D ## the carried shield's model
+var _shield_bone: int = -1 ## the bone it is carried on: the left lower arm (on_forearm) or the left hand
+var _shield_socket: Transform3D ## where it sits, in that bone's axes
+var _shield_up: float = 0.0 ## 0-1: how far the left arm is into its stance
+var _shield_points: PackedVector3Array = [] ## points round the shield's model, in its own axes (shield_body_clearance)
+var _shield_push: Vector3 = Vector3.ZERO ## how far the shield arm is moved off the body just now (the Player's axes)
+var _shield_shoulder_drawn: float = 0.0 ## m the left shoulder was drawn off the body after the fist this frame
+var _bob_now: Vector3 = Vector3.ZERO ## the bob of the steps this frame (_weapon_bob): both arms move by it
 var _weapon_node: Node3D ## the held weapon's model
 var _weapon_socket: Transform3D ## the fist's middle in the right hand bone's axes (WeaponHold.socket)
 var _weapon_fist: Array[float] = [] ## how far each finger closes round the held weapon
 var _weapon_up: float = 0.0 ## 0-1: how far the right arm is into the stance (weapon_raised)
+var _look_pitch: float = 0.0 ## the camera's pitch as last told (advance), radians, negative = down
+var _shoulder_drawn: float = 0.0 ## m the right shoulder was drawn off the body after the fist this frame
+const POSTURE_SPINE: Array[String] = ["Spine", "Chest", "UpperChest"]
+const POSTURE_NECK: Array[String] = ["Neck", "neck_02"]
+## Per side ("Right", "Left") a copy of the model that shows that arm alone (weapon_arm_drawn_apart):
+## "model", "skeleton" (its Skeleton3D), "chain" (the upper arm and every bone under it, parents first).
+var _apart: Dictionary = {}
+## THE SHADOW while the arms are drawn apart comes from a third copy of the model that is
+## never seen itself: the whole body with both arms ON it, reaching to where the stances hold
+## the fists (the shoulders moved after them: the stretch that looked wrong on the body does
+## not show in a shadow). Without it the body's shadow had no arms -- they are shrunk into its
+## shoulders -- and the arms' own shadows lay apart from it (Kirill: "no arm shadows").
+var _shadow_model: Node3D
+var _shadow_skeleton: Skeleton3D
+var _shadow_on: bool = false ## the copy casts the shadow just now, and the body and the arms' copies do not
+var _own_casters: Array = [] ## [mesh, its shadow setting] for every mesh of the body itself
+## The size everything but the arm is shrunk to in the arm's copy, and the arm on the body.
+## Not 0: the arm's bones are sized back up from it, which nothing can be from nothing.
+const ARM_APART_SHRINK := 0.001
 var _ground_speed: float = 0.0 ## m/s over the ground as last told (set_motion); 0 in the air
 var _weapon_bob_stride: float = 0.0 ## how far through a stride the weapon's bob is (0-1, goes round)
 var _weapon_bob_amount: float = 0.0 ## 0-1.5: how much of the bob is in just now
@@ -347,6 +378,89 @@ var _swing_next: int = 0 ## which of ARM_SWINGS the next attack() plays
 ## Off, or with no such node: the arm is the clip's, the weapon still in its fist.
 @export var weapon_raised: bool = true
 @export var weapon_raise_time: float = 0.25 ## seconds to bring it up or let it down
+## What the LEFT arm carries (null: nothing): a WeaponData with on_forearm, a shield. It comes
+## up and goes down with the weapon (weapon_raised: combat is both), into the stance set by
+## hand in the ShieldStance node; lowered, it stays strapped to the arm as the clips move it.
+@export var shield: WeaponData
+## THE SHIELD KEEPS OFF THE BODY: turned down with the view (weapon_follows_view) its stance
+## swings the board into the chest and the legs (Kirill: "the shield clipping through the body
+## when looking down"). So wherever the board comes nearer than this (m) to the middle line
+## of the trunk (hips to chest), or than half of it to a leg's (hip to knee to ankle), the whole
+## shield arm is moved the way shield_clear_toward points until it is clear. 0: off.
+@export var shield_body_clearance: float = 0.24
+## The way it is moved (the Player's axes: -X left, -Z forward). To the LEFT, out past the
+## body's side: moved FORWARD it cleared the body as well, but took the arm's cut end with it
+## into the picture (measured: in view at 60 deg down).
+@export var shield_clear_toward: Vector3 = Vector3(-1.0, 0.0, 0.0)
+## Seconds the shield takes to move off the body, and to come back once it is clear. It comes
+## back slowly on purpose: the legs swing at it with every step, and following each swing
+## would rock the shield at the pace of the steps.
+@export var shield_clearance_ease: float = 0.08
+@export var shield_clearance_return: float = 1.0
+## The arm in the stance is DRAWN APART FROM THE BODY, as first-person games do (Skyrim keeps a
+## separate pair of arms): where the stance holds the hand, the body's own shoulder is up to
+## half a metre away -- the arm is 0.37 m too short for it -- and moving the shoulder there
+## stretched the body's cloth after it (Kirill: "the shoulder is very stretched"). So while
+## the weapon is up, the body's own right arm is shrunk away into its shoulder, and a second
+## copy of the model, everything but its right arm shrunk away into that arm's shoulder, shows
+## the arm where the stance has it. Looking down, the arm is not joined to the body. Off: one
+## body, its shoulder moved (the stretch). Kirill saw it first WITHOUT weapon_follows_view
+## ("it's just floating in the air, the point is to have it on the body"): the arm stood still
+## while the view went down, and its end came into the picture. On again with that setting,
+## after two Skyrim mods that show a body in first person were read (Joy of Perspective keeps
+## the arms on a second skeleton hung from the camera; IFPV hides the body's arms and shows
+## the first-person ones, turned 0.8 of the view's pitch): neither joins the arms to the body.
+## The left arm with the shield is drawn the same way.
+@export var weapon_arm_drawn_apart: bool = true
+## How much of the view's pitch the arms' stances take (0 = they stay as they are while the
+## Player looks up and down, 1 = they keep their place in the picture whatever the pitch):
+## both stances, with what they hold, are turned about the eyes by this share of the pitch.
+## It is what keeps the drawn-apart arms' ends below the picture's edge. Kirill liked 0 with
+## the arm on the body ("I think I like it the way we do now").
+@export_range(0.0, 1.0, 0.01) var weapon_follows_view: float = 0.8
+## THE ARM GOES BACK ONTO THE BODY AS THE PLAYER LOOKS DOWN. The stance's shoulder is beside
+## and below the camera, so looking ahead neither it nor the cloth stretched after it is in
+## the picture; they come into it about 45-50 deg down. Between these two angles (degrees
+## below level) the shoulder slides back to the body's own, and the fist comes in with it to
+## where the real arm reaches: from..by. Looking further down than `by` the arm is the body's
+## own, holding the weapon nearer. The weapon moves in the picture while it slides, and it IS
+## in the picture then (the fist only leaves it about 75 deg down): the slide was first set to
+## 25..50, inside the angles of ordinary play, and every small move of the view shifted the
+## sword (Kirill: "the sword visibly shifts back and forth"). Keep `from` near where the
+## shoulder comes into view, which at the camera's 75 deg is about 50.
+@export var weapon_on_body_slide: bool = false ## off since weapon_body_toward_weapon (Kirill: "can we not move the sword at all?")
+@export var weapon_on_body_from: float = 45.0
+@export var weapon_on_body_by: float = 65.0
+## THE BODY GOES TO THE WEAPON, not the weapon to the body: the fist stays at its place in the
+## stance at every angle of the view, and while the weapon is up the upper body is posed so
+## that its own right shoulder comes near enough to hold it there -- upright instead of the
+## clip's forward lean (the idle carries the head 0.18 m further ahead of the shoulders than
+## the rest pose), the chest turned to bring the sword's side forward, the collar bone pushed
+## forward. The head keeps the turn the clip gives it. Off: the body as the clips have it.
+## OFF FOR NOW (Kirill, 2026-10-13, with the shield in: "temporarily undo the forward body
+## turn we did for the sword"): it turns the shield's shoulder back by as much as the sword's
+## forward. weapon_shoulder_on_body went off with it, so both arms set off from their stances'
+## Shoulder markers again, which is also what the editor shows.
+@export var weapon_body_toward_weapon: bool = false
+## 0-1: how far the spine and neck are straightened from the clip's pose to the rest pose's.
+@export_range(0.0, 1.0, 0.01) var weapon_body_upright: float = 1.0
+## Degrees the chest faces to the LEFT of where the Player looks (which brings the right
+## shoulder forward), whatever the clip does with it; the turn is shared by the three spine bones.
+@export var weapon_chest_turn: float = 40.0
+## Degrees the right collar bone is swung forward.
+@export var weapon_collar_forward: float = 25.0
+## The arm sets off from the body's OWN shoulder, not from the stance's Shoulder marker; only
+## where the fist is still out of reach (the stance's max_reach) is the shoulder drawn after
+## it, by what is missing. Off: the shoulder is put at the marker (the stretch of 0.5 m).
+@export var weapon_shoulder_on_body: bool = false
+## How far from the body's own shoulder the fist may be held before the shoulder is drawn
+## after it (m). The fist is about 0.08 m beyond the wrist, so the arm (0.56 m) is straight at
+## about 0.64; at the stance's own 0.54 the elbow stayed bent 55 deg with the shoulder 0.15 m
+## off the body.
+@export_range(0.3, 0.64, 0.005) var weapon_body_reach: float = 0.58
+## With the arm on the body, the fist is held at most this far from the body's own shoulder
+## (m; the arm is 0.56 long), on the line toward its place in the stance.
+@export_range(0.2, 0.56, 0.005) var weapon_on_body_reach: float = 0.46
 ## The held weapon bobs with the steps: the whole stance (shoulder and fist together) moves
 ## from the eyes by this much up and down (m, twice a stride) and side to side (m, once a
 ## stride), at the pace of the clip that plays. (The stance is set from the eyes, so without
@@ -446,9 +560,11 @@ func _ready() -> void:
 		_lantern_obstacle_bones.append([_skeleton.find_bone((obstacle[0] as String).replace("%s", side)), _skeleton.find_bone((obstacle[1] as String).replace("%s", side)), obstacle[2]])
 	_lantern_light = get_node_or_null(lantern_light_path) as Light3D
 	equip(weapon)
+	equip_shield(shield)
+	_setup_arm_apart()
 	if _lantern_light:
 		var body_bit := 1 << (BODY_LAYER - 1)
-		for mesh: MeshInstance3D in _model.find_children("*", "MeshInstance3D", true, false) + _lantern.find_children("*", "MeshInstance3D", true, false):
+		for mesh: MeshInstance3D in _model.find_children("*", "MeshInstance3D", true, false) + _lantern.find_children("*", "MeshInstance3D", true, false) + (_apart["Right"]["model"] as Node3D).find_children("*", "MeshInstance3D", true, false) + (_apart["Left"]["model"] as Node3D).find_children("*", "MeshInstance3D", true, false) + _shadow_model.find_children("*", "MeshInstance3D", true, false):
 			mesh.layers = body_bit
 		# The lantern's own light neither lights the body nor is shadowed by it. (Which meshes
 		# a light shadows is its shadow_caster_mask alone, whatever it lights.)
@@ -687,15 +803,25 @@ func set_motion(local_velocity: Vector3, on_floor: bool, crouching: bool, sprint
 		var clip := StringName("jog_" + direction)
 		_play(clip, _playback_speed(speed, clip))
 
-## Starts turning the lantern on or off; ignored while one is under way and while in the air.
+## Starts turning the lantern on or off; ignored while one is under way, while in the air, and
+## IN COMBAT, which is while a weapon is held up (Kirill, 2026-10-13: "lantern can't be turned
+## on/off when in combat, when weapon and shield is raised"): both hands are taken.
 func toggle_lantern() -> void:
 	# Not in the air (a jump, a fall): the press is dropped, nothing happens.
-	if _toggle_at >= 0.0 or _lantern_light == null or not _was_on_floor:
+	if _toggle_at >= 0.0 or _lantern_light == null or not _was_on_floor or in_combat():
 		return
 	_toggle_at = 0.0
 	_toggle_lighting = not _lantern_light.visible
 	_pinch_grip_valid = false
 	_toggle_dips = not _sprinting
+
+## True while the lantern is being turned on or off (the hands are at it).
+func turning_lantern() -> bool:
+	return _toggle_at >= 0.0
+
+## True while a weapon is held up, or still on its way up or down.
+func in_combat() -> bool:
+	return _weapon_node != null and (weapon_raised or _weapon_up > 0.0)
 
 ## True while an action is moving the camera (turning the lantern on / off, unless it was
 ## started sprinting, when the view is left alone): the Player ignores the mouse meanwhile.
@@ -761,9 +887,11 @@ func advance(delta: float, camera_pitch: float) -> void:
 	_advance_arm(delta)
 	_advance_toggle(delta, camera_pitch)
 	camera_pitch += _view_dip
+	_look_pitch = camera_pitch
 	# Half a turn (the model faces +Z, the Player looks along -Z) plus the turn into a diagonal.
 	_turn = lerp_angle(_turn, _turn_wanted, 1.0 - exp(-delta * diagonal_turn_rate))
 	_model.rotation.y = PI + _turn
+	_lean_to_weapon(player) # before the eyes are found: it moves the head
 	_place_feet(player, delta) # before the eyes are found: it can lower the hips, and the head with them
 	# The head bone in the Player's space. On the humanoid skeleton its +Y runs up the skull
 	# and its +Z out of the face, so the eyes are found along the head's own axes: a crouched
@@ -791,10 +919,130 @@ func advance(delta: float, camera_pitch: float) -> void:
 	_eye = target + (_eye - target).limit_length(eye_max_lag)
 	_eye_valid = true
 	_hold_weapon(player, delta) # before the lantern: the reach to it sets off from this pose
+	_hold_shield(player, delta)
 	_place_lantern(player, delta)
 	# After the lantern: turning it on / off moves the right arm.
 	if _weapon_node:
 		_weapon_node.global_transform = _skeleton.global_transform * _skeleton.get_bone_global_pose(_arms["Right"]["hand"]) * WeaponHold.in_hand(_weapon_socket, weapon)
+	if _shield_node:
+		_shield_node.global_transform = _skeleton.global_transform * _skeleton.get_bone_global_pose(_shield_bone) * WeaponHold.in_hand(_shield_socket, shield)
+	_draw_arm_apart() # last: it shrinks the body's own arm, which nothing may read afterwards
+
+## See weapon_body_toward_weapon. After the clip, before anything reads the pose.
+func _lean_to_weapon(player: Node3D) -> void:
+	var weight := smoothstep(0.0, 1.0, _weapon_up) if weapon_body_toward_weapon and _weapon_node else 0.0
+	if weight <= 0.001:
+		return
+	var head_turn := _skeleton.get_bone_global_pose(_head_bone).basis
+	for bone_name: String in POSTURE_SPINE + POSTURE_NECK:
+		var bone := _skeleton.find_bone(bone_name)
+		if bone >= 0:
+			_skeleton.set_bone_pose_rotation(bone, _skeleton.get_bone_pose_rotation(bone).slerp(_skeleton.get_bone_rest(bone).basis.get_rotation_quaternion(), weapon_body_upright * weight))
+	# How far left of the Player's line of sight the chest faces now (the rest pose faces the
+	# skeleton's +Z), and the turn about the Player's upright that is still wanted.
+	var to_player := (player.global_transform.affine_inverse() * _skeleton.global_transform).basis.orthonormalized()
+	var chest_bone := _skeleton.find_bone(POSTURE_SPINE[-1])
+	var facing := to_player * (_skeleton.get_bone_global_pose(chest_bone).basis.orthonormalized() * _skeleton.get_bone_global_rest(chest_bone).basis.orthonormalized().inverse() * Vector3.BACK)
+	var turn := clampf(wrapf(deg_to_rad(weapon_chest_turn) - atan2(-facing.x, -facing.z), -PI, PI), -1.2, 1.2) * weight
+	var upright := (to_player.inverse() * Vector3.UP).normalized()
+	for bone_name: String in POSTURE_SPINE:
+		var bone := _skeleton.find_bone(bone_name)
+		var pose := _skeleton.get_bone_global_pose(bone)
+		pose.basis = Basis(upright, turn / POSTURE_SPINE.size()) * pose.basis
+		_skeleton.set_bone_global_pose(bone, pose)
+	var collar: int = _skeleton.get_bone_parent(_arms["Right"]["upper"])
+	var collar_pose := _skeleton.get_bone_global_pose(collar)
+	collar_pose.basis = Basis(upright, deg_to_rad(weapon_collar_forward) * weight) * collar_pose.basis
+	_skeleton.set_bone_global_pose(collar, collar_pose)
+	var head := _skeleton.get_bone_global_pose(_head_bone)
+	head.basis = head_turn
+	_skeleton.set_bone_global_pose(_head_bone, head)
+
+## The copies of the model that each show one arm alone (weapon_arm_drawn_apart): made once,
+## as the model is at the end of _ready's own changes to it. One copy an arm, because all the
+## rest of a copy is shrunk into that arm's shoulder.
+func _setup_arm_apart() -> void:
+	for side: String in ["Right", "Left"]:
+		var model := _model.duplicate() as Node3D
+		model.name = "Rogue%sArm" % side
+		add_child(model)
+		model.visible = false
+		var chain: PackedInt32Array = []
+		var todo: Array[int] = [_arms[side]["upper"]]
+		while not todo.is_empty():
+			var bone: int = todo.pop_front()
+			chain.append(bone)
+			todo.append_array(_skeleton.get_bone_children(bone))
+		# Only the meshes that have any of the arms are drawn; the head and hood (shadows only
+		# on the body) would cast a second shadow from a speck.
+		for mesh: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
+			if not ARM_APART_MESHES.has(String(mesh.name)):
+				mesh.visible = false
+			mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF # the shadow's copy casts for them
+		_apart[side] = {"model": model, "skeleton": model.find_children("*", "Skeleton3D", true, false)[0], "chain": chain}
+	_shadow_model = _model.duplicate() as Node3D
+	_shadow_model.name = "RogueShadow"
+	add_child(_shadow_model)
+	_shadow_model.visible = false
+	_shadow_skeleton = _shadow_model.find_children("*", "Skeleton3D", true, false)[0] as Skeleton3D
+	for mesh: MeshInstance3D in _shadow_model.find_children("*", "MeshInstance3D", true, false):
+		if mesh.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF:
+			mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+		else:
+			mesh.visible = false # casts none on the body either: nothing of it to draw
+	for mesh: MeshInstance3D in _model.find_children("*", "MeshInstance3D", true, false):
+		if mesh.visible:
+			_own_casters.append([mesh, mesh.cast_shadow])
+
+## See weapon_arm_drawn_apart. An arm's pose is worked out on the body as ever; here it is
+## handed to that arm's copy, and the body's own arm put away. The right arm while the weapon
+## is up, the left while the shield is.
+func _draw_arm_apart() -> void:
+	# The shadow first, while the body still has its arms: the whole pose as it stands goes to
+	# the shadow's copy, which casts in place of the body and of the arms' copies.
+	var shadow_on := weapon_arm_drawn_apart and ((_weapon_node != null and _weapon_up > 0.0) or (_shield_node != null and _shield_up > 0.0))
+	if shadow_on != _shadow_on:
+		_shadow_on = shadow_on
+		_shadow_model.visible = shadow_on
+		for caster: Array in _own_casters:
+			var mesh: MeshInstance3D = caster[0]
+			if caster[1] == GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY:
+				mesh.visible = not shadow_on # the head and hood: with their shadow off they would be DRAWN, round the camera
+			else:
+				mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF if shadow_on else caster[1]
+	if shadow_on:
+		_shadow_model.transform = _model.transform
+		for bone in _skeleton.get_bone_count():
+			_shadow_skeleton.set_bone_pose_position(bone, _skeleton.get_bone_pose_position(bone))
+			_shadow_skeleton.set_bone_pose_rotation(bone, _skeleton.get_bone_pose_rotation(bone))
+			_shadow_skeleton.set_bone_pose_scale(bone, _skeleton.get_bone_pose_scale(bone))
+	for side: String in _apart:
+		var copy: Dictionary = _apart[side]
+		var model: Node3D = copy["model"]
+		var upper: int = _arms[side]["upper"]
+		var up := (_weapon_node != null and _weapon_up > 0.0) if side == "Right" else (_shield_node != null and _shield_up > 0.0)
+		model.visible = weapon_arm_drawn_apart and up
+		if not model.visible:
+			continue
+		model.transform = _model.transform
+		var bones: Skeleton3D = copy["skeleton"]
+		var shoulder := _skeleton.get_bone_global_pose(upper)
+		# Everything shrunk into the arm's shoulder, so that cloth shared between the arm and
+		# the chest closes over the arm's end there instead of trailing off to the body.
+		for root_bone in bones.get_parentless_bones():
+			bones.set_bone_pose_position(root_bone, shoulder.origin)
+			bones.set_bone_pose_scale(root_bone, Vector3.ONE * ARM_APART_SHRINK)
+		bones.set_bone_global_pose(upper, shoulder) # full size again, by its own scale
+		var chain: PackedInt32Array = copy["chain"]
+		for i in range(1, chain.size()):
+			var bone := chain[i]
+			bones.set_bone_pose_position(bone, _skeleton.get_bone_pose_position(bone))
+			bones.set_bone_pose_rotation(bone, _skeleton.get_bone_pose_rotation(bone))
+			bones.set_bone_pose_scale(bone, _skeleton.get_bone_pose_scale(bone))
+		# The body's own arm: back on its shoulder and shrunk into it (_hold_weapon and
+		# _hold_shield undo this at the start of the next frame's work on the arm).
+		_skeleton.set_bone_pose_position(upper, _skeleton.get_bone_rest(upper).origin)
+		_skeleton.set_bone_pose_scale(upper, Vector3.ONE * ARM_APART_SHRINK)
 
 ## The right arm's clip over the body's: the sword idle while a weapon is held, or a swing.
 func _advance_arm(delta: float) -> void:
@@ -847,6 +1095,142 @@ func equip(data: WeaponData) -> void:
 		for mesh: MeshInstance3D in _weapon_node.find_children("*", "MeshInstance3D", true, false):
 			mesh.layers = 1 << (BODY_LAYER - 1)
 
+## Puts a shield on the left arm, in place of the one carried (null: none).
+func equip_shield(data: WeaponData) -> void:
+	if _shield_node:
+		_shield_node.queue_free()
+		_shield_node = null
+	shield = data
+	if data == null or data.scene == null:
+		return
+	if data.on_forearm:
+		_shield_bone = _arms["Left"]["lower"]
+		_shield_socket = WeaponHold.forearm_socket(_skeleton, "Left")
+	else:
+		_shield_bone = _arms["Left"]["hand"]
+		_shield_socket = WeaponHold.socket(_skeleton, "Left", data.grip_radius)
+	_shield_node = data.scene.instantiate() as Node3D
+	add_child(_shield_node)
+	_shield_node.top_level = true
+	# The corners of its meshes' boxes and the middles of the boxes' edges and faces.
+	_shield_points = PackedVector3Array()
+	for mesh: MeshInstance3D in _shield_node.find_children("*", "MeshInstance3D", true, false):
+		var box := mesh.mesh.get_aabb()
+		var in_model := _shield_node.global_transform.affine_inverse() * mesh.global_transform
+		for x in 3:
+			for y in 3:
+				for z in 3:
+					_shield_points.append(in_model * (box.position + box.size * Vector3(x, y, z) * 0.5))
+	if _lantern_light:
+		for mesh: MeshInstance3D in _shield_node.find_children("*", "MeshInstance3D", true, false):
+			mesh.layers = 1 << (BODY_LAYER - 1)
+
+## The left arm carries the shield: up with the weapon, in the stance set by hand in the
+## ShieldStance node (the fist at a place from the eyes, the arm setting off from the body's
+## own shoulder as the weapon's does), over whatever clip plays.
+func _hold_shield(player: Node3D, delta: float) -> void:
+	var arm: Dictionary = _arms["Left"]
+	_skeleton.set_bone_pose_position(arm["upper"], _skeleton.get_bone_rest(arm["upper"]).origin)
+	_skeleton.set_bone_pose_scale(arm["upper"], Vector3.ONE) # _draw_arm_apart shrank it last frame
+	_shield_shoulder_drawn = 0.0
+	if _shield_node == null:
+		_shield_up = 0.0
+		return
+	_shield_up = move_toward(_shield_up, 1.0 if weapon_raised and _shield_stance else 0.0, delta / maxf(weapon_raise_time, 0.01))
+	var weight := smoothstep(0.0, 1.0, _shield_up)
+	if weight <= 0.001:
+		return
+	var arm_bones: Array[int] = [arm["upper"], arm["lower"], arm["hand"]]
+	var in_clip: Array = [_skeleton.get_bone_pose_position(arm["upper"])]
+	for bone in arm_bones:
+		in_clip.append(_skeleton.get_bone_pose_rotation(bone))
+	var to_skeleton := (player.global_transform.affine_inverse() * _skeleton.global_transform).affine_inverse()
+	var held_from := _eye + _bob_now
+	var fist := _shield_stance.fist_in_hand(_skeleton, shield.grip_radius)
+	if weapon_shoulder_on_body:
+		var own_shoulder := _skeleton.get_bone_global_pose(arm["upper"]).origin
+		WeaponHold.solve_arm(_skeleton, "Left", to_skeleton, to_skeleton.affine_inverse() * own_shoulder, held_from + _shield_stance.hand_from_eyes(), _shield_stance.elbow_toward(), _shield_stance.hand_turn(), fist, weapon_body_reach)
+		_shield_shoulder_drawn = _skeleton.get_bone_global_pose(arm["upper"]).origin.distance_to(own_shoulder)
+	else:
+		var with_view := Basis(Vector3.RIGHT, _look_pitch * weapon_follows_view)
+		for attempt in 2:
+			var from := held_from + (_shield_push if attempt == 1 else Vector3.ZERO)
+			WeaponHold.solve_arm(_skeleton, "Left", to_skeleton, from + with_view * _shield_stance.shoulder_from_eyes(), from + with_view * _shield_stance.hand_from_eyes(),
+					with_view * _shield_stance.elbow_toward(), with_view * _shield_stance.hand_turn(), fist, _shield_stance.max_reach)
+			if shield.on_forearm:
+				# Read every frame, with the arm fully in the stance (before the blend with the
+				# clip): the Grip marker can be changed while the game runs.
+				_shield_socket = _shield_stance.forearm_socket(_skeleton, shield.grip_radius)
+			if attempt == 1:
+				break
+			# The first solve is the stance as set: how far it has to move to clear the body.
+			var wanted := _shield_off_body(to_skeleton.affine_inverse()) if shield_body_clearance > 0.0 else Vector3.ZERO
+			_shield_push = _shield_push.lerp(wanted, 1.0 - exp(-delta / maxf(shield_clearance_ease if wanted.length() > _shield_push.length() else shield_clearance_return, 0.001)))
+			if _shield_push.length() < 0.001:
+				break
+			_skeleton.set_bone_pose_position(arm["upper"], in_clip[0] as Vector3)
+			for i in arm_bones.size():
+				_skeleton.set_bone_pose_rotation(arm_bones[i], in_clip[i + 1] as Quaternion)
+	if shield.on_forearm and weapon_shoulder_on_body:
+		_shield_socket = _shield_stance.forearm_socket(_skeleton, shield.grip_radius)
+	if weight < 0.999:
+		_skeleton.set_bone_pose_position(arm["upper"], (in_clip[0] as Vector3).lerp(_skeleton.get_bone_pose_position(arm["upper"]), weight))
+		for i in arm_bones.size():
+			_skeleton.set_bone_pose_rotation(arm_bones[i], (in_clip[i + 1] as Quaternion).slerp(_skeleton.get_bone_pose_rotation(arm_bones[i]), weight))
+	if weight > 0.5:
+		_shield_stance.pose_fingers(_skeleton, shield.grip_radius)
+
+## How far the shield, as the arm holds it just now, has to be moved along shield_clear_toward
+## (the Player's axes) for the body to be clear of it: no point of the trunk's middle line
+## (hips to chest) nearer than shield_body_clearance to the shield's box, none of a leg's (hip,
+## knee, ankle) nearer than half of that. It is needed because the stance, turned down with the
+## view about the eyes, swings back under them, which is where the body is. (Moving it away from the nearest
+## point of the body instead left the board cutting through: a board is wide, and the body
+## was pushed out on one side of a point and in on the other.) `to_player` brings the
+## skeleton's space into the Player's.
+func _shield_off_body(to_player: Transform3D) -> Vector3:
+	var board := to_player * _skeleton.get_bone_global_pose(_shield_bone) * WeaponHold.in_hand(_shield_socket, shield)
+	var to_board := board.affine_inverse()
+	var way := shield_clear_toward.normalized() if shield_clear_toward.length() > 0.001 else Vector3.LEFT
+	var forward := (to_board.basis * way).normalized() # the way it moves, in the shield's own axes
+	var low := _shield_points[0]
+	var high := _shield_points[0]
+	for point in _shield_points:
+		low = low.min(point)
+		high = high.max(point)
+	var hips := _skeleton.get_bone_global_pose(_hips_bone).origin
+	var lines: Array = [[hips, _skeleton.get_bone_global_pose(_skeleton.find_bone("UpperChest")).origin, shield_body_clearance]]
+	for leg: Dictionary in _legs:
+		var knee := _skeleton.get_bone_global_pose(leg["lower"]).origin
+		lines.append([_skeleton.get_bone_global_pose(leg["upper"]).origin, knee, shield_body_clearance * 0.5])
+		lines.append([knee, _skeleton.get_bone_global_pose(leg["foot"]).origin, shield_body_clearance * 0.5])
+	# Points along those lines, in the shield's own axes, each with its clearance.
+	var body_points: Array = []
+	for line: Array in lines:
+		for step in 6:
+			body_points.append([to_board * (to_player * (line[0] as Vector3).lerp(line[1] as Vector3, step / 5.0)), line[2]])
+	var slide := 0.0
+	for round_index in 4: # a move forward can bring the board onto a point further forward
+		var more := 0.0
+		for body_point: Array in body_points:
+			var at: Vector3 = (body_point[0] as Vector3) - forward * slide # the shield moved forward = the point moved back
+			var margin := Vector3.ONE * (body_point[1] as float)
+			if at.x <= low.x - margin.x or at.x >= high.x + margin.x or at.y <= low.y - margin.y or at.y >= high.y + margin.y or at.z <= low.z - margin.z or at.z >= high.z + margin.z:
+				continue
+			# Inside the box grown by its clearance: how far until it is out of it by one side.
+			var out := INF
+			for axis in 3:
+				if forward[axis] > 0.001:
+					out = minf(out, (at[axis] - (low[axis] - margin[axis])) / forward[axis])
+				elif forward[axis] < -0.001:
+					out = minf(out, (at[axis] - (high[axis] + margin[axis])) / forward[axis])
+			if out < INF:
+				more = maxf(more, out)
+		if more <= 0.0:
+			break
+		slide += more + 0.001
+	return way * minf(slide, 1.0)
+
 ## The right hand holds the weapon: the fist closed round it always, and (weapon_raised) the
 ## arm in the stance set by hand in the WeaponStance node, over whatever clip plays -- shoulder
 ## and fist at places set from the eyes, so the weapon keeps its place in the picture. Where
@@ -857,6 +1241,8 @@ func _hold_weapon(player: Node3D, delta: float) -> void:
 	# (measured: a second after lowering the weapon the bone was still 0.3 m off): each frame
 	# starts with it at rest on the body.
 	_skeleton.set_bone_pose_position(arm["upper"], _skeleton.get_bone_rest(arm["upper"]).origin)
+	_skeleton.set_bone_pose_scale(arm["upper"], Vector3.ONE) # _draw_arm_apart shrank it last frame
+	_bob_now = Vector3.ZERO
 	if _weapon_node == null:
 		_weapon_up = 0.0
 		return
@@ -886,13 +1272,34 @@ func _hold_weapon(player: Node3D, delta: float) -> void:
 		for bone in arm_bones:
 			in_clip.append(_skeleton.get_bone_pose_rotation(bone))
 		var to_skeleton := (player.global_transform.affine_inverse() * _skeleton.global_transform).affine_inverse()
-		var held_from := _eye + _weapon_bob(delta) # the eyes, and the bob of the steps
+		_bob_now = _weapon_bob(delta)
+		var held_from := _eye + _bob_now # the eyes, and the bob of the steps
 		if reference:
 			# The wrist itself is put where the clip has it (no reach limit: its arm is shorter).
 			WeaponHold.solve_arm(_skeleton, "Right", to_skeleton, held_from + (frame["shoulder"] as Vector3), held_from + (frame["wrist"] as Vector3),
 					(frame["elbow"] as Vector3) - (frame["shoulder"] as Vector3), frame["hand"] as Basis, Vector3.ZERO, 1.0)
 		else:
-			_stance.pose(_skeleton, to_skeleton, held_from, _stance.fist_in_hand(_skeleton, weapon.grip_radius))
+			var fist := _stance.fist_in_hand(_skeleton, weapon.grip_radius)
+			if weapon_shoulder_on_body:
+				var own_shoulder := _skeleton.get_bone_global_pose(arm["upper"]).origin
+				WeaponHold.solve_arm(_skeleton, "Right", to_skeleton, to_skeleton.affine_inverse() * own_shoulder, held_from + _stance.hand_from_eyes(), _stance.elbow_toward(), _stance.hand_turn(), fist, weapon_body_reach)
+				_shoulder_drawn = _skeleton.get_bone_global_pose(arm["upper"]).origin.distance_to(own_shoulder)
+			else:
+				var with_view := Basis(Vector3.RIGHT, _look_pitch * weapon_follows_view)
+				WeaponHold.solve_arm(_skeleton, "Right", to_skeleton, held_from + with_view * _stance.shoulder_from_eyes(), held_from + with_view * _stance.hand_from_eyes(),
+						with_view * _stance.elbow_toward(), with_view * _stance.hand_turn(), fist, _stance.max_reach)
+			# Looking down: toward the same hold with the shoulder left on the body.
+			var on_body := smoothstep(weapon_on_body_from, maxf(weapon_on_body_by, weapon_on_body_from + 0.1), rad_to_deg(-_look_pitch)) if weapon_on_body_slide else 0.0
+			if on_body > 0.001:
+				var in_stance: Array = [_skeleton.get_bone_pose_position(arm["upper"])]
+				for bone in arm_bones:
+					in_stance.append(_skeleton.get_bone_pose_rotation(bone))
+				_skeleton.set_bone_pose_position(arm["upper"], in_clip[0] as Vector3)
+				WeaponHold.solve_arm(_skeleton, "Right", to_skeleton, Vector3.INF, held_from + _stance.hand_from_eyes(), _stance.elbow_toward(), _stance.hand_turn(), fist, weapon_on_body_reach)
+				if on_body < 0.999:
+					_skeleton.set_bone_pose_position(arm["upper"], (in_stance[0] as Vector3).lerp(_skeleton.get_bone_pose_position(arm["upper"]), on_body))
+					for i in arm_bones.size():
+						_skeleton.set_bone_pose_rotation(arm_bones[i], (in_stance[i + 1] as Quaternion).slerp(_skeleton.get_bone_pose_rotation(arm_bones[i]), on_body))
 		if weight < 0.999:
 			_skeleton.set_bone_pose_position(arm["upper"], (in_clip[0] as Vector3).lerp(_skeleton.get_bone_pose_position(arm["upper"]), weight))
 			for i in arm_bones.size():

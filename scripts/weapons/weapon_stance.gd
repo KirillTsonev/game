@@ -43,6 +43,15 @@ extends Node3D
 ##
 ## The first values were the "neutral" stance of the Skyrim mod measured in docs/weapons.md.
 
+## Which arm this stance is for. For the LEFT the Hand marker is the mirror image: its +X is
+## the way the palm faces (unturned: fingers ahead, thumb up, palm to the right, inward).
+@export_enum("Right", "Left") var side: String = "Right"
+## The body's property with the WeaponData this arm holds: `weapon`, or `shield` for the node
+## that stands for the shield arm. For what is carried on the forearm (WeaponData.on_forearm,
+## a shield) the Hand/Grip marker works as for a weapon -- move and rotate it and the shield
+## moves on the arm by as much, about the fist, while the arm stays -- only its own axes mean
+## nothing: unmoved and unturned the shield sits on the forearm as its data says.
+@export var holds: StringName = &"weapon"
 ## Editor only. Off: the body in its rest pose and no weapon shown.
 @export var preview: bool = true
 ## The furthest the fist is held from the shoulder (m). The arm is 0.56 m long.
@@ -52,11 +61,38 @@ extends Node3D
 ## Empty: the plain fist.
 @export var finger_pose: Array[Quaternion] = []
 ## Back to the plain fist.
-@export_tool_button("Reset the fingers to the plain fist") var reset_fingers: Callable = _reset_fingers
+@export_tool_button("Reset the fingers to the plain fist") var reset_fingers: Callable:
+	get: return _reset_fingers # read each time: a script reloaded in the open editor leaves a plain value empty
+## FIT THE HAND TO THE SWORD: the weapon stays exactly where it is shown, and the arm is found
+## anew behind it -- the handle laid across the palm as a hand holds one (the Grip marker back
+## to the plain grip, the Hand marker turned to suit), then the elbow and the shoulder put where
+## the wrist bends least and the shoulder is nearest the body's own, within what a wrist, a
+## forearm and an elbow do (FIT_* below). The fingers go back to the plain fist. What it found
+## is printed to the Output panel. (For a weapon placed by turning the hand and then the weapon
+## in the hand, which leaves the hand with whatever turn was over.)
+@export_tool_button("Fit the hand to the sword") var fit_hand: Callable:
+	get: return _fit_pressed # read each time: a script reloaded in the open editor leaves a plain value empty
+## The markers and fingers as they were before the last fit; pressed again, the fit before that (kept until the scene is closed).
+@export_tool_button("Put back the stance from before the fit") var unfit_hand: Callable:
+	get: return _put_back_before_fit # read each time: a script reloaded in the open editor leaves a plain value empty
+## Where the body's own right shoulder is from the eyes, standing in the game (measured on the
+## rogue in its idle: +X right, +Y up, +Z behind). The fit keeps the placed shoulder as near
+## it as it can, and reports how far off it still is.
+@export var body_shoulder: Vector3 = Vector3(0.085, -0.144, 0.359)
 
-const HAND := "Right"
 ## A socket's axes (+X the leading edge, +Y the blade) in the Grip marker's (-Z, +Y).
 const SOCKET_IN_GRIP := Basis(Vector3(0.0, 0.0, -1.0), Vector3(0.0, 1.0, 0.0), Vector3(1.0, 0.0, 0.0))
+## What the fit allows (degrees): the wrist bent toward the palm or the back of the hand, toward
+## the thumb, toward the little finger; the forearm rolled either way from thumb-up; the elbow's
+## bend (0 = straight). Well inside what a joint can do, so that the hold looks at ease.
+const FIT_WRIST_FLEX := 45.0
+const FIT_WRIST_TO_THUMB := 15.0
+const FIT_WRIST_TO_LITTLE := 30.0
+const FIT_FOREARM_ROLL := 80.0
+const FIT_ELBOW_BEND := Vector2(35.0, 140.0)
+## How much a wrist bent to its allowance counts against the fit, as metres of shoulder off the body.
+const FIT_WRIST_WEIGHT := 0.25
+var _before_fit: Array[Dictionary] = [] ## the stance before each fit made since the scene was opened, oldest first
 var _skeleton: Skeleton3D
 var _shown: Array = []
 var _preview: Node3D
@@ -105,23 +141,45 @@ func hand_turn() -> Basis:
 ## The middle of the closed fist in the hand bone's axes, for a handle of this thickness: the
 ## point of the hand that is held at the Hand marker.
 func fist_in_hand(skeleton: Skeleton3D, grip_radius: float) -> Vector3:
-	return WeaponHold.socket(skeleton, HAND, grip_radius, 0.0).origin
+	return WeaponHold.socket(skeleton, side, grip_radius, 0.0).origin
 
 ## Where the weapon's grip goes in the hand bone's axes: the fist's middle, moved and turned as
 ## the Hand/Grip marker is in the Hand marker.
 func socket(skeleton: Skeleton3D, grip_radius: float) -> Transform3D:
 	var grip := get_node_or_null("Hand/Grip") as Node3D
 	if grip == null:
-		return WeaponHold.socket(skeleton, HAND, grip_radius)
-	var axes := WeaponHold.hand_axes(skeleton, HAND)
-	# The Hand marker's axes in the hand bone's: -X the palm, +Y the thumb's side, -Z the fingers.
-	var marker := Basis(-(axes["palm_out"] as Vector3), axes["thumb_side"] as Vector3, -(axes["fingers_out"] as Vector3))
+		return WeaponHold.socket(skeleton, side, grip_radius)
+	var axes := WeaponHold.hand_axes(skeleton, side)
+	# The Hand marker's axes in the hand bone's: -X the palm (+X on the left hand), +Y the
+	# thumb's side, -Z the fingers.
+	var palm_side := -1.0 if (axes["fingers_out"] as Vector3).cross(axes["palm_out"] as Vector3).dot(axes["thumb_side"] as Vector3) > 0.0 else 1.0
+	var marker := Basis((axes["palm_out"] as Vector3) * palm_side, axes["thumb_side"] as Vector3, -(axes["fingers_out"] as Vector3))
 	return Transform3D(marker * grip.basis.orthonormalized() * SOCKET_IN_GRIP, fist_in_hand(skeleton, grip_radius) + marker * grip.position)
+
+## For what is carried on the forearm: where it sits in the LOWER ARM bone's axes, with the
+## arm AS IT IS POSED JUST NOW (call it right after pose()). It is the forearm's own socket
+## (WeaponHold.forearm_socket), moved and turned as the Hand/Grip marker is in the Hand marker:
+## the marker's move is the shield's move in the picture, and its turn a turn about the fist.
+func forearm_socket(skeleton: Skeleton3D, grip_radius: float) -> Transform3D:
+	var plain := WeaponHold.forearm_socket(skeleton, side)
+	var grip := get_node_or_null("Hand/Grip") as Node3D
+	if grip == null or grip.transform.is_equal_approx(Transform3D.IDENTITY):
+		return plain
+	var axes := WeaponHold.hand_axes(skeleton, side)
+	var palm_side := -1.0 if (axes["fingers_out"] as Vector3).cross(axes["palm_out"] as Vector3).dot(axes["thumb_side"] as Vector3) > 0.0 else 1.0
+	var hand := skeleton.get_bone_global_pose(skeleton.find_bone(side + "Hand"))
+	var lower := skeleton.get_bone_global_pose(skeleton.find_bone(side + "LowerArm"))
+	# The Hand marker's axes in the skeleton's space, and the fist's middle there.
+	var marker := hand.basis.orthonormalized() * Basis((axes["palm_out"] as Vector3) * palm_side, axes["thumb_side"] as Vector3, -(axes["fingers_out"] as Vector3))
+	var fist := hand * fist_in_hand(skeleton, grip_radius)
+	var turn := marker * grip.basis.orthonormalized() * marker.inverse()
+	var moved := Transform3D(turn, fist - turn * fist + marker * grip.position)
+	return lower.affine_inverse() * moved * lower * plain
 
 ## Poses the arm (not the fingers) outright. `eye` and the stance are in the space that
 ## `to_skeleton` brings into the skeleton's.
 func pose(skeleton: Skeleton3D, to_skeleton: Transform3D, eye: Vector3, grip_in_hand: Vector3) -> void:
-	WeaponHold.solve_arm(skeleton, HAND, to_skeleton, eye + shoulder_from_eyes(), eye + hand_from_eyes(), elbow_toward(), hand_turn(), grip_in_hand, max_reach)
+	WeaponHold.solve_arm(skeleton, side, to_skeleton, eye + shoulder_from_eyes(), eye + hand_from_eyes(), elbow_toward(), hand_turn(), grip_in_hand, max_reach)
 
 ## The right hand's finger joints, in the order of finger_pose.
 func finger_bones(skeleton: Skeleton3D) -> PackedInt32Array:
@@ -129,7 +187,7 @@ func finger_bones(skeleton: Skeleton3D) -> PackedInt32Array:
 		_finger_bones = PackedInt32Array()
 		for finger: String in WeaponHold.FINGERS:
 			for joint: String in (["Metacarpal", "Proximal", "Distal"] if finger == "Thumb" else ["Proximal", "Intermediate", "Distal"]):
-				_finger_bones.append(skeleton.find_bone(HAND + finger + joint))
+				_finger_bones.append(skeleton.find_bone(side + finger + joint))
 		_finger_bones_of = skeleton
 	return _finger_bones
 
@@ -138,7 +196,7 @@ func finger_bones(skeleton: Skeleton3D) -> PackedInt32Array:
 func pose_fingers(skeleton: Skeleton3D, grip_radius: float) -> void:
 	var bones := finger_bones(skeleton)
 	if finger_pose.size() != bones.size():
-		WeaponHold.close_fist(skeleton, HAND, WeaponHold.fist_curls(skeleton, HAND, grip_radius))
+		WeaponHold.close_fist(skeleton, side, WeaponHold.fist_curls(skeleton, side, grip_radius))
 		return
 	for i in bones.size():
 		if bones[i] >= 0:
@@ -170,7 +228,7 @@ func settle_markers() -> void:
 	var to_here := (body.global_transform * transform).affine_inverse() * _skeleton.global_transform
 	for pair: Array in [["Shoulder", "UpperArm"], ["Elbow", "LowerArm"]]:
 		var marker := get_node_or_null(pair[0] as String) as Node3D
-		var at := to_here * _skeleton.get_bone_global_pose(_skeleton.find_bone(HAND + (pair[1] as String))).origin
+		var at := to_here * _skeleton.get_bone_global_pose(_skeleton.find_bone(side + (pair[1] as String))).origin
 		if marker and marker.position.distance_to(at) > 0.0005:
 			marker.position = at
 	_elbow_seen = _place("Elbow") # moved by this script, not dragged
@@ -199,7 +257,7 @@ func _carry_from_elbow(dragged: bool) -> void:
 	var moved := elbow.position - _elbow_seen
 	if dragged and _elbow_tracked and moved.length() > 0.00001 and moved.length() < 0.25:
 		hand.position += moved
-		var upper := _skeleton.get_bone_global_rest(_skeleton.find_bone(HAND + "LowerArm")).origin.distance_to(_skeleton.get_bone_global_rest(_skeleton.find_bone(HAND + "UpperArm")).origin)
+		var upper := _skeleton.get_bone_global_rest(_skeleton.find_bone(side + "LowerArm")).origin.distance_to(_skeleton.get_bone_global_rest(_skeleton.find_bone(side + "UpperArm")).origin)
 		var from_elbow := shoulder.position - elbow.position
 		if from_elbow.length() > 0.001:
 			shoulder.position = elbow.position + from_elbow.normalized() * upper
@@ -208,7 +266,7 @@ func _carry_from_elbow(dragged: bool) -> void:
 
 ## Everything the shown pose depends on.
 func _inputs(data: WeaponData, radius: float) -> Array:
-	return [preview, data, radius, data.scene if data else null, data.grip if data else Transform3D.IDENTITY,
+	return [preview, side, holds, data, radius, data.scene if data else null, data.grip if data else Transform3D.IDENTITY, data.on_forearm if data else false,
 			_place("Shoulder"), _place("Hand"), _place("Elbow"), transform, hand_turn(), max_reach, finger_pose.duplicate(),
 			(get_node("Hand/Grip") as Node3D).transform if has_node("Hand/Grip") else Transform3D.IDENTITY]
 
@@ -287,6 +345,16 @@ func _reset_fingers() -> void:
 func _process(_delta: float) -> void:
 	update()
 
+## This stance's arm, shoulder to fingertips, back to the rest pose.
+func _reset_own_arm() -> void:
+	var todo: Array[int] = [_skeleton.find_bone(side + "UpperArm")]
+	while not todo.is_empty():
+		var bone: int = todo.pop_back()
+		if bone < 0:
+			continue
+		_skeleton.reset_bone_pose(bone)
+		todo.append_array(_skeleton.get_bone_children(bone))
+
 ## One editor frame (also called by headless checks).
 func update() -> void:
 	var body := get_parent() as Node3D
@@ -301,7 +369,7 @@ func update() -> void:
 		_turn_joints_from_markers()
 		_keep_posed_fingers()
 		_carry_from_elbow(_elbow_is_dragged())
-	var data := body.get("weapon") as WeaponData
+	var data := body.get(holds) as WeaponData
 	var radius := data.grip_radius if data else WeaponHold.REFERENCE_RADIUS
 	var wanted := _inputs(data, radius)
 	if wanted == _shown:
@@ -314,7 +382,7 @@ func update() -> void:
 		if wanted == _shown:
 			return
 	_shown = wanted
-	_skeleton.reset_bone_poses()
+	_reset_own_arm() # not the whole skeleton: the other arm's stance node has posed its own
 	_fingers_put = []
 	_joints_put = []
 	if _preview:
@@ -331,4 +399,143 @@ func update() -> void:
 	if data and data.scene:
 		_preview = data.scene.instantiate() as Node3D
 		add_child(_preview) # no owner: not saved with the scene
-		_preview.global_transform = _skeleton.global_transform * _skeleton.get_bone_global_pose(_skeleton.find_bone(HAND + "Hand")) * WeaponHold.in_hand(held, data)
+		if data.on_forearm:
+			_preview.global_transform = _skeleton.global_transform * _skeleton.get_bone_global_pose(_skeleton.find_bone(side + "LowerArm")) * WeaponHold.in_hand(forearm_socket(_skeleton, radius), data)
+		else:
+			_preview.global_transform = _skeleton.global_transform * _skeleton.get_bone_global_pose(_skeleton.find_bone(side + "Hand")) * WeaponHold.in_hand(held, data)
+
+## The right arm as it is posed just now, in degrees and metres: "flex" (wrist toward the palm,
+## negative toward the back of the hand), "to_thumb" (wrist toward the thumb, negative toward
+## the little finger), "roll" (forearm from thumb-up: positive palm turning up, negative down),
+## "bend" (elbow, 0 = straight), "gap" (the shoulder from the body's own, see body_shoulder).
+func arm_measures() -> Dictionary:
+	var body := get_parent() as Node3D
+	var upper := _skeleton.get_bone_global_pose(_skeleton.find_bone(side + "UpperArm"))
+	var lower := _skeleton.get_bone_global_pose(_skeleton.find_bone(side + "LowerArm"))
+	var hand := _skeleton.get_bone_global_pose(_skeleton.find_bone(side + "Hand"))
+	var axes := WeaponHold.hand_axes(_skeleton, side)
+	var fingers: Vector3 = hand.basis * (axes["fingers_out"] as Vector3)
+	var palm: Vector3 = hand.basis * (axes["palm_out"] as Vector3)
+	var thumb: Vector3 = hand.basis * (axes["thumb_side"] as Vector3)
+	var forearm := (hand.origin - lower.origin).normalized()
+	var own := _skeleton.global_transform.affine_inverse() * body.global_transform * (position + body_shoulder)
+	return {"flex": rad_to_deg(atan2(forearm.dot(-palm), forearm.dot(fingers))), "to_thumb": rad_to_deg(atan2(forearm.dot(-thumb), forearm.dot(fingers))),
+			"roll": _forearm_roll(upper.origin, lower.origin, hand.origin, palm), "bend": 180.0 - rad_to_deg((upper.origin - lower.origin).angle_to(hand.origin - lower.origin)),
+			"gap": upper.origin.distance_to(own)}
+
+## Degrees the forearm is rolled from thumb-up, where the palm faces the inside of the arm's
+## bend: positive toward palm up.
+static func _forearm_roll(shoulder: Vector3, elbow: Vector3, wrist: Vector3, palm: Vector3) -> float:
+	var forearm := (wrist - elbow).normalized()
+	var inward := (shoulder - elbow).cross(wrist - elbow).normalized()
+	var across := palm - forearm * palm.dot(forearm)
+	return rad_to_deg(atan2(forearm.dot(inward.cross(across)), inward.dot(across)))
+
+func _fit_pressed() -> void:
+	print(fit_hand_to_sword())
+
+## See `fit_hand`. Returns what it found, in words.
+func fit_hand_to_sword() -> String:
+	if side != "Right" or holds != &"weapon":
+		return "[WeaponStance] fit: made for a weapon in the right fist only."
+	update()
+	var body := get_parent() as Node3D
+	var hand_marker := get_node_or_null("Hand") as Node3D
+	var grip_marker := get_node_or_null("Hand/Grip") as Node3D
+	var shoulder_marker := get_node_or_null("Shoulder") as Node3D
+	var elbow_marker := get_node_or_null("Elbow") as Node3D
+	if body == null or _skeleton == null or hand_marker == null or grip_marker == null or shoulder_marker == null or elbow_marker == null:
+		return "[WeaponStance] fit: a body with a skeleton and the Shoulder, Elbow, Hand and Hand/Grip markers are needed."
+	var data := body.get(holds) as WeaponData
+	var radius := data.grip_radius if data else WeaponHold.REFERENCE_RADIUS
+	var to_skeleton := _skeleton.global_transform.affine_inverse() * body.global_transform
+	var from_eyes := to_skeleton * Transform3D(Basis.IDENTITY, position)
+	var upper_bone := _skeleton.find_bone(side + "UpperArm")
+	var lower_bone := _skeleton.find_bone(side + "LowerArm")
+	var hand_bone := _skeleton.find_bone(side + "Hand")
+	# The arm as the markers have it now, and with it where the weapon's grip is: that stays.
+	_reset_own_arm()
+	pose(_skeleton, to_skeleton, position, fist_in_hand(_skeleton, radius))
+	var was := arm_measures()
+	var held := (_skeleton.get_bone_global_pose(hand_bone) * socket(_skeleton, radius)).orthonormalized()
+	var upper_length := _skeleton.get_bone_global_pose(upper_bone).origin.distance_to(_skeleton.get_bone_global_pose(lower_bone).origin)
+	var lower_length := _skeleton.get_bone_global_pose(lower_bone).origin.distance_to(_skeleton.get_bone_global_pose(hand_bone).origin)
+	# The hand that holds a grip standing there in the plain way.
+	var axes := WeaponHold.hand_axes(_skeleton, side)
+	var plain := WeaponHold.socket(_skeleton, side, radius)
+	var hand_basis := held.basis * plain.basis.orthonormalized().inverse()
+	var wrist := held.origin - hand_basis * plain.origin
+	var fingers: Vector3 = hand_basis * (axes["fingers_out"] as Vector3)
+	var palm: Vector3 = hand_basis * (axes["palm_out"] as Vector3)
+	var thumb: Vector3 = hand_basis * (axes["thumb_side"] as Vector3)
+	var own := from_eyes * body_shoulder
+	# Every forearm the wrist allows, and for each every upper arm: the one with the shoulder
+	# nearest the body's own and the wrist least bent.
+	var directions: Array[Vector3] = []
+	for i in 400: # spread evenly over a ball
+		var height := 1.0 - 2.0 * (i + 0.5) / 400.0
+		var around := i * 2.399963
+		directions.append(Vector3(cos(around) * sqrt(1.0 - height * height), height, sin(around) * sqrt(1.0 - height * height)))
+	var best_cost := INF
+	var best_elbow := Vector3.ZERO
+	var best_shoulder := Vector3.ZERO
+	var flex := -FIT_WRIST_FLEX
+	while flex <= FIT_WRIST_FLEX + 0.01:
+		var to_thumb := -FIT_WRIST_TO_LITTLE
+		while to_thumb <= FIT_WRIST_TO_THUMB + 0.01:
+			var forearm := (fingers - palm * tan(deg_to_rad(flex)) - thumb * tan(deg_to_rad(to_thumb))).normalized()
+			var elbow := wrist - forearm * lower_length
+			var wrist_cost := FIT_WRIST_WEIGHT * (pow(flex / FIT_WRIST_FLEX, 2.0) + pow(to_thumb / (FIT_WRIST_TO_THUMB if to_thumb > 0.0 else FIT_WRIST_TO_LITTLE), 2.0))
+			for direction in directions:
+				var shoulder := elbow + direction * upper_length
+				var cost := shoulder.distance_to(own) + wrist_cost
+				if cost >= best_cost or shoulder.distance_to(held.origin) > max_reach:
+					continue
+				var bend := 180.0 - rad_to_deg(direction.angle_to(forearm))
+				if bend < FIT_ELBOW_BEND.x or bend > FIT_ELBOW_BEND.y or absf(_forearm_roll(shoulder, elbow, wrist, palm)) > FIT_FOREARM_ROLL:
+					continue
+				best_cost = cost
+				best_elbow = elbow
+				best_shoulder = shoulder
+			to_thumb += 5.0
+		flex += 5.0
+	if best_cost == INF:
+		_shown = []
+		return "[WeaponStance] fit: no arm within the allowances (FIT_*) holds the weapon where it is. Nothing was changed."
+	_before_fit.append({"Shoulder": shoulder_marker.transform, "Elbow": elbow_marker.transform, "Hand": hand_marker.transform, "Grip": grip_marker.transform, "fingers": finger_pose.duplicate()})
+	var to_eyes := from_eyes.affine_inverse()
+	# The Hand marker's turn that gives this hand (the reverse of what WeaponHold.solve_arm does with it).
+	var turned := hand_basis * Basis(axes["fingers_out"] as Vector3, axes["palm_out"] as Vector3, axes["thumb_side"] as Vector3)
+	hand_marker.transform = Transform3D((to_eyes.basis.orthonormalized() * Basis(-turned.y, turned.z, -turned.x)).orthonormalized(), to_eyes * held.origin)
+	var marker := Basis(-(axes["palm_out"] as Vector3), axes["thumb_side"] as Vector3, -(axes["fingers_out"] as Vector3))
+	grip_marker.transform = Transform3D((marker.inverse() * plain.basis.orthonormalized() * SOCKET_IN_GRIP.inverse()).orthonormalized(), Vector3.ZERO)
+	shoulder_marker.position = to_eyes * best_shoulder
+	elbow_marker.position = to_eyes * best_elbow
+	_elbow_seen = elbow_marker.position # put there, not dragged
+	_elbow_tracked = true
+	_reset_fingers()
+	update()
+	if _fingers_put.is_empty(): # the preview is off: pose it for the measuring
+		pose(_skeleton, to_skeleton, position, fist_in_hand(_skeleton, radius))
+	var now := arm_measures()
+	var held_now := (_skeleton.get_bone_global_pose(hand_bone) * socket(_skeleton, radius)).orthonormalized()
+	if Engine.is_editor_hint() and Engine.has_singleton(&"EditorInterface"):
+		Engine.get_singleton(&"EditorInterface").call("mark_scene_as_unsaved")
+	var line := "wrist %+.0f deg toward the palm and %+.0f toward the thumb, forearm rolled %+.0f deg from thumb-up, elbow bent %.0f deg, shoulder %.2f m off the body's own"
+	return "[WeaponStance] fit the hand to the sword:\n  before: %s\n  after:  %s\n  the weapon moved %.1f mm and turned %.1f deg." % [
+			line % [was["flex"], was["to_thumb"], was["roll"], was["bend"], was["gap"]], line % [now["flex"], now["to_thumb"], now["roll"], now["bend"], now["gap"]],
+			held_now.origin.distance_to(held.origin) * 1000.0, rad_to_deg(held_now.basis.get_rotation_quaternion().angle_to(held.basis.get_rotation_quaternion()))]
+
+func _put_back_before_fit() -> void:
+	if _before_fit.is_empty():
+		print("[WeaponStance] no fit was made since the scene was opened: nothing to put back.")
+		return
+	var before: Dictionary = _before_fit.pop_back()
+	for marker: String in ["Shoulder", "Elbow", "Hand"]:
+		(get_node(marker) as Node3D).transform = before[marker]
+	(get_node("Hand/Grip") as Node3D).transform = before["Grip"]
+	_elbow_seen = _place("Elbow")
+	_reset_fingers()
+	finger_pose = before["fingers"]
+	if Engine.is_editor_hint() and Engine.has_singleton(&"EditorInterface"):
+		Engine.get_singleton(&"EditorInterface").call("mark_scene_as_unsaved")

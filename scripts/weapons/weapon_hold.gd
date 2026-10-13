@@ -117,7 +117,22 @@ static func close_fist(skeleton: Skeleton3D, side: String, curls: Array[float], 
 				turn = turn * Quaternion(fingers["thumb_in"] as Vector3, thumb_in)
 			skeleton.set_bone_pose_rotation(bone, turn)
 
-## Where the weapon's model goes in the hand bone's axes, for a socket found by socket().
+## For what is carried ON THE FOREARM (WeaponData.on_forearm, a shield), in the LOWER ARM
+## bone's axes: the origin on the forearm's middle line carried on to where the fist is (wrist
+## straight), +Y along the forearm toward the hand, +X out of the back of the hand's side.
+static func forearm_socket(skeleton: Skeleton3D, side: String) -> Transform3D:
+	var lower_rest := skeleton.get_bone_global_rest(skeleton.find_bone(side + "LowerArm"))
+	var hand_rest := skeleton.get_bone_global_rest(skeleton.find_bone(side + "Hand"))
+	var axes := hand_axes(skeleton, side)
+	var to_lower := lower_rest.affine_inverse()
+	var along := (to_lower.basis * (hand_rest.origin - lower_rest.origin)).normalized()
+	var outward := -(to_lower.basis * (hand_rest.basis * (axes["palm_out"] as Vector3))).normalized()
+	outward = (outward - along * outward.dot(along)).normalized()
+	var fist := to_lower * (hand_rest * ((axes["fingers_out"] as Vector3) * (SOCKET_TO_FINGERS * (axes["length"] as float) / REFERENCE_HAND)))
+	return Transform3D(Basis(outward, along, outward.cross(along)), fist)
+
+## Where the weapon's model goes in the hand bone's axes, for a socket found by socket() (or in
+## the lower arm bone's, for one found by forearm_socket()).
 static func in_hand(hand_socket: Transform3D, data: WeaponData) -> Transform3D:
 	return hand_socket * data.grip.affine_inverse()
 
@@ -164,7 +179,10 @@ static func solve_arm(skeleton: Skeleton3D, side: String, to_skeleton: Transform
 	var pole := (to_skeleton.basis * elbow_toward).normalized()
 	# The hand bone's turn in the skeleton's space that puts fingers, palm and thumb as asked.
 	var asked := (to_skeleton.basis * hand_turn).orthonormalized()
-	var wanted := Basis(-asked.z, -asked.x, asked.y) * Basis(axes["fingers_out"] as Vector3, axes["palm_out"] as Vector3, axes["thumb_side"] as Vector3).inverse()
+	# (The left hand is the right one's mirror image: its palm is on the turn's +X, so that no
+	# turn at all is again fingers ahead, thumb up, palm inward.)
+	var palm_side := -1.0 if (axes["fingers_out"] as Vector3).cross(axes["palm_out"] as Vector3).dot(axes["thumb_side"] as Vector3) > 0.0 else 1.0
+	var wanted := Basis(-asked.z, asked.x * palm_side, asked.y) * Basis(axes["fingers_out"] as Vector3, axes["palm_out"] as Vector3, axes["thumb_side"] as Vector3).inverse()
 	var on_forearm := skeleton.get_bone_rest(hand_bone).basis # the hand's rest on the forearm: wrist straight
 	for pass_index in 5: # the hand turns as the arm bends, which moves the fist: settle it
 		var lower := skeleton.get_bone_global_pose(lower_bone)

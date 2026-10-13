@@ -135,6 +135,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif lantern:
 			lantern.visible = not lantern.visible
 
+	# Q = weapon up / down (into combat and out of it). The lantern cannot be turned on or off
+	# while it is up, and it is up from the start, so without this key L would never work.
+	# Not while the hands are at the lantern.
+	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_Q and body and not body.turning_lantern():
+		body.weapon_raised = not body.weapon_raised
+
 	# Shift = sprint on/off, Ctrl = crouch on/off, Space while crouched = stand up (no jump).
 	if event is InputEventKey and event.pressed and not event.echo and not debug_fly:
 		match event.physical_keycode:

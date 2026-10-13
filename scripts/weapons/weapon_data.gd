@@ -14,3 +14,9 @@ extends Resource
 ## The handle's thickness there, from its middle line (m). Moves the handle off the palm and
 ## opens or closes the fingers to suit.
 @export var grip_radius: float = 0.022
+## A SHIELD: carried on the forearm, not in the fist, and turned by the forearm alone (the
+## wrist's bend does not move it). `grip` then means: the origin on the forearm's middle line
+## where the fist is, +Y along the forearm from the elbow toward the hand, +X the way the
+## shield's face looks (away from the arm, the back of the hand's side). Made for one arm:
+## on the other it comes out upside down.
+@export var on_forearm: bool = false
