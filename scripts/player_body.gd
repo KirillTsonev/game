@@ -61,6 +61,18 @@ const DASH_PARTS := {
 	&"dash_left": [0.1, 0.87],
 	&"dash_right": [0.07, 0.77],
 }
+## The sword arm's clips (Mixamo's sword and shield pack). ONLY THE RIGHT ARM of each is used,
+## shoulder to hand, played by a second AnimationPlayer over whatever the body's clip does; the
+## fingers stay as WeaponHold closes them. Clip -> [file, loops]. A try of 2026-10-13: the
+## body, the left arm and the camera take no part in a swing yet.
+const ARM_CLIPS := {
+	&"sword_idle": ["sword_idle.fbx", true],
+	&"sword_slash": ["sword_slash.fbx", false],
+	&"sword_attack": ["sword_attack.fbx", false],
+}
+const ARM_BONES: Array[String] = ["RightShoulder", "RightUpperArm", "RightLowerArm", "RightHand"]
+## The swings attack() goes through in turn.
+const ARM_SWINGS: Array[StringName] = [&"sword_slash", &"sword_attack"]
 ## The eight ways to move, clockwise from straight ahead, as they appear in the clips' names.
 const DIRECTIONS: Array[String] = ["fwd", "fwd_right", "right", "bwd_right", "bwd", "bwd_left", "left", "fwd_left"]
 ## Drawn into shadows only: the camera sits inside them.
@@ -305,6 +317,55 @@ const KNEE_FORWARD := 0.03 ## m: a nearly straight leg bends forward, whichever 
 ## Where the lantern's handle hangs: a marker under a BoneAttachment3D, placed in the editor.
 @onready var _lantern_hook: Node3D = $HipsAttachment/LanternHook
 @onready var _lantern: Node3D = $HipsAttachment/LanternHook/LanternModel
+## The stance the right arm holds a weapon in, and how the weapon sits in the fist: set by hand
+## in the editor (weapon_stance.gd). Without the node the weapon is in the fist as WeaponHold
+## works it out and the arm is the clip's.
+@onready var _stance: WeaponStance = get_node_or_null("WeaponStance")
+var _weapon_node: Node3D ## the held weapon's model
+var _weapon_socket: Transform3D ## the fist's middle in the right hand bone's axes (WeaponHold.socket)
+var _weapon_fist: Array[float] = [] ## how far each finger closes round the held weapon
+var _weapon_up: float = 0.0 ## 0-1: how far the right arm is into the stance (weapon_raised)
+var _ground_speed: float = 0.0 ## m/s over the ground as last told (set_motion); 0 in the air
+var _weapon_bob_stride: float = 0.0 ## how far through a stride the weapon's bob is (0-1, goes round)
+var _weapon_bob_amount: float = 0.0 ## 0-1.5: how much of the bob is in just now
+var _reference: ArmClip ## the clip of weapon_reference_clip, once read (null: none)
+var _reference_path: String = "" ## the file _reference was read from
+var _reference_time: float = 0.0 ## seconds into it
+var _arm_animations: AnimationPlayer ## plays ARM_CLIPS on the right arm alone
+var _swing_next: int = 0 ## which of ARM_SWINGS the next attack() plays
+
+@export_group("Weapon held")
+## What the right hand holds at the start (none: empty hands). equip() changes it in play.
+@export var weapon: WeaponData
+## The right arm's pose comes from the sword pack's clips (ARM_CLIPS): its idle, and a swing on
+## attack(). Off: the stance of the WeaponStance node (weapon_raised), and no swings.
+@export var weapon_arm_from_clips: bool = false
+## Seconds an arm clip fades into the next.
+@export var weapon_arm_blend: float = 0.15
+## The right arm holds the weapon up before the body, over whatever clip plays, in the stance
+## of the WeaponStance node (set by hand in the editor: scripts/weapons/weapon_stance.gd).
+## Off, or with no such node: the arm is the clip's, the weapon still in its fist.
+@export var weapon_raised: bool = true
+@export var weapon_raise_time: float = 0.25 ## seconds to bring it up or let it down
+## The held weapon bobs with the steps: the whole stance (shoulder and fist together) moves
+## from the eyes by this much up and down (m, twice a stride) and side to side (m, once a
+## stride), at the pace of the clip that plays. (The stance is set from the eyes, so without
+## this the weapon stands still in the picture however the body moves. For scale: the grip of
+## the Skyrim mod measured in docs/weapons.md moves about 0.05 m each way in its run.)
+@export var weapon_bob_height: float = 0.015
+@export var weapon_bob_side: float = 0.012
+## The speed over the ground (m/s) at which the bob is as large as set; slower, it is smaller
+## in proportion, and faster it grows to at most one and a half times.
+@export var weapon_bob_full_speed: float = 3.0
+## Seconds the bob takes to come in when setting off and to die away when stopping.
+@export var weapon_bob_ease: float = 0.2
+## TRIAL 2026-10-13. The arm follows a first-person clip converted from another game's arms
+## (ArmClip: shoulder, elbow, wrist, the hand's turn and the weapon's place in it, per frame,
+## from the eyes) in place of the WeaponStance node's markers. Off, or with no such file: the
+## markers, as before. The fingers are the stance's either way.
+@export var weapon_arm_from_reference: bool = false
+@export_file("*.json") var weapon_reference_clip: String = "res://assets/animations/first_person/sword_neutral_idle.json"
+@export_group("")
 var _skeleton: Skeleton3D
 var _animations: AnimationPlayer
 var _head_bone: int = -1
@@ -384,6 +445,7 @@ func _ready() -> void:
 	for obstacle in LANTERN_OBSTACLES:
 		_lantern_obstacle_bones.append([_skeleton.find_bone((obstacle[0] as String).replace("%s", side)), _skeleton.find_bone((obstacle[1] as String).replace("%s", side)), obstacle[2]])
 	_lantern_light = get_node_or_null(lantern_light_path) as Light3D
+	equip(weapon)
 	if _lantern_light:
 		var body_bit := 1 << (BODY_LAYER - 1)
 		for mesh: MeshInstance3D in _model.find_children("*", "MeshInstance3D", true, false) + _lantern.find_children("*", "MeshInstance3D", true, false):
@@ -435,6 +497,23 @@ func _ready() -> void:
 	_animations.add_animation_library(&"", library)
 	_animations.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL # see advance()
 	_play(&"idle", 1.0)
+	# The sword arm's own player, run after the body's in advance(): its clips have tracks for
+	# the right arm only, so it replaces just that arm in the pose the body's clip gave.
+	var arm_library := AnimationLibrary.new()
+	for clip: StringName in ARM_CLIPS:
+		var scene := (load(CLIP_DIR + (ARM_CLIPS[clip][0] as String)) as PackedScene).instantiate()
+		var source := scene.find_children("*", "AnimationPlayer", true, false)[0] as AnimationPlayer
+		var animation := source.get_animation(source.get_animation_list()[0]).duplicate() as Animation
+		for track in range(animation.get_track_count() - 1, -1, -1):
+			if animation.track_get_type(track) != Animation.TYPE_ROTATION_3D or not ARM_BONES.has(String(animation.track_get_path(track).get_subname(0))):
+				animation.remove_track(track)
+		animation.loop_mode = Animation.LOOP_LINEAR if ARM_CLIPS[clip][1] else Animation.LOOP_NONE
+		arm_library.add_animation(clip, animation)
+		scene.free()
+	_arm_animations = AnimationPlayer.new()
+	_model.add_child(_arm_animations)
+	_arm_animations.add_animation_library(&"", arm_library)
+	_arm_animations.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
 
 ## body_specular onto every material of the model (they are shared by its meshes; the files
 ## are not written).
@@ -554,6 +633,7 @@ func holds_player() -> bool:
 
 ## local_velocity: the Player's velocity in its own axes (-Z forward, +X right).
 func set_motion(local_velocity: Vector3, on_floor: bool, crouching: bool, sprinting: bool, delta: float) -> void:
+	_ground_speed = Vector2(local_velocity.x, local_velocity.z).length() if on_floor else 0.0
 	if _dash_left > 0.0:
 		# A dash's hop plays through; only the fall's speed is still followed.
 		_dash_left -= delta
@@ -678,6 +758,7 @@ func advance(delta: float, camera_pitch: float) -> void:
 	if player == null or _head_bone < 0:
 		return
 	_animations.advance(delta)
+	_advance_arm(delta)
 	_advance_toggle(delta, camera_pitch)
 	camera_pitch += _view_dip
 	# Half a turn (the model faces +Z, the Player looks along -Z) plus the turn into a diagonal.
@@ -709,7 +790,117 @@ func advance(delta: float, camera_pitch: float) -> void:
 	# a jump, crouching) the camera must not be left behind it, looking at the neck.
 	_eye = target + (_eye - target).limit_length(eye_max_lag)
 	_eye_valid = true
+	_hold_weapon(player, delta) # before the lantern: the reach to it sets off from this pose
 	_place_lantern(player, delta)
+	# After the lantern: turning it on / off moves the right arm.
+	if _weapon_node:
+		_weapon_node.global_transform = _skeleton.global_transform * _skeleton.get_bone_global_pose(_arms["Right"]["hand"]) * WeaponHold.in_hand(_weapon_socket, weapon)
+
+## The right arm's clip over the body's: the sword idle while a weapon is held, or a swing.
+func _advance_arm(delta: float) -> void:
+	if _weapon_node == null or not weapon_arm_from_clips:
+		if _arm_animations.is_playing():
+			_arm_animations.stop() # the body's clip has the arm again from the next frame
+		return
+	_arm_animations.playback_default_blend_time = weapon_arm_blend
+	if not _arm_animations.is_playing():
+		_arm_animations.play(&"sword_idle")
+	_arm_animations.advance(delta)
+
+## A swing of the held weapon (the Player's left click). One at a time; the arm goes back to
+## its idle after it.
+func attack() -> void:
+	if _weapon_node == null or not weapon_arm_from_clips or _arm_animations.current_animation in ARM_SWINGS:
+		return
+	_arm_animations.play(ARM_SWINGS[_swing_next % ARM_SWINGS.size()], weapon_arm_blend)
+	_arm_animations.queue(&"sword_idle")
+	_swing_next += 1
+
+## How far the held weapon's stance is moved from its place just now by the steps (the
+## Player's axes). Its pace is that of the clip playing, kept as a count of its own so that a
+## change of clip (a turn into another direction) does not make it jump.
+func _weapon_bob(delta: float) -> Vector3:
+	_weapon_bob_amount = move_toward(_weapon_bob_amount, clampf(_ground_speed / maxf(weapon_bob_full_speed, 0.01), 0.0, 1.5), delta / maxf(weapon_bob_ease, 0.01) * 1.5)
+	if _weapon_bob_amount <= 0.001:
+		return Vector3.ZERO
+	var stride_seconds := _animations.current_animation_length / maxf(absf(_clip_speed), 0.01)
+	if stride_seconds > 0.0:
+		_weapon_bob_stride = fposmod(_weapon_bob_stride + delta / stride_seconds, 1.0)
+	return Vector3(sin(_weapon_bob_stride * TAU) * weapon_bob_side, sin(_weapon_bob_stride * TAU * 2.0) * weapon_bob_height, 0.0) * _weapon_bob_amount
+
+## Puts a weapon in the right hand, in place of the one held (null: none). Any WeaponData
+## fits: the hand's socket is worked out from its bones (WeaponHold).
+func equip(data: WeaponData) -> void:
+	if _weapon_node:
+		_weapon_node.queue_free()
+		_weapon_node = null
+	weapon = data
+	if data == null or data.scene == null:
+		return
+	_weapon_socket = WeaponHold.socket(_skeleton, "Right", data.grip_radius)
+	_weapon_fist = WeaponHold.fist_curls(_skeleton, "Right", data.grip_radius)
+	# Placed by this script in the same frame as the pose, like the lantern.
+	_weapon_node = data.scene.instantiate() as Node3D
+	add_child(_weapon_node)
+	_weapon_node.top_level = true
+	if _lantern_light:
+		for mesh: MeshInstance3D in _weapon_node.find_children("*", "MeshInstance3D", true, false):
+			mesh.layers = 1 << (BODY_LAYER - 1)
+
+## The right hand holds the weapon: the fist closed round it always, and (weapon_raised) the
+## arm in the stance set by hand in the WeaponStance node, over whatever clip plays -- shoulder
+## and fist at places set from the eyes, so the weapon keeps its place in the picture. Where
+## the weapon points is what that arm gives it. It does not follow the camera's pitch.
+func _hold_weapon(player: Node3D, delta: float) -> void:
+	var arm: Dictionary = _arms["Right"]
+	# The stance moves the shoulder bodily and no clip has a track that would move it back
+	# (measured: a second after lowering the weapon the bone was still 0.3 m off): each frame
+	# starts with it at rest on the body.
+	_skeleton.set_bone_pose_position(arm["upper"], _skeleton.get_bone_rest(arm["upper"]).origin)
+	if _weapon_node == null:
+		_weapon_up = 0.0
+		return
+	if weapon_reference_clip != _reference_path:
+		_reference_path = weapon_reference_clip
+		_reference = ArmClip.from_file(weapon_reference_clip)
+	var reference: ArmClip = _reference if weapon_arm_from_reference else null
+	var frame := {}
+	if reference:
+		_reference_time += delta
+		frame = reference.sample(_reference_time)
+		# The weapon as the clip has it in the hand. The clip's hand axes (-X the palm, +Y the
+		# thumb's side, -Z the fingers) in the hand bone's, as in WeaponStance.socket.
+		var grip: Transform3D = frame["grip"]
+		var marker := Basis(-(arm["palm_out"] as Vector3), (arm["fingers_out"] as Vector3).cross(arm["palm_out"] as Vector3), -(arm["fingers_out"] as Vector3))
+		_weapon_socket = Transform3D(marker * grip.basis * WeaponStance.SOCKET_IN_GRIP, marker * grip.origin)
+	elif _stance:
+		# Read every frame: the stance can be changed while the game runs (Remote tree ->
+		# Body/WeaponStance and its markers).
+		_weapon_socket = _stance.socket(_skeleton, weapon.grip_radius)
+	_weapon_up = move_toward(_weapon_up, 1.0 if weapon_raised and (_stance or reference) and not weapon_arm_from_clips else 0.0, delta / maxf(weapon_raise_time, 0.01))
+	var weight := smoothstep(0.0, 1.0, _weapon_up)
+	if weight > 0.001:
+		# The stance outright, then back toward the clip's arm by what is left of the weight.
+		var arm_bones: Array[int] = [arm["upper"], arm["lower"], arm["hand"]]
+		var in_clip: Array = [_skeleton.get_bone_pose_position(arm["upper"])]
+		for bone in arm_bones:
+			in_clip.append(_skeleton.get_bone_pose_rotation(bone))
+		var to_skeleton := (player.global_transform.affine_inverse() * _skeleton.global_transform).affine_inverse()
+		var held_from := _eye + _weapon_bob(delta) # the eyes, and the bob of the steps
+		if reference:
+			# The wrist itself is put where the clip has it (no reach limit: its arm is shorter).
+			WeaponHold.solve_arm(_skeleton, "Right", to_skeleton, held_from + (frame["shoulder"] as Vector3), held_from + (frame["wrist"] as Vector3),
+					(frame["elbow"] as Vector3) - (frame["shoulder"] as Vector3), frame["hand"] as Basis, Vector3.ZERO, 1.0)
+		else:
+			_stance.pose(_skeleton, to_skeleton, held_from, _stance.fist_in_hand(_skeleton, weapon.grip_radius))
+		if weight < 0.999:
+			_skeleton.set_bone_pose_position(arm["upper"], (in_clip[0] as Vector3).lerp(_skeleton.get_bone_pose_position(arm["upper"]), weight))
+			for i in arm_bones.size():
+				_skeleton.set_bone_pose_rotation(arm_bones[i], (in_clip[i + 1] as Quaternion).slerp(_skeleton.get_bone_pose_rotation(arm_bones[i]), weight))
+	if _stance:
+		_stance.pose_fingers(_skeleton, weapon.grip_radius) # as posed by hand in the editor
+	else:
+		_set_fingers(arm, _weapon_fist, 1.0)
 
 ## The lantern hangs from its place by the hips and swings there; the light sits in its flame,
 ## and the flame glows only while the light is on (L).
@@ -838,26 +1029,9 @@ func _setup_arms() -> void:
 		var knuckle := _skeleton.get_bone_global_rest(_skeleton.find_bone(side + "MiddleProximal")).origin
 		var forefinger_tip := _skeleton.get_bone_global_rest(_skeleton.find_bone(side + "IndexDistal")).origin
 		var thumb_tip := _skeleton.get_bone_global_rest(_skeleton.find_bone(side + "ThumbDistal")).origin
-		var fingers := {}
-		for finger: String in FINGERS:
-			var joints: Array[String] = ["Proximal", "Intermediate", "Distal"]
-			if finger == "Thumb":
-				joints = ["Metacarpal", "Proximal", "Distal"]
-			fingers[finger] = []
-			for i in joints.size():
-				var bone := _skeleton.find_bone(side + finger + joints[i])
-				var rest := _skeleton.get_bone_global_rest(bone)
-				# The way the joint points: to the next one, or as the one before for the last.
-				var along := rest.origin - _skeleton.get_bone_global_rest(_skeleton.find_bone(side + finger + joints[i - 1])).origin
-				if i < joints.size() - 1:
-					along = _skeleton.get_bone_global_rest(_skeleton.find_bone(side + finger + joints[i + 1])).origin - rest.origin
-				(fingers[finger] as Array).append([bone, (rest.basis.inverse() * along.cross(Vector3.DOWN)).normalized()])
-		# The thumb's other movement, at its first joint: swinging in toward the way the
-		# fingers point, which is what brings its tip to the forefinger's for a pinch
-		# (closing alone leaves the two tips 3 cm apart at best).
-		var thumb_rest := _skeleton.get_bone_global_rest(fingers["Thumb"][0][0])
-		var thumb_along := _skeleton.get_bone_global_rest(fingers["Thumb"][1][0]).origin - thumb_rest.origin
-		var thumb_in := (thumb_rest.basis.inverse() * thumb_along.cross(knuckle - hand_rest.origin)).normalized()
+		# The fingers' joints and the thumb's swing: shared with everything else that closes a hand.
+		var fingers := WeaponHold.finger_joints(_skeleton, side)
+		var thumb_in: Vector3 = fingers["thumb_in"]
 		var fingers_out := (hand_rest.basis.inverse() * (knuckle - hand_rest.origin)).normalized()
 		var palm_out := hand_rest.basis.inverse() * Vector3.DOWN
 		palm_out = (palm_out - fingers_out * palm_out.dot(fingers_out)).normalized()
@@ -1109,15 +1283,19 @@ func _solve_leg(leg: Dictionary, foot_in_clip: Transform3D, goal: Vector3, tilt:
 ## thumb, forefinger, middle, ring and little finger (the order of FINGERS), 0 = flat as in the
 ## rest pose. `thumb_in` swings the thumb in toward the fingers at its first joint (radians).
 ## It replaces the clip's pose of the fingers by `weight`.
-func _set_fingers(arm: Dictionary, closed: Array, weight: float, thumb_in: float = 0.0) -> void:
+func _set_fingers(arm: Dictionary, closed: Array, weight: float, thumb_in: float = 0.0, joint_share: Vector3 = Vector3.ONE) -> void:
 	if weight <= 0.001:
 		return
 	for i in FINGERS.size():
 		var joints: Array = arm["fingers"][FINGERS[i]]
-		for joint: Array in joints:
+		for j in joints.size():
+			var joint: Array = joints[j]
 			var bone: int = joint[0]
-			var wanted := _skeleton.get_bone_rest(bone).basis.get_rotation_quaternion() * Quaternion(joint[1] as Vector3, closed[i])
-			if i == 0 and joint == joints[0]:
+			# The four fingers' joints may each take their own share of the curl (from the
+			# knuckle outward): round something thick the knuckle bends little and the middle
+			# joint most.
+			var wanted := _skeleton.get_bone_rest(bone).basis.get_rotation_quaternion() * Quaternion(joint[1] as Vector3, (closed[i] as float) * (joint_share[j] if i > 0 else 1.0))
+			if i == 0 and j == 0:
 				wanted = wanted * Quaternion(arm["thumb_in"] as Vector3, thumb_in)
 			_skeleton.set_bone_pose_rotation(bone, _skeleton.get_bone_pose_rotation(bone).slerp(wanted, weight))
 

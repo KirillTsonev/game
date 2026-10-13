@@ -47,6 +47,9 @@ automatically) -- a local copy also lives at
   first, how to find real points on the meshes, the pieces in `scripts/player_body.gd`
   (`_reach`, `_set_fingers`, the timeline), the rules each learnt from a fault, and how to
   check it headless. Read before adding or changing such an action.
+- `docs/weapons.md` -- (2026-10-13) how a weapon gets into a hand (`WeaponData`, `WeaponHold`,
+  the hand's socket), the checklist for adding a weapon and for giving one to a body, and the
+  pitfalls of the first sword hold. Read before adding a weapon or touching the hold.
 - This file stays the reference for pitfalls and _why_ things are done the way they are.
 
 ## Local tooling paths (this machine)
@@ -1272,6 +1275,44 @@ optimisation; never judge by GPU utilisation %.
   collider over the walkable rock built from it, rocks and scree placed with it, and the
   rock's relief moved above the heightmap (offset +0.5) so Terrain3D's own collision never
   sits above the new one.
+- **Weapons in hands** (2026-10-13; step by step in `docs/weapons.md`; not judged in game):
+  a weapon is a `WeaponData` resource (model, where the fist goes on its handle, the handle's
+  thickness) and the hand's socket is worked out from the hand's bones by `WeaponHold`
+  (`scripts/weapons/`), so any weapon fits any body on the humanoid skeleton with nothing set
+  up per pair. `PlayerBody.equip(data)` / the Body's `weapon`; `WeaponHold.attach` for enemies.
+  The sword (`assets/models/weapons/sword/`, `sword.tres`, made by
+  `tools/blender/import_sword.py` from `raw-assets/models/wapons/human_sword_lv1.blend`,
+  licence unchecked, 1.19 m, 42,614 triangles) is the only weapon so far; its steel is as the
+  source has it, fully metal at roughness about 0.02 (a mirror).
+  - TRIAL 2026-10-13: the right arm alone takes its pose from three clips of Mixamo's sword
+    and shield pack (`ARM_CLIPS`, `weapon_arm_from_clips`, left click = `attack()`); what the
+    pack holds and what was measured is in `docs/weapons.md`. The pack is third-person: its
+    idle holds the sword hand 0.2-0.4 m BEHIND the eyes. Not judged in game.
+  - With `weapon_arm_from_clips` off, the player's right arm is held in a stance by
+    `PlayerBody._hold_weapon` (`weapon_*` exports): the fist at a place set from the eyes,
+    elbow down, the forearm rolled so the palm faces inward, the wrist tipped 30 deg. The
+    right shoulder is 0.36 m BEHIND the eyes standing and the arm 0.56 m, so the hand is
+    under the picture and only the blade is seen.
+  - **The sword's blade runs along its scene's +Z, not +Y** (the mesh node in `sword.glb` is
+    turned 90 deg; `sword.tres`' grip is written for that). This was the first cause of the
+    whole failure: the import tool's header said +Y, every grip was fitted to that, and every
+    check read the weapon node's +Y instead of the mesh -- so the numbers said "upright" while
+    the sword lay level through the wrist. Measure a held weapon by its mesh's vertices.
+  - **What else went wrong for a day before this, so it is not done again:** the hold steered the
+    ARM by the blade (roll the forearm until the blade points a set way). Any grip then gave
+    the same sword -- measured: blade along any axis of the hand, 51-63 deg above level --
+    with the forearm rolled up to 180 deg, and Kirill turning the grip marker in the editor
+    changed nothing he could see. The check ("blade within 5 deg of the direction asked")
+    passed every time because the solver made it so. And the editor shows the T-pose, palm
+    down, where a rightly held sword lies level: turned upright there by eye, it went through
+    the palm. Hence: the socket never poses the arm; `hand_socket.gd` shows the arm in a hold
+    in the editor; a check measures forearm roll, palm facing and wrist bend.
+  - A pose search that tries many poses on ONE frame is wrong: the arm's roll depends on the
+    pose it was turned from. Measure each setting over the clips' own frames.
+  - `WeaponSocket` (`hand_socket.gd`, a direct child of the Body) is editor-side only: it
+    shows the hold and, with its `automatic` off, is the socket placed by eye. The
+    `RightHandAttachment` BoneAttachment3D it used to hang under is gone: Kirill kept moving
+    that instead, and an attachment is put back on its bone every frame.
 - A clip's speed goes into `AnimationPlayer.play()`'s custom speed, not `speed_scale`: a
   cross-fade advances by `speed_scale`, so a clip frozen through it never fades in.
 - A headless check of a scene (`--headless --script`) that hits a script error never reaches

@@ -3,10 +3,13 @@
 [ext_resource type="Script" uid="uid://qkss66mhiuuv" path="res://scripts/player_body.gd" id="1"]
 [ext_resource type="PackedScene" uid="uid://bttlw4yuvt5hs" path="res://assets/models/characters/rogue/rogue.fbx" id="2"]
 [ext_resource type="PackedScene" uid="uid://drgbx6bjiswmt" path="res://assets/models/props/lantern/lantern.glb" id="3"]
+[ext_resource type="Resource" uid="uid://cgho0dfvxecy6" path="res://assets/models/weapons/sword/sword.tres" id="4"]
+[ext_resource type="Script" uid="uid://dnro4f5ar53gr" path="res://scripts/weapons/weapon_stance.gd" id="5"]
 
 [node name="Body" type="Node3D" unique_id=1812307067]
 script = ExtResource("1")
 body_shadow_reach = 2.75
+weapon = ExtResource("4")
 
 [node name="Rogue" parent="." unique_id=1635915260 instance=ExtResource("2")]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0)
@@ -23,3 +26,84 @@ transform = Transform3D(-0.91863865, 0.3827425, 0.0980365, 0.3920663, 0.9137622,
 
 [node name="LanternModel" parent="HipsAttachment/LanternHook" unique_id=1815547301 instance=ExtResource("3")]
 transform = Transform3D(0.089155585, 0.0072300956, -0.9959919, -0.18287387, 0.98309326, -0.009233338, 0.9790859, 0.18296403, 0.08897045, 0.00082701445, 0, 0.016209066)
+
+[node name="WeaponStance" type="Node3D" parent="." unique_id=449431304]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.61, -0.175)
+script = ExtResource("5")
+finger_pose = Array[Quaternion]([Quaternion(-0.31789613, 0.7681954, 0.34829098, -0.43302566), Quaternion(0.08021701, -0.03684456, 0.12300362, 0.98847246), Quaternion(0.29882768, -0.44163057, 0.040795334, 0.84498537), Quaternion(0.49418274, -0.122289956, 0.23311621, 0.8285442), Quaternion(0.48032668, -0.28229064, 0.0048029213, 0.83040667), Quaternion(0.39946935, 0.032227423, -0.2137973, 0.8908852), Quaternion(0.5762792, -0.07770864, 0.27636236, 0.7651716), Quaternion(0.46588716, -0.21632914, -0.040345944, 0.8570432), Quaternion(0.43814012, 0.021236641, -0.043452736, 0.89760464), Quaternion(0.6003269, -0.024438927, 0.31597418, 0.7342824), Quaternion(0.36734053, -0.15696539, 0.0684257, 0.91418856), Quaternion(0.42199227, -0.26909232, -0.33271793, 0.7992563), Quaternion(0.58899957, -0.061446697, 0.30213246, 0.7470072), Quaternion(0.45405376, -0.21595126, -0.132144, 0.85424715), Quaternion(0.31002894, 0.20636916, -0.05316057, 0.92653537)])
+
+[node name="Shoulder" type="Marker3D" parent="WeaponStance" unique_id=2135569507]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.3023697, -0.3480185, -0.02284278)
+
+[node name="Elbow" type="Marker3D" parent="WeaponStance" unique_id=433905415]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5600919, -0.4016657, -0.13186057)
+
+[node name="Hand" type="Marker3D" parent="WeaponStance" unique_id=759822060]
+transform = Transform3D(0.83299065, 0.4040843, -0.37794518, -0.52944803, 0.7804998, -0.33242276, 0.16065922, 0.47700733, 0.8640907, 0.52455103, -0.3650658, -0.48719817)
+
+[node name="Grip" type="Marker3D" parent="WeaponStance/Hand" unique_id=593546726]
+transform = Transform3D(0.781708, -0.6018123, 0.16356975, 0.48407942, 0.7508871, 0.44925952, -0.39319292, -0.27200863, 0.8783001, 0.008040965, 0.004613161, -0.009065986)
+
+[node name="Fingers" type="Node3D" parent="WeaponStance" unique_id=161809430]
+
+[node name="ThumbMetacarpal" type="Marker3D" parent="WeaponStance/Fingers" unique_id=277663793]
+transform = Transform3D(-0.8391953, -0.5406878, 0.05837816, -0.35767576, 0.46788523, -0.8081779, 0.4096577, -0.69909954, -0.58603793, 0.5362802, -0.38078094, -0.42681497)
+gizmo_extents = 0.012
+
+[node name="ThumbProximal" type="Marker3D" parent="WeaponStance/Fingers" unique_id=1117650538]
+transform = Transform3D(-0.9343645, -0.29974607, 0.19265331, -0.3097211, 0.41590485, -0.85504156, 0.1761699, -0.85858923, -0.48144442, 0.5119944, -0.35976517, -0.45821607)
+gizmo_extents = 0.012
+
+[node name="ThumbDistal" type="Marker3D" parent="WeaponStance/Fingers" unique_id=1735221389]
+transform = Transform3D(-0.3601038, 0.15641661, 0.919706, -0.9278877, 0.042128533, -0.37047216, -0.096693866, -0.98679227, 0.1299664, 0.5025122, -0.3465935, -0.4854033)
+gizmo_extents = 0.012
+
+[node name="IndexProximal" type="Marker3D" parent="WeaponStance/Fingers" unique_id=1469044451]
+transform = Transform3D(0.08767053, -0.6873158, -0.7210484, 0.9898367, 0.141468, -0.014497915, 0.11196993, -0.71244913, 0.692733, 0.57421166, -0.3532529, -0.48823726)
+gizmo_extents = 0.012
+
+[node name="IndexIntermediate" type="Marker3D" parent="WeaponStance/Fingers" unique_id=1104769768]
+transform = Transform3D(-0.08677771, -0.9678607, 0.23604083, 0.78793555, -0.21166503, -0.5782348, 0.6096124, 0.13580707, 0.78097963, 0.5454405, -0.34733105, -0.51806045)
+gizmo_extents = 0.012
+
+[node name="IndexDistal" type="Marker3D" parent="WeaponStance/Fingers" unique_id=501674851]
+transform = Transform3D(0.2112379, -0.44102526, 0.87228173, 0.92142034, -0.20791733, -0.3282606, 0.3261337, 0.87307906, 0.36244962, 0.5196707, -0.3529668, -0.51444453)
+gizmo_extents = 0.012
+
+[node name="MiddleProximal" type="Marker3D" parent="WeaponStance/Fingers" unique_id=1811821613]
+transform = Transform3D(0.09908557, -0.83674705, -0.5385504, 0.9942728, 0.10503204, 0.019743456, 0.040044762, -0.5374223, 0.842362, 0.5849135, -0.37874925, -0.49546027)
+gizmo_extents = 0.012
+
+[node name="MiddleIntermediate" type="Marker3D" parent="WeaponStance/Fingers" unique_id=1116066334]
+transform = Transform3D(0.1365662, -0.92338145, 0.3587707, 0.8761192, -0.056448422, -0.47877842, 0.4623472, 0.37971085, 0.80128324, 0.5405375, -0.37317896, -0.52396184)
+gizmo_extents = 0.012
+
+[node name="MiddleDistal" type="Marker3D" parent="WeaponStance/Fingers" unique_id=427588948]
+transform = Transform3D(0.16343518, -0.27065262, 0.9487024, 0.9118568, -0.3256169, -0.249982, 0.3765718, 0.9059365, 0.19357915, 0.5170986, -0.37461185, -0.51432335)
+gizmo_extents = 0.012
+
+[node name="RingProximal" type="Marker3D" parent="WeaponStance/Fingers" unique_id=397989590]
+transform = Transform3D(0.14128904, -0.89081895, -0.43183225, 0.9880789, 0.09995772, 0.11708365, -0.061135355, -0.44322702, 0.8943223, 0.58479583, -0.40415275, -0.4977262)
+gizmo_extents = 0.012
+
+[node name="RingIntermediate" type="Marker3D" parent="WeaponStance/Fingers" unique_id=318214782]
+transform = Transform3D(-0.021357002, -0.9567927, 0.28998545, 0.97060394, -0.08939336, -0.22346552, 0.23973294, 0.27668843, 0.930576, 0.5393064, -0.39904845, -0.5203595)
+gizmo_extents = 0.012
+
+[node name="RingDistal" type="Marker3D" parent="WeaponStance/Fingers" unique_id=597944555]
+transform = Transform3D(0.7559414, -0.16316003, 0.6339807, 0.64961994, 0.06726674, -0.7572775, 0.0809116, 0.98430383, 0.15684171, 0.51707184, -0.4011258, -0.51392967)
+gizmo_extents = 0.012
+
+[node name="LittleProximal" type="Marker3D" parent="WeaponStance/Fingers" unique_id=1109264531]
+transform = Transform3D(0.09756166, -0.8670194, -0.48862985, 0.9951432, 0.0785203, 0.05936847, -0.013106249, -0.49204874, 0.87046903, 0.57344437, -0.42460513, -0.4977243)
+gizmo_extents = 0.012
+
+[node name="LittleIntermediate" type="Marker3D" parent="WeaponStance/Fingers" unique_id=1628907833]
+transform = Transform3D(0.32918343, -0.88328946, 0.33382326, 0.84922594, 0.12236141, -0.5136566, 0.4128604, 0.45257857, 0.7903917, 0.5394983, -0.42153084, -0.5169893)
+gizmo_extents = 0.012
+
+[node name="LittleDistal" type="Marker3D" parent="WeaponStance/Fingers" unique_id=619966279]
+transform = Transform3D(0.13460752, -0.4494878, 0.8830864, 0.9890579, 0.0066445433, -0.14737855, 0.06037715, 0.8932618, 0.44546387, 0.5210107, -0.41896975, -0.5075167)
+gizmo_extents = 0.012
+
+[editable path="Rogue"]

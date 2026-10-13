@@ -160,6 +160,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	# Left click only (2026-09-27): the mouse WHEEL is also an InputEventMouseButton, and
 	# re-capturing on it stole the cursor from UI like the grass tuning panel.
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and body:
+			body.attack() # a click that only takes the cursor back is not a swing
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 ## Plain, standard CharacterBody3D FPS pattern (the same shape used by

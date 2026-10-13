@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://cgho0dfvxecy6"]
+
+[ext_resource type="Script" uid="uid://5aw1f25tbir7" path="res://scripts/weapons/weapon_data.gd" id="1"]
+[ext_resource type="PackedScene" uid="uid://cylvrg3x5y14j" path="res://assets/models/weapons/sword/sword.glb" id="2"]
+
+[resource]
+script = ExtResource("1")
+scene = ExtResource("2")
+grip = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, 0, 0.0735)

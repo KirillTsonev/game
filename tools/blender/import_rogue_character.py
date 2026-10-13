@@ -84,6 +84,11 @@ for clip, source in (("jog_fwd", "Jog Forward"), ("jog_bwd", "Jog Backward"),
 # frames a second, NOT in place: each travels about 2 m, which the script takes out).
 for clip, source in (("dodge_fwd", "Forward"), ("dodge_bwd", "Backward"), ("dodge_left", "Left"), ("dodge_right", "Right")):
     ANIMATION_FILES[clip + ".fbx"] = (os.path.join(ANIM_ROOT, "dodge", "Standing Dodge %s.fbx" % source), "mixamo", "Skeleton3D")
+# Mixamo's "Pro Sword and Shield Pack" (raw-assets/animations; 51 clips, "Without Skin", 30
+# frames a second): the three the sword arm is taken from (PlayerBody.ARM_CLIPS). What the rest
+# are is in docs/weapons.md.
+for clip, source in (("sword_idle", "idle (4)"), ("sword_slash", "slash"), ("sword_attack", "attack (4)")):
+    ANIMATION_FILES[clip + ".fbx"] = (os.path.join(ANIM_ROOT, "Pro Sword and Shield Pack", "sword and shield %s.fbx" % source), "mixamo", "Skeleton3D")
 
 
 def humanoid_map(fixed, side_bones, fingers, side_name, finger_name):
