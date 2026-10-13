@@ -1976,6 +1976,16 @@ func _reach(arm: Dictionary, point: String, bones: Transform3D, target: Vector3,
 		var past := to_skeleton * around
 		goal = from.lerp(past, weight).lerp(past.lerp(to_skeleton * target, weight), weight)
 	var pole := (to_skeleton.basis * elbow).normalized()
+	# The elbow's side comes in with the weight, from the side the arm has it on now. Taken
+	# whole from the first sliver of weight, it threw the forearm round the moment a reach began
+	# and the moment it ended, and the hand with it: with a sword in that hand the blade's tip
+	# jumped 0.42 m in the frame the lantern's action ended (Kirill, 2026-10-13: "a visible
+	# janky shift").
+	var elbow_now := _skeleton.get_bone_global_pose(arm["lower"]).origin - _skeleton.get_bone_global_pose(arm["upper"]).origin
+	if elbow_now.length() > 0.001:
+		var eased := elbow_now.normalized().lerp(pole, weight)
+		if eased.length() > 0.01:
+			pole = eased.normalized()
 	var palm_asked := (to_skeleton.basis * palm_toward).normalized()
 	var hand_in_clip := Basis(_skeleton.get_bone_pose_rotation(arm["hand"]))
 	# The hand's own frame, built on the axis that gets pointed: the way its fingers run, or
