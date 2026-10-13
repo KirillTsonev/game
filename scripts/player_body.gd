@@ -299,6 +299,14 @@ const TOGGLE_LEFT_ELBOW := Vector3(-0.5, -0.5, -0.7)
 ## The furthest the camera may trail the eyes (m), however fast the head moves.
 @export var eye_max_lag: float = 0.03
 
+## Standing right foot forward (the idle with its legs mirrored), how far the body from the
+## spine up is turned back to the way it faces standing left foot forward: 1 = the same way
+## (the chest 13 deg to the right, twisted 28 deg over the hips, which "looks kind of weird" --
+## Kirill, 2026-10-13), 0 = it goes round with the mirrored hips (the chest 13 deg to the
+## LEFT, the left shoulder 16 cm from where everything fitted to the left arm expects it).
+## Read once, when the clip is built.
+@export_range(0.0, 1.0, 0.01) var idle_mirror_torso: float = 0.5
+
 ## The model, turned half round in the scene: it faces +Z, the Player looks along -Z.
 ## The feet are put on the ground under them (_place_feet): a clip is made for level ground,
 ## and the Player's capsule only knows the ground under its middle, so on a slope the uphill
@@ -716,7 +724,7 @@ func _ready() -> void:
 		source.owner.free()
 	# The idle stands with the left foot forward; its mirror image is for stopping with the
 	# right foot forward (set_motion).
-	library.add_animation(&"idle_mirror", _mirrored(library.get_animation(&"idle")))
+	library.add_animation(&"idle_mirror", _mirrored(library.get_animation(&"idle"), true))
 	_animations = AnimationPlayer.new()
 	_model.add_child(_animations) # its tracks ("%GeneralSkeleton:<bone>") start at the model's root
 	_animations.add_animation_library(&"", library)
@@ -787,11 +795,50 @@ func _hold_in_place(animation: Animation) -> void:
 ## A clip's mirror image, left and right changed over. On the humanoid skeleton the two sides'
 ## rest poses mirror each other across the plane x = 0, so a bone's turn goes to the bone of
 ## the other side with its y and z parts negated, and a position with its x negated.
-func _mirrored(animation: Animation) -> Animation:
+func _mirrored(animation: Animation, legs_only: bool = false) -> Animation:
 	var mirror := animation.duplicate(true) as Animation
+	# `legs_only`: THE BODY FROM THE SPINE UP STAYS AS THE CLIP HAS IT, turned the same way in
+	# the world; only the hips and the legs are mirrored. (The idle's whole mirror image had
+	# the chest facing 26 deg the other way and the left shoulder 12 cm further in and 10 cm
+	# further back: standing right foot forward, the left arm could not get round the chest
+	# to the lantern, and everything fitted to the left-foot stance sat differently -- Kirill,
+	# 2026-10-13: "can we turn the torso into same position as left leg then?")
+	var above := {} # the spine and every bone under it, by name
+	var spine := _skeleton.find_bone("Spine")
+	if legs_only and spine >= 0:
+		var todo: Array[int] = [spine]
+		while not todo.is_empty():
+			var bone: int = todo.pop_back()
+			above[_skeleton.get_bone_name(bone)] = true
+			todo.append_array(_skeleton.get_bone_children(bone))
+	var turn_track := {} # bone name -> its rotation track in the clip as it is
+	for track in animation.get_track_count():
+		if animation.track_get_type(track) == Animation.TYPE_ROTATION_3D:
+			turn_track[String(animation.track_get_path(track).get_concatenated_subnames())] = track
 	for track in mirror.get_track_count():
 		var path := mirror.track_get_path(track)
 		var bone := String(path.get_concatenated_subnames())
+		if above.has(bone):
+			if bone == "Spine" and mirror.track_get_type(track) == Animation.TYPE_ROTATION_3D:
+				# The spine's own turn is what carries the rest: on the mirrored hips it is
+				# set so that the spine is turned in the skeleton's space as on the hips
+				# unmirrored.
+				for key in mirror.track_get_key_count(track):
+					var carried := Quaternion.IDENTITY # the bones under the spine's, root first
+					var chain: Array[int] = []
+					var parent := _skeleton.get_bone_parent(spine)
+					while parent >= 0:
+						chain.push_front(parent)
+						parent = _skeleton.get_bone_parent(parent)
+					for link in chain:
+						var link_name := _skeleton.get_bone_name(link)
+						carried = carried * ((animation.rotation_track_interpolate(turn_track[link_name], mirror.track_get_key_time(track, key)) as Quaternion) if turn_track.has(link_name) else _skeleton.get_bone_rest(link).basis.get_rotation_quaternion())
+					var carried_mirrored := Quaternion(carried.x, -carried.y, -carried.z, carried.w)
+					# idle_mirror_torso of the way there, from the spine carried round by the
+					# mirrored hips as it is.
+					var own: Quaternion = mirror.track_get_key_value(track, key)
+					mirror.track_set_key_value(track, key, own.slerp((carried_mirrored.inverse() * carried * own).normalized(), idle_mirror_torso))
+			continue
 		if bone.begins_with("Left"):
 			bone = "Right" + bone.substr(4)
 		elif bone.begins_with("Right"):
