@@ -27,6 +27,7 @@
 import os
 import shutil
 import bpy
+import bmesh
 import numpy as np
 from math import radians
 from mathutils import Matrix
@@ -37,10 +38,27 @@ RES_DIR = "res://assets/models/weapons/shield"
 DST = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                     "..", "..", "assets", "models", "weapons", "shield"))
 TEXTURES = {"material_baseColor.png": "albedo", "material_normal.png": "normal", "material_metallicRoughness.png": "metal_rough"}
-# The forearm's middle line is this far behind the board's back (m): the arm rest is 3.3 cm
-# thick and a forearm about 4 cm from its middle to its skin. (The straps stand only 5-6 cm
-# off the board: they pass through the arm as drawn, hidden in it.)
-STANDOFF = 0.073
+# The forearm's middle line is this far behind the arm rest's face (m): a forearm is about
+# 4 cm from its middle to its skin, and it lies on the rest. (This was 0.073 at first, from a
+# survey that took the straps' vertices for the rest's and made the rest 3.3 cm thick: it is
+# 7 mm, and the arm floated 3 cm off it.)
+STANDOFF = 0.045
+# The source's three straps stand 4.5-6 cm off the board and their loops are 8-11 cm tall:
+# too small for an arm to be in them (Kirill, 2026-10-13: "the shield inner handles are too
+# small for our hands", and after a first stretch away from the board only: "still clip
+# through the palm and forearm"). Each is reshaped to go round what it holds, as measured on
+# the rogue's own left arm lying on the rest with the hand open (its mesh's vertices at each
+# strap, plus about 2.5 cm: a strap is an arch and the bracer is square, so with
+# less its corners came through the arch's shoulders): how far it stands off the arm rest's face ("reach", m), and
+# where its loop begins and ends up the shield, from the forearm's middle line ("low",
+# "high", m; the open hand with its thumb is 13.6 cm across, the forearm in its bracer 10.6).
+# The two straps on the hand's side lie across the palm, the third goes round the forearm.
+# The hand's two go round the PALM ONLY (10.1 cm across without the thumb), the thumb outside
+# them: sized round the thumb as well they made a hoop 19 cm tall (Kirill: "too big now").
+STRAPS = {
+    "hand": {"reach": 0.075, "low": -0.073, "high": 0.056},
+    "forearm": {"reach": 0.132, "low": -0.102, "high": 0.07},
+}
 
 
 def write_if_missing(path, text):
@@ -164,6 +182,55 @@ hand_strap = min(straps) if hand_sign < 0.0 else max(straps)
 arm_strap = max(straps) if hand_sign < 0.0 else min(straps)
 print("SHIELD board at x %.3f (back face %.3f), back toward %+.0f x; straps at y %.3f and %.3f, z %.3f; notch and hand toward %+.0f y; hand's strap y %.3f, forearm's %.3f (%.3f m apart)"
       % (board, board_back, back_sign, straps[0], straps[1], strap_height, hand_sign, hand_strap, arm_strap, abs(hand_strap - arm_strap)))
+# The straps, as pieces of the mesh: found on a welded copy (the export splits vertices at
+# texture seams), as the pieces that stand more than 4 cm off the board; then every vertex of
+# the real mesh that sits on one of a strap's is moved, by its distance from the rest's face.
+weld = bmesh.new()
+weld.from_mesh(ob.data)
+bmesh.ops.remove_doubles(weld, verts=weld.verts, dist=0.00001)
+done = set()
+moved = 0
+for start in weld.verts:
+    if start.index in done:
+        continue
+    piece = [start]
+    done.add(start.index)
+    todo = [start]
+    while todo:
+        a = todo.pop()
+        for e in a.link_edges:
+            b = e.other_vert(a)
+            if b.index not in done:
+                done.add(b.index)
+                piece.append(b)
+                todo.append(b)
+    stand = max((v.co.x - board_back) * back_sign for v in piece)
+    if stand < 0.04 or len(piece) > 1000:
+        continue
+    across = sum(v.co.y for v in piece) / len(piece)
+    kind = "hand" if abs(across - hand_strap) < abs(across - arm_strap) else "forearm"
+    want = STRAPS[kind]
+    factor = want["reach"] / stand
+    # The loop is the part that stands off the board (its ends lie flat on it, further out).
+    standing = [v.co.z for v in piece if (v.co.x - board_back) * back_sign > 0.015]
+    bottom = min(standing)
+    top = max(standing)
+    taller = (want["high"] - want["low"]) / (top - bottom)
+    places = {(round(v.co.x, 4), round(v.co.y, 4), round(v.co.z, 4)) for v in piece}
+    count = 0
+    for v in ob.data.vertices:
+        if (round(v.co.x, 4), round(v.co.y, 4), round(v.co.z, 4)) in places:
+            off_face = (v.co.x - board_back) * back_sign
+            if off_face > 0.0:
+                v.co.x = board_back + back_sign * off_face * factor
+            v.co.z = strap_height + want["low"] + (v.co.z - bottom) * taller
+            count += 1
+    moved += count
+    print("STRAP at y %.3f (%s): stood %.3f m off the rest's face, now %.3f; its loop was %.3f m tall, now %.3f (%d vertices)" % (across, kind, stand, want["reach"], top - bottom, want["high"] - want["low"], count))
+weld.free()
+ob.data.update()
+if moved == 0:
+    raise RuntimeError("no straps found to stretch")
 fist = (board_back + back_sign * STANDOFF, hand_strap, strap_height)
 # The fist to the origin; then turned about the upright so that the face looks along -Y and
 # the hand is at -X (Blender), which the exporter makes +Z and -X in Godot, top +Y.

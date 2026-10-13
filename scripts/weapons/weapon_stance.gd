@@ -111,10 +111,13 @@ func _ready() -> void:
 func _notification(what: int) -> void:
 	if what != NOTIFICATION_EDITOR_PRE_SAVE or not Engine.is_editor_hint() or _skeleton == null or not is_instance_valid(_skeleton):
 		return
-	# The shown pose is not the scene's: keep what was posed by hand, then let the skeleton be
-	# saved at rest. The next frame shows the hold again.
+	# The shown pose is not the scene's: keep what was posed by hand, then let this arm be
+	# saved at rest. The next frame shows the hold again. ONLY THIS STANCE'S OWN ARM: with a
+	# second stance node for the other arm, the first to be told of the save reset the whole
+	# skeleton, and the second then took the other hand's rest pose for fingers posed by hand
+	# and kept that -- every save (F5 saves too) opened the shield hand (Kirill, 2026-10-13).
 	_keep_posed_fingers()
-	_skeleton.reset_bone_poses()
+	_reset_own_arm()
 	_shown = []
 	_fingers_put = []
 	_joints_put = []
