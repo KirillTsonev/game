@@ -188,6 +188,20 @@ const BODY_LAYER := 12
 ## 90 degrees the hand ended folded more than 100 degrees back on the forearm.
 @export var toggle_knob_turn: float = 0.9
 @export var toggle_knob_roll: float = 0.05
+## The same for a left hand that stays in a shield's handle: it cannot turn at the wrist (the
+## palm would go through the straps), so the three fingers alone roll the knob between them,
+## by this much a joint (radians) -- Kirill chose this over rolling the whole forearm, which
+## would roll the shield with it.
+@export var toggle_knob_roll_strapped: float = 0.2
+## For that hand's arm: the side its elbow goes to (the Player's axes), and whether the hand
+## comes to the knob round the front of the body (toggle_left_around) or straight. The side is
+## the best of 27 tried with and without the way round the front, by the least room between
+## the shield and the body through the whole action, weapons down and up, either foot forward:
+## none kept the shield out of the body in all four (this one: +4, -6, 0 and -2 cm; the side
+## used without a shield: +1, -8, -5, -3). Standing right foot forward with the weapons down is
+## the bad one whatever the side.
+@export var toggle_strapped_elbow: Vector3 = Vector3(0.3, -0.2, -0.8)
+@export var toggle_strapped_round_front: bool = true
 ## The left hand's way to the knob and back bows out toward this place, from the hips bone in
 ## the Player's axes (+X right, +Y up, -Z ahead): in front of the belly. Going straight, it
 ## passed through the body (Kirill, 2026-10-12). The hand gets about half-way out to it.
@@ -603,6 +617,10 @@ var _view_dip: float = 0.0
 var _toggle_hang: Vector3 = Vector3.DOWN ## from the hook to the lantern's middle before the hand swings it
 var _pinch_grip: Basis ## the left hand's turn on the knob before it turns it, in the lantern's axes
 var _pinch_grip_valid: bool = false
+var _toggle_roll_wanted: float = 0.0 ## the roll it is easing toward
+var _toggle_shield_roll: float = 0.0 ## radians the left forearm is rolled just now to keep its shield off the body while the hand is at the lantern
+const TOGGLE_TRUNK := 0.17 ## how thick the body is taken to be round its middle line for that (m)
+const TOGGLE_LEG := 0.1
 var _toggle_view: float = 0.0 ## 0-1: how far the view and the body's bend are into their look at the lantern
 var _sprinting: bool = false
 var _turn: float = 0.0 ## the body's turn away from the Player's facing (radians, + = to the left)
@@ -895,13 +913,17 @@ func set_motion(local_velocity: Vector3, on_floor: bool, crouching: bool, sprint
 		_play(clip, _playback_speed(speed, clip))
 
 ## Starts turning the lantern on or off; ignored while one is under way, while in the air, and
-## IN COMBAT, which is while a weapon is held up (Kirill, 2026-10-13: "lantern can't be turned
-## on/off when in combat, when weapon and shield is raised"): both hands are taken.
+## while a weapon is on its way up or down. WITH THE WEAPONS UP OR DOWN ALIKE (Kirill,
+## 2026-10-13; for an afternoon it was refused in combat): the left hand does it without
+## leaving the shield's handle, and a right hand that holds a weapon steadies the lantern with
+## its fist. See _place_lantern.
 func toggle_lantern() -> void:
 	# Not in the air (a jump, a fall): the press is dropped, nothing happens.
-	if _toggle_at >= 0.0 or _lantern_light == null or not _was_on_floor or in_combat():
+	if _toggle_at >= 0.0 or _lantern_light == null or not _was_on_floor or (_weapon_node != null and _weapon_up > 0.0 and _weapon_up < 1.0):
 		return
 	_toggle_at = 0.0
+	_toggle_shield_roll = 0.0
+	_toggle_roll_wanted = 0.0
 	_toggle_lighting = not _lantern_light.visible
 	_pinch_grip_valid = false
 	_toggle_dips = not _sprinting
@@ -1675,13 +1697,22 @@ func _place_lantern(player: Node3D, delta: float) -> void:
 		# round the lantern one after another from the forefinger, the thumb from the other
 		# side, and they open again as it lets go.
 		var cup := toggle_cup_offset if toggle_cup_offset.length_squared() > 0.0001 else Vector3.BACK
+		# A right hand that HOLDS A WEAPON keeps its fist round it and steadies the lantern
+		# with that; the weapon comes along. Its arm sets off from the stance's shoulder,
+		# which is not the body's: for the reach the shoulder goes back onto the body (the
+		# lantern is at the hip, out of reach from where the stance has the shoulder).
+		var armed := _weapon_node != null and not _weapon_on_back and _weapon_up > 0.0
+		if armed:
+			var right_upper: int = _arms["Right"]["upper"]
+			_skeleton.set_bone_pose_position(right_upper, _skeleton.get_bone_pose_position(right_upper).lerp(_skeleton.get_bone_rest(right_upper).origin, reaching))
 		_reach(_arms["Right"], "palm", bones, _bob + toggle_cup_offset, reaching, TOGGLE_ELBOW, -cup)
-		var closed := [0.0, 0.0, 0.0, 0.0, 0.0]
-		for i in closed.size():
-			var late := 0.015 * i
-			var gripping := smoothstep(TOGGLE_REACH[1] - 0.07 + late, TOGGLE_REACH[1] + 0.05 + late, through) * (1.0 - smoothstep(TOGGLE_RELEASE[0] - 0.02 + late, TOGGLE_RELEASE[0] + 0.08 + late, through))
-			closed[i] = lerpf(toggle_open_curl, toggle_cup_curl * (0.6 if i == 0 else 1.0), gripping)
-		_set_fingers(_arms["Right"], closed, reaching)
+		if not armed:
+			var closed := [0.0, 0.0, 0.0, 0.0, 0.0]
+			for i in closed.size():
+				var late := 0.015 * i
+				var gripping := smoothstep(TOGGLE_REACH[1] - 0.07 + late, TOGGLE_REACH[1] + 0.05 + late, through) * (1.0 - smoothstep(TOGGLE_RELEASE[0] - 0.02 + late, TOGGLE_RELEASE[0] + 0.08 + late, through))
+				closed[i] = lerpf(toggle_open_curl, toggle_cup_curl * (0.6 if i == 0 else 1.0), gripping)
+			_set_fingers(_arms["Right"], closed, reaching)
 	# Its handle's top at the pivot, its body toward the swinging point, turned with the Player.
 	var up := (pivot - _bob).normalized()
 	var side := up.cross(Vector3.BACK)
@@ -1702,9 +1733,27 @@ func _place_lantern(player: Node3D, delta: float) -> void:
 		var folded := lerpf(toggle_open_curl, 1.3, pinching)
 		var pinched := lerpf(toggle_open_curl, toggle_pinch_curl, pinching)
 		var way := 1.0 if _toggle_lighting else -1.0
-		var rolling := toggle_knob_roll * turned * way
+		# A LEFT HAND IN A SHIELD'S HANDLE STAYS IN IT (Kirill, 2026-10-13): the ring and the
+		# little finger keep their hold as posed, the wrist keeps the turn it has in the
+		# straps, and thumb, forefinger and middle finger do the pinch and roll the knob
+		# between them. The shield comes along on the forearm. The same with the weapons up
+		# or down; with them up the shoulder goes back onto the body for the reach.
+		var strapped := _shield_node != null and shield.on_forearm and _shield_socket_set and _shield_stance != null
+		var rolling := (toggle_knob_roll_strapped if strapped else toggle_knob_roll) * turned * way
+		var holding: Array[Quaternion] = []
+		if strapped:
+			_skeleton.set_bone_pose_position(left["upper"], _skeleton.get_bone_pose_position(left["upper"]).lerp(_skeleton.get_bone_rest(left["upper"]).origin, coming))
+			for finger: String in ["Ring", "Little"]:
+				for joint: Array in left["fingers"][finger]:
+					holding.append(_skeleton.get_bone_pose_rotation(joint[0]))
 		# The thumb closes half as far as the fingers and swings in to meet them.
 		_set_fingers(left, [lerpf(0.0, toggle_pinch_curl * 0.5, pinching) + rolling, pinched - rolling, pinched - rolling * 0.5, folded, folded], coming, toggle_pinch_thumb_in * pinching)
+		if strapped:
+			var kept := 0
+			for finger: String in ["Ring", "Little"]:
+				for joint: Array in left["fingers"][finger]:
+					_skeleton.set_bone_pose_rotation(joint[0], holding[kept])
+					kept += 1
 		# Where the three fingertips meet, with the fingers as they now are (in the hand's axes).
 		var to_hand := _skeleton.get_bone_global_pose(left["hand"]).affine_inverse()
 		var tips: Array[Vector3] = []
@@ -1729,10 +1778,81 @@ func _place_lantern(player: Node3D, delta: float) -> void:
 		# grip itself shifted with the forearm as the hand went round, and a quarter turn of
 		# the knob swung the hand through 180 to 220 degrees.)
 		var turning: Variant = null
-		if through >= TOGGLE_TUG[0] and _pinch_grip_valid:
+		if strapped:
+			turning = _shield_hand_in_stance # the hand's turn on the forearm, kept: see _reach
+		elif through >= TOGGLE_TUG[0] and _pinch_grip_valid:
 			var rod_own := Vector3(toggle_knob.x, 0.0, toggle_knob.z).normalized()
 			turning = lantern_place.basis * Basis(rod_own, toggle_knob_turn * turned * way) * _pinch_grip
-		_reach(left, "pinch", bones, lantern_place * toggle_knob + rod * toggle_pinch_gap, coming, TOGGLE_LEFT_ELBOW, Vector3.DOWN, 0.0, front, -rod, to_tips, turning)
+		# With a shield on the forearm the elbow goes BACK and the hand comes to the knob along
+		# the body's left side, not round its front: the forearm then lies beside the hip with
+		# the shield outside it, as in the relaxed carry. Round the front, with the elbow
+		# forward, the forearm crossed the thigh and no roll of it kept the shield out of the
+		# body (worst standing right foot forward: 8 cm in, Kirill, 2026-10-13).
+		# The elbow's side comes in with the reach, from where the arm has the elbow now: with
+		# the wrist kept still the whole hand goes where the forearm does, and an elbow sent to
+		# its side at once threw the wrist 15-18 cm in one frame.
+		var left_elbow := TOGGLE_LEFT_ELBOW
+		if strapped:
+			var elbow_now := (bones.basis * (_skeleton.get_bone_global_pose(left["lower"]).origin - _skeleton.get_bone_global_pose(left["upper"]).origin)).normalized()
+			left_elbow = elbow_now.lerp(toggle_strapped_elbow.normalized(), coming)
+		_reach(left, "pinch", bones, lantern_place * toggle_knob + rod * toggle_pinch_gap, coming, left_elbow, Vector3.DOWN, 0.0, front if (toggle_strapped_round_front or not strapped) else Vector3.INF, -rod, to_tips, turning)
+		if strapped:
+			# The shield came along as the forearm happened to lie, which was through the
+			# belly and the thigh (Kirill, 2026-10-13). The forearm, with the hand and the
+			# shield on it, is rolled about the line from the elbow to the fingertips' meeting
+			# place -- which stays on the knob -- to the roll that leaves the body the most
+			# room: twenty-four rolls round are tried each frame against points along the trunk
+			# and the legs, and the arm eases toward the best. (Facing the shield "away from
+			# the body", as the relaxed carry does, was tried first: its long point still went
+			# 5-9 cm into the thigh.)
+			var lower := _skeleton.get_bone_global_pose(left["lower"])
+			var hand := _skeleton.get_bone_global_pose(left["hand"])
+			var line := (hand * (left["pinch"] as Vector3) - lower.origin).normalized()
+			var on_arm := WeaponHold.in_hand(_shield_socket, shield)
+			var low := _shield_points[0]
+			var high := _shield_points[0]
+			for point in _shield_points:
+				low = low.min(point)
+				high = high.max(point)
+			var body_points: Array = [] # [place in the skeleton's space, how thick the body is round it]
+			var hips := _skeleton.get_bone_global_pose(_hips_bone).origin
+			var chest := _skeleton.get_bone_global_pose(_skeleton.find_bone("UpperChest")).origin
+			for step in 5:
+				body_points.append([hips.lerp(chest, step / 4.0), TOGGLE_TRUNK])
+			for leg: Dictionary in _legs:
+				var hip := _skeleton.get_bone_global_pose(leg["upper"]).origin
+				var knee := _skeleton.get_bone_global_pose(leg["lower"]).origin
+				var ankle := _skeleton.get_bone_global_pose(leg["foot"]).origin
+				for step in 4:
+					body_points.append([hip.lerp(knee, step / 3.0), TOGGLE_LEG])
+					body_points.append([knee.lerp(ankle, (step + 1) / 4.0), TOGGLE_LEG])
+			var best_roll := 0.0
+			var best_room := -INF
+			var kept_room := -INF # the room the roll chosen before still leaves
+			for step in 24:
+				var roll := step * TAU / 24.0
+				var to_board := (Transform3D(Basis(line, roll) * lower.basis, lower.origin) * on_arm).affine_inverse()
+				var room := INF
+				for body_point: Array in body_points:
+					var at: Vector3 = to_board * (body_point[0] as Vector3)
+					var outside := Vector3(maxf(maxf(low.x - at.x, at.x - high.x), 0.0), maxf(maxf(low.y - at.y, at.y - high.y), 0.0), maxf(maxf(low.z - at.z, at.z - high.z), 0.0))
+					var off := outside.length()
+					if off <= 0.0: # inside the box: by how far, as a loss
+						off = -minf(minf(at.x - low.x, high.x - at.x), minf(minf(at.y - low.y, high.y - at.y), minf(at.z - low.z, high.z - at.z)))
+					room = minf(room, off - (body_point[1] as float))
+				room -= absf(wrapf(roll, -PI, PI)) * 0.01 # of two rolls as good, the smaller
+				if room > best_room:
+					best_room = room
+					best_roll = roll
+				if absf(wrapf(roll - _toggle_roll_wanted, -PI, PI)) < TAU / 48.0 + 0.001:
+					kept_room = room
+			# Another roll is taken up only where it is clearly better: picked afresh each
+			# frame, the choice hopped between two rolls about as good and the shield with it.
+			if best_room > kept_room + 0.03:
+				_toggle_roll_wanted = best_roll
+			_toggle_shield_roll = lerp_angle(_toggle_shield_roll, _toggle_roll_wanted, 1.0 - exp(-delta / 0.12))
+			lower.basis = Basis(line, wrapf(_toggle_shield_roll, -PI, PI) * coming) * lower.basis
+			_skeleton.set_bone_global_pose(left["lower"], lower)
 		if through < TOGGLE_TUG[0]:
 			_pinch_grip = lantern_place.basis.inverse() * (bones.basis * _skeleton.get_bone_global_pose(left["hand"]).basis).orthonormalized()
 			_pinch_grip_valid = true
@@ -1831,6 +1951,10 @@ func _reach(arm: Dictionary, point: String, bones: Transform3D, target: Vector3,
 		if given is Basis:
 			# The hand's turn is given outright (in the Player's space).
 			wanted = (to_skeleton.basis * (given as Basis)).orthonormalized()
+		elif given is Quaternion:
+			# The hand's turn ON THE FOREARM is given (the hand bone's own rotation): the
+			# wrist does not move, and the hand goes wherever the forearm takes it.
+			wanted = lower.basis.orthonormalized() * Basis(given as Quaternion)
 		else:
 			# Where the pointed axis goes: on from the forearm as nearly as the palm's facing
 			# allows, or where `fingers_toward` asks.
