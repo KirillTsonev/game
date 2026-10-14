@@ -918,8 +918,15 @@ placed at`res://compositor_effects/`directly, every effect throws
   "stop the running project" shortcut: the game closes at once, with no error, before the
   script's own handler does anything (Kirill, 2026-10-12: "f8 closes the game" -- the
   `TerrainDisplacement` markers were on it and moved to F1). F5 / F6 / F7 are editor run keys
-  too but do not reach a running game (F6 and F7 are in use by PerfDebug and work). The keys
-  PerfDebug already uses are listed in `scripts/perf_debug.gd`'s `_unhandled_input`.
+  too but do not reach a running game (F6 and F7 worked as PerfDebug keys). The keys
+  PerfDebug uses are listed in the header of `scripts/perf_debug.gd`.
+- **PerfDebug keeps only Y, J and V since 2026-10-14** (Kirill: "leave only Y, J, V, others are
+  not needed anymore"), plus I, added the same day: the animation panel
+  (`scripts/debug/animation_panel.gd`, see `docs/weapons.md`). Every other PerfDebug key named in these notes and in `docs/` (T, P,
+  R, H, G, K, O, M, F1-F4, F6, F7, F9-F11) is gone; the code is in git up to commit `0c93048`.
+  The functions they called (`MountainWalls.toggle_fog`, `RockScatter.debug_probe`, ...) are
+  still there. Free keys for new debug tools: E, F, U, Z, C, Tab, 1-0, F12 (and the old
+  ones above), never F5 or F8.
 - User preference: do not call `take_screenshot` -- screenshots are
   user-provided only. Verify changes via console logs, diagnostic stats
   (e.g. `_print_roughness_stats`), and raycasts (`get_intersection`)
@@ -960,7 +967,8 @@ placed at`res://compositor_effects/`directly, every effect throws
 `scripts/debug/perf_bench.gd` (header comment = what it measures). Run it before and after every
 optimisation; never judge by GPU utilisation %.
 
-- Run: F9 in a running game, or from a shell (the editor can stay open):
+- Run from a shell (the editor can stay open; the F9 key in a running game was removed on
+  2026-10-14):
   `Godot_v4.7.2-stable_win64_console.exe --path herald-of-oblivion --disable-vsync --max-fps 0 -- --bench --bench-label=<name>`
   (~5 min, quits when done). `--bench-only=<text>[,<text>...]` keeps only the ablation toggles whose name
   contains one of the texts (e.g. `layer:trees`, `post:`) for a ~2 min targeted run. `--bench-no-shadows`

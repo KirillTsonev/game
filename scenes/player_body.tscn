@@ -12,9 +12,12 @@ script = ExtResource("1")
 body_shadow_reach = 2.75
 weapon = ExtResource("4")
 shield = ExtResource("6")
-shield_body_clearance = 0.12
+shield_body_clearance = 0.18
 shield_clearance_return = 0.1
 weapon_follows_view = 0.7
+fidget_after = 2.0
+fidget_after_random = 0.0
+weapon_body_clearance = 0.1
 
 [node name="Rogue" parent="." unique_id=1635915260 instance=ExtResource("2")]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0)

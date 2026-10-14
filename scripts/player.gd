@@ -115,6 +115,10 @@ func _snap_to_ground() -> void:
 	#global_position.y = 15
 
 func _unhandled_input(event: InputEvent) -> void:
+	# Any key or mouse button ends a fidget of the body's (looking around does not).
+	if body and event.is_pressed() and not event.is_echo() and (event is InputEventKey or event is InputEventMouseButton):
+		body.interrupt_fidget()
+
 	# Mouse look, only while the cursor is captured.
 	# Not while the body has the view (turning the lantern on / off): the mouse is ignored
 	# then, and the view comes back to where it was (Kirill, 2026-10-12).

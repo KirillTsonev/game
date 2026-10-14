@@ -392,12 +392,25 @@ var _shield_up: float = 0.0 ## 0-1: how far the left arm is into its stance
 var _shield_points: PackedVector3Array = [] ## points round the shield's model, in its own axes (shield_body_clearance)
 var _shield_push: Vector3 = Vector3.ZERO ## how far the shield arm is moved off the body just now (the Player's axes)
 var _relaxed_push: Vector3 = Vector3.ZERO ## the same for the relaxed carry, where the arm is swung out from the shoulder by it
+var _weapon_push: Vector3 = Vector3.ZERO ## how far the weapon arm's stance is moved off the body just now (weapon_body_clearance)
+var _weapon_push_wanted: Vector3 = Vector3.ZERO ## how far it would have to move this frame (before easing)
+var _weapon_push_speed: Vector3 = Vector3.ZERO ## the push's own speed (its spring, weapon_clearance_smoothing)
+var _weapon_low: Vector3 = Vector3.ZERO ## the box the weapon's model fills, in its own axes
+var _weapon_high: Vector3 = Vector3.ZERO
 var _shield_socket_set: bool = false ## _shield_socket has been worked out with the arm in its stance (not only from the model's data)
 var _shield_shoulder_drawn: float = 0.0 ## m the left shoulder was drawn off the body after the fist this frame
 var _bob_now: Vector3 = Vector3.ZERO ## the bob of the steps this frame (_weapon_bob): both arms move by it
 var _breath_now: Vector3 = Vector3.ZERO ## the chest's breathing this frame, faded (_breathe); each arm moves by its share
 var _chest_average: Vector3 = Vector3.ZERO ## the upper chest's place against the eyes, averaged over breathing_average
 var _chest_average_valid: bool = false
+var _fidget: StringName = &"" ## the fidget playing (FIDGETS), or none
+var _fidget_at: float = 0.0 ## seconds into it
+var _fidget_fade: float = 1.0 ## 1 while it plays; falls to 0 over fidget_cancel_time once cancelled
+var _fidget_cancelled: bool = false
+var _fidget_last: StringName = &""
+var _fidget_still: float = 0.0 ## seconds stood still, weapons up, since the last fidget or input
+var _fidget_wait: float = -1.0 ## seconds to stand still before the next one (picked at random)
+var _fidget_driven: bool = false ## the animation debug panel (I) sets its time: it does not run, end or cancel by itself
 var _weapon_node: Node3D ## the held weapon's model
 var _weapon_socket: Transform3D ## the fist's middle in the right hand bone's axes (WeaponHold.socket)
 var _weapon_fist: Array[float] = [] ## how far each finger closes round the held weapon
@@ -650,6 +663,27 @@ var _swing_next: int = 0 ## which of ARM_SWINGS the next attack() plays
 @export var breathing_average: float = 3.0
 ## At most this far (m) the breathing moves a stance.
 @export var breathing_limit: float = 0.03
+## FIDGETS (Kirill, 2026-10-14): standing still with the weapons up, now and then the sword arm
+## does something on its own -- looks the blade over, rolls the wrist (FIDGETS). Any key or
+## mouse button (interrupt_fidget, from the Player) or moving off cancels it, and the arm goes
+## back to the stance in fidget_cancel_time. Looking around does not cancel it.
+@export var fidgets_on: bool = true
+## Seconds of standing still before one plays, plus up to fidget_after_random more at random.
+@export var fidget_after: float = 10.0
+@export var fidget_after_random: float = 6.0
+@export var fidget_cancel_time: float = 0.2
+## THE WEAPON KEEPS OFF THE BODY, as the shield does (shield_body_clearance): wherever the box
+## its model fills comes nearer than this (m) to the trunk's middle line (hips to chest), or
+## than weapon_leg_clearance to a leg's, the whole weapon arm (shoulder and fist) is moved
+## FORWARD, level with the ground, until it is clear; eased in with shield_clearance_ease and
+## back with shield_clearance_return. Any weapon: it reads the model's box. Looking straight
+## down in the inspect fidget the sword was 17 cm into the body (Kirill, 2026-10-14). 0: off.
+@export var weapon_body_clearance: float = 0.18
+@export var weapon_leg_clearance: float = 0.1
+## Seconds the weapon's keep-off takes to follow (a damped spring, the same both ways). It
+## followed at the shield's rates at first -- 0.08 s out, switching rates frame to frame -- and
+## looked choppy looking down (Kirill).
+@export var weapon_clearance_smoothing: float = 0.15
 ## TRIAL 2026-10-13. The arm follows a first-person clip converted from another game's arms
 ## (ArmClip: shoulder, elbow, wrist, the hand's turn and the weapon's place in it, per frame,
 ## from the eyes) in place of the WeaponStance node's markers. Off, or with no such file: the
@@ -1151,6 +1185,7 @@ func advance(delta: float, camera_pitch: float) -> void:
 	_eye = target + (_eye - target).limit_length(eye_max_lag)
 	_eye_valid = true
 	_breathe(player, delta)
+	_update_fidget(delta)
 	_hold_weapon(player, delta) # before the lantern: the reach to it sets off from this pose
 	_hold_shield(player, delta)
 	_place_lantern(player, delta)
@@ -1365,6 +1400,200 @@ func _breathe(player: Node3D, delta: float) -> void:
 	_chest_average = _chest_average.lerp(chest, 1.0 - exp(-delta / maxf(breathing_average, 0.01)))
 	_breath_now = (chest - _chest_average).limit_length(breathing_limit) * (1.0 - clampf(_weapon_bob_amount, 0.0, 1.0))
 
+## The fidgets. "keys": [share of the time, where the fist goes from the eyes, the way the
+## blade points, the way its leading edge faces], in the Player's axes (+X right, +Y up, -Z
+## ahead) and turned with the view as the stance is; the stance itself is before the first key
+## and after the last, and the fist eases from key to key. "circle": the blade sweeps round
+## the stance's own direction instead (see _fidget_pose). Not judged in game yet.
+const FIDGETS := {
+	# The sword brought to the middle of the picture, tip up: the flat the stance shows toward
+	# the eyes (edge to the left), turned part way toward the edge, back to the flat. The
+	# stance holds the edge to the LEFT: opening on the other flat turned the hand over 130 deg
+	# outward on the way in (Kirill: "spins outwards into the proper position"). A turn about
+	# the upright blade is nearly all wrist (the forearm points ahead, and only a roll about
+	# its own line goes into it): edge-on bent it 82 deg and the other flat 151, the fist
+	# folding into the forearm (Kirill: "the third roll seems too drastic") -- so no other flat.
+	# No key back on the flat after the turn: the sword stood almost still through turn and
+	# turn back (three keys in about the same place) and the way to the stance came after a
+	# pause (Kirill). From the turn it goes straight back, the edge turning back on the way;
+	# the fist drifts nearer during the turn so the arm never stands still.
+	&"inspect": {"time": 4.0, "stages": ["to the flat", "turn toward the edge", "back to the stance"], "keys": [
+		[0.3, Vector3(0.07, -0.27, -0.39), Vector3(0.05, 0.97, -0.25), Vector3(-1.0, 0.0, 0.0)],
+		[0.6, Vector3(0.03, -0.23, -0.34), Vector3(0.0, 0.96, -0.3), Vector3(-0.6, 0.2, 0.8)],
+	]},
+	# Two loose circles of the blade round the way it points in the stance.
+	# (At 2.2 s the tip moved up to 7.5 cm a frame: quicker than a loose roll.)
+	&"wrist_roll": {"time": 3.5, "stages": ["tip in", "two circles", "back"], "circle": {"turns": 2.0, "tilt_degrees": 25.0, "hand": 0.03, "from": 0.3, "to": 0.7}},
+}
+
+## Cancels the fidget playing, if any (the Player calls this on any key or mouse button), and
+## starts the wait for the next one again.
+func interrupt_fidget() -> void:
+	_fidget_still = 0.0
+	if _fidget != &"" and not _fidget_cancelled and not _fidget_driven:
+		_fidget_cancelled = true
+
+## Starts a fidget by name at once (for checks and probes; the game picks them by itself).
+func start_fidget(fidget_name: StringName) -> void:
+	if FIDGETS.has(fidget_name):
+		_fidget = fidget_name
+		_fidget_at = 0.0
+		_fidget_fade = 1.0
+		_fidget_cancelled = false
+		_fidget_last = fidget_name
+
+func fidget_playing() -> StringName:
+	return _fidget
+
+## For the animation debug panel (scripts/debug/animation_panel.gd): what can be shown, each as
+## {name, time (s), stages: [[name, from s, to s], ...]}.
+func debug_animations() -> Array[Dictionary]:
+	var list: Array[Dictionary] = []
+	for fidget_name: StringName in FIDGETS:
+		var fidget: Dictionary = FIDGETS[fidget_name]
+		var time := float(fidget["time"])
+		# Where the stages meet, as shares of the time: the keys (of the eased time, see
+		# _fidget_pose) or the circle's start and end.
+		var bounds: Array[float] = [0.0]
+		if fidget.has("keys"):
+			for key: Array in fidget["keys"]:
+				bounds.append(_uneased(float(key[0])))
+		else:
+			bounds.append(float((fidget["circle"] as Dictionary)["from"]))
+			bounds.append(float((fidget["circle"] as Dictionary)["to"]))
+		bounds.append(1.0)
+		var names: Array = fidget.get("stages", [])
+		var stages: Array = []
+		for i in bounds.size() - 1:
+			stages.append([names[i] if i < names.size() else "stage %d" % (i + 1), bounds[i] * time, bounds[i + 1] * time])
+		list.append({"name": fidget_name, "time": time, "stages": stages})
+	return list
+
+## The animation debug panel holds the animation at `seconds` into it (weapons up for a fidget).
+func debug_drive(animation: StringName, seconds: float) -> void:
+	if not FIDGETS.has(animation):
+		return
+	weapon_raised = true
+	if _fidget != animation or _fidget_cancelled:
+		start_fidget(animation)
+	_fidget_driven = true
+	_fidget_at = seconds
+
+## ... and lets it go: the arm eases back to the stance.
+func debug_release() -> void:
+	if _fidget_driven:
+		_fidget_driven = false
+		_fidget_cancelled = true
+
+## The share of the time at which smoothstep reaches `eased`.
+static func _uneased(eased: float) -> float:
+	var low := 0.0
+	var high := 1.0
+	for i in 30:
+		var middle := (low + high) * 0.5
+		if smoothstep(0.0, 1.0, middle) < eased:
+			low = middle
+		else:
+			high = middle
+	return (low + high) * 0.5
+
+## Counts the time stood still and starts, runs and ends the fidgets.
+func _update_fidget(delta: float) -> void:
+	if _fidget_driven:
+		_fidget_fade = 1.0
+		return
+	var still := _weapon_node != null and _weapon_up >= 1.0 and not _weapon_on_back and _ground_speed < still_speed and _was_on_floor and _dash_left <= 0.0 and _toggle_at < 0.0 and not weapon_arm_from_clips
+	if _fidget != &"":
+		_fidget_at += delta
+		if not still:
+			_fidget_cancelled = true
+		if _fidget_cancelled:
+			_fidget_fade = move_toward(_fidget_fade, 0.0, delta / maxf(fidget_cancel_time, 0.01))
+		if _fidget_fade <= 0.0 or _fidget_at >= float((FIDGETS[_fidget] as Dictionary)["time"]):
+			_fidget = &""
+			_fidget_still = 0.0
+			_fidget_wait = -1.0
+		return
+	if not still or not fidgets_on:
+		_fidget_still = 0.0
+		return
+	if _fidget_wait < 0.0:
+		_fidget_wait = fidget_after + randf() * fidget_after_random
+	_fidget_still += delta
+	if _fidget_still >= _fidget_wait:
+		var names: Array = FIDGETS.keys().filter(func(n: StringName) -> bool: return n != _fidget_last)
+		if names.is_empty():
+			names = FIDGETS.keys()
+		start_fidget(names[randi() % names.size()])
+
+## The sword arm's fist place and hand turn for the fidget playing, from the stance's (both in
+## the Player's space, as WeaponHold.solve_arm takes them). Returns [hand, turn].
+func _fidget_pose(hand: Vector3, turn: Basis, held_from: Vector3, with_view: Basis) -> Array:
+	var fidget: Dictionary = FIDGETS[_fidget]
+	var at := clampf(_fidget_at / float(fidget["time"]), 0.0, 1.0)
+	# The blade's and the edge's ways in the hand turn's own axes (the grip's +Y and +X; see
+	# WeaponHold.solve_arm for how a turn becomes the hand bone's).
+	var axes := WeaponHold.hand_axes(_skeleton, "Right")
+	var palm_side := -1.0 if (axes["fingers_out"] as Vector3).cross(axes["palm_out"] as Vector3).dot(axes["thumb_side"] as Vector3) > 0.0 else 1.0
+	var to_turn := Basis(Vector3(0, 0, -1), Vector3(palm_side, 0, 0), Vector3(0, 1, 0)) * Basis(axes["fingers_out"] as Vector3, axes["palm_out"] as Vector3, axes["thumb_side"] as Vector3).inverse()
+	var blade_in_turn := (to_turn * _weapon_socket.basis.y).normalized()
+	var edge_in_turn := (to_turn * _weapon_socket.basis.x).normalized()
+	var to_hand := hand
+	var to_frame := Basis.IDENTITY # the turn applied to the stance's hand turn
+	if fidget.has("keys"):
+		# ONE smooth curve from the stance through every key and back to it, eased once over the
+		# whole: it starts and ends at rest and does not stop at a key. (Eased key to key it
+		# stopped at each, and the way back from the last key read as a separate move -- Kirill,
+		# 2026-10-14.) The keys' shares are of the eased time.
+		var blade_now := (turn * blade_in_turn).normalized()
+		var edge_now := (turn * edge_in_turn).normalized()
+		var times: Array[float] = [0.0]
+		var places: Array[Vector3] = [hand]
+		var blades: Array[Vector3] = [blade_now]
+		var edges: Array[Vector3] = [edge_now]
+		for key: Array in fidget["keys"]:
+			times.append(float(key[0]))
+			places.append(held_from + with_view * (key[1] as Vector3))
+			blades.append((with_view * (key[2] as Vector3)).normalized())
+			edges.append((with_view * (key[3] as Vector3)).normalized())
+		times.append(1.0)
+		places.append(hand)
+		blades.append(blade_now)
+		edges.append(edge_now)
+		var eased := smoothstep(0.0, 1.0, at)
+		to_hand = _through(places, times, eased)
+		var frame := _blade_frame(_through(blades, times, eased), _through(edges, times, eased))
+		to_frame = frame * _blade_frame(blade_now, edge_now).inverse()
+	else:
+		# ONE motion: the circling runs over the whole time, eased once, and the tilt grows up to
+		# "from" and shrinks after "to" while it goes on -- the blade spirals out into the
+		# circles and back in. (Tilt, circles and tilt back eased each on its own stopped the
+		# tip twice, to 0.06 m/s at the end of the circles -- Kirill, 2026-10-14.)
+		var circle: Dictionary = fidget["circle"]
+		var amount := smoothstep(0.0, float(circle["from"]), at) * (1.0 - smoothstep(float(circle["to"]), 1.0, at))
+		var angle := smoothstep(0.0, 1.0, at) * TAU * float(circle["turns"])
+		var blade_now := (turn * blade_in_turn).normalized()
+		var across := blade_now.cross(with_view * Vector3.UP)
+		if across.length_squared() < 0.0001:
+			across = blade_now.cross(with_view * Vector3.BACK)
+		across = across.normalized()
+		var other := blade_now.cross(across).normalized()
+		var axis := (across * cos(angle) + other * sin(angle)).normalized()
+		to_frame = Basis(axis, deg_to_rad(float(circle["tilt_degrees"])) * amount)
+		to_hand = hand + (with_view * Vector3(cos(angle), sin(angle), 0.0)) * float(circle["hand"]) * amount
+	var weight := _fidget_fade
+	var turned := (to_frame * turn).orthonormalized()
+	return [hand.lerp(to_hand, weight), Basis(turn.get_rotation_quaternion().slerp(turned.get_rotation_quaternion(), weight))]
+
+## A frame from a blade's way (+Y) and its edge's (+X, squared to the blade).
+static func _blade_frame(blade: Vector3, edge: Vector3) -> Basis:
+	var y := blade.normalized()
+	var x := edge - y * edge.dot(y)
+	if x.length_squared() < 0.0001:
+		x = y.cross(Vector3.BACK)
+	x = x.normalized()
+	return Basis(x, y, x.cross(y))
+
 ## Puts a weapon in the right hand, in place of the one held (null: none). Any WeaponData
 ## fits: the hand's socket is worked out from its bones (WeaponHold).
 func equip(data: WeaponData) -> void:
@@ -1382,6 +1611,16 @@ func equip(data: WeaponData) -> void:
 	add_child(_weapon_node)
 	_weapon_node.top_level = true
 	_weapon_shadow = _shadow_of(data, _weapon_shadow)
+	# The box its meshes fill, in its own axes (weapon_body_clearance).
+	var first := true
+	for mesh: MeshInstance3D in _weapon_node.find_children("*", "MeshInstance3D", true, false):
+		var box := mesh.mesh.get_aabb()
+		var in_model := _weapon_node.global_transform.affine_inverse() * mesh.global_transform
+		for corner in 8:
+			var point := in_model * box.get_endpoint(corner)
+			_weapon_low = point if first else _weapon_low.min(point)
+			_weapon_high = point if first else _weapon_high.max(point)
+			first = false
 	if _lantern_light:
 		for mesh: MeshInstance3D in _weapon_node.find_children("*", "MeshInstance3D", true, false):
 			mesh.layers = 1 << (BODY_LAYER - 1)
@@ -1589,24 +1828,91 @@ func _keep_relaxed_off_body(arm: Dictionary, player: Node3D, delta: float) -> vo
 ## skeleton's space into the Player's.
 func _shield_off_body(to_player: Transform3D, on_arm: Transform3D, toward: Vector3 = Vector3.ZERO) -> Vector3:
 	var board := to_player * _skeleton.get_bone_global_pose(_shield_bone) * WeaponHold.in_hand(on_arm, shield)
-	var to_board := board.affine_inverse()
 	if toward.length() < 0.001:
 		toward = shield_clear_toward
-	var way := toward.normalized() if toward.length() > 0.001 else Vector3.LEFT
-	var forward := (to_board.basis * way).normalized() # the way it moves, in the shield's own axes
 	var low := _shield_points[0]
 	var high := _shield_points[0]
 	for point in _shield_points:
 		low = low.min(point)
 		high = high.max(point)
+	return _keep_off_body(to_player, board, low, high, toward, shield_body_clearance, shield_leg_clearance if shield_leg_clearance >= 0.0 else shield_body_clearance * 0.5)
+
+## How far the held weapon placed at `held` (the Player's space) has to be moved FORWARD,
+## level with the ground, for the body to be clear of it: the weapon taken as a capsule along
+## the longest side of its model's box (_weapon_low.._weapon_high; for a sword, pommel to tip),
+## as thick as the box's thinner side, kept weapon_body_clearance from the trunk's middle line
+## and weapon_leg_clearance from the legs'. The smallest such move, found by halving. A capsule's
+## distance changes smoothly as the weapon turns; the shield's box test (_keep_off_body) jumps
+## by centimetres as the side the box leaves by changes, and the push looked choppy (Kirill).
+func _weapon_off_body(to_player: Transform3D, held: Transform3D) -> Vector3:
+	var size := _weapon_high - _weapon_low
+	var axis := size.max_axis_index()
+	var middle := (_weapon_low + _weapon_high) * 0.5
+	var a := middle
+	var b := middle
+	a[axis] = _weapon_low[axis]
+	b[axis] = _weapon_high[axis]
+	var thin := INF
+	for other in 3:
+		if other != axis:
+			thin = minf(thin, size[other] * 0.5)
+	var start := held * a
+	var end := held * b
+	var hips := to_player * _skeleton.get_bone_global_pose(_hips_bone).origin
+	var lines: Array = [[hips, to_player * _skeleton.get_bone_global_pose(_skeleton.find_bone("UpperChest")).origin, weapon_body_clearance]]
+	for leg: Dictionary in _legs:
+		var knee := to_player * _skeleton.get_bone_global_pose(leg["lower"]).origin
+		lines.append([to_player * _skeleton.get_bone_global_pose(leg["upper"]).origin, knee, weapon_leg_clearance])
+		lines.append([knee, to_player * _skeleton.get_bone_global_pose(leg["foot"]).origin, weapon_leg_clearance])
+	var room := func(slide: float) -> float:
+		var least := INF
+		for line: Array in lines:
+			var near := Geometry3D.get_closest_points_between_segments(start + Vector3.FORWARD * slide, end + Vector3.FORWARD * slide, line[0], line[1])
+			least = minf(least, near[0].distance_to(near[1]) - thin - (line[2] as float))
+		return least
+	if room.call(0.0) >= 0.0:
+		return Vector3.ZERO
+	var low := 0.0
+	var high := 1.0
+	if room.call(high) < 0.0:
+		return Vector3.FORWARD * high
+	for i in 16:
+		var middle_slide := (low + high) * 0.5
+		if room.call(middle_slide) >= 0.0:
+			high = middle_slide
+		else:
+			low = middle_slide
+	return Vector3.FORWARD * high
+
+## A damped spring from `now` toward `target` (weapon_clearance_smoothing; _weapon_push_speed
+## is its speed): it starts and stops gently, the same both ways.
+func _spring(now: Vector3, target: Vector3, delta: float) -> Vector3:
+	var omega := 2.0 / maxf(weapon_clearance_smoothing, 0.001)
+	var x := omega * delta
+	var decay := 1.0 / (1.0 + x + 0.48 * x * x + 0.235 * x * x * x)
+	var change := now - target
+	var temp := (_weapon_push_speed + omega * change) * delta
+	_weapon_push_speed = (_weapon_push_speed - omega * temp) * decay
+	return target + (change + temp) * decay
+
+## How far a held thing placed at `item` (the Player's space), whose model fills the box
+## `low`..`high` in its own axes, has to be moved along `toward` (the Player's axes) for the
+## body to be clear of it: no point of the trunk's middle line (hips to chest) nearer than
+## `trunk` to the box, none of a leg's (hip, knee, ankle) nearer than `legs`. The shield's and
+## the weapon's keep-off both use it, so it works for any model. `to_player` brings the
+## skeleton's space into the Player's.
+func _keep_off_body(to_player: Transform3D, item: Transform3D, low: Vector3, high: Vector3, toward: Vector3, trunk: float, legs: float) -> Vector3:
+	var to_board := item.affine_inverse()
+	var way := toward.normalized() if toward.length() > 0.001 else Vector3.LEFT
+	var forward := (to_board.basis * way).normalized() # the way it moves, in the item's own axes
 	var hips := _skeleton.get_bone_global_pose(_hips_bone).origin
-	var lines: Array = [[hips, _skeleton.get_bone_global_pose(_skeleton.find_bone("UpperChest")).origin, shield_body_clearance]]
-	var leg_clearance := shield_leg_clearance if shield_leg_clearance >= 0.0 else shield_body_clearance * 0.5
+	var lines: Array = [[hips, _skeleton.get_bone_global_pose(_skeleton.find_bone("UpperChest")).origin, trunk]]
+	var leg_clearance := legs
 	for leg: Dictionary in _legs:
 		var knee := _skeleton.get_bone_global_pose(leg["lower"]).origin
 		lines.append([_skeleton.get_bone_global_pose(leg["upper"]).origin, knee, leg_clearance])
 		lines.append([knee, _skeleton.get_bone_global_pose(leg["foot"]).origin, leg_clearance])
-	# Points along those lines, in the shield's own axes, each with its clearance.
+	# Points along those lines, in the item's own axes, each with its clearance.
 	var body_points: Array = []
 	for line: Array in lines:
 		for step in 6:
@@ -1676,6 +1982,9 @@ func _hold_weapon(player: Node3D, delta: float) -> void:
 	if drawing:
 		for bone in _stance.finger_bones(_skeleton):
 			clip_fingers.append(_skeleton.get_bone_pose_rotation(bone) if bone >= 0 else Quaternion.IDENTITY)
+	if weight <= 0.001:
+		_weapon_push = Vector3.ZERO
+		_weapon_push_speed = Vector3.ZERO
 	if weight > 0.001:
 		# The stance outright, then back toward the clip's arm by what is left of the weight.
 		var arm_bones: Array[int] = [arm["upper"], arm["lower"], arm["hand"]]
@@ -1699,8 +2008,32 @@ func _hold_weapon(player: Node3D, delta: float) -> void:
 				_draw_arm(arm, arm_bones, in_clip, to_skeleton, held_from, fist)
 			else:
 				var with_view := Basis(Vector3.RIGHT, _look_pitch * weapon_follows_view)
-				WeaponHold.solve_arm(_skeleton, "Right", to_skeleton, held_from + with_view * _stance.shoulder_from_eyes(), held_from + with_view * _stance.hand_from_eyes(),
-						with_view * _stance.elbow_toward(), with_view * _stance.hand_turn(), fist, _stance.max_reach)
+				var hand_at := held_from + with_view * _stance.hand_from_eyes()
+				var hand_turn := with_view * _stance.hand_turn()
+				if _fidget != &"":
+					var posed := _fidget_pose(hand_at, hand_turn, held_from, with_view)
+					hand_at = posed[0]
+					hand_turn = posed[1]
+				var shoulder_at := held_from + with_view * _stance.shoulder_from_eyes()
+				for attempt in 2:
+					var push := _weapon_push if attempt == 1 else Vector3.ZERO
+					WeaponHold.solve_arm(_skeleton, "Right", to_skeleton, shoulder_at + push, hand_at + push,
+							with_view * _stance.elbow_toward(), hand_turn, fist, _stance.max_reach)
+					if attempt == 1:
+						break
+					# The first solve is the hold as asked: how far it has to move to clear the body.
+					var wanted := Vector3.ZERO
+					if weapon_body_clearance > 0.0:
+						var to_player := to_skeleton.affine_inverse()
+						var held := to_player * _skeleton.get_bone_global_pose(arm["hand"]) * WeaponHold.in_hand(_weapon_socket, weapon)
+						wanted = _weapon_off_body(to_player, held)
+					_weapon_push_wanted = wanted
+					_weapon_push = _spring(_weapon_push, wanted, delta)
+					if _weapon_push.length() < 0.001:
+						break
+					_skeleton.set_bone_pose_position(arm["upper"], in_clip[0] as Vector3)
+					for i in arm_bones.size():
+						_skeleton.set_bone_pose_rotation(arm_bones[i], in_clip[i + 1] as Quaternion)
 			# Looking down: toward the same hold with the shoulder left on the body.
 			var on_body := smoothstep(weapon_on_body_from, maxf(weapon_on_body_by, weapon_on_body_from + 0.1), rad_to_deg(-_look_pitch)) if weapon_on_body_slide else 0.0
 			if on_body > 0.001:

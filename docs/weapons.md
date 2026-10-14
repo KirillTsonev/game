@@ -135,6 +135,35 @@ How it works now (`weapon_arm_drawn_apart`):
   1.1 / 1.4 cm, the shield 0.8 / 1.1 cm; at most 0.9 mm a frame (`breathing.gd`). After the
   idle switches to its mirror image the average takes a few seconds to settle, so the
   weapons drift about a centimetre sideways meanwhile.
+- **Fidgets** (2026-10-14, not judged in game yet): standing still with the weapons up for
+  `fidget_after` + up to `fidget_after_random` s, the sword arm plays one of `FIDGETS` (never
+  the same twice running): `inspect` (4.5 s: to the middle of the picture, tip up, the flat
+  the stance shows, turned part way toward the edge and back) and `wrist_roll` (3.5 s: two
+  circles of the blade; one motion -- the circling runs over the whole time, the tilt grows
+  in and dies out while it goes on: tilt, circles and tilt back eased each on its own
+  stopped the tip at both joins). A key's edge must be on the stance's side (its LEFT) for the first
+  and last key: opening on the other flat turned the hand over 130 deg outward on the way in
+  (Kirill: "spins outwards into the proper position"). A turn about the upright blade is
+  nearly all WRIST (the forearm points ahead; only a roll about its own line goes into it):
+  edge-on bent it 82 deg, the other flat 151 with the fist folded into the forearm ("too
+  drastic"); turning the elbow's side with the hand made it worse (117-144). Now at most
+  47 deg (the stance has 33). A keyed fidget is ONE curve (`_through`) from the stance through
+  every key and back, eased once over the whole (the keys' shares are of the eased time):
+  eased key to key it stopped at each, and the way back from the last read as "a separate
+  animation" (Kirill). `fidgets.gd --roll-trace` prints the forearm's roll, the
+  elbow's turn and the wrist's bend through each fidget. A fidget is
+  keys of [share of the time, fist from the eyes, blade's way, edge's way], turned with the
+  view; `_fidget_pose` turns the stance's hand so the blade and its edge (the grip's +Y, +X)
+  lie as asked, and the arm is solved as for the stance. Any key or mouse button
+  (`interrupt_fidget`, from `player.gd`) or moving off ends it in `fidget_cancel_time`.
+  Measured (`fidgets.gd`): the sword stays 0.30 m or more from the eyes, 0.27 from the body,
+  0.13 from the shield in `inspect`. **I opens the animation panel**
+  (`scripts/debug/animation_panel.gd`): pick a fidget, play one stage (between keys) or all,
+  scrub with the time slider, slow it down, loop, hold at the end, Release. It drives the body
+  through `PlayerBody.debug_animations` / `debug_drive` / `debug_release`; a fidget gets its
+  stage names from `"stages"` in `FIDGETS`. Another kind of animation is added in those
+  three functions, not in the panel. Planned next: fidgets with the weapons sheathed (hand
+  flex, a look at the lit lantern).
 - **Shadows** come from a hidden third copy of the whole body (`RogueShadow`) with its own
   arm pose (`_pose_shadow_arms`): the hands brought in to `weapon_shadow_reach` from the
   shoulders and the elbows turned down by `weapon_shadow_elbows_down`. Without that the
@@ -185,6 +214,19 @@ What each part fixed (all seen by Kirill looking straight down or ahead):
   `shield_leg_clearance` (0.1; it was half of `shield_body_clearance`, which the scene sets
   to 0.12): at 0.06 the left thigh reached the board jogging back looking straight down
   (Kirill, 2026-10-14).
+- **The weapon keeps off the body too** (2026-10-14; Kirill, looking straight down in the
+  inspect fidget: "pommel clips through body" -- 17 cm in): `weapon_body_clearance` (0.18) /
+  `weapon_leg_clearance` (0.1), the box of the weapon's model (`_weapon_low` / `_high`, read at
+  `equip`), the whole arm moved FORWARD level with the ground (Kirill's choice over moving it
+  right). Runs on every held pose: stance and fidgets. The weapon is measured as a CAPSULE
+  along its box's longest side (`_weapon_off_body`, the smallest forward move found by
+  halving) and the push follows on a damped spring (`weapon_clearance_smoothing`, 0.15 s): it
+  first used the shield's box test (`_keep_off_body`) and easing, whose wanted push jumped
+  2-3 cm a frame as the sword turned (a sawtooth, and 18 cm -> 0 in one frame) -- "choppy"
+  (Kirill). Now smooth, up to about 25 cm forward looking straight down in inspect; there the
+  sword is 1 cm into the body's capsules for a moment as the push starts (the spring's lag),
+  then 4-12 cm clear; level: no push. A first fix that capped how far a fidget follows the view down was dropped for this
+  ("so it works with all weapons").
 - **Keep-off in the relaxed carry** (`_keep_relaxed_off_body`, 2026-10-14): the same test on
   the shield as carried, the arm swung out from its own shoulder by the push (shortest of
   left, left-forward, left-back). Before it the backward jogs put the sheathed shield 8-9 cm
@@ -280,6 +322,8 @@ The probes (`tools/weapon_probes/`, kept out of the editor's scan by `.gdignore`
 |---|---|---|
 | `lantern_armed_action.gd` | `ACTION` | Weapons up, the whole lantern action at 60 frames a second, either foot forward: least room of each kind (sword against body, lantern, shield, left arm, eyes; arm against body and lantern; knuckles' gap; fist behind the lantern) per tenth of the action, and the fastest move of the blade's tip. `-- --hanging=x,y,z --around=x,y,z` try values. |
 | `lantern_armed_search.gd` | `SEARCH` | Thousands of fist places, elbow sides and rolls at the knob's turn, one per tiny frame, kept where the blade points ahead and the knuckles (or pommel) touch the lantern's body. `-- --under`: fist places under the lantern with blade aims, kept where any part of the hand touches its underside. |
+| `fidgets.gd` | `FIDGET` | Every fidget, either foot forward: per tenth the sword's room to the eyes, body and shield, the arm's to the trunk, the fist from the eyes and the blade's way; the tip's fastest move; then one starting by itself and a key ending it. |
+| `animation_panel_check.gd` | `PANEL` | The panel's body side: the stages listed, a driven pose held still through a key press and past the end, released back to the stance; the panel builds. |
 | `breathing.gd` | `BREATH` | Standing still, weapons up, both idles, breathing on and off: how far the chest, the sword's grip and the shield move against the eyes, and the largest step a frame. |
 | `shield_backward.gd` | `SHIELD` | Jogging in six directions, weapons up and down, looking straight down and level: the least room between the shield's vertices and the trunk's and legs' capsules, and how far the keep-off pushed. |
 | `lantern_under_trace.gd` | `TRACE` | For fist places under the swung lantern and four rolls: where palm, wrist and knuckles end up, and where the blade points. |
