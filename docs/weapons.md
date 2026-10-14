@@ -163,6 +163,26 @@ How it works now (`weapon_arm_drawn_apart`):
   through `PlayerBody.debug_animations` / `debug_drive` / `debug_release`; a fidget gets its
   stage names from `"stages"` in `FIDGETS`. Another kind of animation is added in those
   three functions, not in the panel.
+- **`shoulder_tap`** (2026-10-14, not judged in game yet): the blade swung up and back over
+  onto the BODY'S right shoulder (`"rest"` in `FIDGETS`, `_fidget_pose`), tapped four times (0.35 s each; 3.25 s in all)
+  by the wrist (identical taps: Kirill, "there's rhythm to it"), and back; the view and the
+  shield arm stay. The touch is placed from the body's shoulder joint each frame, so it holds
+  on either idle foot. The fist does NOT come in toward the body: it rises 27 cm, comes
+  11 cm back and only 15 cm left from its place in the stance (`"hand"`; with no move left
+  it rested 57 deg right of the view's middle, just past the picture's edge at 54 -- only
+  the pommel showed), the elbow is steered out (`"elbow"`),
+  and the blade lies diagonally from the fist back onto the shoulder -- a sword carried on
+  the shoulder (Kirill's reference picture; the first version moved the fist 0.3 m in toward
+  the middle, its forearm upright). The wrist alone cannot do it: from the stance's fist the
+  shoulder is 0.94 m away (the tip is 0.87) and the blade would have to lie almost along the
+  forearm. The keep-off (`weapon_body_clearance`) is let go while the blade rests
+  (`_fidget_rest`). The blade is turned onto the shoulder the shortest way, not rolled onto
+  its flat (Kirill: "the taps are light enough for it not to matter"). Measured: the fist
+  resting 0.44 m right of the eyes and 0.40 ahead (48 deg off the middle, inside the
+  picture), the elbow 7 cm further out than the fist, the touch 8.5 cm above the shoulder
+  joint and 15-21 cm before the tip, each tap lifts it about 5 cm, the wrist 52-59 deg, the
+  blade at least 0.22 m from the eyes. The blade itself runs back past the camera from the
+  fist: little of it can be in the picture with the view kept still.
 - **The fidgets' easing** (2026-10-14; Kirill: they looked "kind of robotic"): every move in
   them goes through `PlayerBody._ease` (used as smoothstep is), whose speed goes as
   x^2 (1 - x)^3 -- at rest at both ends with no jolt, fastest at 40 % of the way, so it sets off
@@ -195,6 +215,37 @@ How it works now (`weapon_arm_drawn_apart`):
   those"): each jostle bounces and rolls together on one irregular pace (`"together"`, the roll
   `"roll_lag"` 0.1 cycle behind), 0.14-1.64 s; the pause and the sag are gone; 1.85 s in all.
   Then "a little less force": bounce 1.8 cm, roll 12 deg, seesaw 3.5 deg (were 2.5, 18, 5).
+  2026-10-15, the forearm hinging at the elbow through the jostles (Kirill: "move the forearm
+  from the elbow up and down while we shake and roll"): `"seesaw"` 3.5 -> 7 deg, the hand's
+  bounce 1.8 -> 1.4 cm (the force about the same, more of it from the elbow). The probe: no
+  fingers in the board, the middle's speed changing at most 0.58-0.71 m/s in a frame (was
+  0.52-0.59). Then each jostle as a ripple down the arm (`"ripple"`: [metres, cycles]; Kirill
+  chose it over an even sine of the forearm's own): the elbow rises 1.5 cm on the bounce
+  (the wrist held, so the forearm first tips down) and the forearm's tip follows 0.35 cycle
+  behind, lifting the wrist; the hand's own bounce 0.6 cm. Measured (heights against their
+  moving average): elbow peaks at 0.25 / 0.60 / 1.07 / 1.40 s, wrist peaks 0.07-0.18 s after
+  each (0.32 / 0.78 / 1.20 / 1.48); the first jostle about 1.9 cm, the later ones 0.3-0.8;
+  the middle's speed changing at most 0.33-0.37 m/s in a frame. Then "a bit slower": the four
+  jostles over 1.8 s (0.14-1.94; were 1.5), the lift, the start of the way down (1.6 s, in the
+  last jostle) and the look kept in seconds, 2.15 s in all (was 1.85). Measured: elbow peaks
+  0.28 / 0.72 / 1.07 / 1.47 s, the wrist's 0.10-0.18 s after each (0.42 / 0.82 / 1.18 / 1.65),
+  the later jostles 0.5-1.2 cm; the middle's speed changing at most 0.24-0.32 m/s in a frame.
+  2026-10-15: a look at it (`"view"` in the entry): the view turns 0 deg left (Kirill set it; 10, 7, 5 before), 12 down and
+  tilts 3 as the shield lifts (by 0.4 s), held to 1.2 s, back by 1.8 s. (First a 6 deg glance
+  with no dip; then "look down and focus on the arm a bit more": 10 left, 12 down; then the
+  turn "a bit smaller", 7, then 5.) `"dip_alone"`: the drawn weapons do NOT follow this dip, though they
+  follow the view's pitch otherwise (`weapon_follows_view`) -- with them following, a dip
+  hardly moved the shield in the picture, which is why `shield_glance` has none. Measured (10
+  left): the shield's middle 31-38 deg below the picture's middle during the look (the bottom
+  edge is 37.5), 55 at rest; its top edge 10-17 deg above the middle. Since it has the view,
+  moving the mouse ends it (`looked()`); before, it went on.
+  Same day, the swings' lengths (`_irregular_progress`, used by `_irregular_wave`): they were
+  a drift of two sine waves on the pace, and on about a fifth of the seeds two swings came out
+  within 5 % of each other (0.43 / 0.43 / 0.26 / 0.38 s; Kirill: "make sure they are always
+  irregular"). Now each swing gets its own length from an even spread (`IRREGULAR_SPREAD`,
+  longest about 1.7 x the shortest), shuffled and jittered by the play's seed, with the pace
+  easing smoothly between them. Over 2,000 seeds: the closest two swings of a play 13 % apart,
+  all 24 orders used, the pace never under 70 % of the average.
 - **In every shield fidget the hand is kept on the forearm as in the stance**
   (`_shield_hand_in_stance`; the shield is fixed to the forearm): turned as the solver asked,
   the wrist bent against the shield once the arm moved -- the back of the hand in the board
