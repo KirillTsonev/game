@@ -172,6 +172,11 @@ How it works now (`weapon_arm_drawn_apart`):
   strap's fingers had to close later and open earlier (`grip`: 0.39-0.47, 0.59-0.65). Next
   steps proposed: overshoot on arrival with the wrist and fingers trailing, and a very slow
   millimetre drift in holds.
+- **Checked against the realism aim** (2026-10-14, `docs/custom_animations.md`): `inspect` and
+  `wrist_roll` were already one motion each. `lantern_look` waited -- the lift began as the
+  hand arrived and the turn as the lift ended, and its last 0.8 s nothing moved: now the lift
+  starts as the hand settles, the turn as the lift ends, and it is 3.45 s (was 4.5). Its
+  timings are entries (`"reach"`, `"lift"`, `"turn_at"`, `"let_go"`, `"view_in"`).
 - **Fidgets with the weapons sheathed** (2026-10-14, not judged in game yet; `"when":
   sheathed` in `FIDGETS`, picked only when they fit -- `_fidget_fits`): `strap` (the left arm
   brings the shield up in front of the belly, the right hand grips its RIM at the spot Kirill

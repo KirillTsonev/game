@@ -1475,8 +1475,14 @@ const FIDGETS := {
 	# swung the lantern sideways one way and the other at first: "more of a shake twice".) (First set: the palm under
 	# its bottom and a 35 deg lift -- the bottom hangs by the left thigh, the right forearm went
 	# 11 cm into the body, the palm stayed 11-15 cm short and never came into view.)
-	&"lantern_look": {"time": 4.5, "when": &"sheathed", "lit": true, "stages": ["look and reach", "lift", "turn it", "lower and let go"], "bounds": [0.28, 0.42, 0.66],
-		"view": Vector2(75.0, 15.0), "view_out": 0.6, "view_back": 0.82, "lift_degrees": 50.0, "lean_degrees": 50.0, "turn_degrees": 70.0},
+	# Timed in shares of 3.45 s, as seconds: the view down 0-0.99, the hand to the lantern
+	# 0.36-1.26, the lift from 1.08 as the hand settles on it (to 1.8), the turn from 1.62 as the
+	# lift ends (to 2.7), lowered from 2.34, let go 2.43-2.79 and the hand away by 3.33, the view
+	# back 2.43-3.42. (At 4.5 s the lift waited for the hand to arrive and the turn for the lift
+	# to end, and the last 0.8 s nothing moved -- the realism aim, docs/custom_animations.md.)
+	&"lantern_look": {"time": 3.45, "when": &"sheathed", "lit": true, "stages": ["look and reach", "lift", "turn it", "lower and let go"], "bounds": [0.313, 0.47, 0.783],
+		"view": Vector2(75.0, 15.0), "view_in": 0.287, "view_out": 0.704, "view_back": 0.991, "lift_degrees": 50.0, "lean_degrees": 50.0, "turn_degrees": 70.0,
+		"reach": Vector4(0.104, 0.365, 0.757, 0.965), "lift": Vector4(0.313, 0.522, 0.678, 0.835), "turn_at": Vector2(0.47, 0.313), "let_go": Vector2(0.704, 0.809)},
 	# Two loose circles of the blade round the way it points in the stance.
 	# (At 2.2 s the tip moved up to 7.5 cm a frame: quicker than a loose roll.)
 	&"wrist_roll": {"time": 3.5, "stages": ["tip in", "two circles", "back"], "circle": {"turns": 2.0, "tilt_degrees": 25.0, "hand": 0.03, "from": 0.3, "to": 0.7}},
@@ -1904,7 +1910,14 @@ func _fidget_sheathed(bones: Transform3D, pivot: Vector3, delta: float) -> void:
 	elif fidget.has("lift_degrees"):
 		# The lantern: how it hangs just before the hand lifts it, then lifted forward on its
 		# hook and turned a little each way, and let back the same way to where it hung.
-		var lift := _fidget_in_out(0.28, 0.42, 0.58, 0.7)
+		# The timings (shares of the time), from the FIDGETS entry: "lift" in and out, "turn_at"
+		# start and length, "reach" in and out, "let_go" (the fingers open and the hand moves off
+		# the lantern's side).
+		var lift_at: Vector4 = fidget.get("lift", Vector4(0.28, 0.42, 0.58, 0.7))
+		var turn_at: Vector2 = fidget.get("turn_at", Vector2(0.42, 0.24))
+		var reach_at: Vector4 = fidget.get("reach", Vector4(0.08, 0.28, 0.64, 0.8))
+		var let_go: Vector2 = fidget.get("let_go", Vector2(0.6, 0.68))
+		var lift := _fidget_in_out(lift_at.x, lift_at.y, lift_at.z, lift_at.w)
 		if lift <= 0.0:
 			_fidget_hang = (_bob - pivot).normalized()
 		else:
@@ -1923,7 +1936,7 @@ func _fidget_sheathed(bones: Transform3D, pivot: Vector3, delta: float) -> void:
 			_bob = pivot + _fidget_hang.slerp(lifted, lift) * LANTERN_ARM
 			_bob_before = _bob
 		# One turn about its own long axis and back, starting and ending at rest.
-		var turning := clampf((at - 0.42) / 0.24, 0.0, 1.0)
+		var turning := clampf((at - turn_at.x) / turn_at.y, 0.0, 1.0)
 		_lantern_spin = deg_to_rad(float(fidget["turn_degrees"])) * (0.5 - 0.5 * cos(TAU * turning)) * _fidget_fade
 		# The hand leaves while the lantern is still settling: from 0.75 it rested on the hanging
 		# lantern a moment first -- "a pause before letting go" (Kirill).
@@ -1931,8 +1944,8 @@ func _fidget_sheathed(bones: Transform3D, pivot: Vector3, delta: float) -> void:
 		# move: dropping straight back toward the hip it dragged the thumb 3 cm through the
 		# lantern; and with the way down spread to 0.9 the hand hung by the lantern 4 cm from its
 		# rest while the view came up -- "hovering" (Kirill). Both end by 0.8 now.
-		var reach := _fidget_in_out(0.08, 0.28, 0.64, 0.8)
-		var leave := _ease(0.6, 0.68, at)
+		var reach := _fidget_in_out(reach_at.x, reach_at.y, reach_at.z, reach_at.w)
+		var leave := _ease(let_go.x, let_go.y, at)
 		# The hand is what turns it: the palm on the lantern's SIDE (the cup's way squared to the
 		# lantern's axis -- lifted, "behind" lies nearly along the axis and turning it there
 		# moved the palm 1 deg), and its place and facing go round the axis with it (Kirill:
@@ -1949,7 +1962,7 @@ func _fidget_sheathed(bones: Transform3D, pivot: Vector3, delta: float) -> void:
 		# mostly away: blended straight from the cup to the clip's near-fist, the thumb closed
 		# through the lantern (Kirill). The thumb curls less than in toggle_lantern: with the palm
 		# on the lantern's side it wrapped 1.5 cm into it.
-		var open := _ease(0.6, 0.68, at)
+		var open := _ease(let_go.x, let_go.y, at)
 		var curl := lerpf(toggle_cup_curl, toggle_open_curl, open)
 		_set_fingers(arm, [curl * 0.3, curl, curl, curl, curl], _ease(0.0, 0.6, reach))
 
