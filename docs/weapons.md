@@ -173,7 +173,15 @@ What each part fixed (all seen by Kirill looking straight down or ahead):
 - **Keep-off looking down** (`_shield_off_body`): the shield is slid along
   `shield_clear_toward` until a set of body points is outside the shield's own box grown by
   `shield_body_clearance`; `shield_clearance_ease` / `_return` smooth it. It reads the
-  shield's mesh box, so it works for any shield.
+  shield's mesh box, so it works for any shield. The legs have their own clearance,
+  `shield_leg_clearance` (0.1; it was half of `shield_body_clearance`, which the scene sets
+  to 0.12): at 0.06 the left thigh reached the board jogging back looking straight down
+  (Kirill, 2026-10-14).
+- **Keep-off in the relaxed carry** (`_keep_relaxed_off_body`, 2026-10-14): the same test on
+  the shield as carried, the arm swung out from its own shoulder by the push (shortest of
+  left, left-forward, left-back). Before it the backward jogs put the sheathed shield 8-9 cm
+  into the left thigh. `tools/weapon_probes/shield_backward.gd` measures every jog direction
+  weapons up and down, looking down and level.
 - **Relaxed carry, weapons down** (`shield_relaxed_carry`, `_relax_shield_arm`): the clip's
   arm, with the forearm rolled so the shield faces `shield_relaxed_faces` (away from the
   trunk, parallel to the body) and the hand set to the turn it has in the stance
@@ -264,6 +272,7 @@ The probes (`tools/weapon_probes/`, kept out of the editor's scan by `.gdignore`
 |---|---|---|
 | `lantern_armed_action.gd` | `ACTION` | Weapons up, the whole lantern action at 60 frames a second, either foot forward: least room of each kind (sword against body, lantern, shield, left arm, eyes; arm against body and lantern; knuckles' gap; fist behind the lantern) per tenth of the action, and the fastest move of the blade's tip. `-- --hanging=x,y,z --around=x,y,z` try values. |
 | `lantern_armed_search.gd` | `SEARCH` | Thousands of fist places, elbow sides and rolls at the knob's turn, one per tiny frame, kept where the blade points ahead and the knuckles (or pommel) touch the lantern's body. `-- --under`: fist places under the lantern with blade aims, kept where any part of the hand touches its underside. |
+| `shield_backward.gd` | `SHIELD` | Jogging in six directions, weapons up and down, looking straight down and level: the least room between the shield's vertices and the trunk's and legs' capsules, and how far the keep-off pushed. |
 | `lantern_under_trace.gd` | `TRACE` | For fist places under the swung lantern and four rolls: where palm, wrist and knuckles end up, and where the blade points. |
 | `lantern_feet.gd` | `LANTERN` | The action with the shield, weapons down and up, either foot: does each hand arrive, does the left hand stay in the strap, shield against body. |
 | `arm_against_trunk_mesh.gd` | | The left arm against the trunk's own skinned mesh. |
@@ -374,7 +383,10 @@ left hand's part in an attack, two-handed weapons.
 
 - With the weapons up the shield dips about 6-9 cm into the left thigh for a moment at the
   start of the lantern action (the view's dip; his clearance is 0.12).
-- The shield clips a thigh in sideways jogs when sheathed.
+- Sheathed, jogging left: the shield still grazes the left thigh by up to 1.6 cm for a moment
+  each stride (the leg swings out the way the shield is pushed, and the push eases in).
+  Sheathed, the arm is swung out up to 0.28 m (back-left / back-right) and 0.37 m (sideways)
+  by the keep-off: not judged in game yet.
 - Shadow hands stop at `weapon_shadow_reach` during the lantern reach.
 - The lantern action with weapons was measured standing only.
 - The lift from under (2026-10-14): second set, after the first clipped forearm and hilt.

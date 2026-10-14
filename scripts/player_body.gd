@@ -391,6 +391,7 @@ var _shield_hand_in_stance: Quaternion = Quaternion.IDENTITY ## the left hand bo
 var _shield_up: float = 0.0 ## 0-1: how far the left arm is into its stance
 var _shield_points: PackedVector3Array = [] ## points round the shield's model, in its own axes (shield_body_clearance)
 var _shield_push: Vector3 = Vector3.ZERO ## how far the shield arm is moved off the body just now (the Player's axes)
+var _relaxed_push: Vector3 = Vector3.ZERO ## the same for the relaxed carry, where the arm is swung out from the shoulder by it
 var _shield_socket_set: bool = false ## _shield_socket has been worked out with the arm in its stance (not only from the model's data)
 var _shield_shoulder_drawn: float = 0.0 ## m the left shoulder was drawn off the body after the fist this frame
 var _bob_now: Vector3 = Vector3.ZERO ## the bob of the steps this frame (_weapon_bob): both arms move by it
@@ -532,6 +533,10 @@ var _swing_next: int = 0 ## which of ARM_SWINGS the next attack() plays
 ## of the trunk (hips to chest), or than half of it to a leg's (hip to knee to ankle), the whole
 ## shield arm is moved the way shield_clear_toward points until it is clear. 0: off.
 @export var shield_body_clearance: float = 0.24
+## The same for the legs (m from a leg's middle line). It was half of shield_body_clearance; with
+## the scene's 0.12 that let the left thigh reach the board jogging back, looking down (Kirill,
+## 2026-10-14; `tools/weapon_probes/shield_backward.gd`). Below 0: half of shield_body_clearance.
+@export var shield_leg_clearance: float = 0.1
 ## The way it is moved (the Player's axes: -X left, -Z forward). To the LEFT, out past the
 ## body's side: moved FORWARD it cleared the body as well, but took the arm's cut end with it
 ## into the picture (measured: in view at 60 deg down).
@@ -1418,6 +1423,7 @@ func _hold_shield(player: Node3D, delta: float) -> void:
 	var relaxed := shield_relaxed_carry and shield.on_forearm and _shield_stance != null and _shield_socket_set
 	if relaxed:
 		_relax_shield_arm(arm, player)
+		_keep_relaxed_off_body(arm, player, delta)
 	_shield_now = _shield_socket
 	if weight <= 0.001:
 		_shield_push = _shield_push.lerp(Vector3.ZERO, 1.0 - exp(-delta / maxf(shield_clearance_return, 0.001)))
@@ -1511,6 +1517,35 @@ func _relax_shield_arm(arm: Dictionary, player: Node3D) -> void:
 		_skeleton.set_bone_global_pose(arm["lower"], lower)
 	_skeleton.set_bone_pose_rotation(arm["hand"], _shield_hand_in_stance)
 
+## The relaxed carry is the clip's arm, and the backward jogs swing it into the left thigh (8-9 cm
+## measured; Kirill, 2026-10-14: "the shield seems to clip through body ... when sheathed"). The
+## same keep-off as the stance's (_shield_off_body, eased the same way), but as the arm hangs
+## from the body's own shoulder it is swung out from there by it instead of moved bodily.
+func _keep_relaxed_off_body(arm: Dictionary, player: Node3D, delta: float) -> void:
+	var in_player := player.global_transform.affine_inverse() * _skeleton.global_transform
+	# The shortest of three ways out: straight left only, the back-left and back-right jogs hold
+	# the board facing more ahead than out, and it was swung 0.4 m (34 deg) to clear the leg.
+	var wanted := Vector3.ZERO
+	if shield_body_clearance > 0.0:
+		wanted = Vector3.INF
+		for toward: Vector3 in [shield_clear_toward, shield_clear_toward + Vector3.FORWARD, shield_clear_toward + Vector3.BACK]:
+			var push := _shield_off_body(in_player, _shield_socket, toward)
+			if push.length() < wanted.length():
+				wanted = push
+	_relaxed_push = _relaxed_push.lerp(wanted, 1.0 - exp(-delta / maxf(shield_clearance_ease if wanted.length() > _relaxed_push.length() else shield_clearance_return, 0.001)))
+	if _relaxed_push.length() < 0.001:
+		return
+	var upper := _skeleton.get_bone_global_pose(arm["upper"])
+	var shoulder := in_player * upper.origin
+	var board := in_player * (_skeleton.get_bone_global_pose(_shield_bone) * WeaponHold.in_hand(_shield_socket, shield)).origin
+	var reach := board - shoulder
+	var axis := reach.cross(_relaxed_push)
+	if axis.length_squared() < 0.00000001:
+		return
+	# Turned about the shoulder so the board's middle moves about as far as the push asks.
+	upper.basis = Basis((in_player.basis.inverse() * axis).normalized(), atan2(_relaxed_push.length(), reach.length())) * upper.basis
+	_skeleton.set_bone_global_pose(arm["upper"], upper)
+
 ## How far the shield, as the arm holds it just now, has to be moved along shield_clear_toward
 ## (the Player's axes) for the body to be clear of it: no point of the trunk's middle line
 ## (hips to chest) nearer than shield_body_clearance to the shield's box, none of a leg's (hip,
@@ -1519,10 +1554,12 @@ func _relax_shield_arm(arm: Dictionary, player: Node3D) -> void:
 ## point of the body instead left the board cutting through: a board is wide, and the body
 ## was pushed out on one side of a point and in on the other.) `to_player` brings the
 ## skeleton's space into the Player's.
-func _shield_off_body(to_player: Transform3D, on_arm: Transform3D) -> Vector3:
+func _shield_off_body(to_player: Transform3D, on_arm: Transform3D, toward: Vector3 = Vector3.ZERO) -> Vector3:
 	var board := to_player * _skeleton.get_bone_global_pose(_shield_bone) * WeaponHold.in_hand(on_arm, shield)
 	var to_board := board.affine_inverse()
-	var way := shield_clear_toward.normalized() if shield_clear_toward.length() > 0.001 else Vector3.LEFT
+	if toward.length() < 0.001:
+		toward = shield_clear_toward
+	var way := toward.normalized() if toward.length() > 0.001 else Vector3.LEFT
 	var forward := (to_board.basis * way).normalized() # the way it moves, in the shield's own axes
 	var low := _shield_points[0]
 	var high := _shield_points[0]
@@ -1531,10 +1568,11 @@ func _shield_off_body(to_player: Transform3D, on_arm: Transform3D) -> Vector3:
 		high = high.max(point)
 	var hips := _skeleton.get_bone_global_pose(_hips_bone).origin
 	var lines: Array = [[hips, _skeleton.get_bone_global_pose(_skeleton.find_bone("UpperChest")).origin, shield_body_clearance]]
+	var leg_clearance := shield_leg_clearance if shield_leg_clearance >= 0.0 else shield_body_clearance * 0.5
 	for leg: Dictionary in _legs:
 		var knee := _skeleton.get_bone_global_pose(leg["lower"]).origin
-		lines.append([_skeleton.get_bone_global_pose(leg["upper"]).origin, knee, shield_body_clearance * 0.5])
-		lines.append([knee, _skeleton.get_bone_global_pose(leg["foot"]).origin, shield_body_clearance * 0.5])
+		lines.append([_skeleton.get_bone_global_pose(leg["upper"]).origin, knee, leg_clearance])
+		lines.append([knee, _skeleton.get_bone_global_pose(leg["foot"]).origin, leg_clearance])
 	# Points along those lines, in the shield's own axes, each with its clearance.
 	var body_points: Array = []
 	for line: Array in lines:
