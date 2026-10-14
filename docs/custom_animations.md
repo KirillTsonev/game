@@ -5,6 +5,12 @@ and off, L). Written 2026-10-12 from building that one; every rule below is some
 went wrong once. The code is in `scripts/player_body.gd`; `CLAUDE.md` ("The player's body")
 has the facts about the body itself.
 
+**The aim is realism: life-like movement** (Kirill, 2026-10-14, for the fidgets and every
+other animation). Judge every timing by what a real person does: nobody holds a pose, waits
+for one part to finish before the next starts, or moves at an even pace. Moves start a
+little quicker than they settle (`_ease`), parts overlap (T4), two hands working together
+move together, and nothing that is held stands perfectly still for long.
+
 The actions made this way are **not keyframed**. Each frame, after the clip has posed the
 body, code moves a few bones: arms are solved to reach points, hands are turned, fingers are
 set. So an action runs over any clip (the legs go on walking) and follows things that move
@@ -140,7 +146,14 @@ launch arguments.
   read as three separate actions and took 2.0 s. Start the hands as the view starts down,
   bring the second hand in while the first is still working, and start the view back as
   the main action ends: 1.5 s, and one motion. Each part still needs what it depends on
-  finished first (a grip must be closed before it turns).
+  finished first (a grip must be closed before it turns). The same again in the strap
+  fidget (2026-10-14), each one Kirill's: the right hand reached for the shield only once it
+  was up, then took longer than the arm raising it; the grip had a stage of its own and a
+  hold before the tug; and letting go, the fingers opened fully before the hand moved and
+  the hand was gone before the shield came down. Now the hand and the shield go up together
+  and the grip closes as the shield stops, the tug follows at once, the fingers loosen as the
+  tug ends and the hand is already leaving while they open, and the shield lowers with it.
+  Releasing is not "open, then move": a hand lets go as it leaves.
 
 ### Things that are moved
 

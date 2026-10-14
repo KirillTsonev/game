@@ -162,8 +162,116 @@ How it works now (`weapon_arm_drawn_apart`):
   scrub with the time slider, slow it down, loop, hold at the end, Release. It drives the body
   through `PlayerBody.debug_animations` / `debug_drive` / `debug_release`; a fidget gets its
   stage names from `"stages"` in `FIDGETS`. Another kind of animation is added in those
-  three functions, not in the panel. Planned next: fidgets with the weapons sheathed (hand
-  flex, a look at the lit lantern).
+  three functions, not in the panel.
+- **The fidgets' easing** (2026-10-14; Kirill: they looked "kind of robotic"): every move in
+  them goes through `PlayerBody._ease` (used as smoothstep is), whose speed goes as
+  x^2 (1 - x)^3 -- at rest at both ends with no jolt, fastest at 40 % of the way, so it sets off
+  quicker and settles longer than smoothstep's mirrored S. The sword fidgets' keys also slow the
+  pace as they pass (`_key_paced`, `FIDGET_KEY_ACCENT` 0.35: down to 65 % at a key and up to
+  135 % between, never stopping). New fidget code uses `_ease`, not smoothstep. With it the
+  strap's fingers had to close later and open earlier (`grip`: 0.39-0.47, 0.59-0.65). Next
+  steps proposed: overshoot on arrival with the wrist and fingers trailing, and a very slow
+  millimetre drift in holds.
+- **Fidgets with the weapons sheathed** (2026-10-14, not judged in game yet; `"when":
+  sheathed` in `FIDGETS`, picked only when they fit -- `_fidget_fits`): `strap` (the left arm
+  brings the shield up in front of the belly, the right hand grips its RIM at the spot Kirill
+  marked on a screenshot (`"grip": rim`, `"rim_at"` = a way in the view, 6 deg right, 7 up),
+  tugs once and lets go. (In between it went back to the strap on the left forearm, still
+  there as `"grip": strap`.) The rim was missing the shield's SIDES until the outline was
+  taken per angle slice round the board's middle: keeping the outer 8 % by distance from the
+  middle kept only the top corners and the bottom tip of a board taller than wide, so every
+  try landed on the top edge or the far tip. The marked spot was 10 cm out of reach until
+  `"shield_arm"` moved 7 cm toward the middle and 4 cm nearer. Then (Kirill: the right hand
+  rose "like hailing a cab" through the shield, and shifted with the breathing): the hand comes
+  in with the shield and grips the edge as the shield stops (`"reach"` 0.02-0.25, the raise
+  0-0.25, the fingers closed by 0.26 -- Kirill wanted both at once, then "still much slower"
+  arriving at 0.38, then the grip in sync with the shield's stop; the thumb closes earlier with
+  it, `"rim_thumb"`, `"grip_close"`), half way to the eased pace along its curve
+  (`_even_on_curve`, `"reach_even"` 0.5: with the weight as the curve's own parameter the hand
+  slowed to 0.6 m/s at the bend and sped up again; at an even pace it took the bend at full
+  speed). Quick, it reached the arm's full length at the bend and the solver stopped the elbow
+  dead there (the hand's way turned in a frame): `_reach`'s `soft` (`"reach_soft"` 0.03 m)
+  eases into full length instead; at 0.05 the grip drifted with the breathing. Since the same
+  day: 2.8 s, three stages (raise and grip, tug, let go and lower -- Kirill: the grip stage
+  and the hold before the tug were not needed), two quick small tugs straight after the grip
+  (`"tugs"` 2 in 0.5 s, `"tug"` 1.2 cm, the shield moving 0.7; one tug of 3 cm over 0.8 s was
+  too big -- Kirill: "two quick small tugs" that "barely move the shield"), and the hand
+  leaving as the shield goes down (`"lower"`, `"reach_out"`; it used to be gone before the
+  shield moved), already on its way while the fingers open (`"grip_open"` 0.54-0.61 against
+  the hand from 0.57; they opened fully first -- Kirill: "nobody holding something waits until
+  the fingers are off to remove their hands"; see the realism aim in `custom_animations.md`). The shield's own timings are `strap` entries now (`"raise_to"`, `"view_in"`,
+  `"tug_at"`, `"grip_open"`). Lowering, the board went 1.3-2.4 cm into the thigh (the fidget
+  poses the arm after the relaxed carry's keep-off): it has that keep-off of its own on the way
+  down (`_swing_shield_off_body`, `_fidget_shield_push`), faded in as it lowers -- on the way
+  up it moved the board under the arriving hand, and switched on at once it threw the board
+  21 cm in a frame. Along one
+  curve bowed toward a place to the RIGHT of the edge in the view (`"rim_around"`: 0.4 m
+  right, 0.08 up; at 0.2 / 0.03 it passed 1 cm from the board's lower corner). Bowed toward a
+  place in front of the edge it rose straight up through the board; a place out from the
+  board's middle lay ABOVE this edge; two straight moves (up beside the edge, then across)
+  turned a corner (Kirill: "an angular pattern"). Two things moved the grip with each breath: the rim point was picked afresh every frame
+  and flipped between neighbouring vertices (now kept once the shield is up, `_rim_pick`), and
+  the shoulder's 2 cm rise and fall swung the forearm and board 3.5 deg. The left forearm is
+  now held still against the eyes once up (`_forearm_held`; the upper arm is turned to it and
+  takes the 0-2.7 cm difference at the elbow). That moves the lower arm bone's own POSITION,
+  which no clip has a track for: it stayed, and the upper arm came out 4 cm shorter after each
+  run (Kirill: the shield "changes its position permanently"). It is put back at the start of
+  the next frame (`_elbow_restore`). Any script that sets a bone's position must do the same.
+  Drawing the board still and leaving the forearm
+  to move put the forearm 2-3.5 cm off the board's back, in view. With the hand setting off while
+  the shield rises, the pick (re-made each frame until the shield is up) crept 1-2 cm a frame
+  and at times flipped 10-22 cm along the rim: the hand jerked to 4.4 m/s for a frame (Kirill:
+  "sometimes the right hand jitters"). The point now follows the pick on the board through a
+  damped spring (`_rim_local`, `RIM_GLIDE`); an eased follow still turned the hand's way in one
+  frame each time the pick changed. The thumb went through the board both ways (Kirill): the
+  hand arrived open with the thumb's tip 4 cm past the far face, and it crossed as it closed
+  and as it opened. It now closes while the hand is still off to the side and opens once it is
+  off again (`"rim_thumb"`), and the grip sits 1 cm toward the near face (`"rim_across"`; at
+  2 cm the forefinger's tip went through the far face in the tug). The probe tests each finger
+  bone against the board's triangles (CLIP lines). Probe:
+  `tools/weapon_probes/strap_path.gd`. Earlier rim notes: the right
+  hand grips its RIM, tugs once -- the
+  shield moves 0.6 of the tug, `_shield_tug` -- and lets go; only with a shield on the
+  forearm. The rim is any model's own vertices on its outer edge, `_shield_rim`, read at
+  `equip_shield`; the point gripped is the one on the board's RIGHT side -- its way from the
+  board's middle most nearly the Player's right ("just a rim on the right") -- with
+  penalties for being out of reach or out of a 30 deg cone round the view. Kirill: "grab by shield's edge instead, seems more universal for
+  different models". On the way: an ellipse fitted to the board's box missed the mesh by
+  7 cm and aimed at the wrong side; the rim nearest the shoulder was the top edge, level with
+  the eyes, because the shield was held too high -- now lower and nearer the middle,
+  `"shield_arm"` (0.25, -0.32, -0.4)) and `lantern_look`
+  (only while lit: the palm behind the lantern as in the lantern action, swung 65 deg forward,
+  turned once 70 deg about its own long axis and back -- `_lantern_spin`; a sideways swing one
+  way and the other read as "shake twice" -- let back). The palm is on the lantern's SIDE so
+  the hand carries the turn ("the lantern turns without the hand moving"); letting go, the
+  hand leaves outward first and the fingers open before going back to the clip's (the thumb
+  went 3 cm through the lantern), overlapping the lowering (it rested on the lantern first:
+  "a pause before letting go"). The clip's hand rests only about 8 cm from the lantern, so
+  the view starts back up as the hand lets go (`"view_out"` 0.6): with the view still dipped,
+  the hand at rest beside the lantern read as "hover"; now it leaves the picture moving.
+  The view is back up by 0.82 (`"view_back"`). Lifted, the lantern also LEANS 50 deg away
+  from the body's middle (`"lean_degrees"`): turning, its top cap (by the hook on the hip)
+  swung 2.2 cm into the belly with the left foot forward; a bigger lift only raised the cap
+  toward the belly, and turning the other way clipped with either foot. After Kirill moved
+  the hook onto the belt (`LanternHook` in `scenes/player_body.tscn`, 1.4 cm nearer the
+  middle, 2026-10-14) the lean went from 35 to 50 deg and the lift from 65 to 50 (35 as
+  reached). The lantern action, the armed lift and the shield measured the same as before
+  the move. Re-run `sheathed_fidgets.gd`, `lantern_feet.gd` and `lantern_armed_action.gd`
+  after moving the hook again. The body's own arm cannot bring the hand into the
+  picture looking ahead, so these DIP THE VIEW to what they look at (`"view"`, as the lantern
+  action does, never lower than the Player looks), and moving the mouse ends them
+  (`looked()`, from `player.gd`; it also restarts the wait). Their arm is `_fidget_sheathed`,
+  called from `_place_lantern`. Measured (`sheathed_fidgets.gd`): the palm in the picture
+  while held (strap about 25 deg left and 15 below the middle, the shield near the middle;
+  lantern_look about 30 below); the lantern's first set (palm under its bottom, 35 deg lift)
+  put the forearm 11 cm into the body by the left thigh and the palm never in view. `strap`
+  replaced `hand_flex` (the hand in front of the chest opening and closing a finger at a
+  time; "doesn't look good", Kirill). Its first set (shield lower and nearer, straight up,
+  the strap mid-forearm, the right elbow down and back) put the right palm out of view, the
+  right forearm 18 cm into the trunk and the shield 7 cm through it on the way: now the
+  shield higher and further out, up by way of `"shield_around"`, the strap near the wrist
+  (`"strap_along"`), the right elbow out to the right and its way in bowed out in front --
+  every reading within a hanging arm's 3 cm, the shield 7.6 cm clear.
 - **Shadows** come from a hidden third copy of the whole body (`RogueShadow`) with its own
   arm pose (`_pose_shadow_arms`): the hands brought in to `weapon_shadow_reach` from the
   shoulders and the elbows turned down by `weapon_shadow_elbows_down`. Without that the
@@ -323,6 +431,7 @@ The probes (`tools/weapon_probes/`, kept out of the editor's scan by `.gdignore`
 | `lantern_armed_action.gd` | `ACTION` | Weapons up, the whole lantern action at 60 frames a second, either foot forward: least room of each kind (sword against body, lantern, shield, left arm, eyes; arm against body and lantern; knuckles' gap; fist behind the lantern) per tenth of the action, and the fastest move of the blade's tip. `-- --hanging=x,y,z --around=x,y,z` try values. |
 | `lantern_armed_search.gd` | `SEARCH` | Thousands of fist places, elbow sides and rolls at the knob's turn, one per tiny frame, kept where the blade points ahead and the knuckles (or pommel) touch the lantern's body. `-- --under`: fist places under the lantern with blade aims, kept where any part of the hand touches its underside. |
 | `fidgets.gd` | `FIDGET` | Every fidget, either foot forward: per tenth the sword's room to the eyes, body and shield, the arm's to the trunk, the fist from the eyes and the blade's way; the tip's fastest move; then one starting by itself and a key ending it. |
+| `sheathed_fidgets.gd` | `SHEATHED` | The sheathed fidgets, lantern lit, either foot: the view's dip and turn, where the palm is in the picture (and whether it is in a 16:9 picture of the camera's fov), the arm's room to the body, the palm to the lantern's body and its lift. |
 | `animation_panel_check.gd` | `PANEL` | The panel's body side: the stages listed, a driven pose held still through a key press and past the end, released back to the stance; the panel builds. |
 | `breathing.gd` | `BREATH` | Standing still, weapons up, both idles, breathing on and off: how far the chest, the sword's grip and the shield move against the eyes, and the largest step a frame. |
 | `shield_backward.gd` | `SHIELD` | Jogging in six directions, weapons up and down, looking straight down and level: the least room between the shield's vertices and the trunk's and legs' capsules, and how far the keep-off pushed. |

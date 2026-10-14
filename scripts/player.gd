@@ -122,6 +122,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	# Mouse look, only while the cursor is captured.
 	# Not while the body has the view (turning the lantern on / off): the mouse is ignored
 	# then, and the view comes back to where it was (Kirill, 2026-10-12).
+	# Looking round ends a fidget that has the view (looking at the hand or the lantern).
+	if body and event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and (event as InputEventMouseMotion).relative.length() > 2.0:
+		body.looked()
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not (body and body.has_the_view()):
 		rotate_y(-event.relative.x * mouse_sensitivity)
 		pitch = clamp(pitch - event.relative.y * mouse_sensitivity, -1.4, 1.4)
