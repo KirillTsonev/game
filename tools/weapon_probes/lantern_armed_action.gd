@@ -34,7 +34,21 @@ func _go() -> void:
 		if arg.begins_with("--around="):
 			var n := arg.trim_prefix("--around=").split_floats(",")
 			body.toggle_armed_around = Vector3(n[0], n[1], n[2])
-	print("ACTION hanging ", body.toggle_armed_fist_hanging, " around ", body.toggle_armed_around)
+		if arg.begins_with("--blade-hanging="):
+			var n := arg.trim_prefix("--blade-hanging=").split_floats(",")
+			body.toggle_armed_blade_hanging = Vector3(n[0], n[1], n[2])
+		if arg.begins_with("--blade="):
+			var n := arg.trim_prefix("--blade=").split_floats(",")
+			body.toggle_armed_blade = Vector3(n[0], n[1], n[2])
+		if arg.begins_with("--fist="):
+			var n := arg.trim_prefix("--fist=").split_floats(",")
+			body.toggle_armed_fist = Vector3(n[0], n[1], n[2])
+		if arg.begins_with("--elbow="):
+			var n := arg.trim_prefix("--elbow=").split_floats(",")
+			body.toggle_armed_elbow = Vector3(n[0], n[1], n[2])
+		if arg.begins_with("--roll="):
+			body.toggle_armed_roll = arg.trim_prefix("--roll=").to_float()
+	print("ACTION hanging ", body.toggle_armed_fist_hanging, " around ", body.toggle_armed_around, " blade hanging ", body.toggle_armed_blade_hanging, " fist ", body.toggle_armed_fist, " elbow ", body.toggle_armed_elbow, " roll ", body.toggle_armed_roll, " blade ", body.toggle_armed_blade)
 	sk = body.get("_skeleton") as Skeleton3D
 	var apart: Dictionary = body.get("_apart")
 	var arms: Dictionary = body.get("_arms")

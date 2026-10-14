@@ -202,24 +202,37 @@ const BODY_LAYER := 12
 ## the bad one whatever the side.
 @export var toggle_strapped_elbow: Vector3 = Vector3(0.3, -0.2, -0.8)
 @export var toggle_strapped_round_front: bool = true
-## A right hand that holds a weapon nudges the lantern with THE KNUCKLES of its fist, the
-## weapon pointing ahead (Kirill, 2026-10-13). Where the fist's palm goes, from where the
-## middle of the lantern's body is once it is swung forward, in the Player's axes (+X right,
-## +Y up, -Z ahead): behind the lantern and to its right, so the knuckles meet its body's near
-## end; the side the elbow goes to (the same axes; it must not be near the line from the
-## shoulder to the fist, or the elbow flips over); and how far the forearm is rolled from how
-## the stance has it (degrees), which is what points the blade. These three are the best of
-## about 9,000 tried with the blade within 35 degrees of straight ahead: the sword is 0-2 cm
-## clear of the body, its crossguard reads 3 cm into the lantern's top end and the blade
-## passes within a centimetre of the shield's edge.
-@export var toggle_armed_fist: Vector3 = Vector3(0.07, 0.08, 0.08)
-## The same before the swing, from the middle of the lantern as it hangs: behind it, so that
-## the fist is seen to push it forward. And the place the fist's way to it bows out toward,
-## from where the lantern's middle hangs: to the right and back, so it comes round behind.
-@export var toggle_armed_fist_hanging: Vector3 = Vector3(0.1, 0.1, 0.05)
-@export var toggle_armed_around: Vector3 = Vector3(0.2, 0.15, 0.1)
-@export var toggle_armed_elbow: Vector3 = Vector3(0.9, 0.0, -0.4)
-@export var toggle_armed_roll: float = 45.0
+## A right hand that holds a weapon LIFTS the lantern from UNDER it with the top of its fist,
+## the weapon pointing ahead and a little down (Kirill, 2026-10-14: before this the fist sat
+## above the lantern's middle and the sword landed on top of it). Where the fist's palm goes,
+## from where the middle of the lantern's body is once it is swung forward, in the Player's
+## axes (+X right, +Y up, -Z ahead): under it; the side the elbow goes to (the same axes; it
+## must not be near the line from the shoulder to the fist, or the elbow flips over); and how
+## far the forearm is rolled from how the stance has it (degrees), which turns the side of the
+## fist that faces up. From `lantern_armed_search.gd -- --under`, ranked by room to the
+## lantern first (Kirill: the first set put the lantern through the forearm and the hilt),
+## then checked over the whole action: the sword 0-3 cm clear of the lantern, the forearm on
+## its surface (0-1 cm), the sword 1-2 cm into the body's (generous) capsules. Higher and the
+## sword touches the lantern. The wrist's bend lowers the palm a further 4-5 cm.
+@export var toggle_armed_fist: Vector3 = Vector3(0.06, -0.08, 0.0)
+## The same before the swing, from the middle of the lantern as it hangs: behind it and to its
+## right, so that the fist is seen to push it forward and the blade passes beside it. And the
+## place the fist's way to it bows out toward, from where the lantern's middle hangs: to the
+## right and back, so it comes round behind.
+@export var toggle_armed_fist_hanging: Vector3 = Vector3(0.12, -0.04, 0.06)
+@export var toggle_armed_around: Vector3 = Vector3(0.25, 0.0, 0.15)
+@export var toggle_armed_elbow: Vector3 = Vector3(1.0, -0.2, 0.3)
+@export var toggle_armed_roll: float = 0.0
+## Where the blade points while that fist carries the lantern, in the Player's axes (zero = as
+## the forearm's roll leaves it). The hand is bent at the wrist toward it, at most
+## TOGGLE_ARMED_WRIST_MAX. Without the bend the roll only spins the blade about the forearm:
+## with the fist under the lantern it pointed 25-35 degrees up through it, or out to the right
+## (lantern_under_trace.gd; Kirill, 2026-10-14: the sword landed on top of the lantern).
+@export var toggle_armed_blade: Vector3 = Vector3(0.0, -0.4, -0.92)
+## The same before the swing, while the lantern still hangs: out to the right, or a blade
+## pointing ahead from a fist behind the hanging lantern runs straight through it.
+@export var toggle_armed_blade_hanging: Vector3 = Vector3(0.6, -0.6, -0.5)
+const TOGGLE_ARMED_WRIST_MAX := 1.05 ## radians (60 degrees)
 ## The left hand's way to the knob and back bows out toward this place, from the hips bone in
 ## the Player's axes (+X right, +Y up, -Z ahead): in front of the belly. Going straight, it
 ## passed through the body (Kirill, 2026-10-12). The hand gets about half-way out to it.
@@ -1800,8 +1813,9 @@ func _place_lantern(player: Node3D, delta: float) -> void:
 			# half-way through the swing). Its place is set from the lantern's middle, wherever
 			# that is: toggle_armed_fist_hanging before the swing, toggle_armed_fist once swung,
 			# and between the two by how far the swing is. It gets there round the back, by way
-			# of toggle_armed_around. Its wrist is as the stance has it, and the forearm is
-			# rolled to point the blade.
+			# of toggle_armed_around. The forearm is rolled (which side of the fist faces up)
+			# and the wrist bent to point the blade (toggle_armed_blade_hanging, then
+			# toggle_armed_blade): since 2026-10-14 the fist LIFTS the lantern from under it.
 			reaching = _part(through, TOGGLE_REACH_ARMED) * (1.0 - _part(through, TOGGLE_RELEASE_ARMED))
 			var in_fist := _skeleton.get_bone_pose_rotation(_arms["Right"]["hand"])
 			_reach(_arms["Right"], "palm", bones, _bob + toggle_armed_fist_hanging.lerp(toggle_armed_fist, swung), reaching, toggle_armed_elbow, -cup, 0.0, pivot + Vector3.DOWN * LANTERN_ARM + toggle_armed_around, Vector3.INF, Vector3.INF, in_fist)
@@ -1809,6 +1823,16 @@ func _place_lantern(player: Node3D, delta: float) -> void:
 			var along := (_skeleton.get_bone_global_pose(_arms["Right"]["hand"]).origin - forearm.origin).normalized()
 			forearm.basis = Basis(along, deg_to_rad(toggle_armed_roll) * reaching) * forearm.basis
 			_skeleton.set_bone_global_pose(_arms["Right"]["lower"], forearm)
+			if toggle_armed_blade.length_squared() > 0.0001:
+				# The wrist bends the blade toward toggle_armed_blade (the grip's +Y is the blade).
+				var hand := _skeleton.get_bone_global_pose(_arms["Right"]["hand"])
+				var blade_now := (hand.basis * _weapon_socket.basis.y).normalized()
+				var blade_asked := (bones.affine_inverse().basis * toggle_armed_blade_hanging.normalized().slerp(toggle_armed_blade.normalized(), swung)).normalized()
+				var bend_axis := blade_now.cross(blade_asked)
+				if bend_axis.length_squared() > 0.000001:
+					var bend := minf(blade_now.angle_to(blade_asked), TOGGLE_ARMED_WRIST_MAX) * reaching
+					hand.basis = Basis(bend_axis.normalized(), bend) * hand.basis
+					_skeleton.set_bone_global_pose(_arms["Right"]["hand"], hand)
 		else:
 			_reach(_arms["Right"], "palm", bones, _bob + toggle_cup_offset, reaching, TOGGLE_ELBOW, -cup)
 		if not armed:

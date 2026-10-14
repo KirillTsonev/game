@@ -199,8 +199,11 @@ about the elbow-to-pinch line is searched each frame (24 rolls, body points with
 `TOGGLE_TRUNK` / `TOGGLE_LEG` radii, 0.03 of hysteresis) to keep the shield off the body.
 `toggle_strapped_elbow` is the best of 27 elbow sides tried.
 
-**Right hand, with a sword in it (`armed`).** The sword comes along; the fist's knuckles
-nudge the lantern, the blade pointing ahead (Kirill's idea, after three others failed):
+**Right hand, with a sword in it (`armed`).** The sword comes along; since 2026-10-14 the
+fist goes in behind the hanging lantern and LIFTS it forward from under it, the blade ahead
+and a little down (Kirill: in the knuckles version below the fist sat above the lantern's
+middle -- `toggle_armed_fist` had +Y -- and "the sword lands on top of the lantern"). The
+history first:
 
 | Tried | Measured |
 |---|---|
@@ -209,13 +212,21 @@ nudge the lantern, the blade pointing ahead (Kirill's idea, after three others f
 | Back of the hand against it | Body clear, lantern still 4-5 cm in, wrist 100-170 deg. |
 | Forearm against it, fist past it | Numbers clean, but the "contact" was with the wire handle: Kirill, "nothing touches the lantern". |
 | Pommel against it, blade ahead | No pose found. |
-| **Knuckles against its body, blade ahead** | Sword 0-2 cm clear of the body, crossguard about 3 cm into the lantern's top end, blade within 1 cm of the shield's edge. "Looks great." |
+| Knuckles against its body, blade ahead | Sword 0-2 cm clear of the body, crossguard about 3 cm into the lantern's top end, blade within 1 cm of the shield's edge. "Looks great" (2026-10-13); the next day: the sword lands on top of the lantern. |
+| Fist under it, wrist as the stance has it | The roll only spins the blade about the forearm (`lantern_under_trace.gd`): roll 0 = ahead but 25-35 deg up through the lantern, roll 70-80 = level but pointing right. No pose with the blade ahead. |
+| Fist under it, wrist bent to aim the blade (`toggle_armed_blade`), first set | Sword up to 3 cm into the lantern's underside, forearm 3-4 cm into its handle end. "Very good, but the lantern clips through the right forearm slightly and I think the sword hilt does too." |
+| **The same, searched for room to the lantern first** | Over the whole action: sword 0-3 cm clear of the lantern, forearm on its surface (0-1 cm), sword 1-2 cm into the body's capsules, shield 2-12 cm clear, arm 1-3 cm into the trunk's. At the knob's turn the palm is 12-13 cm under the lantern's middle. A fist higher than `toggle_armed_fist`'s -0.08 puts the sword into the lantern. |
 
 How it runs:
 
 - The shoulder goes back onto the body for the reach (the lantern is out of reach from the
-  stance's shoulder). The wrist stays as the stance has it; `toggle_armed_roll` rolls the
-  forearm, which is what points the blade; `toggle_armed_elbow` is the elbow's side.
+  stance's shoulder). `toggle_armed_roll` rolls the forearm (which side of the fist faces
+  up), then the wrist bends the blade toward `toggle_armed_blade` (at most
+  `TOGGLE_ARMED_WRIST_MAX`, 60 deg); `toggle_armed_elbow` is the elbow's side.
+- While the lantern still hangs the blade is aimed out to the right and down
+  (`toggle_armed_blade_hanging`) and the fist is to the lantern's right: a fist behind the
+  hanging lantern with the blade ahead ran the blade 5 cm through it. The aim turns to
+  `toggle_armed_blade` with the swing.
 - The fist's place is set from the lantern's middle wherever that is:
   `toggle_armed_fist_hanging` before the swing, `toggle_armed_fist` once swung, between the
   two by the swing. It comes in round the back by way of `toggle_armed_around`, so it is
@@ -252,7 +263,8 @@ The probes (`tools/weapon_probes/`, kept out of the editor's scan by `.gdignore`
 | Probe | Tag | What it tells |
 |---|---|---|
 | `lantern_armed_action.gd` | `ACTION` | Weapons up, the whole lantern action at 60 frames a second, either foot forward: least room of each kind (sword against body, lantern, shield, left arm, eyes; arm against body and lantern; knuckles' gap; fist behind the lantern) per tenth of the action, and the fastest move of the blade's tip. `-- --hanging=x,y,z --around=x,y,z` try values. |
-| `lantern_armed_search.gd` | `SEARCH` | Thousands of fist places, elbow sides and rolls at the knob's turn, one per tiny frame, kept where the blade points ahead and the knuckles (or pommel) touch the lantern's body. |
+| `lantern_armed_search.gd` | `SEARCH` | Thousands of fist places, elbow sides and rolls at the knob's turn, one per tiny frame, kept where the blade points ahead and the knuckles (or pommel) touch the lantern's body. `-- --under`: fist places under the lantern with blade aims, kept where any part of the hand touches its underside. |
+| `lantern_under_trace.gd` | `TRACE` | For fist places under the swung lantern and four rolls: where palm, wrist and knuckles end up, and where the blade points. |
 | `lantern_feet.gd` | `LANTERN` | The action with the shield, weapons down and up, either foot: does each hand arrive, does the left hand stay in the strap, shield against body. |
 | `arm_against_trunk_mesh.gd` | | The left arm against the trunk's own skinned mesh. |
 | `lantern_end_jump.gd` | `JANK` | Frame-by-frame steps of sword, shield, hands, eyes at the action's end. |
@@ -297,7 +309,7 @@ mirrored idle and torso half-turn, relaxed carry.
 | Stance markers and the fifteen hand-posed fingers (one stance per hand, shared) | Handle thickness and shape, the weapon's weight and look. |
 | `weapon_back_offset`, `_slant`, `_turned_over` | Blade length (does the tip clear the hip, the hilt the head). |
 | `weapon_draw_arc*`, `weapon_draw_out`, `weapon_draw_via`, `DRAW_BLADE_OVER` | Blade length: the room to the head and eyes. |
-| `toggle_armed_fist`, `_fist_hanging`, `_around`, `_elbow`, `_roll` | Blade length, crossguard width (the guard is what meets the lantern). |
+| `toggle_armed_fist`, `_fist_hanging`, `_around`, `_elbow`, `_roll`, `_blade`, `_blade_hanging` | Blade length, crossguard width (the guard is what meets the lantern). |
 | `toggle_strapped_elbow`, `shield_body_clearance`, `shield_relaxed_faces` | The shield's size and outline. |
 | `import_shield.py`'s `STRAPS`, `STANDOFF` | That shield model. |
 
@@ -365,8 +377,9 @@ left hand's part in an attack, two-handed weapons.
 - The shield clips a thigh in sideways jogs when sheathed.
 - Shadow hands stop at `weapon_shadow_reach` during the lantern reach.
 - The lantern action with weapons was measured standing only.
-- The crossguard reads about 3 cm into the lantern's top end; the knuckles are about 5 cm
-  short of it for the first part of the push.
+- The lift from under (2026-10-14): second set, after the first clipped forearm and hilt.
+  Not judged in game yet. If the hand looks like it hovers under the lantern rather than
+  carrying it, that is the price of the room: no fist place both touches and clears.
 - The thumb is not closed by the automatic fist (closed, its surface goes into the handle);
   curls for another handle thickness are an estimate (`CURL_PER_METRE`).
 - A second preview can appear after a held model is re-imported, until the scene is reloaded.
