@@ -127,6 +127,14 @@ How it works now (`weapon_arm_drawn_apart`):
   after that**, and a probe reads the arm from `body._apart[side]["skeleton"]`.
 - The stance is rotated about the eyes by `weapon_follows_view` of the view's pitch (0.8 by
   default, 0.7 in the scene), which is what Skyrim's IFPV mod does (0.8).
+- **Breathing** (2026-10-14; Kirill: the chest breathed while the weapons stood still in the
+  picture): `_breathe` takes the upper chest's place against the eyes less its average over
+  `breathing_average` (3 s), and each stance moves by its share (`weapon_breathing` 0.8,
+  `shield_breathing` 0.6), capped at `breathing_limit`, faded out as the step bob comes in.
+  On the idle: the chest moves 1.4 cm up and down and 1.8 cm front to back; the sword's grip
+  1.1 / 1.4 cm, the shield 0.8 / 1.1 cm; at most 0.9 mm a frame (`breathing.gd`). After the
+  idle switches to its mirror image the average takes a few seconds to settle, so the
+  weapons drift about a centimetre sideways meanwhile.
 - **Shadows** come from a hidden third copy of the whole body (`RogueShadow`) with its own
   arm pose (`_pose_shadow_arms`): the hands brought in to `weapon_shadow_reach` from the
   shoulders and the elbows turned down by `weapon_shadow_elbows_down`. Without that the
@@ -272,6 +280,7 @@ The probes (`tools/weapon_probes/`, kept out of the editor's scan by `.gdignore`
 |---|---|---|
 | `lantern_armed_action.gd` | `ACTION` | Weapons up, the whole lantern action at 60 frames a second, either foot forward: least room of each kind (sword against body, lantern, shield, left arm, eyes; arm against body and lantern; knuckles' gap; fist behind the lantern) per tenth of the action, and the fastest move of the blade's tip. `-- --hanging=x,y,z --around=x,y,z` try values. |
 | `lantern_armed_search.gd` | `SEARCH` | Thousands of fist places, elbow sides and rolls at the knob's turn, one per tiny frame, kept where the blade points ahead and the knuckles (or pommel) touch the lantern's body. `-- --under`: fist places under the lantern with blade aims, kept where any part of the hand touches its underside. |
+| `breathing.gd` | `BREATH` | Standing still, weapons up, both idles, breathing on and off: how far the chest, the sword's grip and the shield move against the eyes, and the largest step a frame. |
 | `shield_backward.gd` | `SHIELD` | Jogging in six directions, weapons up and down, looking straight down and level: the least room between the shield's vertices and the trunk's and legs' capsules, and how far the keep-off pushed. |
 | `lantern_under_trace.gd` | `TRACE` | For fist places under the swung lantern and four rolls: where palm, wrist and knuckles end up, and where the blade points. |
 | `lantern_feet.gd` | `LANTERN` | The action with the shield, weapons down and up, either foot: does each hand arrive, does the left hand stay in the strap, shield against body. |

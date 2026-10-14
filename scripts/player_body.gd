@@ -395,6 +395,9 @@ var _relaxed_push: Vector3 = Vector3.ZERO ## the same for the relaxed carry, whe
 var _shield_socket_set: bool = false ## _shield_socket has been worked out with the arm in its stance (not only from the model's data)
 var _shield_shoulder_drawn: float = 0.0 ## m the left shoulder was drawn off the body after the fist this frame
 var _bob_now: Vector3 = Vector3.ZERO ## the bob of the steps this frame (_weapon_bob): both arms move by it
+var _breath_now: Vector3 = Vector3.ZERO ## the chest's breathing this frame, faded (_breathe); each arm moves by its share
+var _chest_average: Vector3 = Vector3.ZERO ## the upper chest's place against the eyes, averaged over breathing_average
+var _chest_average_valid: bool = false
 var _weapon_node: Node3D ## the held weapon's model
 var _weapon_socket: Transform3D ## the fist's middle in the right hand bone's axes (WeaponHold.socket)
 var _weapon_fist: Array[float] = [] ## how far each finger closes round the held weapon
@@ -447,9 +450,12 @@ var _swing_next: int = 0 ## which of ARM_SWINGS the next attack() plays
 @export var weapon_arm_blend: float = 0.15
 ## The right arm holds the weapon up before the body, over whatever clip plays, in the stance
 ## of the WeaponStance node (set by hand in the editor: scripts/weapons/weapon_stance.gd).
-## Off, or with no such node: the arm is the clip's, the weapon still in its fist.
-@export var weapon_raised: bool = true
+## Off, or with no such node: the arm is the clip's, the weapon still in its fist. Off at the
+## start: the game begins with the weapons sheathed (Kirill, 2026-10-14); Q raises them.
+@export var weapon_raised: bool = false
 @export var weapon_raise_time: float = 0.25 ## seconds to bring it up or let it down
+## Whether the lantern is lit when the game begins (Kirill, 2026-10-14: off; L lights it).
+@export var lantern_lit_at_start: bool = false
 ## LOWERED, THE WEAPON IS ON THE BACK, and raising it is a draw over the right shoulder: the
 ## hand goes up behind the shoulder to where the grip lies, takes it there -- behind the head,
 ## where the camera never looks, so the weapon changes from the back to the fist unseen and no
@@ -632,6 +638,18 @@ var _swing_next: int = 0 ## which of ARM_SWINGS the next attack() plays
 @export var weapon_bob_full_speed: float = 3.0
 ## Seconds the bob takes to come in when setting off and to die away when stopping.
 @export var weapon_bob_ease: float = 0.2
+## Standing still the held weapons rise and fall with the chest's breathing (Kirill,
+## 2026-10-14: the chest breathed while the weapons stood still in the picture). The share of
+## the upper chest's movement against the eyes that each stance (shoulder and fist together)
+## follows: 0 = still in the picture, 1 = as much as the chest. It is the clip's own breathing,
+## so another idle brings its own pace; it fades out as the step bob comes in.
+@export_range(0.0, 1.5, 0.05) var weapon_breathing: float = 0.8
+@export_range(0.0, 1.5, 0.05) var shield_breathing: float = 0.6
+## Seconds over which the chest's place is averaged: what the breathing is measured from. Slow
+## changes (crouching, the clip changing) go into the average and do not move the weapons.
+@export var breathing_average: float = 3.0
+## At most this far (m) the breathing moves a stance.
+@export var breathing_limit: float = 0.03
 ## TRIAL 2026-10-13. The arm follows a first-person clip converted from another game's arms
 ## (ArmClip: shoulder, elbow, wrist, the hand's turn and the weapon's place in it, per frame,
 ## from the eyes) in place of the WeaponStance node's markers. Off, or with no such file: the
@@ -722,6 +740,8 @@ func _ready() -> void:
 	for obstacle in LANTERN_OBSTACLES:
 		_lantern_obstacle_bones.append([_skeleton.find_bone((obstacle[0] as String).replace("%s", side)), _skeleton.find_bone((obstacle[1] as String).replace("%s", side)), obstacle[2]])
 	_lantern_light = get_node_or_null(lantern_light_path) as Light3D
+	if _lantern_light:
+		_lantern_light.visible = lantern_lit_at_start
 	equip(weapon)
 	equip_shield(shield)
 	_setup_arm_apart()
@@ -1130,6 +1150,7 @@ func advance(delta: float, camera_pitch: float) -> void:
 	# a jump, crouching) the camera must not be left behind it, looking at the neck.
 	_eye = target + (_eye - target).limit_length(eye_max_lag)
 	_eye_valid = true
+	_breathe(player, delta)
 	_hold_weapon(player, delta) # before the lantern: the reach to it sets off from this pose
 	_hold_shield(player, delta)
 	_place_lantern(player, delta)
@@ -1332,6 +1353,18 @@ func _weapon_bob(delta: float) -> Vector3:
 		_weapon_bob_stride = fposmod(_weapon_bob_stride + delta / stride_seconds, 1.0)
 	return Vector3(sin(_weapon_bob_stride * TAU) * weapon_bob_side, sin(_weapon_bob_stride * TAU * 2.0) * weapon_bob_height, 0.0) * _weapon_bob_amount
 
+## The chest's breathing against the eyes (see weapon_breathing): its place now less its slow
+## average, faded out as the step bob comes in. Sets _breath_now.
+func _breathe(player: Node3D, delta: float) -> void:
+	if _chest_bone < 0:
+		_chest_bone = _skeleton.find_bone("UpperChest")
+	var chest := (player.global_transform.affine_inverse() * _skeleton.global_transform * _skeleton.get_bone_global_pose(_chest_bone)).origin - _eye
+	if not _chest_average_valid:
+		_chest_average = chest
+		_chest_average_valid = true
+	_chest_average = _chest_average.lerp(chest, 1.0 - exp(-delta / maxf(breathing_average, 0.01)))
+	_breath_now = (chest - _chest_average).limit_length(breathing_limit) * (1.0 - clampf(_weapon_bob_amount, 0.0, 1.0))
+
 ## Puts a weapon in the right hand, in place of the one held (null: none). Any WeaponData
 ## fits: the hand's socket is worked out from its bones (WeaponHold).
 func equip(data: WeaponData) -> void:
@@ -1435,7 +1468,7 @@ func _hold_shield(player: Node3D, delta: float) -> void:
 	for bone in arm_bones:
 		in_clip.append(_skeleton.get_bone_pose_rotation(bone))
 	var to_skeleton := (player.global_transform.affine_inverse() * _skeleton.global_transform).affine_inverse()
-	var held_from := _eye + _bob_now
+	var held_from := _eye + _bob_now + _breath_now * shield_breathing
 	var fist := _shield_stance.fist_in_hand(_skeleton, shield.grip_radius)
 	if weapon_shoulder_on_body:
 		var own_shoulder := _skeleton.get_bone_global_pose(arm["upper"]).origin
@@ -1651,7 +1684,7 @@ func _hold_weapon(player: Node3D, delta: float) -> void:
 			in_clip.append(_skeleton.get_bone_pose_rotation(bone))
 		var to_skeleton := (player.global_transform.affine_inverse() * _skeleton.global_transform).affine_inverse()
 		_bob_now = _weapon_bob(delta)
-		var held_from := _eye + _bob_now # the eyes, and the bob of the steps
+		var held_from := _eye + _bob_now + _breath_now * weapon_breathing # the eyes, the bob of the steps and the breathing
 		if reference:
 			# The wrist itself is put where the clip has it (no reach limit: its arm is shorter).
 			WeaponHold.solve_arm(_skeleton, "Right", to_skeleton, held_from + (frame["shoulder"] as Vector3), held_from + (frame["wrist"] as Vector3),

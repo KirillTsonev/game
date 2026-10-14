@@ -122,6 +122,10 @@ func run(quit_when_done: bool, label: String) -> void:
 	# That also stops the lantern's flame flicker (scripts/lantern_flicker.gd): put it at its
 	# resting brightness, so every run measures the same light.
 	var flicker := _player.get_node_or_null("Lantern")
+	# The game starts with it off since 2026-10-14 (PlayerBody.lantern_lit_at_start); every
+	# baseline before that was measured with it lit, and its "lantern" switch needs it on.
+	if flicker is Light3D:
+		(flicker as Light3D).visible = true
 	if flicker and flicker.has_method("hold_steady"):
 		flicker.hold_steady()
 	# Whole-run conditions from user arguments, to split one layer's cost (with --bench-only=layer:<x>):
