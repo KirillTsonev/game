@@ -10,7 +10,8 @@ extends SceneTree
 var player: Node3D
 var body: PlayerBody
 var sk: Skeleton3D
-const CHAINS := [["RightThumbMetacarpal", "RightThumbProximal", "RightThumbDistal"], ["RightIndexProximal", "RightIndexIntermediate", "RightIndexDistal"], ["RightMiddleProximal", "RightMiddleIntermediate", "RightMiddleDistal"], ["RightRingProximal", "RightRingIntermediate", "RightRingDistal"], ["RightLittleProximal", "RightLittleIntermediate", "RightLittleDistal"]]
+const FINGER_RADIUS := 0.009 ## a finger's half thickness (m), for the CLIP test
+const CHAINS :=[["RightThumbMetacarpal", "RightThumbProximal", "RightThumbDistal"], ["RightIndexProximal", "RightIndexIntermediate", "RightIndexDistal"], ["RightMiddleProximal", "RightMiddleIntermediate", "RightMiddleDistal"], ["RightRingProximal", "RightRingIntermediate", "RightRingDistal"], ["RightLittleProximal", "RightLittleIntermediate", "RightLittleDistal"]]
 
 func _init() -> void:
 	_run.call_deferred()
@@ -100,9 +101,16 @@ func _run() -> void:
 				var last := sk.get_bone_global_pose(sk.find_bone(chain[-1]))
 				var before := sk.get_bone_global_pose(sk.find_bone(chain[-2]))
 				points.append(to_board * (last * Vector3(0, 0.75 * last.origin.distance_to(before.origin), 0)))
+				# Each segment as a finger is thick: the bone's line and four lines FINGER_RADIUS off it.
+				var radius := FINGER_RADIUS * to_board.basis.get_scale().x
 				for k in points.size() - 1:
-					if not tri.intersect_segment(points[k], points[k + 1]).is_empty():
-						through_list.append("%s seg %d" % [chain[-1], k])
+					var along := (points[k + 1] - points[k]).normalized()
+					var side := along.cross(Vector3.UP if absf(along.y) < 0.9 else Vector3.RIGHT).normalized()
+					var other := along.cross(side)
+					for offset: Vector3 in [Vector3.ZERO, side * radius, -side * radius, other * radius, -other * radius]:
+						if not tri.intersect_segment(points[k] + offset, points[k + 1] + offset).is_empty():
+							through_list.append("%s seg %d%s" % [chain[-1], k, "" if offset == Vector3.ZERO else " (skin)"])
+							break
 			if not through_list.is_empty():
 				print("CLIP %.3f %s" % [through, ", ".join(through_list)])
 			if frames % 6 == 0:

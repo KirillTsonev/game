@@ -172,6 +172,44 @@ How it works now (`weapon_arm_drawn_apart`):
   strap's fingers had to close later and open earlier (`grip`: 0.39-0.47, 0.59-0.65). Next
   steps proposed: overshoot on arrival with the wrist and fingers trailing, and a very slow
   millimetre drift in holds.
+- **Shield fidgets, weapons drawn** (2026-10-14, not judged in game yet): `shield_settle` (a
+  shrug and lift that re-seats the shield, 1.3 s) and `shield_glance` (the shield brought up and
+  in, its face rolled 124 deg toward the eyes, held, and back: 1.3 s in, 0.9 s held, 0.9 s back
+  -- Kirill: slower in, no drifting "look" stage, just a hold at the peak; `"hold"` makes the
+  one key a peak eased in, held and eased out, since two equal keys on one curve still bulge
+  between them). Through the hold it turns slowly about the line along its length through its
+  middle, the side facing the eyes moving right (`"twist"`, 12 deg; the face swings about 16
+  deg in the picture, the middle and the board's slant in the picture stay put): the forearm
+  turned about that line (`_shield_length`, the board's longest side), then the whole arm moved
+  back by what that moved the board's middle. Kirill asked for it for "an examining vibe";
+  turned from the elbow about the way to the eyes it slid 2 cm aside ("not a translate"), and
+  turned about the face's axis it spun flat in the picture ("I meant along the shield's length
+  in the middle"). Unwound on the way back. Since: held 0.4 s before the twist, the twist in
+  0.4 s, held turned 0.77 s (3.77 s in all; "rotate it a bit quicker and hold it rotated a bit
+  longer", then "hold the shield both before and after rotation a bit longer", then held
+  turned 1.4 s -> 1.1 -> 0.77, "30% less"), and the head
+  looks at it ("slight head tilts/turns to show that the MC is examining"): `"view"` turned 8
+  deg left with no dip (a dip would move the drawn weapons, which follow the view's pitch),
+  `"view_tilt"` 3 deg going to 5 as the twist turns (`_fidget_tilt`, + = left ear down; a
+  "view" dip of 0 now leaves the pitch alone), the head in by 0.3 and back from 0.7, both
+  ahead of the shield. With "view" the glance is ended by moving the mouse (`looked()`). `"shield_keys"` move the stance's hand and
+  shoulder and roll the forearm (`_shield_fidget_pose`, in `_hold_shield`); the sword stays in
+  its stance. The roll is put on the forearm bone about its own line AFTER the solve: as a turn
+  of the asked hand about the stance's forearm line, part of it went into the wrist once the
+  hand had moved and the face stopped turning at about 70 deg. Which way turns the face toward
+  the eyes is read from the stance (`_read_glance_axes`, `_glance_sign`), so any shield gets
+  it. The stance's shield sits about 55 deg below the middle of the view: rolled alone it
+  stayed out of the picture, so the glance also lifts it 16 cm and brings it 10 cm in; at the
+  look its face is 31 deg off the way to the eyes (from 123), its middle 26 deg left and 21
+  below the middle of the view, 12 cm from the body, 20 from the eyes. While a shield fidget
+  plays the shield's seat on the forearm is not read again from the arm. Probe:
+  `tools/weapon_probes/shield_fidgets.gd`.
+- **`inspect` timing** (2026-10-14): `"key_times"` set when each key is reached (the flat at
+  1.4 s, the edge at 2.9, back by 4.0), joined by one smooth monotone curve
+  (`_smooth_through`, at rest at both ends, never stopping at a key). Eased once over the whole,
+  the keys came at 1.3 and 1.9 s and the last 2.1 s were the way back (Kirill: "keep inspecting
+  it longer and hurry the moving to idle up"). The way back now takes 1.1 s, the tip at most
+  1.1 m/s.
 - **Checked against the realism aim** (2026-10-14, `docs/custom_animations.md`): `inspect` and
   `wrist_roll` were already one motion each. `lantern_look` waited -- the lift began as the
   hand arrived and the turn as the lift ended, and its last 0.8 s nothing moved: now the lift
@@ -233,7 +271,13 @@ How it works now (`weapon_arm_drawn_apart`):
   and as it opened. It now closes while the hand is still off to the side and opens once it is
   off again (`"rim_thumb"`), and the grip sits 1 cm toward the near face (`"rim_across"`; at
   2 cm the forefinger's tip went through the far face in the tug). The probe tests each finger
-  bone against the board's triangles (CLIP lines). Probe:
+  bone against the board's triangles (CLIP lines). Later the same day (Kirill's screenshot: a
+  finger in the board during the grip) the probe tests each finger as THICK (its line and four
+  lines `FINGER_RADIUS` 9 mm off it): the thumb's last joint and tip were in the near face all
+  through the grip while its line stayed out. Closing it more fixed it (`"rim_thumb_closed"`
+  1.1, was 0.9: its tip 1.7 cm off the grip point on the near side, from 0.3; at 0.6 it stopped
+  on the far side and went through, at 1.3 it stood off the face). Left: a fingertip's skin
+  touching for one frame now and then. Probe:
   `tools/weapon_probes/strap_path.gd`. Earlier rim notes: the right
   hand grips its RIM, tugs once -- the
   shield moves 0.6 of the tug, `_shield_tug` -- and lets go; only with a shield on the

@@ -412,6 +412,7 @@ var _fidget_still: float = 0.0 ## seconds stood still, weapons up, since the las
 var _fidget_wait: float = -1.0 ## seconds to stand still before the next one (picked at random)
 var _fidget_driven: bool = false ## the animation debug panel (I) sets its time: it does not run, end or cancel by itself
 var _fidget_turn: float = 0.0 ## radians the view is turned right by a fidget that has the view, just now
+var _fidget_tilt: float = 0.0 ## radians the view is tilted (+ = left ear down) by such a fidget, just now
 var _fidget_hang: Vector3 = Vector3.DOWN ## from the hook to the lantern's middle before lantern_look lifts it
 var _lantern_spin: float = 0.0 ## radians the lantern is turned about its own long axis just now (lantern_look)
 var _shield_tug: Vector3 = Vector3.ZERO ## how far the strap fidget's tug moves the shield just now (the Player's axes)
@@ -423,10 +424,13 @@ var _rim_local := Vector3.INF ## the strap fidget's rim point as it glides to th
 var _rim_local_speed := Vector3.ZERO ## ... and its speed (the spring's)
 const RIM_GLIDE := 0.15 ## seconds: how slowly that point follows the pick
 var _fidget_shield_push := Vector3.ZERO ## the strap fidget's own keep-off of the board (as _relaxed_push)
+var _shield_forearm_axis := Vector3.ZERO ## the drawn shield's forearm line in the stance (the Player's axes), for the shield fidgets
+var _glance_sign := 1.0 ## which way a roll about it turns the shield's face toward the eyes
 var _elbow_restore := Vector3.INF ## the left lower arm's own place before the strap fidget moved it this frame (INF = not moved)
 var _shield_rim: PackedVector3Array = [] ## the shield model's vertices on its outer edge, in its own axes (equip_shield)
 var _shield_rim_middle: Vector3 = Vector3.ZERO ## the middle of its board, in its own axes
 var _shield_face: Vector3 = Vector3.FORWARD ## the way its board's face looks (its thinnest side), in its own axes
+var _shield_length: Vector3 = Vector3.UP ## the board's length (its longest side), in its own axes
 var _weapon_node: Node3D ## the held weapon's model
 var _weapon_socket: Transform3D ## the fist's middle in the right hand bone's axes (WeaponHold.socket)
 var _weapon_fist: Array[float] = [] ## how far each finger closes round the held weapon
@@ -1113,7 +1117,7 @@ func view_offset() -> Vector3:
 	if weapon_sheath_on_back and _weapon_node != null and _stance != null and _weapon_up > 0.0 and _weapon_up < 1.0:
 		# Most at the moment the hand grips the weapon on the back.
 		lean = smoothstep(0.0, weapon_draw_grab, _weapon_up) * (1.0 - smoothstep(weapon_draw_grab, 1.0, _weapon_up))
-	return Vector3(_view_dip, -deg_to_rad(toggle_turn_degrees) * _toggle_view - _fidget_turn + deg_to_rad(weapon_draw_head_turn) * lean,-deg_to_rad(toggle_roll_degrees) * _toggle_view + deg_to_rad(weapon_draw_head_tilt) * lean)
+	return Vector3(_view_dip, -deg_to_rad(toggle_turn_degrees) * _toggle_view - _fidget_turn + deg_to_rad(weapon_draw_head_turn) * lean,-deg_to_rad(toggle_roll_degrees) * _toggle_view + deg_to_rad(weapon_draw_head_tilt) * lean + _fidget_tilt)
 
 ## One frame of turning the lantern on / off: the light, the view, the body's bend.
 func _advance_toggle(delta: float, camera_pitch: float) -> void:
@@ -1439,7 +1443,11 @@ const FIDGETS := {
 	# turn back (three keys in about the same place) and the way to the stance came after a
 	# pause (Kirill). From the turn it goes straight back, the edge turning back on the way;
 	# the fist drifts nearer during the turn so the arm never stands still.
-	&"inspect": {"time": 4.0, "stages": ["to the flat", "turn toward the edge", "back to the stance"], "keys": [
+	# "key_times": when each key is reached (shares of the time) -- the flat at 1.4 s, the edge at
+	# 2.9, back by 4.0. (Eased once over the whole, the keys came at 1.3 and 1.9 s and the last
+	# 2.1 s were the way back: Kirill, "keep inspecting it longer and hurry the moving to idle
+	# up".)
+	&"inspect": {"time": 4.0, "stages": ["to the flat", "turn toward the edge", "back to the stance"], "key_times": [0.35, 0.725], "keys": [
 		[0.3, Vector3(0.07, -0.27, -0.39), Vector3(0.05, 0.97, -0.25), Vector3(-1.0, 0.0, 0.0)],
 		[0.6, Vector3(0.03, -0.23, -0.34), Vector3(0.0, 0.96, -0.3), Vector3(-0.6, 0.2, 0.8)],
 	]},
@@ -1468,7 +1476,7 @@ const FIDGETS := {
 	&"strap": {"time": 2.8, "when": &"sheathed", "stages": ["raise and grip", "tug", "let go and lower"], "bounds": [0.371, 0.55],
 		"raise_to": 0.357, "view_in": 0.314, "view_out": 0.679, "view_back": 0.993, "tug_at": Vector2(0.371, 0.179), "tugs": 2,
 		"lower": Vector2(0.564, 0.921), "reach_out": Vector2(0.564, 0.921), "grip_open": Vector2(0.529, 0.611),
-		"view": Vector2(58.0, -10.0), "grip": &"rim", "rim_at": Vector2(6.0, 7.0), "reach": Vector2(0.029, 0.357), "grip_close": Vector2(0.3, 0.371), "reach_even": 0.5, "reach_soft": 0.03, "rim_around": Vector2(0.4, 0.08), "rim_thumb": Vector4(0.1, 0.2, 0.721, 0.821), "rim_across": -0.01, "shield_arm": Vector3(0.22, -0.16, -0.4), "shield_around": Vector3(-0.05, -0.3, -0.45), "strap_along": 0.8, "rim_out": 0.02, "tug": 0.012},
+		"view": Vector2(58.0, -10.0), "grip": &"rim", "rim_at": Vector2(6.0, 7.0), "reach": Vector2(0.029, 0.357), "grip_close": Vector2(0.3, 0.371), "reach_even": 0.5, "reach_soft": 0.03, "rim_around": Vector2(0.4, 0.08), "rim_thumb": Vector4(0.1, 0.2, 0.721, 0.821), "rim_thumb_closed": 1.1, "rim_across": -0.01, "shield_arm": Vector3(0.22, -0.16, -0.4), "shield_around": Vector3(-0.05, -0.3, -0.45), "strap_along": 0.8, "rim_out": 0.02, "tug": 0.012},
 	# Only while it is lit ("lit"): the palm comes in behind the lantern as in toggle_lantern
 	# (toggle_cup_offset), swings it forward on its hook ("lift_degrees") into the picture,
 	# turns it ONCE about its own long axis ("turn_degrees") and back, and lets it back. (It
@@ -1483,6 +1491,39 @@ const FIDGETS := {
 	&"lantern_look": {"time": 3.45, "when": &"sheathed", "lit": true, "stages": ["look and reach", "lift", "turn it", "lower and let go"], "bounds": [0.313, 0.47, 0.783],
 		"view": Vector2(75.0, 15.0), "view_in": 0.287, "view_out": 0.704, "view_back": 0.991, "lift_degrees": 50.0, "lean_degrees": 50.0, "turn_degrees": 70.0,
 		"reach": Vector4(0.104, 0.365, 0.757, 0.965), "lift": Vector4(0.313, 0.522, 0.678, 0.835), "turn_at": Vector2(0.47, 0.313), "let_go": Vector2(0.704, 0.809)},
+	# WEAPONS DRAWN, THE SHIELD ARM ("shield_keys"; the sword stays in its stance): [share of
+	# the eased time, the hand moved (m, the stance's axes: +X right, +Y up, +Z back toward the
+	# eyes), the forearm rolled (degrees, + = the shield's face toward the eyes, worked out from
+	# the stance: _glance_sign), the shoulder moved (m)]; the stance before the first key and
+	# after the last, one eased curve through them as the sword's keys (_key_paced). 2026-10-14,
+	# not judged in game yet.
+	# A shrug and lift that re-seats the shield on the forearm: up with a little roll, down just
+	# past where it was, and back.
+	&"shield_settle": {"time": 1.3, "stages": ["shrug and lift", "settle"], "bounds": [0.45], "shield_keys": [
+		[0.35, Vector3(0.0, 0.045, 0.01), 4.0, Vector3(0.0, 0.03, 0.0)],
+		[0.68, Vector3(0.0, -0.012, 0.0), -2.0, Vector3(0.0, -0.005, 0.0)],
+	]},
+	# The shield turned in to look at its face: a little toward the middle, up and nearer, its
+	# face rolled toward the eyes, held there, and back. "hold": [up by, back from] (shares of
+	# the time) -- with "hold" the one key is the peak, eased in, held, eased out. Seconds: in
+	# 0-1.3, held to 2.2, back by 3.1. (Kirill: turn it in slower, no "look" stage -- it drifted
+	# between two keys -- just held at the peak a little longer.)
+	# "twist": [degrees, from, to] -- the shield turned about the line along its length through
+	# its middle (positive = the side facing the eyes moves right), slowly through the hold, and
+	# unwound on the way back (Kirill: "a little rotation when the shield's at the peak, to
+	# really give an examining vibe", "along the shield's length in the middle").
+	# Seconds since: in 0-1.3, held 0.4 s, the twist 1.7-2.1, held turned to 2.87, back by 3.77
+	# (Kirill: "rotate it a bit quicker and hold it rotated a bit longer", then "hold the shield
+	# both before and after rotation a bit longer", then "little less after rotation" (1.4 s ->
+	# 1.1), then 30 % less again (0.77 s)); the head in by 1.05, back 2.72-3.52.
+	# The head looks at it (Kirill: "slight head tilts/turns to show that the MC is examining the
+	# shield"): 8 deg left (the shield's middle is 27 left: the eyes do the rest), tilted 3 deg
+	# and then 5 as it turns; the head is in before the shield (1.05 s against 1.3) and leaves
+	# first (from 2.72 s, the shield from 2.87). No dip: the drawn weapons follow the view's pitch.
+	&"shield_glance": {"time": 3.77, "stages": ["turn it in", "back"], "bounds": [0.761], "hold": Vector2(0.345, 0.761), "twist": Vector3(12.0, 0.451, 0.557),
+		"view": Vector2(0.0, -8.0), "view_in": 0.279, "view_out": 0.721, "view_back": 0.934, "view_tilt": Vector2(3.0, 5.0), "shield_keys": [
+		[0.5, Vector3(0.1, 0.16, 0.05), 124.0, Vector3(0.0, 0.03, 0.0)],
+	]},
 	# Two loose circles of the blade round the way it points in the stance.
 	# (At 2.2 s the tip moved up to 7.5 cm a frame: quicker than a loose roll.)
 	&"wrist_roll": {"time": 3.5, "stages": ["tip in", "two circles", "back"], "circle": {"turns": 2.0, "tilt_degrees": 25.0, "hand": 0.03, "from": 0.3, "to": 0.7}},
@@ -1514,6 +1555,8 @@ func _fidget_fits(fidget_name: StringName) -> bool:
 		if fidget.has("shield_arm") and (_shield_node == null or shield == null or not shield.on_forearm):
 			return false
 		return true
+	if fidget.has("shield_keys") and (_shield_node == null or shield == null or not shield.on_forearm or _shield_up < 1.0 or _shield_stance == null or weapon_shoulder_on_body):
+		return false
 	return _weapon_node != null and _weapon_up >= 1.0 and not _weapon_on_back and not weapon_arm_from_clips
 
 ## Starts a fidget by name at once (for checks and probes; the game picks them by itself).
@@ -1545,6 +1588,9 @@ func debug_animations() -> Array[Dictionary]:
 		if fidget.has("bounds"):
 			for bound: float in fidget["bounds"]:
 				bounds.append(bound)
+		elif fidget.has("key_times"):
+			for share: float in fidget["key_times"]:
+				bounds.append(share)
 		elif fidget.has("keys"):
 			for key: Array in fidget["keys"]:
 				bounds.append(_uneased(float(key[0])))
@@ -1627,6 +1673,38 @@ static func _even_on_curve(start: Vector3, bend: Vector3, end: Vector3, share: f
 			return (i - 1 + part) / STEPS
 	return 1.0
 
+## A smooth, never-backward curve through the points (xs[i], ys[i]) (xs and ys rising from 0 to
+## 1), flat at both ends and at no point between (a monotone cubic: Fritsch and Carlson), at `x`.
+static func _smooth_through(xs: Array[float], ys: Array[float], x: float) -> float:
+	var n := xs.size()
+	var slopes: Array[float] = []
+	for i in n - 1:
+		slopes.append((ys[i + 1] - ys[i]) / maxf(xs[i + 1] - xs[i], 0.000001))
+	var tangents: Array[float] = [0.0]
+	for i in range(1, n - 1):
+		tangents.append(0.0 if slopes[i - 1] * slopes[i] <= 0.0 else (slopes[i - 1] + slopes[i]) * 0.5)
+	tangents.append(0.0)
+	for i in n - 1: # no overshoot
+		if slopes[i] == 0.0:
+			tangents[i] = 0.0
+			tangents[i + 1] = 0.0
+			continue
+		var a := tangents[i] / slopes[i]
+		var b := tangents[i + 1] / slopes[i]
+		var length := a * a + b * b
+		if length > 9.0:
+			var scale := 3.0 / sqrt(length)
+			tangents[i] = scale * a * slopes[i]
+			tangents[i + 1] = scale * b * slopes[i]
+	var index := 0
+	while index < n - 2 and x > xs[index + 1]:
+		index += 1
+	var width := maxf(xs[index + 1] - xs[index], 0.000001)
+	var t := clampf((x - xs[index]) / width, 0.0, 1.0)
+	var t2 := t * t
+	var t3 := t2 * t
+	return (2.0 * t3 - 3.0 * t2 + 1.0) * ys[index] + (t3 - 2.0 * t2 + t) * width * tangents[index] + (-2.0 * t3 + 3.0 * t2) * ys[index + 1] + (t3 - t2) * width * tangents[index + 1]
+
 ## The share of the time at which _ease reaches `eased`.
 static func _uneased(eased: float) -> float:
 	var low := 0.0
@@ -1679,16 +1757,27 @@ func _fidget_in_out(from_in: float, to_in: float, from_out: float, to_out: float
 	return _ease(from_in, to_in, at) * (1.0 - _ease(from_out, to_out, at)) * _fidget_fade
 
 ## A fidget that has the view ("view" in FIDGETS) dips it toward what it looks at, and turns it
-## a little right; no lower than the Player already looks. Adds to _view_dip, sets _fidget_turn.
+## a little right; no lower than the Player already looks. Adds to _view_dip, sets _fidget_turn
+## and _fidget_tilt. A dip of 0 leaves the pitch alone. "view_tilt": [degrees, degrees] the head
+## tilts (+ = left ear down), the first as it looks, going to the second as the "twist" turns.
 func _fidget_view(camera_pitch: float) -> void:
 	_fidget_turn = 0.0
+	_fidget_tilt = 0.0
 	if _fidget == &"" or not (FIDGETS[_fidget] as Dictionary).has("view"):
 		return
 	var view: Vector2 = FIDGETS[_fidget]["view"]
 	var fidget: Dictionary = FIDGETS[_fidget]
 	var amount := _fidget_in_out(0.0, float(fidget.get("view_in", 0.22)), float(fidget.get("view_out", 0.78)), float(fidget.get("view_back", 1.0)))
-	_view_dip += minf(-deg_to_rad(view.x) - camera_pitch, 0.0) * amount
+	if view.x > 0.0:
+		_view_dip += minf(-deg_to_rad(view.x) - camera_pitch, 0.0) * amount
 	_fidget_turn = deg_to_rad(view.y) * amount
+	if fidget.has("view_tilt"):
+		var tilt: Vector2 = fidget["view_tilt"]
+		var turned := 0.0
+		if fidget.has("twist"):
+			var twist: Vector3 = fidget["twist"]
+			turned = _ease(twist.y, twist.z, _fidget_share())
+		_fidget_tilt = deg_to_rad(lerpf(tilt.x, tilt.y, turned)) * amount
 
 ## The sheathed fidgets' right arm (and the lantern's lift), after the clip and before the
 ## lantern is placed. `pivot` is the lantern's hook (the Player's space).
@@ -1905,7 +1994,8 @@ func _fidget_sheathed(bones: Transform3D, pivot: Vector3, delta: float) -> void:
 		var thumb_curl := curl * 0.6
 		if fidget.has("rim_thumb"):
 			var thumb_at: Vector4 = fidget["rim_thumb"]
-			thumb_curl = lerpf(toggle_open_curl, 0.9, _ease(thumb_at.x, thumb_at.y, at) * (1.0 - _ease(thumb_at.z, thumb_at.w, at))) * 0.6
+			# "rim_thumb_closed": how far it closes (radians a joint, before the thumb's 0.6 share).
+			thumb_curl = lerpf(toggle_open_curl, float(fidget.get("rim_thumb_closed", 0.9)), _ease(thumb_at.x, thumb_at.y, at) * (1.0 - _ease(thumb_at.z, thumb_at.w, at))) * 0.6
 		_set_fingers(arm, [thumb_curl, curl, curl, curl, curl], grip_at)
 	elif fidget.has("lift_degrees"):
 		# The lantern: how it hangs just before the hand lifts it, then lifted forward on its
@@ -2000,7 +2090,16 @@ func _fidget_pose(hand: Vector3, turn: Basis, held_from: Vector3, with_view: Bas
 		places.append(hand)
 		blades.append(blade_now)
 		edges.append(edge_now)
-		var eased := _key_paced(times, _ease(0.0, 1.0, at))
+		var eased := _ease(0.0, 1.0, at)
+		if fidget.has("key_times"):
+			# Each key reached at its own moment ("key_times", shares of the time): one smooth
+			# curve through them, at rest at both ends, never stopping at a key.
+			var at_times: Array[float] = [0.0]
+			for share: float in fidget["key_times"]:
+				at_times.append(share)
+			at_times.append(1.0)
+			eased = _smooth_through(at_times, times, at)
+		eased = _key_paced(times, eased)
 		to_hand = _through(places, times, eased)
 		var frame := _blade_frame(_through(blades, times, eased), _through(edges, times, eased))
 		to_frame = frame * _blade_frame(blade_now, edge_now).inverse()
@@ -2129,6 +2228,8 @@ func equip_shield(data: WeaponData) -> void:
 		_shield_face = Vector3.ZERO
 		_shield_face[thin] = 1.0
 		_shield_rim_middle = (low + high) * 0.5
+		_shield_length = Vector3.ZERO
+		_shield_length[size.max_axis_index()] = 1.0
 		# The OUTLINE: the board split into 90 slices by angle round its middle, and in each the
 		# vertices within 1 cm of the outermost. (Keeping the outer 8 % by distance from the
 		# middle kept only the top corners and the bottom tip of a shield taller than it is
@@ -2198,13 +2299,53 @@ func _hold_shield(player: Node3D, delta: float) -> void:
 		_shield_shoulder_drawn = _skeleton.get_bone_global_pose(arm["upper"]).origin.distance_to(own_shoulder)
 	else:
 		var with_view := Basis(Vector3.RIGHT, _look_pitch * weapon_follows_view)
+		# A shield fidget moves the stance's hand and shoulder and rolls the forearm (_shield_fidget_pose).
+		var hand_from := _shield_stance.hand_from_eyes()
+		var shoulder_from := _shield_stance.shoulder_from_eyes()
+		var shield_turn := with_view * _shield_stance.hand_turn()
+		var fidgeting := _fidget != &"" and (FIDGETS[_fidget] as Dictionary).has("shield_keys")
+		var roll := 0.0
+		var twist := 0.0
+		if fidgeting:
+			var posed := _shield_fidget_pose()
+			hand_from += posed[0]
+			shoulder_from += posed[1]
+			roll = (posed[2] as float) * _glance_sign
+			twist = posed[3]
 		for attempt in 2:
 			var from := held_from + (_shield_push if attempt == 1 else Vector3.ZERO)
-			WeaponHold.solve_arm(_skeleton, "Left", to_skeleton, from + with_view * _shield_stance.shoulder_from_eyes(), from + with_view * _shield_stance.hand_from_eyes(),
-					with_view * _shield_stance.elbow_toward(), with_view * _shield_stance.hand_turn(), fist, _shield_stance.max_reach)
-			if shield.on_forearm:
+			WeaponHold.solve_arm(_skeleton, "Left", to_skeleton, from + with_view * shoulder_from, from + with_view * hand_from,
+					with_view * _shield_stance.elbow_toward(), shield_turn, fist, _shield_stance.max_reach)
+			if absf(roll) > 0.0001:
+				# The forearm rolled about its own line as solved, the hand and the shield with it.
+				# (A turn of the asked hand about the stance's forearm line went partly into the
+				# wrist once the hand had moved: the face stopped turning at about 70 deg.)
+				var lower := _skeleton.get_bone_global_pose(arm["lower"])
+				var along := (_skeleton.get_bone_global_pose(arm["hand"]).origin - lower.origin).normalized()
+				lower.basis = Basis(along, roll) * lower.basis
+				_skeleton.set_bone_global_pose(arm["lower"], lower)
+			if absf(twist) > 0.0001:
+				# The shield turned about the line along its length through its middle (Kirill:
+				# "along the shield's length in the middle"; turned about its face's axis it spun
+				# flat, and turned from the elbow it slid aside): the forearm turned that way,
+				# then the whole arm moved back by what that moved the shield's middle (the drawn
+				# arm's shoulder is placed anyway).
+				var lower := _skeleton.get_bone_global_pose(arm["lower"])
+				var board := lower * WeaponHold.in_hand(_shield_socket, shield)
+				var middle := board * _shield_rim_middle
+				var axis := (board.basis * _shield_length).normalized()
+				if axis.dot(to_skeleton.basis * Vector3.UP) < 0.0:
+					axis = -axis # toward its upper end: a positive twist moves the side facing the eyes to the right
+				lower.basis = Basis(axis, twist) * lower.basis
+				_skeleton.set_bone_global_pose(arm["lower"], lower)
+				var moved := (_skeleton.get_bone_global_pose(arm["lower"]) * WeaponHold.in_hand(_shield_socket, shield)) * _shield_rim_middle - middle
+				var upper := _skeleton.get_bone_global_pose(arm["upper"])
+				upper.origin -= moved
+				_skeleton.set_bone_global_pose(arm["upper"], upper)
+			if shield.on_forearm and not fidgeting:
 				# Read every frame, with the arm fully in the stance (before the blend with the
-				# clip): the Grip marker can be changed while the game runs.
+				# clip): the Grip marker can be changed while the game runs. Not during a shield
+				# fidget, whose arm is not in the stance.
 				_shield_socket = _shield_stance.forearm_socket(_skeleton, shield.grip_radius)
 				_shield_socket_set = true
 				_shield_hand_in_stance = _skeleton.get_bone_pose_rotation(arm["hand"])
@@ -2227,6 +2368,54 @@ func _hold_shield(player: Node3D, delta: float) -> void:
 	if weight > 0.5 or relaxed:
 		_shield_stance.pose_fingers(_skeleton, shield.grip_radius)
 	_shield_now = _shield_socket
+	if weight >= 0.999 and not weapon_shoulder_on_body and (_fidget == &"" or not (FIDGETS[_fidget] as Dictionary).has("shield_keys")):
+		_read_glance_axes(player)
+
+## For the shield fidgets, from the arm in the stance: the forearm's line (the Player's axes) and
+## which way a roll about it turns the shield's face toward the eyes (_glance_sign).
+func _read_glance_axes(player: Node3D) -> void:
+	var arm: Dictionary = _arms["Left"]
+	var to_player := player.global_transform.affine_inverse() * _skeleton.global_transform
+	var lower := _skeleton.get_bone_global_pose(arm["lower"])
+	var wrist := _skeleton.get_bone_global_pose(arm["hand"]).origin
+	var forearm := (to_player.basis * (wrist - lower.origin)).normalized()
+	var placed := to_player * lower * _shield_socket
+	var faces := (to_player.basis * lower.basis.orthonormalized() * _shield_socket.basis.x).normalized()
+	var turning := forearm.cross(faces).dot(_eye - placed.origin)
+	if forearm.is_finite() and absf(turning) > 0.000001:
+		_shield_forearm_axis = forearm
+		_glance_sign = signf(turning)
+
+## The shield fidget playing: [the hand moved, the shoulder moved (both in the stance's axes),
+## the forearm's roll (radians)], through "shield_keys" as _fidget_pose goes through the sword's.
+func _shield_fidget_pose() -> Array:
+	var fidget: Dictionary = FIDGETS[_fidget]
+	if fidget.has("hold"):
+		# One peak (the first key), eased in by "hold".x, held, eased out from "hold".y.
+		var hold: Vector2 = fidget["hold"]
+		var peak: Array = (fidget["shield_keys"] as Array)[0]
+		var amount := _fidget_in_out(0.0, hold.x, hold.y, 1.0)
+		var twisted := 0.0
+		if fidget.has("twist"):
+			# Turned on through the hold, and unwound with the way back.
+			var twist: Vector3 = fidget["twist"]
+			twisted = deg_to_rad(twist.x) * _ease(twist.y, twist.z, _fidget_share()) * (1.0 - _ease(hold.y, 1.0, _fidget_share())) * _fidget_fade
+		return [(peak[1] as Vector3) * amount, (peak[3] as Vector3) * amount, deg_to_rad(float(peak[2])) * amount, twisted]
+	var times: Array[float] = [0.0]
+	var hands: Array[Vector3] = [Vector3.ZERO]
+	var shoulders: Array[Vector3] = [Vector3.ZERO]
+	var rolls: Array[Vector3] = [Vector3.ZERO]
+	for key: Array in fidget["shield_keys"]:
+		times.append(float(key[0]))
+		hands.append(key[1] as Vector3)
+		rolls.append(Vector3(deg_to_rad(float(key[2])), 0.0, 0.0))
+		shoulders.append(key[3] as Vector3)
+	times.append(1.0)
+	hands.append(Vector3.ZERO)
+	shoulders.append(Vector3.ZERO)
+	rolls.append(Vector3.ZERO)
+	var eased := _key_paced(times, _ease(0.0, 1.0, _fidget_share()))
+	return [_through(hands, times, eased) * _fidget_fade, _through(shoulders, times, eased) * _fidget_fade, _through(rolls, times, eased).x * _fidget_fade, 0.0]
 
 ## Where the shield sits on the forearm depends on the ShieldStance's Grip marker, which is
 ## read with the arm in its stance. Until the arm had been there once the shield sat as the
@@ -2500,7 +2689,7 @@ func _hold_weapon(player: Node3D, delta: float) -> void:
 				var with_view := Basis(Vector3.RIGHT, _look_pitch * weapon_follows_view)
 				var hand_at := held_from + with_view * _stance.hand_from_eyes()
 				var hand_turn := with_view * _stance.hand_turn()
-				if _fidget != &"" and (FIDGETS[_fidget] as Dictionary).get("when", &"drawn") == &"drawn":
+				if _fidget != &"" and (FIDGETS[_fidget] as Dictionary).get("when", &"drawn") == &"drawn" and not (FIDGETS[_fidget] as Dictionary).has("shield_keys"):
 					var posed := _fidget_pose(hand_at, hand_turn, held_from, with_view)
 					hand_at = posed[0]
 					hand_turn = posed[1]
