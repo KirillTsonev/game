@@ -172,8 +172,43 @@ How it works now (`weapon_arm_drawn_apart`):
   strap's fingers had to close later and open earlier (`grip`: 0.39-0.47, 0.59-0.65). Next
   steps proposed: overshoot on arrival with the wrist and fingers trailing, and a very slow
   millimetre drift in holds.
-- **Shield fidgets, weapons drawn** (2026-10-14, not judged in game yet): `shield_settle` (a
-  shrug and lift that re-seats the shield, 1.3 s) and `shield_glance` (the shield brought up and
+- **Shield fidgets, weapons drawn** (2026-10-14, not judged in game yet): `shield_settle`
+  (re-seating the shield, 1.55 s, back down from 1.0 s while the last roll swing is still going
+  -- after it, it "came separate after a pause" (Kirill). Since: 3 bounces and 4 roll swings at
+  up to +-18 deg ("with more force"), no two swings alike in length (0.08-0.25 s) or size, and
+  a new pattern on every play (`_irregular_wave`, `_fidget_seed`; Kirill: "make them all
+  irregular times so they're not identical"), and a 0.15 s pause between the shake and the
+  roll (1.9 s in all; "a small pause between shakes and rolls"), the arm sagging 1.5 cm
+  through it (`"sag"`; held still, "the arm is frozen during pause"), and FOUR FULL rolls
+  (Kirill counts a roll as one back-and-forth: "there are 2 rolls, I said 4") over 1.2 s, the
+  fidget 2.5 s. The elbow rises with the shield (`"elbow_lift"` 5 cm: the upper arm swung up
+  from the shoulder, the forearm turned back so the wrist stays where it was solved to -- the
+  solver set the wrist and left the elbow nearly where it was) and through the shake and roll
+  the elbow and wrist each drift +-1.5 cm on their own, slowly and out of step (`"drift"`;
+  Kirill: a forearm held at one slant "seems unrealistic"). Then a quarter slower (still
+  "uncanny"): 3 shakes in 1.0 s, 4 rolls in 1.6 s, 3.1 s in all. And the left hand's grip
+  eased off through the shake and roll (`"loosen"`: fingers to 0.45 rad a joint, thumb 0.2,
+  loose by 0.37 s, tight again 2.64-3.1 s; Kirill: "we're still clutching the shield handle
+  while we do all that"). The probe's left-finger test (thick fingers against the board)
+  found fingertips touching the board, loosened or not -- the hand's wrist bend, fixed below. Then the shake and the roll
+  became ONE motion, four times (Kirill: "combine shake and roll into one motion ... 4 of
+  those"): each jostle bounces and rolls together on one irregular pace (`"together"`, the roll
+  `"roll_lag"` 0.1 cycle behind), 0.14-1.64 s; the pause and the sag are gone; 1.85 s in all.
+  Then "a little less force": bounce 1.8 cm, roll 12 deg, seesaw 3.5 deg (were 2.5, 18, 5).
+- **In every shield fidget the hand is kept on the forearm as in the stance**
+  (`_shield_hand_in_stance`; the shield is fixed to the forearm): turned as the solver asked,
+  the wrist bent against the shield once the arm moved -- the back of the hand in the board
+  through most of the glance, the palm's lower edge through the handle in the settle's jostles
+  (Kirill asked about the latter), fingertips touching the board in both (first blamed on the
+  stance's grip: the stance alone has none). `tools/weapon_probes/shield_palm.gd` tests the
+  palm (three lines wrist to knuckles, at its surface, middle and back) against the shield.
+  First version: lifted 8 cm with a shrug, jostled up and down 2.5 cm in 2.5
+  dying bounces with the forearm tipping 5 deg about the elbow a quarter cycle behind, then
+  rolled back and forth +-10 deg in 2 dying cycles, the roll starting as the shake fades --
+  `"shake"`, `_dying_wave`; the first version, one slow lift and dip, was "very lackluster",
+  and Kirill sketched the shake and the roll. The 8 cm lift brings the board's middle only
+  from 55 to 50 deg below the middle of the view: it hangs below the forearm, so mostly its top
+  edge shows) and `shield_glance` (the shield brought up and
   in, its face rolled 124 deg toward the eyes, held, and back: 1.3 s in, 0.9 s held, 0.9 s back
   -- Kirill: slower in, no drifting "look" stage, just a hold at the peak; `"hold"` makes the
   one key a peak eased in, held and eased out, since two equal keys on one curve still bulge

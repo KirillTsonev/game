@@ -412,6 +412,7 @@ var _fidget_still: float = 0.0 ## seconds stood still, weapons up, since the las
 var _fidget_wait: float = -1.0 ## seconds to stand still before the next one (picked at random)
 var _fidget_driven: bool = false ## the animation debug panel (I) sets its time: it does not run, end or cancel by itself
 var _fidget_turn: float = 0.0 ## radians the view is turned right by a fidget that has the view, just now
+var _fidget_seed: float = 0.0 ## 0-1, new each time a fidget starts: what makes its shakes differ from the last play (_irregular_wave)
 var _fidget_tilt: float = 0.0 ## radians the view is tilted (+ = left ear down) by such a fidget, just now
 var _fidget_hang: Vector3 = Vector3.DOWN ## from the hook to the lantern's middle before lantern_look lifts it
 var _lantern_spin: float = 0.0 ## radians the lantern is turned about its own long axis just now (lantern_look)
@@ -1497,12 +1498,33 @@ const FIDGETS := {
 	# the stance: _glance_sign), the shoulder moved (m)]; the stance before the first key and
 	# after the last, one eased curve through them as the sword's keys (_key_paced). 2026-10-14,
 	# not judged in game yet.
-	# A shrug and lift that re-seats the shield on the forearm: up with a little roll, down just
-	# past where it was, and back.
-	&"shield_settle": {"time": 1.3, "stages": ["shrug and lift", "settle"], "bounds": [0.45], "shield_keys": [
-		[0.35, Vector3(0.0, 0.045, 0.01), 4.0, Vector3(0.0, 0.03, 0.0)],
-		[0.68, Vector3(0.0, -0.012, 0.0), -2.0, Vector3(0.0, -0.005, 0.0)],
-	]},
+	# Re-seating the shield on the forearm: lifted a little into view with a shrug, jostled up
+	# and down (the elbow and the wrist a little out of step), then rolled back and forth about
+	# the forearm, each dying out, the roll starting as the shake fades. (The first version, one
+	# slow lift and dip, was "very lackluster" -- Kirill sketched the shake and the roll.)
+	# "shake": "lift" (m, the stance's axes) in by "lift_in", out over "lift_out"; "shrug" (m)
+	# early on; "bounce" [from, to (shares of the time), cycles, metres up and down]; "seesaw"
+	# degrees the forearm tips about the elbow with the bounce, a quarter cycle behind; "roll"
+	# [from, to, cycles, degrees]. Each shake dies out toward its end.
+	# Seconds: lifted by 0.34, the bounce 0.14-0.88, a pause, the roll 1.03-1.75, and back down
+	# from 1.35 -- while the last roll swing is still going (Kirill: the settle "shouldn't be
+	# separate after a pause, it should come as the last shake is being done"; then "a small
+	# pause between shakes and rolls": 0.15 s, the arm sagging 1.5 cm through it, 0.82-1.12 s,
+	# so it is not frozen).
+	# Since: four full rolls (back and forth each; "there are 2 rolls, I said 4"), and both a
+	# quarter slower ("something that looks uncanny ... shake and roll a little slower"): the
+	# shake 0.14-1.14 s (3 a second, was 4), the pause to 1.29, the roll 1.29-2.89 (2.5 a second,
+	# was 3.3), back down from 2.55 during the last roll; 3.1 s in all.
+	# Since: the shake and the roll as ONE motion, four times (Kirill: "combine shake and roll
+	# into one motion ... 4 of those"): each jostle bounces the arm and rolls the forearm
+	# together, on one irregular pace ("roll" with the same window and cycles as "bounce", and
+	# "roll_lag" cycles behind it), 0.14-1.64 s, back down from 1.3 during the last; no pause and
+	# no sag any more; 1.85 s in all. Then "a little less force": bounce 2.5 -> 1.8 cm, roll 18 ->
+	# 12 deg, seesaw 5 -> 3.5 deg.
+	&"shield_settle": {"time": 1.85, "stages": ["lift and jostle", "settle"], "bounds": [0.703], "shield_keys": [], "shake": {
+		"lift": Vector3(0.02, 0.08, 0.02), "lift_in": 0.184, "lift_out": Vector2(0.703, 1.0), "shrug": 0.025, "shrug_to": 0.251,
+		"elbow_lift": 0.05, "drift": Vector2(1.25, 0.015), "loosen": Vector4(0.45, 0.2, 0.2, 0.703),
+		"bounce": Vector4(0.076, 0.886, 4.0, 0.018), "seesaw": 3.5, "roll": Vector4(0.076, 0.886, 4.0, 12.0), "roll_lag": 0.1, "together": true}},
 	# The shield turned in to look at its face: a little toward the middle, up and nearer, its
 	# face rolled toward the eyes, held there, and back. "hold": [up by, back from] (shares of
 	# the time) -- with "hold" the one key is the peak, eased in, held, eased out. Seconds: in
@@ -1567,6 +1589,7 @@ func start_fidget(fidget_name: StringName) -> void:
 		_fidget_fade = 1.0
 		_fidget_cancelled = false
 		_fidget_last = fidget_name
+		_fidget_seed = randf()
 		_rim_pick = -1
 		_rim_local = Vector3.INF
 		_forearm_held_set = false
@@ -1704,6 +1727,26 @@ static func _smooth_through(xs: Array[float], ys: Array[float], x: float) -> flo
 	var t2 := t * t
 	var t3 := t2 * t
 	return (2.0 * t3 - 3.0 * t2 + 1.0) * ys[index] + (t3 - 2.0 * t2 + t) * width * tangents[index] + (-2.0 * t3 + 3.0 * t2) * ys[index + 1] + (t3 - t2) * width * tangents[index + 1]
+
+## A shake: `wave` = [from, to (shares of the time), cycles, -]; -1..1 at `at`, `phase`
+## (cycles) shifting it. Exactly `wave.z` cycles, but no two swings alike: its pace drifts
+## (each swing takes its own time) and its size wobbles, both from `seed` (0-1; a new one each
+## time a fidget plays, so no two plays are alike either). It sets off quickly, shrinks a little
+## as it goes, and ends at rest with no jolt. (Even swings that died away read as mechanical:
+## Kirill, "make them all irregular times so they're not identical".)
+static func _irregular_wave(wave: Vector4, at: float, phase: float, seed: float) -> float:
+	if at <= wave.x or at >= wave.y:
+		return 0.0
+	var s := (at - wave.x) / (wave.y - wave.x)
+	# The pace is 1 + 0.35 sin(..) + 0.2 sin(..) -- never below 0.45, so it never stops or turns
+	# back -- and the wave's progress is its integral, scaled to end at exactly wave.z cycles.
+	var a := 0.7 + seed * 5.0
+	var b := 1.9 + seed * 3.0
+	var progress := func(x: float) -> float:
+		return x - 0.35 / (TAU * 1.3) * (cos(TAU * 1.3 * x + a) - cos(a)) - 0.2 / (TAU * 2.9) * (cos(TAU * 2.9 * x + b) - cos(b))
+	var along := float(progress.call(s)) / float(progress.call(1.0))
+	var envelope := smoothstep(0.0, 0.1, s) * (1.0 - smoothstep(0.72, 1.0, s)) * (1.0 - 0.35 * s) * (1.0 + 0.25 * sin(TAU * 1.7 * s + seed * 7.0))
+	return sin(TAU * (wave.z * along + phase)) * envelope
 
 ## The share of the time at which _ease reaches `eased`.
 static func _uneased(eased: float) -> float:
@@ -2306,16 +2349,38 @@ func _hold_shield(player: Node3D, delta: float) -> void:
 		var fidgeting := _fidget != &"" and (FIDGETS[_fidget] as Dictionary).has("shield_keys")
 		var roll := 0.0
 		var twist := 0.0
+		var tip := 0.0
+		var elbow_up := 0.0
 		if fidgeting:
 			var posed := _shield_fidget_pose()
 			hand_from += posed[0]
 			shoulder_from += posed[1]
 			roll = (posed[2] as float) * _glance_sign
 			twist = posed[3]
+			tip = posed[4]
+			elbow_up = posed[5]
 		for attempt in 2:
 			var from := held_from + (_shield_push if attempt == 1 else Vector3.ZERO)
 			WeaponHold.solve_arm(_skeleton, "Left", to_skeleton, from + with_view * shoulder_from, from + with_view * hand_from,
 					with_view * _shield_stance.elbow_toward(), shield_turn, fist, _shield_stance.max_reach)
+			if absf(elbow_up) > 0.0001:
+				# The elbow raised (m): the upper arm swung up from the shoulder, then the forearm
+				# turned back about the elbow so the wrist stays where it was solved to.
+				var upper := _skeleton.get_bone_global_pose(arm["upper"])
+				var elbow_was := _skeleton.get_bone_global_pose(arm["lower"]).origin
+				var wrist_was := _skeleton.get_bone_global_pose(arm["hand"]).origin
+				var reach := elbow_was - upper.origin
+				var up := to_skeleton.basis * Vector3.UP
+				var swing_axis := reach.cross(up)
+				if swing_axis.length_squared() > 0.0001:
+					upper.basis = Basis(swing_axis.normalized(), asin(clampf(elbow_up / maxf(reach.length(), 0.01), -0.5, 0.5))) * upper.basis
+					_skeleton.set_bone_global_pose(arm["upper"], upper)
+					var lower := _skeleton.get_bone_global_pose(arm["lower"])
+					var now_to := _skeleton.get_bone_global_pose(arm["hand"]).origin - lower.origin
+					var was_to := wrist_was - lower.origin
+					if now_to.cross(was_to).length_squared() > 0.0000001:
+						lower.basis = Basis(Quaternion(now_to.normalized(), was_to.normalized())) * lower.basis
+						_skeleton.set_bone_global_pose(arm["lower"], lower)
 			if absf(roll) > 0.0001:
 				# The forearm rolled about its own line as solved, the hand and the shield with it.
 				# (A turn of the asked hand about the stance's forearm line went partly into the
@@ -2324,6 +2389,15 @@ func _hold_shield(player: Node3D, delta: float) -> void:
 				var along := (_skeleton.get_bone_global_pose(arm["hand"]).origin - lower.origin).normalized()
 				lower.basis = Basis(along, roll) * lower.basis
 				_skeleton.set_bone_global_pose(arm["lower"], lower)
+			if absf(tip) > 0.0001:
+				# The forearm tipped up or down about the elbow (+ = the wrist up): with the
+				# hand's bounce a little ahead of it, elbow and wrist move out of step.
+				var lower := _skeleton.get_bone_global_pose(arm["lower"])
+				var along := (_skeleton.get_bone_global_pose(arm["hand"]).origin - lower.origin).normalized()
+				var across := along.cross(to_skeleton.basis * Vector3.UP)
+				if across.length_squared() > 0.0001:
+					lower.basis = Basis(across.normalized(), tip) * lower.basis # about along x up: + turns the wrist up
+					_skeleton.set_bone_global_pose(arm["lower"], lower)
 			if absf(twist) > 0.0001:
 				# The shield turned about the line along its length through its middle (Kirill:
 				# "along the shield's length in the middle"; turned about its face's axis it spun
@@ -2342,6 +2416,13 @@ func _hold_shield(player: Node3D, delta: float) -> void:
 				var upper := _skeleton.get_bone_global_pose(arm["upper"])
 				upper.origin -= moved
 				_skeleton.set_bone_global_pose(arm["upper"], upper)
+			if fidgeting and shield.on_forearm:
+				# The hand kept on the forearm as in the stance, so it stays in the grip as the shield
+				# (fixed to the forearm) moves: turned as the solver asks it, its back went into the
+				# board through most of the glance and the palm's lower edge through the handle in
+				# the settle's jostles (2026-10-14, Kirill: "does the lower part of the shield handle
+				# clip with the bottom part of the palm?").
+				_skeleton.set_bone_pose_rotation(arm["hand"], _shield_hand_in_stance)
 			if shield.on_forearm and not fidgeting:
 				# Read every frame, with the arm fully in the stance (before the blend with the
 				# clip): the Grip marker can be changed while the game runs. Not during a shield
@@ -2367,7 +2448,16 @@ func _hold_shield(player: Node3D, delta: float) -> void:
 			_skeleton.set_bone_pose_rotation(arm_bones[i], (in_clip[i + 1] as Quaternion).slerp(_skeleton.get_bone_pose_rotation(arm_bones[i]), weight))
 	if weight > 0.5 or relaxed:
 		_shield_stance.pose_fingers(_skeleton, shield.grip_radius)
-	_shield_now = _shield_socket
+		# "loosen" (a shaking fidget): [fingers' curl, thumb's curl (radians a joint), loosened by,
+		# gripped again from (shares of the time; tight again by "lift_out".y)] -- the grip
+		# eased off while the arm shakes and rolls: clenched through it, it looked uncanny (Kirill).
+		if weight > 0.5 and _fidget != &"" and (FIDGETS[_fidget] as Dictionary).has("shake"):
+			var shake: Dictionary = FIDGETS[_fidget]["shake"]
+			if shake.has("loosen"):
+				var loosen: Vector4 = shake["loosen"]
+				var lift_out: Vector2 = shake["lift_out"]
+				var loose := _fidget_in_out(0.0, loosen.z, loosen.w, lift_out.y)
+				_set_fingers(arm, [loosen.y, loosen.x, loosen.x, loosen.x, loosen.x], loose)
 	if weight >= 0.999 and not weapon_shoulder_on_body and (_fidget == &"" or not (FIDGETS[_fidget] as Dictionary).has("shield_keys")):
 		_read_glance_axes(player)
 
@@ -2390,6 +2480,35 @@ func _read_glance_axes(player: Node3D) -> void:
 ## the forearm's roll (radians)], through "shield_keys" as _fidget_pose goes through the sword's.
 func _shield_fidget_pose() -> Array:
 	var fidget: Dictionary = FIDGETS[_fidget]
+	if fidget.has("shake"):
+		var shake: Dictionary = fidget["shake"]
+		var at := _fidget_share()
+		var lift_out: Vector2 = shake["lift_out"]
+		var lifted := _fidget_in_out(0.0, float(shake["lift_in"]), lift_out.x, lift_out.y)
+		# "sag": [metres, from, to] -- the arm settling a little lower through the pause before the
+		# roll, so it is not frozen there (Kirill); it stays that much lower until it goes down.
+		var sag := Vector3.ZERO
+		if shake.has("sag"):
+			var sag_at: Vector3 = shake["sag"]
+			sag = Vector3.DOWN * sag_at.x * _ease(sag_at.y, sag_at.z, at) * lifted
+		var shrug := float(shake["shrug"]) * sin(PI * clampf(at / float(shake.get("shrug_to", 0.3)), 0.0, 1.0)) * _fidget_fade
+		var bounce: Vector4 = shake["bounce"]
+		var bounce_wave := _irregular_wave(bounce, at, 0.0, _fidget_seed)
+		var tip := _irregular_wave(bounce, at, -0.25, _fidget_seed) # a quarter cycle behind: the elbow and wrist out of step
+		var roll: Vector4 = shake["roll"]
+		# "together": the roll on the bounce's own pace (the same seed), "roll_lag" cycles behind it.
+		var rolled := _irregular_wave(roll, at, -float(shake.get("roll_lag", 0.0)), _fidget_seed) if bool(shake.get("together", false)) else _irregular_wave(roll, at, 0.0, fmod(_fidget_seed + 0.37, 1.0))
+		# The elbow rises with the shield ("elbow_lift", m), and through the shake and the roll the
+		# elbow and the wrist each drift up and down on their own ("drift": [cycles, metres]):
+		# slow, irregular and out of step, so the forearm never holds one slant (Kirill: keeping
+		# it steady "seems unrealistic").
+		var drift: Vector2 = shake.get("drift", Vector2.ZERO)
+		var drifting := Vector4(bounce.x, roll.y, drift.x, 0.0)
+		var wrist_drift := drift.y * _irregular_wave(drifting, at, 0.0, fmod(_fidget_seed + 0.61, 1.0))
+		var elbow_drift := drift.y * _irregular_wave(drifting, at, 0.3, fmod(_fidget_seed + 0.83, 1.0))
+		var elbow_up := (float(shake.get("elbow_lift", 0.0)) * lifted + elbow_drift) * _fidget_fade
+		return [(shake["lift"] as Vector3) * lifted + sag + Vector3.UP * (bounce.w * bounce_wave + wrist_drift) * _fidget_fade, Vector3.UP * shrug,
+				deg_to_rad(roll.w) * rolled * _fidget_fade, 0.0, deg_to_rad(float(shake["seesaw"])) * tip * _fidget_fade, elbow_up]
 	if fidget.has("hold"):
 		# One peak (the first key), eased in by "hold".x, held, eased out from "hold".y.
 		var hold: Vector2 = fidget["hold"]
@@ -2400,7 +2519,7 @@ func _shield_fidget_pose() -> Array:
 			# Turned on through the hold, and unwound with the way back.
 			var twist: Vector3 = fidget["twist"]
 			twisted = deg_to_rad(twist.x) * _ease(twist.y, twist.z, _fidget_share()) * (1.0 - _ease(hold.y, 1.0, _fidget_share())) * _fidget_fade
-		return [(peak[1] as Vector3) * amount, (peak[3] as Vector3) * amount, deg_to_rad(float(peak[2])) * amount, twisted]
+		return [(peak[1] as Vector3) * amount, (peak[3] as Vector3) * amount, deg_to_rad(float(peak[2])) * amount, twisted, 0.0, 0.0]
 	var times: Array[float] = [0.0]
 	var hands: Array[Vector3] = [Vector3.ZERO]
 	var shoulders: Array[Vector3] = [Vector3.ZERO]
@@ -2415,7 +2534,7 @@ func _shield_fidget_pose() -> Array:
 	shoulders.append(Vector3.ZERO)
 	rolls.append(Vector3.ZERO)
 	var eased := _key_paced(times, _ease(0.0, 1.0, _fidget_share()))
-	return [_through(hands, times, eased) * _fidget_fade, _through(shoulders, times, eased) * _fidget_fade, _through(rolls, times, eased).x * _fidget_fade, 0.0]
+	return [_through(hands, times, eased) * _fidget_fade, _through(shoulders, times, eased) * _fidget_fade, _through(rolls, times, eased).x * _fidget_fade, 0.0, 0.0, 0.0]
 
 ## Where the shield sits on the forearm depends on the ShieldStance's Grip marker, which is
 ## read with the arm in its stance. Until the arm had been there once the shield sat as the

@@ -7,6 +7,7 @@ extends SceneTree
 var player: Node3D
 var body: PlayerBody
 var sk: Skeleton3D
+const LEFT_CHAINS := [["LeftThumbMetacarpal", "LeftThumbProximal", "LeftThumbDistal"], ["LeftIndexProximal", "LeftIndexIntermediate", "LeftIndexDistal"], ["LeftMiddleProximal", "LeftMiddleIntermediate", "LeftMiddleDistal"], ["LeftRingProximal", "LeftRingIntermediate", "LeftRingDistal"], ["LeftLittleProximal", "LeftLittleIntermediate", "LeftLittleDistal"]]
 
 func _init() -> void:
 	_run.call_deferred()
@@ -41,12 +42,38 @@ func _run() -> void:
 	var sword_verts := sample(sword_mesh, 300)
 	var shield_verts := sample(shield_mesh, 400)
 	var box := shield_mesh.mesh.get_aabb()
+	var tri := shield_mesh.mesh.generate_triangle_mesh()
 	var thin := 0
 	for a in 3:
 		if box.size[a] < box.size[thin]:
 			thin = a
 	var camera := player.get_node("Camera3D") as Camera3D
 	var parts: Array = [["Hips", "Spine", 0.15], ["Spine", "UpperChest", 0.15], ["UpperChest", "Neck", 0.13], ["Neck", "Head", 0.09], ["LeftUpperLeg", "LeftLowerLeg", 0.09], ["RightUpperLeg", "RightLowerLeg", 0.09]]
+	# The shakes' swings (PlayerBody._irregular_wave), for three seeds: each swing's length (s)
+	# and peak, per wave of shield_settle.
+	if PlayerBody.FIDGETS.has(&"shield_settle"):
+		var settle: Dictionary = PlayerBody.FIDGETS[&"shield_settle"]
+		for wave_name: String in ["bounce", "roll"]:
+			var wave: Vector4 = (settle["shake"] as Dictionary)[wave_name]
+			for seed: float in [0.1, 0.5, 0.9]:
+				var swings: Array[String] = []
+				var last_sign := 0.0
+				var start := wave.x
+				var peak := 0.0
+				for k in 2001:
+					var at := wave.x + (wave.y - wave.x) * k / 2000.0
+					var v := PlayerBody._irregular_wave(wave, at, 0.0, seed)
+					var sign := signf(v)
+					if sign != 0.0 and last_sign != 0.0 and sign != last_sign:
+						swings.append("%.2fs %+.2f" % [(at - start) * float(settle["time"]), peak])
+						start = at
+						peak = 0.0
+					if sign != 0.0:
+						last_sign = sign
+					if absf(v) > absf(peak):
+						peak = v
+				swings.append("%.2fs %+.2f" % [(wave.y - start) * float(settle["time"]), peak])
+				print("WAVE %s seed %.1f: %d swings: %s" % [wave_name, seed, swings.size(), ", ".join(swings)])
 	body.weapon_raised = true
 	for i in 240:
 		step()
@@ -66,6 +93,8 @@ func _run() -> void:
 			if face_now.dot(to_p * shield_mesh.global_transform.origin - hips) < 0.0:
 				face_sign = -1.0
 			body.start_fidget(fidget)
+			var heights_from := Vector2.INF # the elbow's and wrist's heights in the first frame
+			var clips := {} # left finger -> frames it was in the board
 			var bins := {}
 			var frames := 0
 			var mid_was := Vector3.INF
@@ -103,6 +132,29 @@ func _run() -> void:
 				var lb := to_p * left.global_transform
 				var l_elbow := lb * left.get_bone_global_pose(left.find_bone("LeftLowerArm")).origin
 				var l_wrist := lb * left.get_bone_global_pose(left.find_bone("LeftHand")).origin
+				# The left hand's fingers (thick: their bones' lines and four lines 9 mm off them)
+				# through the shield's triangles.
+				var to_board := shield_mesh.global_transform.affine_inverse() * left.global_transform
+				var radius := 0.009 * to_board.basis.get_scale().x
+				for chain: Array in LEFT_CHAINS:
+					var points: Array[Vector3] = [to_board * left.get_bone_global_pose(left.find_bone("LeftHand")).origin]
+					for bone_name: String in chain:
+						points.append(to_board * left.get_bone_global_pose(left.find_bone(bone_name)).origin)
+					var last := left.get_bone_global_pose(left.find_bone(chain[-1]))
+					var before := left.get_bone_global_pose(left.find_bone(chain[-2]))
+					points.append(to_board * (last * Vector3(0, 0.75 * last.origin.distance_to(before.origin), 0)))
+					for k in points.size() - 1:
+						var along := (points[k + 1] - points[k]).normalized()
+						var side := along.cross(Vector3.UP if absf(along.y) < 0.9 else Vector3.RIGHT).normalized()
+						var other := along.cross(side)
+						for offset: Vector3 in [Vector3.ZERO, side * radius, -side * radius, other * radius, -other * radius]:
+							if not tri.intersect_segment(points[k] + offset, points[k + 1] + offset).is_empty():
+								clips[chain[-1]] = clips.get(chain[-1], 0) + 1
+								break
+				if heights_from == Vector2.INF:
+					heights_from = Vector2(l_elbow.y, l_wrist.y)
+				m["elbow-up"] = l_elbow.y - heights_from.x
+				m["wrist-up"] = l_wrist.y - heights_from.y
 				for k in 11:
 					var p := l_elbow.lerp(l_wrist, k / 10.0)
 					for t: Array in trunk:
@@ -137,8 +189,10 @@ func _run() -> void:
 					for n: String in ["shield-body", "shield-sword", "shield-eyes", "left-arm"]:
 						bins[bin][n] = minf(bins[bin][n], m[n])
 					bins[bin]["face-eyes"] = minf(bins[bin]["face-eyes"], m["face-eyes"])
-			print("SHIELD %s, %s foot fwd: %d frames (%.2f s), the middle's speed changed at most %.2f m/s in a frame (at %.2f)" % [fidget, "right" if mirrored else "left", frames, frames / 60.0, worst_change, worst_at])
-			for n: String in ["shield-body", "shield-sword", "shield-eyes", "left-arm", "face-eyes"]:
+					bins[bin]["elbow-up"] = maxf(bins[bin]["elbow-up"], m["elbow-up"])
+					bins[bin]["wrist-up"] = maxf(bins[bin]["wrist-up"], m["wrist-up"])
+			print("SHIELD %s, %s foot fwd: %d frames (%.2f s), the middle's speed changed at most %.2f m/s in a frame (at %.2f); left fingers in the board (frames): %s" % [fidget, "right" if mirrored else "left", frames, frames / 60.0, worst_change, worst_at, clips if not clips.is_empty() else "none"])
+			for n: String in ["shield-body", "shield-sword", "shield-eyes", "left-arm", "elbow-up", "wrist-up", "face-eyes"]:
 				var line := "SHIELD   %-13s" % n
 				for bin in 10:
 					line += ((" %+.2f" if n != "face-eyes" else " %5.0f") % (bins[bin][n] as float)) if bins.has(bin) else "   . "
