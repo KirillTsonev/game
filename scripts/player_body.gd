@@ -1463,7 +1463,8 @@ const FIDGETS := {
 	# 2.9, back by 4.0. (Eased once over the whole, the keys came at 1.3 and 1.9 s and the last
 	# 2.1 s were the way back: Kirill, "keep inspecting it longer and hurry the moving to idle
 	# up".)
-	&"inspect": {"time": 4.0, "stages": ["to the flat", "turn toward the edge", "back to the stance"], "key_times": [0.35, 0.725], "keys": [
+	&"inspect": {"time": 4.0, "stages": ["to the flat", "turn toward the edge", "back to the stance"], "key_times": [0.35, 0.725],
+		"shield_rest": {"hand": Vector3(0.0, -0.028, 0.0), "shoulder": Vector3(0.0, -0.008, 0.0), "tip": -1.2, "in": Vector2(0.05, 0.35), "out": Vector2(0.7, 0.95)}, "keys": [
 		[0.3, Vector3(0.07, -0.27, -0.39), Vector3(0.05, 0.97, -0.25), Vector3(-1.0, 0.0, 0.0)],
 		[0.6, Vector3(0.03, -0.23, -0.34), Vector3(0.0, 0.96, -0.3), Vector3(-0.6, 0.2, 0.8)],
 	]},
@@ -1489,10 +1490,15 @@ const FIDGETS := {
 	# up 1.9-2.78. (Kirill: no stage just to grip, no hold before the tug, hand and shield
 	# together both ways, nobody waits for the fingers to open before moving the hand away, and
 	# two quick small tugs that barely move the shield, not one big one of 3 cm over 0.8 s.)
-	&"strap": {"time": 2.8, "when": &"sheathed", "stages": ["raise and grip", "tug", "let go and lower"], "bounds": [0.371, 0.55],
-		"raise_to": 0.357, "view_in": 0.314, "view_out": 0.679, "view_back": 0.993, "tug_at": Vector2(0.371, 0.179), "tugs": 2,
-		"lower": Vector2(0.564, 0.921), "reach_out": Vector2(0.564, 0.921), "grip_open": Vector2(0.529, 0.611),
-		"view": Vector2(58.0, -10.0), "grip": &"rim", "rim_at": Vector2(6.0, 7.0), "reach": Vector2(0.029, 0.357), "grip_close": Vector2(0.3, 0.371), "reach_even": 0.5, "reach_soft": 0.03, "rim_around": Vector2(0.4, 0.08), "rim_thumb": Vector4(0.1, 0.2, 0.721, 0.821), "rim_thumb_closed": 1.1, "rim_across": -0.01, "shield_arm": Vector3(0.22, -0.16, -0.4), "shield_around": Vector3(-0.05, -0.3, -0.45), "strap_along": 0.8, "rim_out": 0.02, "tug": 0.012},
+	# Then 3.5 s (Kirill, 2026-10-15, as for shield_settle): the raise and the lowering slower, 1.35 s
+	# each (were about 1.0), the grip and the tugs kept in seconds -- raise and reach 0-1.35 (the hand
+	# from 0.11, the fingers closing 1.15-1.35, the thumb 0.38-0.76), two tugs 1.39-1.89, the fingers
+	# opening 1.83-2.06, hand and shield down 1.93-3.28, the thumb opening 2.52-2.90, the view in
+	# by 1.19 and back 2.36-3.45.
+	&"strap": {"time": 3.5, "when": &"sheathed", "stages": ["raise and grip", "tug", "let go and lower"], "bounds": [0.397, 0.54],
+		"raise_to": 0.386, "view_in": 0.34, "view_out": 0.674, "view_back": 0.986, "tug_at": Vector2(0.397, 0.143), "tugs": 2,
+		"lower": Vector2(0.551, 0.937), "reach_out": Vector2(0.551, 0.937), "grip_open": Vector2(0.523, 0.589),
+		"view": Vector2(58.0, -10.0), "grip": &"rim", "rim_at": Vector2(6.0, 7.0), "reach": Vector2(0.031, 0.386), "grip_close": Vector2(0.329, 0.386), "reach_even": 0.5, "reach_soft": 0.03, "rim_around": Vector2(0.4, 0.08), "rim_thumb": Vector4(0.109, 0.217, 0.72, 0.829), "rim_thumb_closed": 1.1, "rim_across": -0.01, "shield_arm": Vector3(0.22, -0.16, -0.4), "shield_around": Vector3(-0.05, -0.3, -0.45), "strap_along": 0.8, "rim_out": 0.02, "tug": 0.012},
 	# Only while it is lit ("lit"): the palm comes in behind the lantern as in toggle_lantern
 	# (toggle_cup_offset), swings it forward on its hook ("lift_degrees") into the picture,
 	# turns it ONCE about its own long axis ("turn_degrees") and back, and lets it back. (It
@@ -1580,11 +1586,22 @@ const FIDGETS := {
 	# focus on the arm a bit more".) "dip_alone": the drawn weapons do not follow this dip, as
 	# they follow the view's pitch otherwise -- the head looks down, the arms stay, so the
 	# shield rises in the picture. Having the view, moving the mouse ends it (looked()).
-	&"shield_settle": {"time": 2.15, "stages": ["lift and jostle", "settle"], "bounds": [0.744], "shield_keys": [],
-		"view": Vector2(12.0, 0.0), "dip_alone": true, "view_in": 0.186, "view_out": 0.698, "view_back": 0.977, "view_tilt": Vector2(3.0, 3.0), "shake": {
-		"lift": Vector3(0.02, 0.08, 0.02), "lift_in": 0.158, "lift_out": Vector2(0.744, 1.0), "shrug": 0.025, "shrug_to": 0.216,
-		"elbow_lift": 0.05, "drift": Vector2(1.25, 0.015), "loosen": Vector4(0.45, 0.2, 0.172, 0.744),
-		"bounce": Vector4(0.065, 0.902, 4.0, 0.006), "seesaw": 7.0, "ripple": Vector2(0.015, 0.35), "roll": Vector4(0.065, 0.902, 4.0, 12.0), "roll_lag": 0.1, "together": true}},
+	# Then (2026-10-15, Kirill: "raise and lower the shield at the start and end of animation
+	# slower"): up over 0.6 s (was 0.34) and down over 0.8 s from 1.6 (was 0.55), the jostles
+	# kept in seconds (0.14-1.94, overlapping both), the look in by 0.5 s and back by 2.3; 2.4 s
+	# in all (was 2.15). Every other timing kept in seconds. Then the raise matched to the lowering
+	# (Kirill): 0.8 s ("lift_in" 0.333).
+	# Then "increase both more, to reach 3 seconds": up over 1.1 s and down over 1.1 s from 1.9,
+	# the jostles moved 0.3 s later (0.44-2.24, so not all of them come during the longer raise;
+	# the lowering still starts in the last one), the look in by 0.6 s and back 1.8-2.9, the grip
+	# loosened by 0.6 s and tight again with the lowering.
+	# Then 3.5 s ("let's increase to 3.5s total"): up over 1.35 s, down over 1.35 s from 2.15, the
+	# jostles 0.69-2.49, the look in by 0.75 s and back 2.05-3.4, the grip loosened by 0.75 s.
+	&"shield_settle": {"time": 3.5, "stages": ["lift and jostle", "settle"], "bounds": [0.614], "shield_keys": [],
+		"view": Vector2(12.0, 0.0), "dip_alone": true, "view_in": 0.214, "view_out": 0.586, "view_back": 0.971, "view_tilt": Vector2(3.0, 3.0), "shake": {
+		"lift": Vector3(0.02, 0.08, 0.02), "lift_in": 0.386, "lift_out": Vector2(0.614, 1.0), "shrug": 0.025, "shrug_to": 0.214,
+		"elbow_lift": 0.05, "drift": Vector2(1.25, 0.015), "loosen": Vector4(0.45, 0.2, 0.214, 0.614),
+		"bounce": Vector4(0.197, 0.711, 4.0, 0.006), "seesaw": 7.0, "ripple": Vector2(0.015, 0.35), "roll": Vector4(0.197, 0.711, 4.0, 12.0), "roll_lag": 0.1, "together": true}},
 	# The shield turned in to look at its face: a little toward the middle, up and nearer, its
 	# face rolled toward the eyes, held there, and back. "hold": [up by, back from] (shares of
 	# the time) -- with "hold" the one key is the peak, eased in, held, eased out. Seconds: in
@@ -1624,12 +1641,16 @@ const FIDGETS := {
 	# lands with speed. "arc" (m, the Player's axes): the fist bowed on its way there and back
 	# (needed when it went in toward the middle: the blade swung over 7 cm from the eyes).
 	# Not judged in game yet.
-	&"shoulder_tap": {"time": 3.25, "stages": ["onto the shoulder", "four taps", "back"], "bounds": [0.277, 0.705], "rest": {
+	# Then 3.5 s (Kirill, 2026-10-15: the sword raised onto the shoulder and lowered slower): up
+	# 0-1.06 s and back 2.45-3.5 (were 0.9 and 0.96 s), the four taps kept in seconds (1.06-2.45).
+	&"shoulder_tap": {"time": 3.5, "stages": ["onto the shoulder", "four taps", "back"], "bounds": [0.301, 0.699], "rest": {
 		"on": Vector3(0.0, 0.075, 0.0), "hand": Vector3(-0.15, 0.27, 0.11), "elbow": Vector3(1.0, -0.3, -0.6),
-		"in": 0.277, "out": 0.705, "taps": Vector4(0.277, 0.705, 4.0, 4.5), "arc": Vector3.ZERO}},
+		"in": 0.301, "out": 0.699, "taps": Vector4(0.301, 0.699, 4.0, 4.5), "arc": Vector3.ZERO},
+		"shield_rest": {"hand": Vector3(-0.015, -0.045, 0.0), "shoulder": Vector3(0.0, -0.01, 0.0), "tip": -2.5, "in": Vector2(0.05, 0.3), "out": Vector2(0.7, 0.95)}},
 	# Two loose circles of the blade round the way it points in the stance.
 	# (At 2.2 s the tip moved up to 7.5 cm a frame: quicker than a loose roll.)
-	&"wrist_roll": {"time": 3.5, "stages": ["tip in", "two circles", "back"], "circle": {"turns": 2.0, "tilt_degrees": 25.0, "hand": 0.03, "from": 0.3, "to": 0.7}},
+	&"wrist_roll": {"time": 3.5, "stages": ["tip in", "two circles", "back"],
+		"shield_rest": {"hand": Vector3(0.0, -0.015, 0.0), "tip": -0.6, "in": Vector2(0.05, 0.3), "out": Vector2(0.72, 0.95)}, "circle": {"turns": 2.0, "tilt_degrees": 25.0, "hand": 0.03, "from": 0.3, "to": 0.7}},
 }
 
 ## Cancels the fidget playing, if any (the Player calls this on any key or mouse button), and
@@ -1934,7 +1955,8 @@ func _fidget_in_out(from_in: float, to_in: float, from_out: float, to_out: float
 	return _ease(from_in, to_in, at) * (1.0 - _ease(from_out, to_out, at)) * _fidget_fade
 
 ## A fidget that has the view ("view" in FIDGETS) dips it toward what it looks at, and turns it
-## a little right; no lower than the Player already looks. Adds to _view_dip, sets _fidget_turn
+## a little right; no lower than the Player already looks (with "dip_alone": a nod of that much from
+## wherever the Player looks). Adds to _view_dip, sets _fidget_turn
 ## and _fidget_tilt. A dip of 0 leaves the pitch alone. "view_tilt": [degrees, degrees] the head
 ## tilts (+ = left ear down), the first as it looks, going to the second as the "twist" turns.
 func _fidget_view(camera_pitch: float) -> void:
@@ -1948,9 +1970,14 @@ func _fidget_view(camera_pitch: float) -> void:
 	var amount := _fidget_in_out(0.0, float(fidget.get("view_in", 0.22)), float(fidget.get("view_out", 0.78)), float(fidget.get("view_back", 1.0)))
 	if view.x > 0.0:
 		var dip := minf(-deg_to_rad(view.x) - camera_pitch, 0.0) * amount
-		_view_dip += dip
 		if bool(fidget.get("dip_alone", false)):
+			# The weapons stay where they are while the head dips ("dip_alone"), so the dip is a NOD
+			# of view.x from wherever the Player looks (never past 85 deg down), not a look down to
+			# that pitch: looking at the sky, the old dip pulled the view 70 deg down while the drawn
+			# arms stayed posed for the sky, and they showed floating (Kirill, shield_settle).
+			dip = maxf(-deg_to_rad(view.x), minf(-deg_to_rad(85.0) - camera_pitch, 0.0)) * amount
 			_fidget_dip = dip
+		_view_dip += dip
 	_fidget_turn = deg_to_rad(view.y) * amount
 	if fidget.has("view_tilt"):
 		var tilt: Vector2 = fidget["view_tilt"]
@@ -2969,6 +2996,20 @@ func _hold_shield(player: Node3D, delta: float) -> void:
 			twist = posed[3]
 			tip = posed[4]
 			elbow_up = posed[5]
+		elif _fidget != &"" and (FIDGETS[_fidget] as Dictionary).has("shield_rest"):
+			# A sword fidget lets the guard sag (Kirill, 2026-10-15: lower the shield a little during
+			# inspect, wrist_roll and shoulder_tap -- a relaxed moment): "hand" (m, the stance's
+			# axes: +X right, +Y up, +Z back toward the eyes) and "shoulder" moved, the forearm
+			# drooped "tip" degrees at the elbow (- = the wrist down). In over "in", back over "out"
+			# (shares of the fidget): it settles just after the sword sets off and is back up a
+			# little before the sword is.
+			var rest: Dictionary = (FIDGETS[_fidget] as Dictionary)["shield_rest"]
+			var rest_in: Vector2 = rest["in"]
+			var rest_out: Vector2 = rest["out"]
+			var resting := _fidget_in_out(rest_in.x, rest_in.y, rest_out.x, rest_out.y)
+			hand_from += (rest["hand"] as Vector3) * resting
+			shoulder_from += (rest.get("shoulder", Vector3.ZERO) as Vector3) * resting
+			tip = deg_to_rad(float(rest.get("tip", 0.0))) * resting
 		for attempt in 2:
 			var from := held_from + (_shield_push if attempt == 1 else Vector3.ZERO)
 			WeaponHold.solve_arm(_skeleton, "Left", to_skeleton, from + with_view * shoulder_from, from + with_view * hand_from,

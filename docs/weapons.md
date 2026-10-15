@@ -183,6 +183,21 @@ How it works now (`weapon_arm_drawn_apart`):
   joint and 15-21 cm before the tip, each tap lifts it about 5 cm, the wrist 52-59 deg, the
   blade at least 0.22 m from the eyes. The blade itself runs back past the camera from the
   fist: little of it can be in the picture with the view kept still.
+  2026-10-15, 3.5 s (Kirill: the sword raised onto the shoulder and lowered slower): up 0-1.06 s and
+  back 2.45-3.5 (were 0.9 and 0.96 s), the four taps kept in seconds (1.06-2.45). Written while
+  Kirill's game was running: NOT run in `fidgets.gd` / `sword_fidget_shield.gd` yet.
+- **The guard sags in the sword fidgets** (2026-10-15; Kirill agreed: lower the shield a little
+  during `inspect`, `wrist_roll` and `shoulder_tap`, relaxed moments): `"shield_rest"` in those
+  entries -- the stance's hand (`"hand"`, m, the stance's axes) and shoulder moved, the forearm
+  drooped (`"tip"`, degrees, - = the wrist down), in over `"in"` and back over `"out"` (shares of
+  the fidget: it settles just after the sword sets off and is up again a little before it), read
+  in `_hold_shield` where the shield fidgets' keys are. The shield's middle lies well out from the
+  elbow, so the droop adds to the drop: the first values gave 7.4 / 4.3 / 11 cm, and moving the
+  shield toward the middle in `inspect` brought it to 8.5 cm of the sword (13 before). Measured
+  (`tools/weapon_probes/sword_fidget_shield.gd`, `SAG`): the shield's middle 4.6 cm lower at most
+  in `inspect`, 2.8 in `wrist_roll`, 7.3 in `shoulder_tap`; its room to the trunk and legs 0.42 m
+  or more (the stance 0.43-0.45); the sword at least 13 cm from it in `inspect`. Not judged in
+  game yet.
 - **The fidgets' easing** (2026-10-14; Kirill: they looked "kind of robotic"): every move in
   them goes through `PlayerBody._ease` (used as smoothstep is), whose speed goes as
   x^2 (1 - x)^3 -- at rest at both ends with no jolt, fastest at 40 % of the way, so it sets off
@@ -230,6 +245,27 @@ How it works now (`weapon_arm_drawn_apart`):
   last jostle) and the look kept in seconds, 2.15 s in all (was 1.85). Measured: elbow peaks
   0.28 / 0.72 / 1.07 / 1.47 s, the wrist's 0.10-0.18 s after each (0.42 / 0.82 / 1.18 / 1.65),
   the later jostles 0.5-1.2 cm; the middle's speed changing at most 0.24-0.32 m/s in a frame.
+  Then "raise and lower the shield at the start and end of animation slower": up over 0.6 s
+  (was 0.34), down over 0.8 s from 1.6 (was 0.55), the jostles kept in seconds (0.14-1.94, so the
+  first now comes while the shield still rises), the look in by 0.5 s and back by 2.3; 2.4 s in
+  all (was 2.15). Measured: no fingers in the board, the middle's speed changing at most
+  0.31-0.35 m/s in a frame (at the first jostle).
+  Then the raise matched to the lowering (Kirill): 0.8 s (`"lift_in"` 0.333), nothing else moved.
+  Measured: no fingers in the board, the middle's speed changing at most 0.26-0.32 m/s in a frame.
+  Then "increase both more, to reach 3 seconds": up over 1.1 s, down over 1.1 s from 1.9 (3.0 s
+  in all), the jostles 0.3 s later (0.44-2.24; the lowering still starts in the last), the look in
+  by 0.6 s and back 1.8-2.9, the grip loosened by 0.6 s and tight again with the lowering.
+  Measured: no fingers in the board, the middle's speed changing at most 0.26-0.36 m/s in a frame.
+  Then 3.5 s: up over 1.35 s, down over 1.35 s from 2.15, the jostles 0.69-2.49, the look in by
+  0.75 s and back 2.05-3.4, the grip loosened by 0.75 s. Measured: no fingers in the board, the
+  middle's speed changing at most 0.26-0.29 m/s in a frame.
+  Then "if I look at the sky, the shield settle animation brings the camera down and then back
+  up ... that makes the fake floating arms visible": `"view"`'s dip was a look DOWN TO 12 deg below
+  level, so from 60 deg up it pulled the view 72 deg down, while the drawn arms (which `"dip_alone"`
+  keeps from following the dip) stayed posed for the sky. With `"dip_alone"` the dip is now a NOD of
+  that much from wherever the Player looks, never past 85 deg down (`_fidget_view`). Checked: a 12
+  deg nod looking 60 up, level and 60 down; 5 deg looking 80 down. The sheathed fidgets' looks
+  (the body's own arms) are unchanged.
   2026-10-15: a look at it (`"view"` in the entry): the view turns 0 deg left (Kirill set it; 10, 7, 5 before), 12 down and
   tilts 3 as the shield lifts (by 0.4 s), held to 1.2 s, back by 1.8 s. (First a 6 deg glance
   with no dip; then "look down and focus on the arm a bit more": 10 left, 12 down; then the
@@ -301,6 +337,15 @@ How it works now (`weapon_arm_drawn_apart`):
   hand arrived and the turn as the lift ended, and its last 0.8 s nothing moved: now the lift
   starts as the hand settles, the turn as the lift ends, and it is 3.45 s (was 4.5). Its
   timings are entries (`"reach"`, `"lift"`, `"turn_at"`, `"let_go"`, `"view_in"`).
+- **`strap` at 3.5 s** (2026-10-15; Kirill: "let's do the same for strap check animation, 3.5
+  total", as for `shield_settle`): the raise and the lowering about 1.35 s each (were about 1.0), the
+  grip and the tugs kept in seconds -- raise and reach 0-1.35 (the hand from 0.11, the fingers
+  closing 1.15-1.35, the thumb 0.38-0.76), two tugs 1.39-1.89, the fingers opening 1.83-2.06, hand
+  and shield down 1.93-3.28, the thumb opening 2.52-2.90, the view in by 1.19 and back 2.36-3.45.
+  Measured (`sheathed_fidgets.gd`, `strap_path.gd`): the shield's room to the body +4.7 / +5.1 cm;
+  the little finger's tip at skin depth on the rim through the grip and tugs, no bone in the board;
+  the palm's speed changing at most 0.39 m/s in a frame (setting off down), 0.16-0.22 slowing into
+  the grip; the grip steady in a hold; the elbow back where it was.
 - **Fidgets with the weapons sheathed** (2026-10-14, not judged in game yet; `"when":
   sheathed` in `FIDGETS`, picked only when they fit -- `_fidget_fits`): `strap` (the left arm
   brings the shield up in front of the belly, the right hand grips its RIM at the spot Kirill
@@ -775,6 +820,7 @@ The probes (`tools/weapon_probes/`, kept out of the editor's scan by `.gdignore`
 | `lantern_armed_search.gd` | `SEARCH` | Thousands of fist places, elbow sides and rolls at the knob's turn, one per tiny frame, kept where the blade points ahead and the knuckles (or pommel) touch the lantern's body. `-- --under`: fist places under the lantern with blade aims, kept where any part of the hand touches its underside. |
 | `fidgets.gd` | `FIDGET` | Every fidget, either foot forward: per tenth the sword's room to the eyes, body and shield, the arm's to the trunk, the fist from the eyes and the blade's way; the tip's fastest move; then one starting by itself and a key ending it. |
 | `brush_off.gd` | `BRUSH` | `brush_off` with the shield and with none, either foot, a fixed seed (`-- --seed <n>`): per 1/20 the palm in the picture, the palm's and fingertips' height off the brushed surface (only over the board), how far along the stroke line, the arm's and the shield's room to the body; the palm's fastest move and when; `STROKE` / `LEAVE` the palm's speed through the strokes and the leave; `JERK` the twelve sharpest changes of acceleration of palm and elbow; `EDGE` how far past the board's real edge the hand goes; `INSIDE` hand points inside the board (outline and thickness), when, which and how deep. `-- --search`: shield holds x face turns, held at the first stroke: room, the face's angle off the eyes, the right shoulder's distance to the line, the line in the picture. `-- --no-outline`: the line placed from the board's box. |
+| `sword_fidget_shield.gd` | `SAG` | The sword fidgets with `"shield_rest"`, weapons up, either foot: how far the shield's middle drops below the stance and when, its least room to the trunk and legs against the stance's, the sword's least room to the shield. |
 | `sheathed_fidgets.gd` | `SHEATHED` | The sheathed fidgets, lantern lit, either foot: the view's dip and turn, where the palm is in the picture (and whether it is in a 16:9 picture of the camera's fov), the arm's room to the body, the palm to the lantern's body and its lift. |
 | `animation_panel_check.gd` | `PANEL` | The panel's body side: the stages listed, a driven pose held still through a key press and past the end, released back to the stance; the panel builds. |
 | `breathing.gd` | `BREATH` | Standing still, weapons up, both idles, breathing on and off: how far the chest, the sword's grip and the shield move against the eyes, and the largest step a frame. |
