@@ -407,6 +407,214 @@ How it works now (`weapon_arm_drawn_apart`):
   shield higher and further out, up by way of `"shield_around"`, the strap near the wrist
   (`"strap_along"`), the right elbow out to the right and its way in bowed out in front --
   every reading within a hanging arm's 3 cm, the shield 7.6 cm clear.
+- **`brush_off`** (2026-10-15, weapons sheathed, not judged in game yet): the right hand
+  brushes dust off the shield's face, or with no shield (or one held in the hand: it does not
+  play then) off the left forearm's sleeve -- three strokes of irregular length, each pulled
+  along the surface with the finger pads and brought back lifted 3 cm, the last sweeping on
+  past the edge and lifting off (the flick), the hand leaving from there
+  (`_fidget_brush`, `"brush"` in `FIDGETS`). The left arm's raise for the shield is the strap's,
+  shared now (`_raise_shield`; the strap's probe output is identical to before), plus a roll of
+  the forearm turning the face toward the eyes (`"face_to_eyes"` 0.65, `_roll_shield_face_to_eyes`).
+  The shield is a flat board (its face rises under 1 cm off a plane, no boss; 0.44 x 0.96 m),
+  so the hand follows the face's plane. What the search found (`brush_off.gd -- --search`):
+  turned fully face up with the forearm across the chest, the board's top end goes 16 cm behind
+  the eyes into the trunk; strokes run out from the board's middle end 0.65-0.96 m from the
+  right shoulder whatever the hold (the arm reaches about 0.6 to the palm). So the strokes
+  first PULLED toward the right hand, from the middle to the face's point nearest the right
+  shoulder (`"edge_margin"` inside the board's box), and flicked off that edge. Since the same
+  day (Kirill drew it on a screenshot) they run ACROSS the board near the right hand and PUSH
+  away: crossing that old line `"cross_back"` (0.11 m) back from its end, from the near edge to
+  the far one (`"edge_margin"` inside each, at most `"length"` 0.3 m), the flick off the far
+  edge by the notch -- "away" is toward the left wrist (fixed on the board; judged by the way
+  from the eyes it flipped while the board rose and the hand jumped at 14 m/s). The line is
+  placed from the board's own box, so another shield model gets it too. Measured with it: the
+  face 46 deg off the eyes, the palm 3-26 deg below the picture's middle through the strokes,
+  fingertips at most 0.7 cm in, the palm at most 3.6 m/s. The view dips 68 and turns 8 right.
+  Then (Kirill: "a little slower", bent fingers "look like we're scratching the shield", "the
+  start of the brush should be slower and faster at the end"): the strokes take 1.55 s (were
+  1.25; the fidget 2.9 s), the fingers are flat (`"curl"` 0.05 / 0, no `"drag"`), and on the
+  surface a stroke goes as x^2 -- from rest, fastest at the end -- then lifts while still moving
+  and runs on through the air before coming back (a cubic leaving the end at the stroke's
+  speed); the last runs on `"flick_on"` (0.5 of the line) as it lifts. The far end was at the
+  arm's limit (1.9 m/s to 0.2 in about 0.07 s): `"reach_soft"` 0.04 and the shield held nearer the right hand
+  (`"shield_arm"` (0.22, -0.31, -0.45); at (0.26, -0.3, -0.42) the board went 5.8 cm into the
+  body). The flat hand read 1.6-2.8 cm off the face: the palm point is about 1.5 cm below the
+  palm's skin, so `"above"` is -0.01 (laying the fingers along the surface changed nothing).
+  Measured: a stroke 0.4 -> 1.1 -> 1.7 -> 2.4 m/s to its end, on 12-15 % of the line past it,
+  the flick 26 %; the finger bones' line 0.7-1.8 cm off the face (pads on it); the shield's room
+  0.0 / -3.3 cm (left / right foot forward); shoulder to the line's ends 0.33-0.39 / 0.51-0.58 m.
+  Then ("raise the shield slower and add a little pause between brushes"): the raise, the
+  hand's reach and the view's dip take 1.1 s (were 0.78), and after each stroke but the last
+  the hand rests at the start about 0.15 s (`"pause"`, a share of the stroke; the strokes
+  themselves as fast as before): the strokes 1.07-2.92 s, the fidget 3.5 s. Measured: the palm
+  still (under 0.1 m/s) 0.15-0.2 s between strokes, at most 4.0 m/s, nothing else changed.
+  Then "some of the brushes are too fast": the strokes' lengths in time are spread +-12 %
+  (`"spread"`; at the shared `IRREGULAR_SPREAD` 0.26 the shortest was 1.7 x quicker than the
+  longest -- `_irregular_progress` takes the spread now) and the strokes take 2.1 s with the
+  pauses (were 1.85), the fidget 3.75 s. Measured on one seed: the three strokes peak at 2.45,
+  2.10 and 1.90 m/s at their ends (were up to 2.6-3.3), the lifted way back up to 2.5 m/s.
+  Then "the return stroke of the brushes seems very quick and robotic" (an even sin^2 lift of
+  3 cm straight back over the line in 0.29 s, to the same start each time): the way back takes
+  about 0.45 s (the strokes 2.6 s, the fidget 4.25 s), rises quickly off the end and settles
+  slowly onto the start (sin^2 of pi u^0.6: the top a third of the way back, `"lift"` 5 cm),
+  bows 2.5 cm to one side (`"return_aside"`), ends at a start up to 2 cm off the last one's
+  (`"jitter"`, new each play), and the fingers curl a little in the air (`"lift_curl"` 0.25).
+  Measured: the way back 1.4-2.0 m/s at most (was 2.5), the strokes as before.
+  Then "the arm movements are choppy and not fluid enough". The probe now ranks JERK (how
+  suddenly the acceleration changes, m/s^3, from the third difference of the palm's and the
+  right elbow's places a frame apart; acceleration alone is high in any quick loop and says
+  nothing). The worst, 3,300 (elbow), had three causes: (1) the pieces of each stroke met with
+  the same speed but not the same change of speed (x^2 then a cubic, and a lift that started
+  with a kink) -- now 2x^3 - x^4 on the surface, a quintic back (`glide` in `_fidget_brush`),
+  bumps u^3 (1-u)^5 and (u (1-u))^3 for the lift and the bow, smootherstep for the shift;
+  (2) the far end with the arm all but straight (the elbow swings there) -- the strokes stop
+  `"far_margin"` 8 cm inside the far edge, 0.26 m long, `"flick_on"` 0.35, `"reach_soft"`
+  0.08, faded out with the reach (at full softness it held the hanging hand off the clip's and
+  it snapped back when the reach let go); (3) the hand leaving at 2.5 m/s in 0.63 s -- now
+  0.86 s, the fidget 4.5 s. Measured: the worst jerk 1,100 (palm, at a stroke's end), the leave
+  under 760, the palm at most 2.3 m/s.
+  Then "there should be some space before the brushes, but they also have to be one continuous
+  fluid motion": the pause is a SETTLE, not a rest. The way back ends `"settle_creep"` (0.06 of
+  the line) short of the start and `"settle_lift"` (1.5 cm) above it, already sinking; there it
+  turns from going back to going forward while moving down, so the hand never stands still;
+  through the pause it lowers onto the surface while setting off forward, and the next stroke
+  starts from that creep (`glide` takes an end speed now). Asked to arrive moving forward, the
+  way back overshot that place and came back -- two near-stops of 0.08 m/s. Measured: the palm
+  0.10-0.2 m/s for about 0.2 s between strokes, touching down near the end, then speeding up;
+  the worst jerk about as before (1,375).
+  Then "the shield's top part is an irregular shape, so currently the hand flies off way past
+  the actual edge": the line's ends were found on the board's BOX, and its top has a notch
+  20 cm deep (the top edge at model y 0.32 right of x -0.01, 0.12 left of it); the line ended
+  3 cm into the notch's air and the palm went 14-19 cm past the real edge. Now the line is cut
+  with the real outline (`_shield_outline`: `_shield_rim` on the face, sorted round the middle
+  and joined into edges at `equip_shield` -- the rim points are the mesh's vertices, and the
+  notch's straight wall has none along it, so "points near the line" found nothing). The
+  strokes are 0.18 m now (the notch's wall bounds them). The flick ends `"flick_past"` (3 cm)
+  past the real edge (`_brush_flick`, in lines): a quintic over the whole flick from about
+  2 m/s overshot to 15 cm past the line's end and came back, so it now slows along the line
+  only over the share of the time it can without overshooting (m <= 2.5 d) and the lift rises
+  over the first half; the hand leaves from 3.22 s, as the flick ends (from 3.54 it hovered at
+  the edge 0.35 s), up and away (`"leave_around"` 0.25 m up; at 0.12 it sank back to the edge).
+  Measured (probe `EDGE` line, `-- --no-outline` for the box): the palm at most 1.7-2.2 cm past
+  the real edge, 13 cm above the face as it leaves, the worst jerk 715.
+  Then "the hand seems to hover a bit at the end of the last stroke" (it stopped along the board
+  at the edge and rose 9 cm at 0.45-0.58 m/s for 0.3 s before a separately eased leave took it):
+  THE FLICK AND THE LEAVE ARE ONE MOVE now. From the instant the last stroke ends (worked out
+  between two frames, `_brush_p_before`; started at the frame itself, the hand stuck for a frame,
+  2,100 m/s^3) the hand keeps its speed along one curve of quintic pieces (no change of speed at
+  the joins; as cubics, 2,600 m/s^3 at the flick) through a place `"flick_past"` beyond the real
+  edge and `"flick_lift"` up (`"flick_time"` 0.15 s), back over the board to `"leave_over"`
+  (0.16 m) above a place `"leave_clear"` (0.1 m) out past the near edge (`"over_time"` 0.3 s;
+  straight from the flick to the hip it went through the board, and above the line's start
+  itself the drop cut its near part), and down to where the clip holds the palm at the hip
+  (`"leave_time"` 0.55 s), arriving at rest; placed in the Player's space. From the flick's top
+  to half way down the palm turns to face the way the clip's palm does and the brushing roll
+  fades (still facing the board, the clip's palm place was out of the straightening arm's reach
+  and the hand swung 6 cm off for two frames, 4-5 m/s with no shield; steering the elbow to the
+  clip's side did not help, handing back earlier moved the elbow under the moving hand); the
+  reach's weight lets go over the last half of the last piece (`"leave_turn"`). With no shield
+  the "over" place is on the way from the flick to the hip. `"reach_out"` and `"leave_around"`
+  are gone. Also: the way in bows further out (`"around"` (0.3, 0.05, -0.15), `"come_from"`
+  0.3), the right hand sets off at 0.3 s (`"reach"`), and the shield rises by way of
+  (-0.1, -0.3, -0.55) (`"shield_around"`): the rising board met the hand on its way in.
+  The probe now plays fixed seeds (`-- --seed <n>`, 1 by default: each fidget draws its seed
+  from the global random numbers, so runs differed), traces the palm's speed from the last
+  stroke (`LEAVE`) and tests the right hand's palm, wrist and finger ends against the board's
+  real outline and thickness (`INSIDE`, with how deep; the palm point counts only 2.5 cm under
+  the face, finger ends get 5 mm). Measured (seeds 1-3): the flick turns at about 0.4 m/s for an
+  instant and the hand never stops on its way to the hip (2.9 m/s at most), the worst jerk about
+  1,060 m/s^3, no shield at most 2.5 m/s. STILL OPEN: the rising board's edge goes through the
+  right hand's fingers for 2-3 frames at about 0.6 s (2.2 cm in with the left foot forward, 4.7
+  with the right), and the fingers touch its near part for 1-2 frames at about 3.7 s.
+  Then "the right hand leaves by going up towards the left shoulder, doesn't make sense": the
+  "over" place was 11 cm LEFT of the eyes and only 13 cm below them -- the flick goes off the
+  board's edge on the right, ahead, and the hip is below on the right. The detour had been added
+  because the hand seemed to go through the board on the straight way, read off the board's box
+  (before the outline check existed). Now the hand drops: the middle place is `"leave_over"`
+  (0.4) of the way from the flick's top to the hip, `"leave_out"` (6 cm) further right, and the
+  flick runs 5 cm past the edge (`"flick_past"`; at 3 cm the thumb clipped the board's right
+  edge, 3.8 cm in, as the hand dropped past it). `"leave_clear"` is gone. Measured (seeds 1, 3):
+  the places from the eyes -- flick ends (0.16, -0.38, -0.07), its top (0.25, -0.37, -0.16), the
+  middle (0.29, -0.51, 0.06), the hip (0.20, -0.73, 0.37); the palm 6.6-10 cm past the real edge
+  at most; at most 1 fingertip frame in the board on the way out; the arm's room to the body
+  -0.02 / 0.00 (was -0.16); the worst jerk about 1,000 m/s^3.
+  Then Kirill drew the way he wants it on a screenshot: not up and sharply down through the
+  middle of the picture, but one wide arc -- on ahead past the edge, curving out to the RIGHT and
+  out of the picture there. The middle place is now `"leave_out"` (0.3, -0.03, 0.05) m from the
+  flick's top (the Player's axes); `"leave_over"` is gone. Measured (seed 1, left foot): the
+  places from the eyes -- the flick's top (0.26, -0.38, -0.16), the middle (0.56, -0.41, -0.11);
+  the palm in the picture 22 right / 18 down -> 29 / 3 -> 40 / 1 -> 50 / 9 -> out past the right
+  edge at about 3.6 s, where it slows to about 0.5 m/s as it turns down toward the hip (out of
+  sight from there: the view comes back up); nothing in the board on the way out; the worst jerk
+  under 1,000 m/s^3.
+  Then "the wrist bend down/forward on the end of the exit doesn't look natural" (Kirill's
+  screenshot: the arm out to the right, the hand drooping): the palm still faced the board's
+  way, which with the forearm reaching out to the side bends the wrist down toward its limit.
+  The leave now turns the hand in two steps: it RELAXES first -- palm to facing down, the roll
+  fading, the fingers loosening into a curl (`"leave_curl"` 0.3) -- from the flick's start to
+  half way out; facing down, the palm lies square to the outstretched forearm and the wrist
+  runs straight on. Then from half way out to half way down to the hip it turns on to the
+  clip's way. Measured (probe `LEAVE`: the wrist's bend and the palm's way): through the sweep
+  out the wrist bent 4-16 deg, the palm facing down (0, -1, 0); 26 deg at most while turning
+  to the clip's, the clip's own 17 at the end; no jumps, the worst jerk under 1,000 m/s^3.
+  Then Kirill marked the sideways part on a screenshot: after the last stroke "the hand moves
+  laterally ... and then leaves back to idle. can we remove the [lateral part] and start the
+  leave to idle in one smooth motion after final brush". So the waypoints are gone: from the
+  last stroke's end the hand follows ONE quintic to the clip's palm place at the hip
+  (`"leave_time"` 0.8 s), starting at the stroke's speed and way, carrying on past the edge by
+  that speed and bending round; `"leave_lift"` (6 cm, u^2 (1-u)^6, the top a quarter of the way)
+  lifts it off the face early. The hand relaxes by `"leave_relax_by"` (0.3 of the way), turns to
+  the clip's way by `"leave_turn_by"` (0.72), and hands back over the last `"leave_turn"` (0.3).
+  Gone: `"flick_*"`, `"over_time"`, `"leave_out"`, `_brush_flick`, the apex and middle places.
+  Measured (seeds 1, 3): the palm 1.3 m/s at the stroke's end, about 0.7 as it turns, up to
+  1.6, at rest by about 3.8 s; 9.5-12 cm past the real edge at most; nothing in the board on
+  the way out; the wrist up to 36 deg while it turns; the worst jerk 1,350-1,540 m/s^3 (the
+  elbow as the hand arrives at the hip).
+  That went "back to the arm going straight down after the final brush" -- Kirill wants the arc,
+  "just without the straight lateral movement" (his second screenshot: up, a rounded top, then
+  down and out to the lower right). So: an ARCH through two places (quintic pieces, Catmull-Rom
+  speeds, as before): a top `"arch_ahead"` (0.1 m) on along the stroke's way and `"arch_up"`
+  (0.07) off the face (`"arch_time"` 0.2 s), then `"arch_down"` (0.22, -0.15, 0.12) m from the
+  top -- out to the right AND lower, which is what removes the straight sideways part (the
+  earlier middle place was at the top's height) -- (`"down_time"` 0.3 s), then the hip
+  (`"leave_time"` 0.45 s). `"leave_lift"` is gone (the top lifts the hand). Measured (seeds 1,
+  3): in the picture the palm 22 right / 18 down -> 28 / 4 -> the top 33 / 0 -> 41 / 9 -> 45 /
+  28 -> out at the bottom right; about 0.5 m/s at the top and 0.8 coming down through the middle
+  place, never stopping; nothing in the board on the way out; the wrist 1-19 deg; the worst jerk
+  under 1,000 m/s^3.
+  Then Kirill found the lift at the top unnatural and set `"arch_up"` to 0; with no lift the
+  hand cut through the board (the top only 2 cm past the edge with the palm's middle, its heel
+  still over the board), so he set `"arch_ahead"` to 0.5, which carries it well past the edge
+  first. `"arch_up"` was then removed. Not measured with the probe since.
+  Then "as we brush the shield, the entire shield shift up and down just a couple of cm, can we
+  tilt/rotate the top part up and down a little instead": `"press"` moved the held forearm
+  bodily into the face under each stroke (the probe's `BOARD` line: the whole board 6.5 mm up
+  and down, 5 mm front to back, no turn). On the shield the board now TIPS: the held forearm
+  rolls about its own line by `"press_tilt"` (2 deg at the hardest press) the way that moves the
+  place being pressed (`_brush_press_at`, the hand's goal) into the face (`_raise_shield`'s
+  `tilt`); `"press"` is only the forearm's give without a shield now. Measured: the face turns
+  1.7 deg; the brushed part near the top dips 7.5 mm, the middle moves 5 mm (it is off the
+  forearm's line), the far tip rises 1.8 cm; the fingertips on the face as before.
+  Then "every stroke follows the same line each time, can we make it a cone of possible lines
+  instead, but I guess the last one is always the same" -- "relatively tight ... just for some
+  visual variety": every stroke but the last is turned about the face's normal by its own angle,
+  up to `"cone"` (6 deg) either way, new each play, about the strokes' common start; each at most
+  as long as the last and ended `"far_margin"` short of where it leaves the outline (the outline
+  cut is a function now, `outline_exits` in `_fidget_brush`). The line keeps each stroke's end
+  (`_brush_line[3]`); on the way back and through the settle the hand goes over from one
+  stroke's line to the next's as the shift does. The last stroke keeps the line it had. Written
+  while Kirill's game was running: NOT run in the probe yet.
+  The hand is rolled 0.5 rad about its fingers (`"roll"`; without it the forefinger's tip was
+  1.6 cm in the board, the little finger's 2 cm off). Leaving, the hand's goal is held where
+  the flick ended once the shield lowers, and it leaves up and right (`"leave_around"`):
+  following the board it chased it down at 5.8 m/s, and leaving toward the hip the lowering
+  board's corner swung 4-10 cm into it. Measured: face 33 deg off the eyes, the palm inside the
+  picture through the strokes (up to 41 deg below the middle at a stroke's near end with the
+  sleeve), fingertips at most 0.7 cm into the surface (skin contact), the shield's room to the
+  body +1.2 / -2.1 cm (left / right foot forward; the strap's was +7.6), the right forearm's
+  room -0.07 to -0.09 on the way in (out of the picture; a hanging arm reads -0.03), the palm
+  at most 3.3-3.6 m/s leaving. Each stroke pushes the board / forearm in 8 mm (`"press"`) and
+  bends the fingers a little (`"drag"`).
 - **Shadows** come from a hidden third copy of the whole body (`RogueShadow`) with its own
   arm pose (`_pose_shadow_arms`): the hands brought in to `weapon_shadow_reach` from the
   shoulders and the elbows turned down by `weapon_shadow_elbows_down`. Without that the
@@ -566,6 +774,7 @@ The probes (`tools/weapon_probes/`, kept out of the editor's scan by `.gdignore`
 | `lantern_armed_action.gd` | `ACTION` | Weapons up, the whole lantern action at 60 frames a second, either foot forward: least room of each kind (sword against body, lantern, shield, left arm, eyes; arm against body and lantern; knuckles' gap; fist behind the lantern) per tenth of the action, and the fastest move of the blade's tip. `-- --hanging=x,y,z --around=x,y,z` try values. |
 | `lantern_armed_search.gd` | `SEARCH` | Thousands of fist places, elbow sides and rolls at the knob's turn, one per tiny frame, kept where the blade points ahead and the knuckles (or pommel) touch the lantern's body. `-- --under`: fist places under the lantern with blade aims, kept where any part of the hand touches its underside. |
 | `fidgets.gd` | `FIDGET` | Every fidget, either foot forward: per tenth the sword's room to the eyes, body and shield, the arm's to the trunk, the fist from the eyes and the blade's way; the tip's fastest move; then one starting by itself and a key ending it. |
+| `brush_off.gd` | `BRUSH` | `brush_off` with the shield and with none, either foot, a fixed seed (`-- --seed <n>`): per 1/20 the palm in the picture, the palm's and fingertips' height off the brushed surface (only over the board), how far along the stroke line, the arm's and the shield's room to the body; the palm's fastest move and when; `STROKE` / `LEAVE` the palm's speed through the strokes and the leave; `JERK` the twelve sharpest changes of acceleration of palm and elbow; `EDGE` how far past the board's real edge the hand goes; `INSIDE` hand points inside the board (outline and thickness), when, which and how deep. `-- --search`: shield holds x face turns, held at the first stroke: room, the face's angle off the eyes, the right shoulder's distance to the line, the line in the picture. `-- --no-outline`: the line placed from the board's box. |
 | `sheathed_fidgets.gd` | `SHEATHED` | The sheathed fidgets, lantern lit, either foot: the view's dip and turn, where the palm is in the picture (and whether it is in a 16:9 picture of the camera's fov), the arm's room to the body, the palm to the lantern's body and its lift. |
 | `animation_panel_check.gd` | `PANEL` | The panel's body side: the stages listed, a driven pose held still through a key press and past the end, released back to the stance; the panel builds. |
 | `breathing.gd` | `BREATH` | Standing still, weapons up, both idles, breathing on and off: how far the chest, the sword's grip and the shield move against the eyes, and the largest step a frame. |
