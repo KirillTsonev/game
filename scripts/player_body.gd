@@ -389,6 +389,7 @@ var _shield_socket: Transform3D ## where it sits IN COMBAT, in that bone's axes 
 var _shield_now: Transform3D ## where it sits just now (the same as _shield_socket: the relaxed carry turns the ARM, not the shield on it)
 var _shield_hand_in_stance: Quaternion = Quaternion.IDENTITY ## the left hand bone's own turn on the forearm with the arm in its stance
 var _shield_up: float = 0.0 ## 0-1: how far the left arm is into its stance
+var _crouching: bool = false ## the Player crouches (set_motion); the sheathed fidgets do not play then
 var _shield_points: PackedVector3Array = [] ## points round the shield's model, in its own axes (shield_body_clearance)
 var _shield_push: Vector3 = Vector3.ZERO ## how far the shield arm is moved off the body just now (the Player's axes)
 var _relaxed_push: Vector3 = Vector3.ZERO ## the same for the relaxed carry, where the arm is swung out from the shoulder by it
@@ -596,6 +597,11 @@ var _swing_next: int = 0 ## which of ARM_SWINGS the next attack() plays
 ## body's side: moved FORWARD it cleared the body as well, but took the arm's cut end with it
 ## into the picture (measured: in view at 60 deg down).
 @export var shield_clear_toward: Vector3 = Vector3(-1.0, 0.0, 0.0)
+## THE RAISED SHIELD KEEPS OFF THE GROUND: crouched, the stance (set from the eyes, 0.93 m up)
+## put the board's lower edge into the ground (Kirill, 2026-10-15). Wherever its rim's lowest
+## point comes nearer than this (m) to the ground under it, the whole shield arm is moved
+## straight up by the difference, eased like the keep-off from the body. 0: off.
+@export var shield_ground_clearance: float = 0.05
 ## Seconds the shield takes to move off the body, and to come back once it is clear. It comes
 ## back slowly on purpose: the legs swing at it with every step, and following each swing
 ## would rock the shield at the pace of the steps.
@@ -1041,6 +1047,7 @@ func holds_player() -> bool:
 
 ## local_velocity: the Player's velocity in its own axes (-Z forward, +X right).
 func set_motion(local_velocity: Vector3, on_floor: bool, crouching: bool, sprinting: bool, delta: float) -> void:
+	_crouching = crouching
 	_ground_speed = Vector2(local_velocity.x, local_velocity.z).length() if on_floor else 0.0
 	if _dash_left > 0.0:
 		# A dash's hop plays through; only the fall's speed is still followed.
@@ -1672,6 +1679,9 @@ func looked() -> void:
 func _fidget_fits(fidget_name: StringName) -> bool:
 	var fidget: Dictionary = FIDGETS[fidget_name]
 	if fidget.get("when", &"drawn") == &"sheathed":
+		# strap, lantern_look, brush_off: made standing, broken crouched (Kirill, 2026-10-15).
+		if _crouching:
+			return false
 		if _weapon_node != null and (weapon_raised or _weapon_up > 0.0):
 			return false
 		if bool(fidget.get("lit", false)) and (_lantern_light == null or not _lantern_light.visible):
@@ -3085,6 +3095,8 @@ func _hold_shield(player: Node3D, delta: float) -> void:
 				break
 			# The first solve is the stance as set: how far it has to move to clear the body.
 			var wanted := _shield_off_body(to_skeleton.affine_inverse(), _shield_socket) if shield_body_clearance > 0.0 else Vector3.ZERO
+			if shield_ground_clearance > 0.0:
+				wanted.y = maxf(wanted.y, _shield_off_ground(player, to_skeleton.affine_inverse(), wanted))
 			_shield_push = _shield_push.lerp(wanted, 1.0 - exp(-delta / maxf(shield_clearance_ease if wanted.length() > _shield_push.length() else shield_clearance_return, 0.001)))
 			if _shield_push.length() < 0.001:
 				break
@@ -3290,6 +3302,26 @@ func _shield_off_body(to_player: Transform3D, on_arm: Transform3D, toward: Vecto
 		low = low.min(point)
 		high = high.max(point)
 	return _keep_off_body(to_player, board, low, high, toward, shield_body_clearance, shield_leg_clearance if shield_leg_clearance >= 0.0 else shield_body_clearance * 0.5)
+
+## How far the shield, as the arm holds it just now and then moved by `moved` (the Player's
+## axes; only its level part counts), has to be raised for its rim's lowest point to be
+## shield_ground_clearance above the ground under that point (_ground_under: the collision, or
+## the drawn ground on displaced textures). 0 where it is clear or no ground is found.
+func _shield_off_ground(player: Node3D, to_player: Transform3D, moved: Vector3) -> float:
+	var board := to_player * _skeleton.get_bone_global_pose(_shield_bone) * WeaponHold.in_hand(_shield_socket, shield)
+	var lowest := Vector3(0.0, INF, 0.0)
+	for point in (_shield_rim if not _shield_rim.is_empty() else _shield_points):
+		var at := board * point
+		if at.y < lowest.y:
+			lowest = at
+	if lowest.y == INF:
+		return 0.0
+	lowest += Vector3(moved.x, 0.0, moved.z)
+	var at_world := player.global_transform * lowest
+	var ground := _ground_under(player, at_world)
+	if ground.is_empty():
+		return 0.0
+	return maxf((ground[0] as float) + shield_ground_clearance - at_world.y, 0.0)
 
 ## How far the held weapon placed at `held` (the Player's space) has to be moved FORWARD,
 ## level with the ground, for the body to be clear of it: the weapon taken as a capsule along
