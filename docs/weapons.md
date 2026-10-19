@@ -163,6 +163,40 @@ How it works now (`weapon_arm_drawn_apart`):
   through `PlayerBody.debug_animations` / `debug_drive` / `debug_release`; a fidget gets its
   stage names from `"stages"` in `FIDGETS`. Another kind of animation is added in those
   three functions, not in the panel.
+- **A fidget needs room** (2026-10-15; Kirill: "if we stand right in front of a wall/tree we
+  shouldn't be able to play the shield brush"; tested headless only, not judged in game). Every fidget, drawn
+  or sheathed, has a box in `PlayerBody.FIDGET_ROOMS`: the space it sweeps through, from the
+  eyes in the Player's axes. `_fidget_has_room` tests it against the world's collision (walls,
+  cliffs, rocks, tree trunks; grass and bushes have none) with one shape query, excluding the
+  Player. When the wait is over only fidgets with room are picked; none has room -> another
+  try in `fidget_room_retry` s. While one plays it is checked every frame and, once blocked,
+  ends as by a key (Kirill chose this over checking only at the start: the drawn fidgets go
+  on while the mouse turns the body). Knobs on the Body: `fidget_needs_room`,
+  `fidget_room_margin` (0.05 m all round), `fidget_room_floor` (0.3 m), `fidget_room_retry`.
+  - **The boxes are MEASURED, not set by hand** (`tools/weapon_probes/fidget_room.gd`, about
+    10 min): every fidget, either foot, standing, crouched (drawn) and looking 0.6 rad down
+    and up (drawn); the arms to the finger tips, the held sword, the shield and the lantern,
+    each sample counted only once it is more than 12 cm from where it was as the fidget
+    started. **After changing a fidget, re-run it and paste the block it prints.** At 4 cm
+    the box took in the shield hanging on the back (the idle sways it 9 cm) and the whole rim
+    of a shield tipped a few cm, and reached behind the Player and down to the feet in every
+    fidget. Measured only at pitch 0, the shield fidgets came 0.2 m outside looking down: the
+    shield does not follow the view as the sword does.
+  - Drawn fidgets' boxes are turned with the view's pitch as the stance is (`_look_pitch *
+    weapon_follows_view`) and the query takes the upright box round that. Looking about
+    50 deg down (0.9 rad), `shield_settle` / `shield_glance` still reach 17-25 cm outside;
+    within 0.6 rad all stay within 2 cm.
+  - The box is cut off `fidget_room_floor` above the feet: crouched, the shield's rim comes
+    down near the ground and every box would hit the floor. Steep ground or a mountain face
+    ahead still blocks.
+  - `tools/weapon_probes/fidget_room_wall.gd` (a ground slab and a wall or a 0.3 m trunk):
+    a wall 0.5 m ahead (10 cm off the body) blocks all but `lantern_look` (it only lifts the
+    lantern at the hip, so it never meets a wall in front); 0.8 m ahead it blocks the drawn
+    ones, not `brush_off` or `strap` (they work close to the chest); 1.2 m blocks only crouched
+    `shield_glance`; a trunk 0.7 m ahead blocks all drawn ones and `brush_off`. `strap` and
+    `brush_off` are also blocked by a wall 0.5 m BEHIND or to the left: their boxes start where
+    the shield hangs at the side, a little behind the body. A playing `brush_off` ended 0.2 s
+    after a wall appeared in front.
 - **`shoulder_tap`** (2026-10-14, not judged in game yet): the blade swung up and back over
   onto the BODY'S right shoulder (`"rest"` in `FIDGETS`, `_fidget_pose`), tapped four times (0.35 s each; 3.25 s in all)
   by the wrist (identical taps: Kirill, "there's rhythm to it"), and back; the view and the
@@ -817,6 +851,8 @@ The probes (`tools/weapon_probes/`, kept out of the editor's scan by `.gdignore`
 | Probe | Tag | What it tells |
 |---|---|---|
 | `lantern_armed_action.gd` | `ACTION` | Weapons up, the whole lantern action at 60 frames a second, either foot forward: least room of each kind (sword against body, lantern, shield, left arm, eyes; arm against body and lantern; knuckles' gap; fist behind the lantern) per tenth of the action, and the fastest move of the blade's tip. `-- --hanging=x,y,z --around=x,y,z` try values. |
+| `fidget_room.gd` | `ROOM` | The space each fidget sweeps through (what moves more than 12 cm from its start: arms, held sword, shield, lantern), from the eyes, either foot, standing / crouched / looking 0.6 rad down and up; prints the block for `PlayerBody.FIDGET_ROOMS`. **Re-run and paste after changing a fidget.** About 10 min. |
+| `fidget_room_wall.gd` | `WALL` | `_fidget_has_room` against real collision: per fidget, room or BLOCKED with a wall 0.5 / 0.8 / 1.2 m ahead, behind, left, right, and a trunk ahead; a fidget playing is ended when a wall appears; none starts by itself in front of one. |
 | `lantern_crouched_screen.gd` | `SCREEN` | Weapons up, crouched, the lantern action: where the fist and the blade's middle and tip are on a 1280 x 720 screen every 3 frames, with the view's dip, turn and tilt. A path the player sees (the view moves too), not one in the body's space. `-- --mirrored`: right foot forward. |
 | `lantern_armed_search.gd` | `SEARCH` | Thousands of fist places, elbow sides and rolls at the knob's turn, one per tiny frame, kept where the blade points ahead and the knuckles (or pommel) touch the lantern's body. `-- --under`: fist places under the lantern with blade aims, kept where any part of the hand touches its underside. |
 | `fidgets.gd` | `FIDGET` | Every fidget, either foot forward: per tenth the sword's room to the eyes, body and shield, the arm's to the trunk, the fist from the eyes and the blade's way; the tip's fastest move; then one starting by itself and a key ending it. |

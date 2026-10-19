@@ -751,6 +751,16 @@ var _swing_next: int = 0 ## which of ARM_SWINGS the next attack() plays
 @export var fidget_after: float = 10.0
 @export var fidget_after_random: float = 6.0
 @export var fidget_cancel_time: float = 0.2
+## A fidget plays only where its space is free of the world's collision (FIDGET_ROOMS,
+## _fidget_has_room): not picked there, and ended (as by a key) if the Player turns into a wall
+## while it plays. The space is grown by fidget_room_margin (m) all round, and the ground below
+## fidget_room_floor (m above the feet) does not count.
+@export var fidget_needs_room: bool = true
+@export var fidget_room_margin: float = 0.05
+@export var fidget_room_floor: float = 0.3
+## Seconds before another try at picking a fidget when none had room.
+@export var fidget_room_retry: float = 1.0
+var _room_box: BoxShape3D
 ## THE WEAPON KEEPS OFF THE BODY, as the shield does (shield_body_clearance): wherever the box
 ## its model fills comes nearer than this (m) to the trunk's middle line (hips to chest), or
 ## than weapon_leg_clearance to a leg's, the whole weapon arm (shoulder and fist) is moved
@@ -1715,6 +1725,59 @@ const FIDGETS := {
 		"shield_rest": {"hand": Vector3(0.0, -0.015, 0.0), "tip": -0.6, "in": Vector2(0.05, 0.3), "out": Vector2(0.72, 0.95)}, "circle": {"turns": 2.0, "tilt_degrees": 25.0, "hand": 0.03, "from": 0.3, "to": 0.7}},
 }
 
+## The space each fidget sweeps through (Kirill, 2026-10-15: in front of a wall or a tree the
+## shield brush has no room), from the eyes in the Player's axes (+X right, +Y up, -Z ahead); for
+## the drawn ones turned with the view's pitch as the stance is. What the arms, the held sword,
+## the shield and the lantern reach once moved more than 12 cm from where they were as it
+## started, either foot forward, standing and (drawn) crouched and looking 0.6 rad down and up
+## (the shield does not follow the view as the sword does). MEASURED, not set by hand:
+## after changing a fidget, run tools/weapon_probes/fidget_room.gd and paste what it prints here.
+## A fidget missing here needs no room. See _fidget_has_room.
+const FIDGET_ROOMS := {
+	&"inspect": AABB(Vector3(-0.11, -0.66, -0.63), Vector3(0.61, 1.28, 0.41)),
+	&"strap": AABB(Vector3(-0.57, -1.11, -0.31), Vector3(0.94, 1.09, 1.18)),
+	&"lantern_look": AABB(Vector3(0.20, -0.84, -0.01), Vector3(0.18, 0.29, 0.35)),
+	&"brush_off": AABB(Vector3(-0.91, -1.06, -0.44), Vector3(1.56, 0.90, 1.27)),
+	&"shield_settle": AABB(Vector3(-0.65, -1.01, -0.76), Vector3(0.67, 1.07, 0.75)),
+	&"shield_glance": AABB(Vector3(-0.67, -1.03, -0.97), Vector3(0.77, 1.24, 0.99)),
+	&"shoulder_tap": AABB(Vector3(-0.44, -1.11, -0.70), Vector3(1.03, 1.66, 1.16)),
+	&"wrist_roll": AABB(Vector3(0.06, -0.71, -0.85), Vector3(0.81, 1.24, 0.76)),
+}
+
+## Whether a fidget's space (FIDGET_ROOMS, grown by fidget_room_margin) is free of the world's
+## collision -- walls, cliffs, rocks, tree trunks; grass and bushes have none. The box is taken
+## upright round the room turned with the view, and cut off fidget_room_floor above the feet so
+## the ground stood on does not count (crouched, the shield's rim comes down near it); steep
+## ground ahead still does. Checked before one is picked and every frame while it plays.
+func _fidget_has_room(fidget_name: StringName) -> bool:
+	if not fidget_needs_room or not FIDGET_ROOMS.has(fidget_name):
+		return true
+	var player := get_parent() as CollisionObject3D
+	if player == null or not player.is_inside_tree():
+		return true
+	var room: AABB = (FIDGET_ROOMS[fidget_name] as AABB).grow(fidget_room_margin)
+	if (FIDGETS[fidget_name] as Dictionary).get("when", &"drawn") != &"sheathed":
+		var with_view := Basis(Vector3.RIGHT, _look_pitch * weapon_follows_view)
+		var turned := AABB(with_view * room.position, Vector3.ZERO)
+		for corner in 8:
+			turned = turned.expand(with_view * room.get_endpoint(corner))
+		room = turned
+	room.position += _eye
+	var bottom := maxf(room.position.y, fidget_room_floor)
+	room.size.y = room.end.y - bottom
+	room.position.y = bottom
+	if room.size.y <= 0.0:
+		return true
+	if _room_box == null:
+		_room_box = BoxShape3D.new()
+	_room_box.size = room.size
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = _room_box
+	query.transform = Transform3D(player.global_basis.orthonormalized(), player.global_transform * room.get_center())
+	query.collision_mask = player.collision_mask
+	query.exclude = [player.get_rid()]
+	return player.get_world_3d().direct_space_state.intersect_shape(query, 1).is_empty()
+
 ## Cancels the fidget playing, if any (the Player calls this on any key or mouse button), and
 ## starts the wait for the next one again.
 func interrupt_fidget() -> void:
@@ -1988,7 +2051,7 @@ func _update_fidget(delta: float) -> void:
 	var still := _ground_speed < still_speed and _was_on_floor and _dash_left <= 0.0 and _toggle_at < 0.0
 	if _fidget != &"":
 		_fidget_at += delta
-		if not still or not _fidget_fits(_fidget):
+		if not still or not _fidget_fits(_fidget) or (not _fidget_cancelled and not _fidget_has_room(_fidget)):
 			_fidget_cancelled = true
 		if _fidget_cancelled:
 			_fidget_fade = move_toward(_fidget_fade, 0.0, delta / maxf(fidget_cancel_time, 0.01))
@@ -2005,6 +2068,11 @@ func _update_fidget(delta: float) -> void:
 		_fidget_wait = fidget_after + randf() * fidget_after_random
 	_fidget_still += delta
 	if _fidget_still >= _fidget_wait:
+		# Only those with room here (checked now, not every frame of the wait).
+		fitting = fitting.filter(_fidget_has_room)
+		if fitting.is_empty():
+			_fidget_still = _fidget_wait - fidget_room_retry
+			return
 		var names: Array = fitting.filter(func(n: StringName) -> bool: return n != _fidget_last)
 		if names.is_empty():
 			names = fitting

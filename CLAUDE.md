@@ -1335,6 +1335,12 @@ optimisation; never judge by GPU utilisation %.
     shows the hold and, with its `automatic` off, is the socket placed by eye. The
     `RightHandAttachment` BoneAttachment3D it used to hang under is gone: Kirill kept moving
     that instead, and an attachment is put back on its bone every frame.
+- **A fidget plays only where it has room** (2026-10-15): its box in `PlayerBody.FIDGET_ROOMS`
+  is tested against the world's collision before it is picked and every frame while it plays.
+  The boxes are measured by `tools/weapon_probes/fidget_room.gd`: after adding or changing a
+  fidget, re-run it and paste what it prints, or the new fidget is never checked (a fidget
+  missing from the table needs no room) and a changed one is checked with its old box.
+  Details: `docs/weapons.md`, "A fidget needs room".
 - A clip's speed goes into `AnimationPlayer.play()`'s custom speed, not `speed_scale`: a
   cross-fade advances by `speed_scale`, so a clip frozen through it never fades in.
 - A headless check of a scene (`--headless --script`) that hits a script error never reaches
