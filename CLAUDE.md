@@ -1222,8 +1222,10 @@ optimisation; never judge by GPU utilisation %.
   idle stands with the left foot 43 cm ahead of the right; coming to a stand, `set_motion`
   picks the idle or its mirror by which foot is forward at that moment. Mirroring a clip on
   the humanoid skeleton = each track to the other side's bone, a turn's y and z negated, a
-  position's x negated (checked: within 0.1 mm of a true mirror image). The crouch idle is
-  not mirrored. Code that tests for the idle must test for both names.
+  position's x negated (checked: within 0.1 mm of a true mirror image). Since 2026-10-15 the
+  crouch idle is mirrored the same way (`crouch_idle_mirror`; its left foot is 0.54 m ahead),
+  sharing the choice with the standing idle, so crouching or standing up while still keeps
+  the same foot forward. Code that tests for an idle must use `PlayerBody.IDLES` (all four names).
 - **The feet are placed on the ground** (`PlayerBody._place_feet`, `feet_*` exports,
   2026-10-12; Kirill: "the feet clip even without displacement on slopes"). A clip is made
   for level ground and the capsule knows only the ground under its middle: on 20 deg the

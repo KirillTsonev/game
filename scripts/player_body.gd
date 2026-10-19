@@ -233,6 +233,28 @@ const BODY_LAYER := 12
 ## pointing ahead from a fist behind the hanging lantern runs straight through it.
 @export var toggle_armed_blade_hanging: Vector3 = Vector3(0.6, -0.6, -0.5)
 const TOGGLE_ARMED_WRIST_MAX := 1.05 ## radians (60 degrees)
+## CROUCHED WITH THE WEAPON DRAWN (_crouched_armed_reach; Kirill, 2026-10-15: crouched,
+## everything clipped; "we never see the lantern anyway, we don't have to move the right hand
+## exactly towards it, just in the general direction, as long as the weapon doesn't clip
+## anywhere"): the fist goes toward this place, from the Player's feet in its axes (+X right,
+## +Y up, -Z ahead), and the blade turns to point this way (the same axes). The lantern does
+## not swing: nothing touches it. The place is FIXED, not set from the lantern: the lantern
+## hangs from the hips, which the two crouch idles hold differently (left foot forward it hangs
+## 6 cm higher and 5 cm further ahead), and the arm's way changed with them. Kirill found it
+## "much much better" with the right foot forward, so this is where the fist ends up there.
+## Then the whole arm with the weapon is moved off the body and the lantern wherever the
+## weapon's outline comes nearer than TOGGLE_TRUNK / TOGGLE_LEG (_weapon_outline_off_body; not
+## weapon_body_clearance, which the scene sets to 0.1 for the stance), the shortest of right,
+## right and forward, right and back (forward alone runs along the crouched thighs); out at
+## once, back eased over toggle_crouched_push_ease (s). Tried and dropped the same day: laying
+## the weapon on the ground first; the fist stopping against the torso; the standing toggle's
+## arm with the keep-off (its wrist bend flipped the blade crouched).
+@export var toggle_crouched_fist: Vector3 = Vector3(0.13, 0.51, 0.06)
+@export var toggle_crouched_blade: Vector3 = Vector3(0.3, 0.1, -0.95)
+@export var toggle_crouched_push_ease: float = 0.08
+## m more than the body's thickness: the outline is the outermost points of 16 slices, and
+## between them the sword still reached 1-2 cm into the chest (lantern_armed_action.gd --crouched).
+const CROUCHED_ARMED_MARGIN := 0.03
 ## The left hand's way to the knob and back bows out toward this place, from the hips bone in
 ## the Player's axes (+X right, +Y up, -Z ahead): in front of the belly. Going straight, it
 ## passed through the body (Kirill, 2026-10-12). The hand gets about half-way out to it.
@@ -269,7 +291,15 @@ const TOGGLE_REACH := [0.0, 0.18] ## the right hand goes to the lantern
 const TOGGLE_REACH_ARMED := [0.0, 0.3]
 const TOGGLE_SWING_ARMED := [0.22, 0.38] ## the lantern's swing forward for it
 const TOGGLE_RELEASE_ARMED := [0.68, 1.0]
-const TOGGLE_SWING := [0.14, 0.32] ## and swings it forward
+## Crouched with a weapon the fist only goes toward the lantern, and it sets off back a little
+## BEFORE the view rises (TOGGLE_VIEW_OUT), as a hand leads the head. Setting off at 0.68 as
+## standing, the sword hung still in the Player's space while the view rose: on screen it sank
+## and drifted left before rising to the stance, a path with a corner (Kirill, 2026-10-15:
+## "horizontal movement before the hand goes up"). With the view's own [0.58, 1.0] it still
+## dipped and looped; at [0.5, 0.95] the blade draws one arc on screen (up-left, then round to
+## the right into the stance). Measured with tools/weapon_probes/lantern_crouched_screen.gd.
+const TOGGLE_RELEASE_CROUCHED_ARMED := [0.5, 0.95]
+const TOGGLE_SWING :=[0.14, 0.32] ## and swings it forward
 ## The left hand comes to the knob, as fast as it later leaves (0.3 s each way). Setting off
 ## earlier, at 0.08, it took 0.45 s to arrive and pulled away visibly faster than it came.
 const TOGGLE_LEFT_IN := [0.18, 0.38]
@@ -390,6 +420,12 @@ var _shield_now: Transform3D ## where it sits just now (the same as _shield_sock
 var _shield_hand_in_stance: Quaternion = Quaternion.IDENTITY ## the left hand bone's own turn on the forearm with the arm in its stance
 var _shield_up: float = 0.0 ## 0-1: how far the left arm is into its stance
 var _crouching: bool = false ## the Player crouches (set_motion); the sheathed fidgets do not play then
+## The lantern toggle was started crouched: it is a separate one, built step by step (Kirill,
+## 2026-10-15: everything clipped crouched). Step one: the left arm is not moved at all -- no
+## reach to the knob, sheathed or drawn; the light still changes with TOGGLE_TUG. Kept for the
+## whole toggle, so standing up or crouching midway does not switch hands in mid-move.
+var _toggle_crouched: bool = false
+var _toggle_arm_push: Vector3 = Vector3.ZERO ## how far the right arm is moved off the body just now in a crouched toggle (the Player's axes)
 var _shield_points: PackedVector3Array = [] ## points round the shield's model, in its own axes (shield_body_clearance)
 var _shield_push: Vector3 = Vector3.ZERO ## how far the shield arm is moved off the body just now (the Player's axes)
 var _relaxed_push: Vector3 = Vector3.ZERO ## the same for the relaxed carry, where the arm is swung out from the shoulder by it
@@ -398,6 +434,7 @@ var _weapon_push_wanted: Vector3 = Vector3.ZERO ## how far it would have to move
 var _weapon_push_speed: Vector3 = Vector3.ZERO ## the push's own speed (its spring, weapon_clearance_smoothing)
 var _weapon_low: Vector3 = Vector3.ZERO ## the box the weapon's model fills, in its own axes
 var _weapon_high: Vector3 = Vector3.ZERO
+var _weapon_outline: PackedVector3Array = [] ## points round the weapon's model, in its own axes (_weapon_outline_off_body)
 var _shield_socket_set: bool = false ## _shield_socket has been worked out with the arm in its stance (not only from the model's data)
 var _shield_shoulder_drawn: float = 0.0 ## m the left shoulder was drawn off the body after the fist this frame
 var _bob_now: Vector3 = Vector3.ZERO ## the bob of the steps this frame (_weapon_bob): both arms move by it
@@ -756,7 +793,16 @@ var _eye: Vector3
 var _eye_valid: bool = false
 var _clip: StringName = &""
 var _dash_left: float = 0.0 ## seconds of a dash's hop still to play (start_dash)
-var _idle_mirrored: bool = false ## standing with the right foot forward (the idle's mirror image)
+var _idle_mirrored: bool = false ## standing or crouching still with the right foot forward (the idle's mirror image)
+## The still clips, standing and crouched, and their mirror images. Code that tests for an idle
+## must test for all of them.
+const IDLES: Array[StringName] = [&"idle", &"idle_mirror", &"crouch_idle", &"crouch_idle_mirror"]
+## Clips that, set off from an idle, start at the moment of their cycle with the same foot
+## forward as the idle had (_idle_mirrored), not at their own start. The crouch walk's start has
+## the left foot forward: from the mirrored crouch idle the legs swapped places in the first
+## steps (Kirill, 2026-10-15: "there's a jank and we start with left foot again").
+const START_ON_FOOT: Array[StringName] = [&"crouch_fwd"]
+var _foot_forward_at: Dictionary = {} ## clip -> Vector2(time with the left foot furthest ahead, the same for the right)
 var _arms: Dictionary = {} ## "Left" / "Right" -> that arm's bones and hand points (_setup_arms)
 var _toggle_at: float = -1.0 ## seconds into turning the lantern on / off, below 0 = not doing it
 var _toggle_lighting: bool = false ## the turn under way lights the lantern (false: puts it out)
@@ -865,12 +911,15 @@ func _ready() -> void:
 	for source: AnimationPlayer in sources.values():
 		source.owner.free()
 	# The idle stands with the left foot forward; its mirror image is for stopping with the
-	# right foot forward (set_motion).
+	# right foot forward (set_motion). The crouch idle too: it has the left foot 0.54 m ahead
+	# (Kirill, 2026-10-15: "mirror the crouch idle like we do standing idle").
 	library.add_animation(&"idle_mirror", _mirrored(library.get_animation(&"idle"), true))
+	library.add_animation(&"crouch_idle_mirror", _mirrored(library.get_animation(&"crouch_idle"), true))
 	_animations = AnimationPlayer.new()
 	_model.add_child(_animations) # its tracks ("%GeneralSkeleton:<bone>") start at the model's root
 	_animations.add_animation_library(&"", library)
 	_animations.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL # see advance()
+	_find_foot_forward_times()
 	_play(&"idle", 1.0)
 	# The sword arm's own player, run after the body's in advance(): its clips have tracks for
 	# the right arm only, so it replaces just that arm in the pose the body's clip gave.
@@ -1081,7 +1130,11 @@ func set_motion(local_velocity: Vector3, on_floor: bool, crouching: bool, sprint
 		_play(&"jump_land", 1.0)
 	elif crouching:
 		if speed <= still_speed:
-			_play(&"crouch_idle", 1.0)
+			# As the standing idle below; the two share the choice, so crouching or standing up
+			# while still keeps the same foot forward.
+			if not IDLES.has(_clip):
+				_idle_mirrored = _right_foot_ahead()
+			_play(&"crouch_idle_mirror" if _idle_mirrored else &"crouch_idle", 1.0)
 		else:
 			# One clip for every direction; moving backward plays it in reverse.
 			_play(&"crouch_fwd", _playback_speed(speed, &"crouch_fwd") * (-1.0 if direction.begins_with("bwd") else 1.0))
@@ -1089,7 +1142,7 @@ func set_motion(local_velocity: Vector3, on_floor: bool, crouching: bool, sprint
 		# Coming to a stand, the foot that is forward stays forward: the idle has the left one
 		# there, its mirror image the right. (Always the left: stopping on the right foot, the
 		# legs changed places.)
-		if _clip != &"idle" and _clip != &"idle_mirror":
+		if not IDLES.has(_clip):
 			_idle_mirrored = _right_foot_ahead()
 		_play(&"idle_mirror" if _idle_mirrored else &"idle", 1.0)
 	elif sprinting and direction.begins_with("fwd"):
@@ -1117,6 +1170,8 @@ func toggle_lantern() -> void:
 	_toggle_lighting = not _lantern_light.visible
 	_pinch_grip_valid = false
 	_toggle_dips = not _sprinting
+	_toggle_crouched = _crouching
+	_toggle_arm_push = Vector3.ZERO
 
 ## True while the lantern is being turned on or off (the hands are at it).
 func turning_lantern() -> bool:
@@ -2839,6 +2894,32 @@ func equip(data: WeaponData) -> void:
 			_weapon_low = point if first else _weapon_low.min(point)
 			_weapon_high = point if first else _weapon_high.max(point)
 			first = false
+	# Its outline (_weapon_outline_off_body): the model's vertices cut into slices along its
+	# longest side, and in each slice the outermost on both sides of the other two.
+	var long := (_weapon_high - _weapon_low).max_axis_index()
+	var slices := 16
+	var extremes: Array = [] # per slice: 4 points
+	extremes.resize(slices)
+	for mesh: MeshInstance3D in _weapon_node.find_children("*", "MeshInstance3D", true, false):
+		var in_model := _weapon_node.global_transform.affine_inverse() * mesh.global_transform
+		for surface in mesh.mesh.get_surface_count():
+			for v: Vector3 in mesh.mesh.surface_get_arrays(surface)[Mesh.ARRAY_VERTEX]:
+				var point := in_model * v
+				var slice := clampi(int((point[long] - _weapon_low[long]) / maxf(_weapon_high[long] - _weapon_low[long], 0.001) * slices), 0, slices - 1)
+				if extremes[slice] == null:
+					extremes[slice] = [point, point, point, point]
+				var kept: Array = extremes[slice]
+				var a := (long + 1) % 3
+				var b := (long + 2) % 3
+				if point[a] < (kept[0] as Vector3)[a]: kept[0] = point
+				if point[a] > (kept[1] as Vector3)[a]: kept[1] = point
+				if point[b] < (kept[2] as Vector3)[b]: kept[2] = point
+				if point[b] > (kept[3] as Vector3)[b]: kept[3] = point
+	_weapon_outline = PackedVector3Array()
+	for kept: Variant in extremes:
+		if kept != null:
+			for point: Vector3 in kept:
+				_weapon_outline.append(point)
 	if _lantern_light:
 		for mesh: MeshInstance3D in _weapon_node.find_children("*", "MeshInstance3D", true, false):
 			mesh.layers = 1 << (BODY_LAYER - 1)
@@ -3370,6 +3451,47 @@ func _weapon_off_body(to_player: Transform3D, held: Transform3D) -> Vector3:
 			low = middle_slide
 	return Vector3.FORWARD * high
 
+## How far the held weapon placed at `held` (the Player's space) has to be moved along `toward`
+## (unit, the Player's axes) for no point of its outline (_weapon_outline: the model's own
+## shape, crossguard and edges included) to be nearer than `trunk` to the trunk's middle line
+## or `legs` to a leg's. The smallest such move up to 1 m, found by halving. (_weapon_off_body
+## takes the weapon as a thin line along its length: crouched, the crossguard and the blade's
+## edges were 2-9 cm in the chest and the thigh while it saw the weapon clear.)
+## `extra`: more lines to keep off, each [from, to, clearance] in the Player's space.
+func _weapon_outline_off_body(to_player: Transform3D, held: Transform3D, toward: Vector3, trunk: float, legs: float, extra: Array = []) -> Vector3:
+	var points := PackedVector3Array()
+	for point in _weapon_outline:
+		points.append(held * point)
+	# The trunk along its bones (crouched it bends well off the straight line hips to chest).
+	var hips := to_player * _skeleton.get_bone_global_pose(_hips_bone).origin
+	var spine := to_player * _skeleton.get_bone_global_pose(_skeleton.find_bone("Spine")).origin
+	var lines: Array = [[hips, spine, trunk], [spine, to_player * _skeleton.get_bone_global_pose(_skeleton.find_bone("UpperChest")).origin, trunk]]
+	for leg: Dictionary in _legs:
+		var knee := to_player * _skeleton.get_bone_global_pose(leg["lower"]).origin
+		lines.append([to_player * _skeleton.get_bone_global_pose(leg["upper"]).origin, knee, legs])
+		lines.append([knee, to_player * _skeleton.get_bone_global_pose(leg["foot"]).origin, legs])
+	lines.append_array(extra)
+	var room := func(slide: float) -> float:
+		var least := INF
+		var moved := toward * slide
+		for point in points:
+			for line: Array in lines:
+				least = minf(least, Geometry3D.get_closest_point_to_segment(point + moved, line[0], line[1]).distance_to(point + moved) - (line[2] as float))
+		return least
+	if room.call(0.0) >= 0.0:
+		return Vector3.ZERO
+	var low := 0.0
+	var high := 1.0
+	if room.call(high) < 0.0:
+		return toward * high
+	for i in 12:
+		var middle_slide := (low + high) * 0.5
+		if room.call(middle_slide) >= 0.0:
+			high = middle_slide
+		else:
+			low = middle_slide
+	return toward * high
+
 ## A damped spring from `now` toward `target` (weapon_clearance_smoothing; _weapon_push_speed
 ## is its speed): it starts and stops gently, the same both ways.
 func _spring(now: Vector3, target: Vector3, delta: float) -> Vector3:
@@ -3682,7 +3804,7 @@ func _place_lantern(player: Node3D, delta: float) -> void:
 		var forward := deg_to_rad(toggle_swing_degrees)
 		if through < swing_part[0]:
 			_toggle_hang = (_bob - pivot).normalized() # how it hangs just before the hand moves it
-		elif through < TOGGLE_BACK[1]:
+		elif through < TOGGLE_BACK[1] and not (armed and _toggle_crouched): # crouched with a weapon nothing touches it
 			# Out and back along the same way, to where it hung: left to fall back by itself
 			# it came down in front of the thigh and stayed leaning on it.
 			_bob = pivot + _toggle_hang.slerp(Vector3(0.0, -cos(forward), -sin(forward)), swung) * LANTERN_ARM
@@ -3697,7 +3819,9 @@ func _place_lantern(player: Node3D, delta: float) -> void:
 		# with that; the weapon comes along. Its arm sets off from the stance's shoulder,
 		# which is not the body's: for the reach the shoulder goes back onto the body (the
 		# lantern is at the hip, out of reach from where the stance has the shoulder).
-		if armed:
+		if armed and _toggle_crouched:
+			_crouched_armed_reach(bones, pivot, through, delta)
+		elif armed:
 			var right_upper: int = _arms["Right"]["upper"]
 			_skeleton.set_bone_pose_position(right_upper, _skeleton.get_bone_pose_position(right_upper).lerp(_skeleton.get_bone_rest(right_upper).origin, _part(through, TOGGLE_REACH_ARMED) * (1.0 - _part(through, TOGGLE_RELEASE_ARMED))))
 			# THE KNUCKLES of the fist nudge the lantern, the weapon pointing ahead (Kirill,
@@ -3750,7 +3874,7 @@ func _place_lantern(player: Node3D, delta: float) -> void:
 	# The model's wide axis (its X) runs front to back, so its thin side is toward the leg.
 	var lantern_place := Transform3D(Basis(up, _lantern_spin) * Basis(side.cross(up), up, -side), pivot)
 	_lantern.global_transform = player.global_transform * lantern_place
-	if through >= 0.0:
+	if through >= 0.0 and not _toggle_crouched:
 		# The left hand: to the knob on the lantern, wherever that now is. It comes open; thumb,
 		# forefinger and middle finger close on the knob's end and the other two fold out of
 		# the way; then the whole pinch turns about the knob's rod, and it opens leaving.
@@ -3902,6 +4026,50 @@ func _place_lantern(player: Node3D, delta: float) -> void:
 			near.omni_range = maxf(body_shadow_reach, 0.01)
 			near.light_energy = _lantern_light.light_energy
 			near.light_color = _lantern_light.light_color
+
+## The crouched toggle with a weapon in the right hand (toggle_crouched_fist): the fist goes
+## toward the lantern, not to it, and the blade turns from where the stance points it to
+## toggle_crouched_blade -- about ONE fixed axis, with no wrist bend: the standing toggle's
+## bend, asked for more crouched, swapped its axis between frames and the blade flipped from
+## up to down in two frames (1.36 m at the tip, tools/weapon_probes/lantern_armed_action.gd
+## --crouched). Then the whole arm is moved off the body and the lantern wherever the weapon
+## comes nearer to them than TOGGLE_TRUNK / TOGGLE_LEG / LANTERN_RADIUS plus a little.
+func _crouched_armed_reach(bones: Transform3D, pivot: Vector3, through: float, delta: float) -> void:
+	var arm: Dictionary = _arms["Right"]
+	var right_upper: int = arm["upper"]
+	var reaching := _part(through, TOGGLE_REACH_ARMED) * (1.0 - _part(through, TOGGLE_RELEASE_CROUCHED_ARMED))
+	if reaching <= 0.001:
+		_toggle_arm_push = Vector3.ZERO
+		return
+	_skeleton.set_bone_pose_position(right_upper, _skeleton.get_bone_pose_position(right_upper).lerp(_skeleton.get_bone_rest(right_upper).origin, reaching))
+	# The hand's turn: the stance's, turned so the blade points toggle_crouched_blade (_reach
+	# blends to it with the reach).
+	var stance_turn := (bones.basis * _skeleton.get_bone_global_pose(arm["hand"]).basis).orthonormalized()
+	var blade_now := (stance_turn * _weapon_socket.basis.y).normalized()
+	var blade_asked := toggle_crouched_blade.normalized()
+	var turn := stance_turn
+	var axis := blade_now.cross(blade_asked)
+	if axis.length_squared() > 0.000001:
+		turn = Basis(axis.normalized(), blade_now.angle_to(blade_asked)) * stance_turn
+	_reach(arm, "palm", bones, toggle_crouched_fist, reaching, toggle_armed_elbow, Vector3.DOWN, 0.0, Vector3.INF, Vector3.INF, Vector3.INF, turn)
+	# Off the body and the lantern: the shortest of three ways out.
+	var held := bones * _skeleton.get_bone_global_pose(arm["hand"]) * WeaponHold.in_hand(_weapon_socket, weapon)
+	var lantern: Array = [pivot, _bob + (_bob - pivot).normalized() * 0.1, LANTERN_RADIUS + 0.02]
+	var wanted := Vector3.INF
+	for toward: Vector3 in [Vector3.RIGHT, Vector3.RIGHT + Vector3.FORWARD, Vector3.RIGHT + Vector3.BACK]:
+		var push := _weapon_outline_off_body(bones, held, toward.normalized(), TOGGLE_TRUNK + CROUCHED_ARMED_MARGIN, TOGGLE_LEG + CROUCHED_ARMED_MARGIN, [lantern])
+		if push.length() < wanted.length():
+			wanted = push
+	# Out at once (eased, it trailed the arm's quick moves into the body by 5-7 cm), back eased.
+	# Whole from early in the reach on: scaled by the reach itself it was a fraction of what was
+	# needed while the arm came in.
+	if wanted.length() >= _toggle_arm_push.length():
+		_toggle_arm_push = wanted
+	else:
+		_toggle_arm_push = _toggle_arm_push.lerp(wanted, 1.0 - exp(-delta / maxf(toggle_crouched_push_ease, 0.001)))
+	var upper := _skeleton.get_bone_global_pose(right_upper)
+	upper.origin += bones.affine_inverse().basis * (_toggle_arm_push * smoothstep(0.0, 0.15, reaching))
+	_skeleton.set_bone_global_pose(right_upper, upper)
 
 ## How far through one part of a sequence: 0 before it, 1 after, eased between.
 func _part(through: float, part: Array) -> float:
@@ -4296,6 +4464,33 @@ func _playback_speed(speed: float, clip: StringName) -> float:
 func _play(clip: StringName, playback_speed: float) -> void:
 	if clip == _clip and absf(playback_speed - _clip_speed) < 0.01:
 		return
+	var from_idle := IDLES.has(_clip)
 	_clip = clip
 	_clip_speed = playback_speed
 	_animations.play(clip, blend_time, playback_speed, playback_speed < 0.0)
+	if from_idle and _foot_forward_at.has(clip):
+		# Set off from a stand on the foot that is forward (see START_ON_FOOT).
+		_animations.seek((_foot_forward_at[clip] as Vector2)[1 if _idle_mirrored else 0], false)
+
+## For each START_ON_FOOT clip, the times (s) in its cycle where the left foot (x) and the
+## right foot (y) are furthest ahead of the other: found once by posing the skeleton with it.
+func _find_foot_forward_times() -> void:
+	for clip: StringName in START_ON_FOOT:
+		var animation := _animations.get_animation(clip)
+		var left_at := 0.0
+		var right_at := 0.0
+		var most_left := -INF
+		var most_right := -INF
+		_animations.play(clip)
+		for i in 48:
+			var at := animation.length * i / 48.0
+			_animations.seek(at, true)
+			var ahead := _skeleton.get_bone_global_pose(_legs[1]["foot"]).origin.z - _skeleton.get_bone_global_pose(_legs[0]["foot"]).origin.z # the right foot ahead of the left (the skeleton's +Z is its front)
+			if ahead > most_right:
+				most_right = ahead
+				right_at = at
+			if -ahead > most_left:
+				most_left = -ahead
+				left_at = at
+		_foot_forward_at[clip] = Vector2(left_at, right_at)
+	_animations.stop()

@@ -12,8 +12,10 @@ static func seg(at: Vector3, a: Vector3, b: Vector3) -> float:
 	var along := b - a
 	return at.distance_to(a + along * clampf((at - a).dot(along) / along.length_squared(), 0.0, 1.0))
 
+var crouched := false # --crouched: the crouched toggle (the arm kept off the body)
+
 func step(delta: float) -> void:
-	body.set_motion(Vector3.ZERO, true, false, false, delta)
+	body.set_motion(Vector3.ZERO, true, crouched, false, delta)
 	body.advance(delta, 0.0)
 
 func _run() -> void:
@@ -28,6 +30,8 @@ func _go() -> void:
 	player.set_process(false)
 	await process_frame
 	for arg in OS.get_cmdline_user_args():
+		if arg == "--crouched":
+			crouched = true
 		if arg.begins_with("--hanging="):
 			var n := arg.trim_prefix("--hanging=").split_floats(",")
 			body.toggle_armed_fist_hanging = Vector3(n[0], n[1], n[2])
@@ -132,9 +136,9 @@ func _go() -> void:
 			if tip_before.is_finite():
 				tip_step = maxf(tip_step, tip.distance_to(tip_before))
 				if tip.distance_to(tip_before) > 0.12:
-					print("ACTION tip moved %.2f m in the frame at %.3f of the action" % [tip.distance_to(tip_before), through])
+					print("ACTION tip moved %.2f m in the frame at %.3f of the action (arm push %s)" % [tip.distance_to(tip_before), through, (body.get("_toggle_arm_push") as Vector3).snappedf(0.01)])
 			tip_before = tip
-			if not mirrored and through < 0.34:
+			if not mirrored and (through < 0.34 or through > 0.8) and OS.get_cmdline_user_args().has("--trace"):
 				var tp := player.global_transform.affine_inverse()
 				print("TRACE %.3f fist %s elbow %s shoulder %s blade %s lantern %s" % [through, (tp * fist).snappedf(0.01), (tp * r_elbow).snappedf(0.01), (tp * r_shoulder).snappedf(0.01), (tp.basis * sword_mesh.global_transform.basis.y).normalized().snappedf(0.01), (body.get("_bob") as Vector3).snappedf(0.01)])
 			var bin := mini(int(through * 10.0), 9)
@@ -145,6 +149,15 @@ func _go() -> void:
 					bins[bin][n] = minf(bins[bin][n], m[n])
 			if through > 0.5 and not said:
 				said = true
+				var parts_room := ""
+				for t: Array in trunk:
+					var least := 9.0
+					for v in verts:
+						least = minf(least, seg(sword_mesh.global_transform * v, t[0], t[1]) - (t[2] as float))
+					parts_room += " %+.2f" % least
+				var bones := player.global_transform.affine_inverse() * sk.global_transform
+				var held := player.global_transform.affine_inverse() * sword.global_transform
+				print("ACTION per part (hips-spine, spine-chest, chest-neck, L thigh, L shin, R thigh, R shin):%s | outline %d points | off body right %s forward %s" % [parts_room, (body.get("_weapon_outline") as PackedVector3Array).size(),body.call("_weapon_outline_off_body", bones, held, Vector3.RIGHT, 0.17, 0.1), body.call("_weapon_outline_off_body", bones, held, Vector3.FORWARD, 0.17, 0.1)])
 				var to_p := player.global_transform.affine_inverse()
 				print("ACTION %s foot: at the turn the fist is %s from the lantern's middle (Player's axes), blade toward %s, wrist at %s, elbow at %s, hook at %s, lantern's middle at %s" % ["right" if mirrored else "left", (to_p * fist - (body.get("_bob") as Vector3)).snappedf(0.01), (to_p.basis * sword_mesh.global_transform.basis.y).normalized().snappedf(0.01), (to_p * r_hand.origin).snappedf(0.01), (to_p * r_elbow).snappedf(0.01), (to_p * top).snappedf(0.01), (body.get("_bob") as Vector3).snappedf(0.01)])
 		for n: String in NAMES:
