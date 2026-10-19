@@ -47,6 +47,25 @@ const CLIFF_DRESSING_YAW_JITTER := 0.35 ## radians of random extra yaw on top of
 ## so max half-width is 4.2 -- this clears that with margin, reaching genuinely flat,
 ## unmodified low-side ground for every feature regardless of its own jittered softness.
 const CLIFF_DRESSING_FOOT_SAMPLE_OFFSET := 8.0
+## 2026-10-19 (Kirill, seed 2711445549: "anomalous elevation and cliff mesh missing terrain under
+## it"): a feature running across the valley's wall had two meshes 17 m apart with feet at 20.5
+## and 5.3 m (each foot is the ground in front of that mesh, and the wall's slope swamps the
+## feature's own 2-6 m step). Each footprint is levelled to its own foot, so the lower mesh's
+## levelling cut an 11 m terrain wall beside the higher mesh and left its end over the drop.
+## Along a feature, neighbouring feet may differ by at most this (m): the feature's placements are
+## split where it is exceeded and only the longest run is dressed (the rest of the step stays
+## plain terrain). Same day, same cause: the low side is decided ONCE per feature (sampled along
+## its whole length), not per mesh -- per mesh, two neighbours on one feature faced opposite ways.
+const CLIFF_DRESSING_MAX_FOOT_STEP := 4.0
+const CLIFF_DRESSING_SIDE_SAMPLE_STEP := 4.0 ## m between the samples that decide a feature's low side
+## Levelling (flatten_terrain_for_cliff_dressing) runs highest foot first and locks each footprint
+## (feathered over this, m) before the next, as the knot rows do (Knots._build_rows): a lower
+## neighbour's levelling can no longer cut the ground away under a higher mesh.
+const CLIFF_DRESSING_FLATTEN_LOCK_FEATHER := 2.0
+## Placements dropped by CLIFF_DRESSING_MAX_FOOT_STEP in the last plan, and features whose low side
+## (decided once) disagreed with the fault's own polarity -- for the log line.
+static var last_plan_skipped := 0
+static var last_plan_flipped := 0
 ## How far past a cliff-dressing mesh's own rotated footprint (in world units) the
 ## terrain-flatten blend (_flatten_terrain_for_cliff_dressing) fades back out to the
 ## untouched heightmap -- 0 would leave a hard, visible shelf edge right at the mesh's
@@ -279,6 +298,8 @@ static func build_cliff_dressing_obstacle_mask(plan: Array[Dictionary], width: i
 ## itself still happens later, in _dress_cliff_faces, once Terrain3D and heightmap_corner exist.
 static func plan_cliff_dressing(cliff_features: Array[Dictionary], heights: PackedFloat32Array, width: int, length: int, rng: RandomNumberGenerator, initial_usage: Dictionary = {}) -> Array[Dictionary]:
 	var plan: Array[Dictionary] = []
+	last_plan_skipped = 0
+	last_plan_flipped = 0
 	# 2026-09-17: tracks how many times each CLIFF_DRESSING_DEFS model has been placed so
 	# far across the WHOLE map (declared here, above the per-feature loop, so it balances
 	# globally rather than resetting per fault) -- see the least-used-first selection below.
@@ -310,6 +331,27 @@ static func plan_cliff_dressing(cliff_features: Array[Dictionary], heights: Pack
 		var low_side_sign := -1.0 if step_height > 0.0 else 1.0
 		var usable_half_len := half_len * (1.0 - TerrainConfig.BOULDER_END_INSET_FRACTION)
 		var cursor := -usable_half_len
+		# Which side is actually lower, decided once for the whole feature (2026-10-19, see
+		# CLIFF_DRESSING_MAX_FOOT_STEP): the ground CLIFF_DRESSING_FOOT_SAMPLE_OFFSET out on either
+		# side, summed along the feature. It replaces the per-placement check described below,
+		# which let two neighbours on one feature face opposite ways.
+		var side_sum := 0.0
+		var s := -usable_half_len
+		while s <= usable_half_len + 0.001:
+			var s_t := clampf(s / half_len, -1.0, 1.0) if half_len > 0.0001 else 0.0
+			var s_curve := curve_amplitude * lerpf(sin(s_t * PI * curve_frequency + curve_phase), sin(s_t * PI * curve_frequency2 + curve_phase2), curve_weight2)
+			var s_px := center.x + s * axis_x + s_curve * perp_x
+			var s_pz := center.y + s * axis_z + s_curve * perp_z
+			var off_x := perp_x * low_side_sign * CLIFF_DRESSING_FOOT_SAMPLE_OFFSET
+			var off_z := perp_z * low_side_sign * CLIFF_DRESSING_FOOT_SAMPLE_OFFSET
+			side_sum += TerrainUtil.sample_height_bilinear(heights, width, length, clampf(s_px + off_x, 0.0, float(width - 1)), clampf(s_pz + off_z, 0.0, float(length - 1))) \
+					- TerrainUtil.sample_height_bilinear(heights, width, length, clampf(s_px - off_x, 0.0, float(width - 1)), clampf(s_pz - off_z, 0.0, float(length - 1)))
+			s += CLIFF_DRESSING_SIDE_SAMPLE_STEP
+		if side_sum > 0.0:
+			low_side_sign = -low_side_sign
+			last_plan_flipped += 1
+			print("TERRAIN_GEN_DEBUG cliff dressing -- feature at px (%.1f, %.1f), step %.1f m: dressed on the side opposite its fault's polarity (mean %.1f m lower there)" % [center.x, center.y, step_height, side_sum / maxf(1.0, floor(2.0 * usable_half_len / CLIFF_DRESSING_SIDE_SAMPLE_STEP) + 1.0)])
+		var feature_entries: Array[Dictionary] = []
 
 		while cursor < usable_half_len - 0.5:
 			var remaining := usable_half_len - cursor
@@ -372,10 +414,7 @@ static func plan_cliff_dressing(cliff_features: Array[Dictionary], heights: Pack
 			# where we look UP the terrain to decide how far down the mesh's base belongs.
 			var foot_a_px := clampf(px + face_dir_x * CLIFF_DRESSING_FOOT_SAMPLE_OFFSET, 0.0, float(width - 1))
 			var foot_a_pz := clampf(pz + face_dir_z * CLIFF_DRESSING_FOOT_SAMPLE_OFFSET, 0.0, float(length - 1))
-			var foot_b_px := clampf(px - face_dir_x * CLIFF_DRESSING_FOOT_SAMPLE_OFFSET, 0.0, float(width - 1))
-			var foot_b_pz := clampf(pz - face_dir_z * CLIFF_DRESSING_FOOT_SAMPLE_OFFSET, 0.0, float(length - 1))
 			var foot_a_height := TerrainUtil.sample_height_bilinear(heights, width, length, foot_a_px, foot_a_pz)
-			var foot_b_height := TerrainUtil.sample_height_bilinear(heights, width, length, foot_b_px, foot_b_pz)
 
 			# Ground-truth low-side check (2026-09-17): the fault's own step_height is what
 			# DEFINES face_dir/low_side_sign above, but that step gets ADDED on top of whatever
@@ -391,15 +430,9 @@ static func plan_cliff_dressing(cliff_features: Array[Dictionary], heights: Pack
 			# lower fixes this at the source, regardless of why the terrain looks the way it
 			# does there -- most placements agree with the fault's own guess and nothing
 			# changes; this only kicks in where a bigger surrounding feature dominates.
-			var foot_px := foot_a_px
-			var foot_pz := foot_a_pz
+			# 2026-10-19: that comparison is now made once per feature (side_sum above), so
+			# low_side_sign already points at the lower side here.
 			var height := foot_a_height
-			if foot_b_height < foot_a_height:
-				face_dir_x = -face_dir_x
-				face_dir_z = -face_dir_z
-				foot_px = foot_b_px
-				foot_pz = foot_b_pz
-				height = foot_b_height
 
 			var scale_jitter := rng.randf_range(CLIFF_DRESSING_SCALE_MIN, CLIFF_DRESSING_SCALE_MAX)
 			# atan2(face_dir_x, face_dir_z), NOT the Node3D-forward-vector-derived
@@ -410,7 +443,7 @@ static func plan_cliff_dressing(cliff_features: Array[Dictionary], heights: Pack
 			# abstract Node3D-forward-vector math here.
 			var face_angle := atan2(face_dir_x, face_dir_z) + rng.randf_range(-CLIFF_DRESSING_YAW_JITTER, CLIFF_DRESSING_YAW_JITTER)
 
-			plan.append({
+			feature_entries.append({
 				"def_name": chosen.name,
 				"px": px,
 				"pz": pz,
@@ -422,6 +455,26 @@ static func plan_cliff_dressing(cliff_features: Array[Dictionary], heights: Pack
 			})
 
 			cursor += chosen.real_size + CLIFF_DRESSING_SPACING
+		# Split where neighbouring feet differ by more than CLIFF_DRESSING_MAX_FOOT_STEP (the feature
+		# runs down a slope there) and keep the longest run; the dropped models' usage is given back.
+		var best_from := 0
+		var best_count := 0
+		var run_from := 0
+		for i in feature_entries.size() + 1:
+			if i == feature_entries.size() or (i > 0 and absf(float(feature_entries[i].height) - float(feature_entries[i - 1].height)) > CLIFF_DRESSING_MAX_FOOT_STEP):
+				if i - run_from > best_count:
+					best_from = run_from
+					best_count = i - run_from
+				run_from = i
+		for i in feature_entries.size():
+			if i >= best_from and i < best_from + best_count:
+				plan.append(feature_entries[i])
+			else:
+				var dropped: String = feature_entries[i].def_name
+				dressing_usage_count[dropped] = int(dressing_usage_count[dropped]) - 1
+				last_plan_skipped += 1
+				print("TERRAIN_GEN_DEBUG cliff dressing -- dropped %s at px (%.1f, %.1f), foot %.1f m (the kept run's feet: %.1f..%.1f m)" % [dropped, float(feature_entries[i].px), float(feature_entries[i].pz), float(feature_entries[i].height), float(feature_entries[best_from].height), float(feature_entries[best_from + best_count - 1].height)])
+	print("TERRAIN_GEN: cliff dressing plan -- %d placement(s); %d dropped where neighbouring feet differ by more than %.1f m; %d feature(s) dressed on the side opposite their fault's polarity" % [plan.size(), last_plan_skipped, CLIFF_DRESSING_MAX_FOOT_STEP, last_plan_flipped])
 	return plan
 
 ## Flattens the heightmap under each PLANNED cliff-face mesh's own footprint (option 1 of the
@@ -439,7 +492,13 @@ static func flatten_terrain_for_cliff_dressing(plan: Array[Dictionary], heights:
 	for def in TerrainConfig.CLIFF_DRESSING_DEFS:
 		defs_by_name[def.name] = def
 
-	for entry in plan:
+	# Highest foot first, each footprint locked once levelled (CLIFF_DRESSING_FLATTEN_LOCK_FEATHER).
+	var by_foot: Array[Dictionary] = plan.duplicate()
+	by_foot.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a.height) > float(b.height))
+	var lock := PackedFloat32Array()
+	if by_foot.size() > 1:
+		lock.resize(width * length)
+	for entry in by_foot:
 		var def = defs_by_name.get(entry.def_name)
 		if def == null:
 			continue
@@ -501,7 +560,12 @@ static func flatten_terrain_for_cliff_dressing(plan: Array[Dictionary], heights:
 					continue
 				var weight := 1.0 - smoothstep(0.0, softness, outside_dist)
 				var idx := qz * width + qx
-				heights[idx] = lerpf(heights[idx], target_height, weight)
+				if lock.is_empty():
+					heights[idx] = lerpf(heights[idx], target_height, weight)
+					continue
+				heights[idx] = lerpf(heights[idx], target_height, weight * (1.0 - lock[idx]))
+				# Locked after this entry's own write (softness >= the feather, so this loop reaches it).
+				lock[idx] = maxf(lock[idx], 1.0 - smoothstep(0.0, CLIFF_DRESSING_FLATTEN_LOCK_FEATHER, outside_dist))
 
 
 ## Builds a height-vs-local-X "skyline" profile for one cliff dressing model (2026-09-17,

@@ -1364,6 +1364,15 @@ and functions called across modules lost their leading underscore
   (cliff hanging over missing ground). `Knots._build_rows` now levels highest foot first and
   locks that footprint (`KNOT_ROW_LOCK_FEATHER`) before the next; the ground steps between the
   two meshes instead.
+- Ordinary cliff features got the same fix on 2026-10-19 (seed 2711445549: an 11 m terrain wall
+  beside a cliff mesh whose end hung over the drop; a feature running across the valley's wall
+  gave two neighbouring meshes feet at 20.5 and 5.3 m). In `CliffDressing`: the low side is
+  decided once per feature (per mesh, two neighbours faced opposite ways); a feature's placements
+  are split where neighbouring feet differ by more than `CLIFF_DRESSING_MAX_FOOT_STEP` (4 m) and
+  only the longest run is dressed; `flatten_terrain_for_cliff_dressing` levels highest foot first
+  and locks each footprint (`CLIFF_DRESSING_FLATTEN_LOCK_FEATHER`). The log line
+  `cliff dressing plan -- ...` counts the drops; `TERRAIN_GEN_DEBUG cliff dressing --` lines say
+  where. Seeds 2711445549 / 538572580: 4 / 2 placements dropped.
 - Ground paint v3 (2026-10-10, Kirill: the textures "all look like they're following a grid"):
   the ground is patches of ONE texture each (largest weight per vertex + a majority filter), and
   `_blend_band` gives vertices near a border the pair (own texture, the one across) at 50/50 on
