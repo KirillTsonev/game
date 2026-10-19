@@ -150,6 +150,7 @@ func _ready() -> void:
 	data.calc_height_range(true)
 	_apply_displacement(terrain)
 	_apply_detiling(terrain, false)
+	_apply_macro_variation(terrain)
 
 	var height_range: Vector2 = data.get_height_range()
 	print("TERRAIN_GEN: imported. region_count=%d height_range=%s" % [data.get_region_count(), height_range])
@@ -738,6 +739,34 @@ const DETILING_SHIFT := 1.0
 ## shader's per-cell random number cannot be repeated there. Its tile is 13 m; the mountain's
 ## copy of the texture has its own id and keeps the values above.
 const DETILING_BY_ID := {2: [0.0, 0.0]}
+## Macro variation (2026-10-19, Kirill: what else against the textures' repetition): Terrain3D's
+## own large-scale tint, on by default but with both colours white, so it did nothing. Every
+## texture's colour is multiplied by MACRO_VARIATION_1 where one noise is low and by
+## MACRO_VARIATION_2 where a second is, so the same texture reads a little darker / warmer /
+## cooler from patch to patch, and from far or above the ground stops looking printed. The
+## noises are read anyway (no extra cost). MACRO_NOISE_*_SCALE: the noise texture repeats every
+## 1 / (scale * 0.1) m (Terrain3D's defaults 0.04 and 0.076 = 250 and 132 m; the patches are
+## smaller than that). MACRO_VARIATION_SLOPE fades it on steep ground: its weight is
+## clamp(normal.y + slope, 0, 1) -- at 0 flat ground gets all of it, 45 deg 0.71, 70 deg 0.34; at
+## Terrain3D's 0.333 everything under 48 deg gets all of it, the mountain's rock as well (Kirill:
+## no noise-mixed look on the mountain). Set at startup, not in main.tscn. White both = off. TUNING.
+const MACRO_VARIATION_1 := Color(0.82, 0.78, 0.70) # where noise 1 is low: darker, warmer
+const MACRO_VARIATION_2 := Color(0.90, 0.95, 0.88) # where noise 2 is low: a little cooler, greener
+const MACRO_VARIATION_SLOPE := 0.0
+const MACRO_NOISE_1_SCALE := 0.04
+const MACRO_NOISE_2_SCALE := 0.076
+
+func _apply_macro_variation(terrain: Terrain3D) -> void:
+	var mat: Terrain3DMaterial = terrain.material
+	mat.macro_variation_enabled = true
+	mat.set_shader_param(&"macro_variation1", MACRO_VARIATION_1)
+	mat.set_shader_param(&"macro_variation2", MACRO_VARIATION_2)
+	mat.set_shader_param(&"macro_variation_slope", MACRO_VARIATION_SLOPE)
+	mat.set_shader_param(&"noise1_scale", MACRO_NOISE_1_SCALE)
+	mat.set_shader_param(&"noise2_scale", MACRO_NOISE_2_SCALE)
+	# Without a noise texture the noises read 0 and the whole ground gets both tints flat.
+	print("TERRAIN_GEN: macro variation -- %s, %s, slope %.2f, noise scales %.3f / %.3f, noise texture %s" % [MACRO_VARIATION_1, MACRO_VARIATION_2, MACRO_VARIATION_SLOPE, MACRO_NOISE_1_SCALE, MACRO_NOISE_2_SCALE, mat.get_shader_param(&"noise_texture")])
+
 var _detiling_old := false
 func toggle_detiling() -> String:
 	var terrain: Terrain3D = get_parent().get_node_or_null("Terrain3D")

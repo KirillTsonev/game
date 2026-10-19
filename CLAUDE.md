@@ -53,6 +53,10 @@ automatically) -- a local copy also lives at
   keep-off and relaxed carry, the lantern action with weapons, the headless probes in
   `tools/weapon_probes/`, what is still fitted to the one sword and shield, the plan for
   per-weapon setups, and the rules learnt. Read before adding a weapon or touching any of it.
+- `docs/texture_repetition.md` -- (2026-10-19) what breaks the terrain textures' repetition
+  (detiling, ground paint, rock detail, macro variation -- a trial), what was found about
+  Terrain3D's macro variation and iq's / Heitz-Neyret's techniques, and the options left
+  (distance blend, iq's technique 3, the mountain shader) with their costs.
 - This file stays the reference for pitfalls and _why_ things are done the way they are.
 
 ## Local tooling paths (this machine)

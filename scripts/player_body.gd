@@ -428,6 +428,8 @@ var _toggle_crouched: bool = false
 var _toggle_arm_push: Vector3 = Vector3.ZERO ## how far the right arm is moved off the body just now in a crouched toggle (the Player's axes)
 var _shield_points: PackedVector3Array = [] ## points round the shield's model, in its own axes (shield_body_clearance)
 var _shield_push: Vector3 = Vector3.ZERO ## how far the shield arm is moved off the body just now (the Player's axes)
+var _shield_turn: Vector2 = Vector2.ZERO ## the forearm's swing and roll off the body just now (radians; shield_clear_swing_max)
+var _shield_turn_aim: Vector2 = Vector2.ZERO ## the turn the search last found (it goes on from there)
 var _relaxed_push: Vector3 = Vector3.ZERO ## the same for the relaxed carry, where the arm is swung out from the shoulder by it
 var _weapon_push: Vector3 = Vector3.ZERO ## how far the weapon arm's stance is moved off the body just now (weapon_body_clearance)
 var _weapon_push_wanted: Vector3 = Vector3.ZERO ## how far it would have to move this frame (before easing)
@@ -634,6 +636,21 @@ var _swing_next: int = 0 ## which of ARM_SWINGS the next attack() plays
 ## body's side: moved FORWARD it cleared the body as well, but took the arm's cut end with it
 ## into the picture (measured: in view at 60 deg down).
 @export var shield_clear_toward: Vector3 = Vector3(-1.0, 0.0, 0.0)
+## BEFORE IT IS MOVED, THE SHIELD IS TURNED (Kirill, 2026-10-19: moved alone, the arm came
+## out of the picture's left edge looking down; he drew it kept near the trunk, the shield
+## turned). The forearm swings about the elbow round the Player's up (up to
+## shield_clear_swing_max degrees) and rolls about its own line, the board's face with it (up to
+## shield_clear_roll_max); the move along shield_clear_toward clears only what turning leaves.
+## The turn is searched a few degrees a frame (shield_clear_turn_step) from where it is, for
+## the least move plus shield_clear_turn_cost (m of move) per full turn on each axis. 0: off.
+@export var shield_clear_swing_max: float = 35.0
+@export var shield_clear_roll_max: float = 45.0
+@export var shield_clear_turn_step: float = 3.0
+@export var shield_clear_turn_cost: float = 0.05
+## How much better (m of move) another turn must be before the search leaves the one it has.
+@export var shield_clear_turn_hold: float = 0.02
+## The fastest the turn changes (deg a second), so what still changes moves rather than jumps.
+@export var shield_clear_turn_speed: float = 120.0
 ## THE RAISED SHIELD KEEPS OFF THE GROUND: crouched, the stance (set from the eyes, 0.93 m up)
 ## put the board's lower edge into the ground (Kirill, 2026-10-15). Wherever its rim's lowest
 ## point comes nearer than this (m) to the ground under it, the whole shield arm is moved
@@ -642,7 +659,8 @@ var _swing_next: int = 0 ## which of ARM_SWINGS the next attack() plays
 ## Seconds the shield takes to move off the body, and to come back once it is clear. It comes
 ## back slowly on purpose: the legs swing at it with every step, and following each swing
 ## would rock the shield at the pace of the steps.
-@export var shield_clearance_ease: float = 0.08
+## (0.08 until 2026-10-19: crouched, a look down in 0.1 s left the board 1.6 cm in the shin.)
+@export var shield_clearance_ease: float = 0.04
 @export var shield_clearance_return: float = 1.0
 ## The arm in the stance is DRAWN APART FROM THE BODY, as first-person games do (Skyrim keeps a
 ## separate pair of arms): where the stance holds the hand, the body's own shoulder is up to
@@ -3122,6 +3140,8 @@ func _hold_shield(player: Node3D, delta: float) -> void:
 	_shield_now = _shield_socket
 	if weight <= 0.001:
 		_shield_push = _shield_push.lerp(Vector3.ZERO, 1.0 - exp(-delta / maxf(shield_clearance_return, 0.001)))
+		_shield_turn = _shield_turn.lerp(Vector2.ZERO, 1.0 - exp(-delta / maxf(shield_clearance_return, 0.001)))
+		_shield_turn_aim = Vector2.ZERO
 		if relaxed:
 			_shield_stance.pose_fingers(_skeleton, shield.grip_radius)
 		return
@@ -3242,8 +3262,20 @@ func _hold_shield(player: Node3D, delta: float) -> void:
 				_shield_hand_in_stance = _skeleton.get_bone_pose_rotation(arm["hand"])
 			if attempt == 1:
 				break
-			# The first solve is the stance as set: how far it has to move to clear the body.
-			var wanted := _shield_off_body(to_skeleton.affine_inverse(), _shield_socket) if shield_body_clearance > 0.0 else Vector3.ZERO
+			# The first solve is the stance as set: how far it has to turn and move to clear the body.
+			var wanted := Vector3.ZERO
+			var wanted_turn := Vector2.ZERO
+			if shield_body_clearance > 0.0:
+				var cleared := _shield_turn_off_body(to_skeleton.affine_inverse())
+				wanted = cleared[0]
+				wanted_turn = cleared[1]
+			var eased_turn := _shield_turn.lerp(wanted_turn, 1.0 - exp(-delta / maxf(shield_clearance_ease if absf(wanted_turn.x) + absf(wanted_turn.y) > absf(_shield_turn.x) + absf(_shield_turn.y) else shield_clearance_return, 0.001)))
+			_shield_turn += (eased_turn - _shield_turn).limit_length(deg_to_rad(shield_clear_turn_speed) * delta)
+			if shield_body_clearance > 0.0 and not _shield_turn.is_equal_approx(wanted_turn):
+				# The move for the turn the arm HAS, not the one it is going to: the turn is held
+				# to shield_clear_turn_speed, and on a quick look down the move asked for the
+				# finished turn left the board 4 cm in the shin crouched (Kirill, 2026-10-19).
+				wanted = _shield_slide_at(_shield_turn, to_skeleton.affine_inverse())
 			if shield_ground_clearance > 0.0:
 				wanted.y = maxf(wanted.y, _shield_off_ground(player, to_skeleton.affine_inverse(), wanted))
 			_shield_push = _shield_push.lerp(wanted, 1.0 - exp(-delta / maxf(shield_clearance_ease if wanted.length() > _shield_push.length() else shield_clearance_return, 0.001)))
@@ -3252,6 +3284,11 @@ func _hold_shield(player: Node3D, delta: float) -> void:
 			_skeleton.set_bone_pose_position(arm["upper"], in_clip[0] as Vector3)
 			for i in arm_bones.size():
 				_skeleton.set_bone_pose_rotation(arm_bones[i], in_clip[i + 1] as Quaternion)
+		if absf(_shield_turn.x) + absf(_shield_turn.y) > 0.0001:
+			# The forearm turned off the body about the elbow (the hand and the board with it), after
+			# any move: the elbow moved with the arm, so the order does not matter.
+			var lower := _skeleton.get_bone_global_pose(arm["lower"])
+			_skeleton.set_bone_global_pose(arm["lower"], _shield_turned(_shield_turn, to_skeleton.affine_inverse()) * lower)
 	if shield.on_forearm and weapon_shoulder_on_body:
 		_shield_socket = _shield_stance.forearm_socket(_skeleton, shield.grip_radius)
 	if weight < 0.999:
@@ -3452,6 +3489,92 @@ func _shield_off_body(to_player: Transform3D, on_arm: Transform3D, toward: Vecto
 		high = high.max(point)
 	return _keep_off_body(to_player, board, low, high, toward, shield_body_clearance, shield_leg_clearance if shield_leg_clearance >= 0.0 else shield_body_clearance * 0.5)
 
+## The stance's keep-off with the turn first (shield_clear_swing_max): [the move along
+## shield_clear_toward still needed, the turn (swing, roll; radians)], for the arm as it is
+## posed just now. The turn is looked for round the last one found, a step each way on each
+## axis, and with no turn at all: it moves on smoothly from frame to frame.
+func _shield_turn_off_body(to_player: Transform3D) -> Array:
+	var no_turn := _shield_off_body(to_player, _shield_socket)
+	var swing_max := deg_to_rad(shield_clear_swing_max)
+	var roll_max := deg_to_rad(shield_clear_roll_max)
+	if no_turn.length() < 0.001 or (swing_max <= 0.0 and roll_max <= 0.0):
+		_shield_turn_aim = Vector2.ZERO
+		return [no_turn, Vector2.ZERO]
+	var low := _shield_points[0]
+	var high := _shield_points[0]
+	for point in _shield_points:
+		low = low.min(point)
+		high = high.max(point)
+	var body_points := _body_points(to_player, shield_body_clearance, shield_leg_clearance if shield_leg_clearance >= 0.0 else shield_body_clearance * 0.5)
+	var board := _skeleton.get_bone_global_pose(_shield_bone) * WeaponHold.in_hand(_shield_socket, shield)
+	var step := deg_to_rad(shield_clear_turn_step)
+	var from := Vector2(clampf(_shield_turn_aim.x, -swing_max, swing_max), clampf(_shield_turn_aim.y, -roll_max, roll_max))
+	# The turn found last frame stays unless another beats it by shield_clear_turn_hold: two
+	# turns (the face rolled either way) can clear about as well, and the breathing tipped the
+	# choice between them many times a second -- the shield twitched (Kirill, 2026-10-19).
+	var best_push := no_turn
+	var best_turn := Vector2.ZERO
+	var best_cost := no_turn.length()
+	if not from.is_zero_approx():
+		best_turn = from
+		best_push = _slide_clear(body_points, to_player * _shield_turned(from, to_player) * board, low, high, shield_clear_toward)
+		best_cost = best_push.length() + shield_clear_turn_cost * ((absf(from.x) / swing_max if swing_max > 0.0 else 0.0) + (absf(from.y) / roll_max if roll_max > 0.0 else 0.0))
+	best_cost -= shield_clear_turn_hold
+	if not from.is_zero_approx() and no_turn.length() < best_cost:
+		best_cost = no_turn.length()
+		best_push = no_turn
+		best_turn = Vector2.ZERO
+	# A step each way round the last turn found, and a coarse grid over the whole range: from
+	# the steps alone it stuck at a few degrees in the backward jogs (a small turn barely helps).
+	var candidates: Array[Vector2] = []
+	for i in range(-1, 2):
+		for j in range(-1, 2):
+			candidates.append(Vector2(clampf(from.x + i * step, -swing_max, swing_max), clampf(from.y + j * step, -roll_max, roll_max)))
+	for i in range(-2, 3):
+		for j in range(-2, 3):
+			var coarse := Vector2(swing_max * i / 2.0, roll_max * j / 2.0)
+			# Not over to the other side of a turn under way: the face rolled +45 and -45 cleared
+			# about as well, and the breathing still flipped it between them.
+			if signf(coarse.x) * signf(from.x) < 0.0 or signf(coarse.y) * signf(from.y) < 0.0:
+				continue
+			candidates.append(coarse)
+	for turn in candidates:
+		if turn.is_zero_approx():
+			continue
+		var push := _slide_clear(body_points, to_player * _shield_turned(turn, to_player) * board, low, high, shield_clear_toward)
+		var cost := push.length() + shield_clear_turn_cost * ((absf(turn.x) / swing_max if swing_max > 0.0 else 0.0) + (absf(turn.y) / roll_max if roll_max > 0.0 else 0.0))
+		if cost < best_cost - 0.0001:
+			best_cost = cost
+			best_push = push
+			best_turn = turn
+	_shield_turn_aim = best_turn
+	return [best_push, best_turn]
+
+## The move along shield_clear_toward that clears the body with the forearm turned by `turn`
+## (the arm as posed just now, unturned).
+func _shield_slide_at(turn: Vector2, to_player: Transform3D) -> Vector3:
+	if turn.is_zero_approx():
+		return _shield_off_body(to_player, _shield_socket)
+	var low := _shield_points[0]
+	var high := _shield_points[0]
+	for point in _shield_points:
+		low = low.min(point)
+		high = high.max(point)
+	var body_points := _body_points(to_player, shield_body_clearance, shield_leg_clearance if shield_leg_clearance >= 0.0 else shield_body_clearance * 0.5)
+	var board := _skeleton.get_bone_global_pose(_shield_bone) * WeaponHold.in_hand(_shield_socket, shield)
+	return _slide_clear(body_points, to_player * _shield_turned(turn, to_player) * board, low, high, shield_clear_toward)
+
+## The left forearm's turn off the body (_shield_turn_off_body) in the skeleton's space: a swing
+## about the Player's up and a roll about the forearm's own line, both through the elbow.
+func _shield_turned(turn: Vector2, to_player: Transform3D) -> Transform3D:
+	var arm: Dictionary = _arms["Left"]
+	var elbow := _skeleton.get_bone_global_pose(arm["lower"]).origin
+	var along := _skeleton.get_bone_global_pose(arm["hand"]).origin - elbow
+	var turned := Basis((to_player.basis.inverse() * Vector3.UP).normalized(), turn.x)
+	if along.length_squared() > 0.000001:
+		turned = turned * Basis(along.normalized(), turn.y)
+	return Transform3D(turned, elbow - turned * elbow)
+
 ## How far the shield, as the arm holds it just now and then moved by `moved` (the Player's
 ## axes; only its level part counts), has to be raised for its rim's lowest point to be
 ## shield_ground_clearance above the ground under that point (_ground_under: the collision, or
@@ -3578,21 +3701,32 @@ func _spring(now: Vector3, target: Vector3, delta: float) -> Vector3:
 ## the weapon's keep-off both use it, so it works for any model. `to_player` brings the
 ## skeleton's space into the Player's.
 func _keep_off_body(to_player: Transform3D, item: Transform3D, low: Vector3, high: Vector3, toward: Vector3, trunk: float, legs: float) -> Vector3:
-	var to_board := item.affine_inverse()
-	var way := toward.normalized() if toward.length() > 0.001 else Vector3.LEFT
-	var forward := (to_board.basis * way).normalized() # the way it moves, in the item's own axes
+	return _slide_clear(_body_points(to_player, trunk, legs), item, low, high, toward)
+
+## Points along the trunk's middle line (hips to chest) and each leg's (hip, knee, ankle), in the
+## Player's axes, each with its clearance: [point, clearance] (_keep_off_body).
+func _body_points(to_player: Transform3D, trunk: float, legs: float) -> Array:
 	var hips := _skeleton.get_bone_global_pose(_hips_bone).origin
 	var lines: Array = [[hips, _skeleton.get_bone_global_pose(_skeleton.find_bone("UpperChest")).origin, trunk]]
-	var leg_clearance := legs
 	for leg: Dictionary in _legs:
 		var knee := _skeleton.get_bone_global_pose(leg["lower"]).origin
-		lines.append([_skeleton.get_bone_global_pose(leg["upper"]).origin, knee, leg_clearance])
-		lines.append([knee, _skeleton.get_bone_global_pose(leg["foot"]).origin, leg_clearance])
-	# Points along those lines, in the item's own axes, each with its clearance.
+		lines.append([_skeleton.get_bone_global_pose(leg["upper"]).origin, knee, legs])
+		lines.append([knee, _skeleton.get_bone_global_pose(leg["foot"]).origin, legs])
 	var body_points: Array = []
 	for line: Array in lines:
 		for step in 6:
-			body_points.append([to_board * (to_player * (line[0] as Vector3).lerp(line[1] as Vector3, step / 5.0)), line[2]])
+			body_points.append([to_player * (line[0] as Vector3).lerp(line[1] as Vector3, step / 5.0), line[2]])
+	return body_points
+
+## The move of _keep_off_body for points already found (_body_points); `item` is in the Player's axes.
+func _slide_clear(points: Array, item: Transform3D, low: Vector3, high: Vector3, toward: Vector3) -> Vector3:
+	var to_board := item.affine_inverse()
+	var way := toward.normalized() if toward.length() > 0.001 else Vector3.LEFT
+	var forward := (to_board.basis * way).normalized() # the way it moves, in the item's own axes
+	# The points in the item's own axes.
+	var body_points: Array = []
+	for point: Array in points:
+		body_points.append([to_board * (point[0] as Vector3), point[1]])
 	var slide := 0.0
 	for round_index in 4: # a move forward can bring the board onto a point further forward
 		var more := 0.0

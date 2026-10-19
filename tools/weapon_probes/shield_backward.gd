@@ -30,6 +30,9 @@ func _run() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--pitch="):
 			pitches.append(arg.trim_prefix("--pitch=").to_float())
+		elif arg == "--no-turn": # the keep-off as it was before 2026-10-19: moved only
+			body.shield_clear_swing_max = 0.0
+			body.shield_clear_roll_max = 0.0
 	var speed := 3.0
 	var ways := {"back": Vector3(0, 0, 1), "back-left": Vector3(-1, 0, 1).normalized(), "back-right": Vector3(1, 0, 1).normalized(), "left": Vector3(-1, 0, 0), "right": Vector3(1, 0, 0), "forward (for comparison)": Vector3(0, 0, -1)}
 	for raised: bool in [true, false]:
@@ -41,6 +44,7 @@ func _run() -> void:
 				var at_time := 0.0
 				var clip := ""
 				var push_most := 0.0
+				var turn_most := Vector2.ZERO
 				var per_tenth: Array[float] = []
 				per_tenth.resize(10)
 				per_tenth.fill(9.0)
@@ -52,6 +56,8 @@ func _run() -> void:
 						continue
 					clip = (body.get("_animations") as AnimationPlayer).current_animation
 					push_most = maxf(push_most, ((body.get("_shield_push") if raised else body.get("_relaxed_push")) as Vector3).length())
+					var turn := body.get("_shield_turn") as Vector2
+					turn_most = Vector2(maxf(turn_most.x, absf(rad_to_deg(turn.x))), maxf(turn_most.y, absf(rad_to_deg(turn.y))))
 					var world := sk.global_transform
 					var lines: Array = []
 					for part: Array in parts:
@@ -72,5 +78,5 @@ func _run() -> void:
 				var line_text := ""
 				for r in per_tenth:
 					line_text += " %+.2f" % r
-				print("SHIELD weapons %-4s pitch %+.2f %-24s clip %-14s least %+.3f at %-13s (%.2f s) | push up to %.2f | per 0.4 s:%s" % ["up" if raised else "down", pitch, way, clip, deepest, where, at_time, push_most, line_text])
+				print("SHIELD weapons %-4s pitch %+.2f %-24s clip %-14s least %+.3f at %-13s (%.2f s) | push up to %.2f, turn up to %.0f / %.0f deg | per 0.4 s:%s" % ["up" if raised else "down", pitch, way, clip, deepest, where, at_time, push_most, turn_most.x, turn_most.y, line_text])
 	quit()

@@ -744,6 +744,31 @@ What each part fixed (all seen by Kirill looking straight down or ahead):
   `shield_leg_clearance` (0.1; it was half of `shield_body_clearance`, which the scene sets
   to 0.12): at 0.06 the left thigh reached the board jogging back looking straight down
   (Kirill, 2026-10-14).
+  **Turned before it is moved** (2026-10-19, Kirill: moved alone, the arm came out of the
+  picture's left edge looking down; he drew it kept near the trunk with the shield turned):
+  `_shield_turn_off_body` swings the forearm about the elbow round the Player's up
+  (`shield_clear_swing_max`, 35) and rolls it about its own line (`shield_clear_roll_max`,
+  45), picking the turn with the least remaining move + `shield_clear_turn_cost` (0.05 m per
+  full turn per axis); the slide clears only what is left. The search tries a step
+  (`shield_clear_turn_step`, 3 deg) round the last turn found plus a coarse 5 x 5 grid over the whole
+  range: with only the steps it got stuck at 3-6 deg. Measured looking straight down with weapons up (`shield_backward.gd`,
+  `--no-turn` for the old way): move 0.25-0.28 -> 0.01-0.18 m, turned 23-35 / 44-45 deg;
+  least room to the body 0.03-0.12 m (was 0.03-0.10; jogging left 0.05 -> 0.03, right 0.03 -> 0.12).
+  Both maxima 0 = moved only. Not judged in game; cost per frame not measured (about 34 box tests).
+  It twitched with the breathing looking far down (Kirill, same day): the face rolled +45 and
+  -45 cleared about as well and the choice flipped 42 times a second
+  (`tools/weapon_probes/shield_turn_twitch.gd`). Now the turn held is kept unless another beats
+  it by `shield_clear_turn_hold` (0.02 m), the coarse grid never offers the other side of a
+  turn under way, and the turn changes at most `shield_clear_turn_speed` (120 deg/s). Measured:
+  no change at all held straight down, at most 2 deg a frame tipping down; jogging looking down
+  the least room is 0.085-0.126 m.
+  Crouched, left foot forward, a quick look down put the board 4.3 cm into the left shin
+  (Kirill, same day): the speed limit held the turn back while the move was sized for the
+  finished turn. The move is now worked out for the turn the arm has (`_shield_slide_at`) and
+  `shield_clearance_ease` is 0.04 (was 0.08; at 0.02 the roll flipped sides once).
+  `tools/weapon_probes/shield_quick_look.gd` (looks in 0.1 / 0.25 / 0.5 s, either foot):
+  least room 0.034 m (was -0.043). After a quick look the board stands up to 0.21 m off the
+  leg for a moment and comes back to 0.10 over about a second, as the turn catches up.
 - **The weapon keeps off the body too** (2026-10-14; Kirill, looking straight down in the
   inspect fidget: "pommel clips through body" -- 17 cm in): `weapon_body_clearance` (0.18) /
   `weapon_leg_clearance` (0.1), the box of the weapon's model (`_weapon_low` / `_high`, read at
