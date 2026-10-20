@@ -517,6 +517,9 @@ var _shadow_on: bool = false ## the copy casts the shadow just now, and the body
 var _own_casters: Array = [] ## [mesh, its shadow setting] for every mesh of the body itself
 var _weapon_shadow: Node3D ## a copy of the held weapon's model that only casts a shadow, in the shadow body's hand
 var _shield_shadow: Node3D ## the same for the shield
+## The weapon's meshes as last set by _apply_weapon_seen: -1 not yet (a new weapon), else
+## (sheathed and unseen) * 2 + _shadow_on.
+var _weapon_seen_state: int = -1
 ## The size everything but the arm is shrunk to in the arm's copy, and the arm on the body.
 ## Not 0: the arm's bones are sized back up from it, which nothing can be from nothing.
 const ARM_APART_SHRINK := 0.001
@@ -1429,6 +1432,26 @@ func _setup_arm_apart() -> void:
 		if mesh.visible:
 			_own_casters.append([mesh, mesh.cast_shadow])
 
+## The sheathed weapon is never seen in first person (Kirill, 2026-10-19: sprinting, the hilt
+## rose into the top-right corner): while it lies on the back with the arm down it only casts
+## its shadow. It is drawn again as the draw starts. While the shadow copy casts (_shadow_on)
+## the weapon itself casts none -- and, sheathed, is hidden outright.
+func _apply_weapon_seen() -> void:
+	if _weapon_node == null:
+		return
+	var unseen := _weapon_on_back and _weapon_up <= 0.0
+	var state := (2 if unseen else 0) + (1 if _shadow_on else 0)
+	if state == _weapon_seen_state:
+		return
+	_weapon_seen_state = state
+	for mesh: MeshInstance3D in _weapon_node.find_children("*", "MeshInstance3D", true, false):
+		if unseen:
+			mesh.visible = not _shadow_on
+			mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+		else:
+			mesh.visible = true
+			mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF if _shadow_on else GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+
 ## See weapon_arm_drawn_apart. An arm's pose is worked out on the body as ever; here it is
 ## handed to that arm's copy, and the body's own arm put away. The right arm while the weapon
 ## is up, the left while the shield is.
@@ -1440,7 +1463,7 @@ func _draw_arm_apart() -> void:
 		_shadow_on = shadow_on
 		_shadow_model.visible = shadow_on
 		# What is held casts from its shadow copy, in the shadow body's hands.
-		for held: Node3D in [_weapon_node, _shield_node]:
+		for held: Node3D in [_shield_node]: # the weapon: _apply_weapon_seen
 			if held:
 				for mesh: MeshInstance3D in held.find_children("*", "MeshInstance3D", true, false):
 					mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF if shadow_on else GeometryInstance3D.SHADOW_CASTING_SETTING_ON
@@ -1453,6 +1476,7 @@ func _draw_arm_apart() -> void:
 				mesh.visible = not shadow_on # the head and hood: with their shadow off they would be DRAWN, round the camera
 			else:
 				mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF if shadow_on else caster[1]
+	_apply_weapon_seen()
 	if shadow_on:
 		_shadow_model.transform = _model.transform
 		for bone in _skeleton.get_bone_count():
@@ -2969,6 +2993,7 @@ func equip(data: WeaponData) -> void:
 	_weapon_node = data.scene.instantiate() as Node3D
 	add_child(_weapon_node)
 	_weapon_node.top_level = true
+	_weapon_seen_state = -1 # its meshes are set afresh (_apply_weapon_seen)
 	_weapon_shadow = _shadow_of(data, _weapon_shadow)
 	# The box its meshes fill, in its own axes (weapon_body_clearance).
 	var first := true

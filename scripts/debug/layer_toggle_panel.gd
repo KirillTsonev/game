@@ -25,6 +25,7 @@ const LAYERS := [
 	[&"deadfall", "Logs / stumps / branches"],
 	[&"cliffs", "Cliff meshes"],
 	[&"outcrops", "Outcrop meshes"],
+	[&"fireflies", "Fireflies"],
 ]
 
 var _shown: Dictionary = {} # layer key -> bool
@@ -82,6 +83,11 @@ func _on_layer_toggled(on: bool, key: StringName) -> void:
 		if field:
 			field.visible = on
 			field.process_mode = Node.PROCESS_MODE_INHERIT if on else Node.PROCESS_MODE_DISABLED
+	elif key == &"fireflies":
+		var fireflies := get_tree().current_scene.get_node_or_null(FireflyField.NODE_NAME) as Node3D
+		if fireflies:
+			fireflies.visible = on
+			fireflies.process_mode = Node.PROCESS_MODE_INHERIT if on else Node.PROCESS_MODE_DISABLED
 	elif key == &"cliffs" or key == &"outcrops":
 		# Their colliders are children of the meshes, so disabling the container removes those too.
 		var container_name: String = CliffInstancer.CLIFF_DRESSING_NODE_NAME if key == &"cliffs" else TerrainOutcrops.OUTCROP_NODE_NAME

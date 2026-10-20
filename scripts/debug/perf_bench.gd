@@ -832,7 +832,7 @@ func _classify(node: Node, layer_by_id: Dictionary) -> Array:
 		var asset: Terrain3DMeshAsset = _terrain.get_assets().get_mesh_asset(parsed.x)
 		return [layer_by_id.get(parsed.x, &"instanced_other"), "%d %s" % [parsed.x, asset.name if asset else "?"], parsed.y]
 	var top := path.get_slice("/", 0)
-	var layer: StringName = {CliffInstancer.CLIFF_DRESSING_NODE_NAME: &"cliffs", TerrainOutcrops.OUTCROP_NODE_NAME: &"outcrops", TerrainRoad.ROAD_MESH_NODE_NAME: &"road"}.get(top, StringName(top))
+	var layer: StringName = {CliffInstancer.CLIFF_DRESSING_NODE_NAME: &"cliffs", TerrainOutcrops.OUTCROP_NODE_NAME: &"outcrops", TerrainRoad.ROAD_MESH_NODE_NAME: &"road", FireflyField.NODE_NAME: &"fireflies"}.get(top, StringName(top))
 	# What was built since the mountains (2026-10-10): the rows and their cloud sheets share one
 	# node, and are two layers here.
 	if top == MountainWalls.NODE_NAME:
@@ -879,7 +879,7 @@ func _audit_layers() -> Array:
 		if not LayerTogglePanel.mesh_ids(spec[0]).is_empty() and not _layer_nodes.has(spec[0]):
 			_layer_nodes[spec[0]] = []
 	for key: StringName in _layer_nodes.keys():
-		if not (key in [&"grass", &"cliffs", &"outcrops", &"instanced_other", &"mountains", &"mountain_clouds", &"castle"] or not LayerTogglePanel.mesh_ids(key).is_empty()):
+		if not (key in [&"grass", &"cliffs", &"outcrops", &"instanced_other", &"mountains", &"mountain_clouds", &"castle", &"fireflies"] or not LayerTogglePanel.mesh_ids(key).is_empty()):
 			_layer_nodes.erase(key) # player, road, ...: listed in the audit, not switched off
 	var layers: Array = []
 	for key: StringName in _layer_assets:

@@ -15,6 +15,7 @@
 ##   UnderstoryScatter understory_scatter.gd  shrubs + ferns, density from canopy + shaded cliff feet
 ##   SaplingScatter  sapling_scatter.gd  mid-storey saplings (scaled-down canopy trees) at grove edges
 ##   FlowerScatter   flower_scatter.gd   wood sorrel under canopy; poppies, dandelions, clover in the open
+##   FireflyScatter  firefly_scatter.gd  rare firefly swarms in dark spots (TRIAL); FireflyField (a node) draws them
 ##   PlantField      plant_field.gd      (a node, like GrassField) GPU-culled drawing of plants handed over by the scatter modules
 ##   FoliageWind     foliage_wind.gd     the wind noise shared by grass and plants; switches the understory / flower sway on
 ##   TerrainHub      hub.gd              the fixed strip south of the map: raised village plateau + scarp with a trail down
@@ -41,6 +42,7 @@ func _ready() -> void:
 	PlantField.reset_run_state()
 	FoliageWind.reset_run_state()
 	DeadfallScatter.reset_run_state()
+	FireflyScatter.reset_run_state()
 	GrassScatter.reset_run_state()
 	TerrainDisplacement.reset_run_state()
 	# Whole-_ready() timing (2026-09-16): the earlier per-stage prints only
@@ -296,6 +298,15 @@ func _ready() -> void:
 	sapling_rng.seed = resolved_seed ^ 0x5341504C # 'SAPL' salt
 	SaplingScatter.scatter_saplings(terrain, maps.heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, heightmap_corner, sapling_rng, maps.road_weight, maps.cliff_dressing_plan, maps.cliff_dressing_top_profiles, maps.outcrop_plan)
 	_log_stage("sapling scattering", t_ready_stage)
+	t_ready_stage = Time.get_ticks_msec()
+
+	# Fireflies (TRIAL 2026-10-19): rare swarms in the dark under the canopy and by logs -- reads the
+	# canopy and the deadfall, so after both. Own cosmetic stream.
+	var firefly_rng := RandomNumberGenerator.new()
+	firefly_rng.seed = resolved_seed ^ 0x46464C59 # 'FFLY' salt
+	FireflyScatter.scatter_fireflies(maps.heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, heightmap_corner, firefly_rng, maps.road_weight)
+	FireflyField.spawn(get_parent())
+	_log_stage("firefly scattering", t_ready_stage)
 	t_ready_stage = Time.get_ticks_msec()
 
 	# Grass step 1: bake the groundcover density/dry/tall texture (no instances -- the GPU
@@ -679,9 +690,15 @@ var _road_displaced := false
 ## 3 cm down (1.0 would be 25 cm). Plants and debris stand at the undisplaced height. 0 = flat.
 const DISPLACEMENT_LITTER_SCALE := 1.2
 ## TRIAL (2026-10-10, Kirill: "let's do aerial rocks texture next"): the AerialRocks texture
-## (id 4, the mossy rock ground at cliffs; a 1 m tile) displaced by this scale -- 1.0 is about
-## 8 cm up and 8 cm down. 0 = flat.
-const DISPLACEMENT_AERIAL_ROCKS_SCALE := 1.0
+## (id 4, the mossy rock ground at cliffs) displaced by this scale -- at uv_scale 1, 0.5 is about
+## 8 cm up and 8 cm down (the relief grows with the tile). 0 = flat.
+const DISPLACEMENT_AERIAL_ROCKS_SCALE := 0.5
+## AerialRocks' tile (2026-10-20, Kirill's screenshot: "up close we have some visible texture
+## repetition"). The texture is a drone photo of a whole hillside; at the file's uv_scale 2 it was
+## squeezed into a 0.5 m tile, and the grid of identical rock blotches read as scales. 1 = a 1 m
+## tile. Set at startup by _apply_displacement (so not with DISPLACEMENT_TESSELLATION 0);
+## 0 = keep terrain_assets.tres' value.
+const AERIAL_ROCKS_UV_SCALE := 1.0
 ## TRIAL (2026-10-10, Kirill: "let's do coast sand rocks next"): the CoastSandRocks texture
 ## (id 3, where cliff meets grass; a 1 m tile) displaced by this scale -- 1.0 is about 8 cm up
 ## and 8 cm down. 0 = flat.
@@ -738,7 +755,9 @@ const DETILING_SHIFT := 1.0
 ## surface is being reproduced in script (TerrainDisplacement) to build collision on it, and the
 ## shader's per-cell random number cannot be repeated there. Its tile is 13 m; the mountain's
 ## copy of the texture has its own id and keeps the values above.
-const DETILING_BY_ID := {2: [0.0, 0.0]}
+## AerialRocks (id 4): any angle, since 2026-10-20 -- moss and rock clumps have no grain to swirl,
+## and +-36 deg left its rock blotches in a visible grid.
+const DETILING_BY_ID := {2: [0.0, 0.0], 4: [1.0, 1.0]}
 ## Macro variation (2026-10-19, Kirill: what else against the textures' repetition): Terrain3D's
 ## own large-scale tint, on by default but with both colours white, so it did nothing. Every
 ## texture's colour is multiplied by MACRO_VARIATION_1 where one noise is low and by
@@ -870,6 +889,8 @@ func _apply_displacement(terrain: Terrain3D) -> void:
 		litter_asset.displacement_offset = DISPLACEMENT_LITTER_OFFSET
 		print("TERRAIN_GEN: displacement -- pine litter texture: uv_scale %.2f, scale %.2f, relief about +-%.1f cm" % [litter_asset.uv_scale, DISPLACEMENT_LITTER_SCALE, DISPLACEMENT_LITTER_SCALE * 0.04 / (0.5 * litter_asset.uv_scale) * DISPLACEMENT_SCALE * 100.0])
 	var aerial_asset: Terrain3DTextureAsset = terrain.get_assets().get_texture_asset(TerrainGroundPaint.AERIAL_ROCKS_ID)
+	if AERIAL_ROCKS_UV_SCALE > 0.0 and aerial_asset:
+		aerial_asset.uv_scale = AERIAL_ROCKS_UV_SCALE
 	if DISPLACEMENT_AERIAL_ROCKS_SCALE > 0.0 and aerial_asset:
 		aerial_asset.displacement_scale = DISPLACEMENT_AERIAL_ROCKS_SCALE
 		aerial_asset.displacement_offset = DISPLACEMENT_SMALL_ROCK_OFFSET

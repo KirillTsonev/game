@@ -10,6 +10,8 @@ extends Node
 ##       player from where they are.
 ##   I = animation panel (scripts/debug/animation_panel.gd): the body's fidgets in stages, a
 ##       time slider, speed, loop. Same cursor handling as Y.
+##   1 / 2 = the fireflies' swarm lights / glint lights on / off, each on its own
+##       (FireflyField.toggle_swarm_lights / toggle_glints, 2026-10-20).
 ## The benchmark (scripts/debug/perf_bench.gd) runs, then quits, when the game is launched with
 ## the user argument --bench [--bench-label=<name>]. Its F9 / F10 keys, and T, P, R, H, G, K, O,
 ## M, F1-F4, F6, F7, F11, were removed on 2026-10-14 (Kirill: "leave only Y, J, V"); they are in
@@ -64,6 +66,14 @@ func _input(event: InputEvent) -> void:
 			_animation_panel.visible = false
 			get_tree().root.add_child(_animation_panel)
 		_animation_panel.toggle()
+	elif event.physical_keycode == KEY_1 or event.physical_keycode == KEY_2:
+		var fireflies := get_tree().current_scene.get_node_or_null(FireflyField.NODE_NAME) as FireflyField
+		if fireflies == null:
+			print("[PerfDebug] no fireflies in this world")
+		elif event.physical_keycode == KEY_1:
+			print(fireflies.toggle_swarm_lights())
+		else:
+			print(fireflies.toggle_glints())
 	elif event.physical_keycode == KEY_V:
 		var player := get_tree().current_scene.get_node_or_null("Player")
 		if player:
