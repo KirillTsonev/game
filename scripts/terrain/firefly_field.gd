@@ -7,7 +7,15 @@
 ## its scatter (0 = at home, 1 = fled). It rises over SCATTER_TIME while the player is within
 ## REACT_RADIUS of the swarm, and once the player has been gone RETURN_DELAY it falls back over
 ## RETURN_TIME. The values go to the shader in a two-row float texture (row 1: where the take-off
-## wave starts, _set_wave_origin), rewritten only when one changed. A loop over every swarm (a few dozen) is cheaper than any lookup grid.
+## wave starts, _set_wave_origin, and how high the swarm climbs), rewritten only when one changed. A loop over every swarm (a few dozen) is cheaper than any lookup grid.
+## Above the player (2026-10-20, Kirill: swarms stay by cliffs and outcrops, which the player can
+## climb): a swarm climbs its own 3-4 m (the shader's flee_up_*) or higher, so that every firefly
+## within CLIMB_REACH of the player (horizontally) ends up at least CLEARANCE_ABOVE_PLAYER above
+## the camera. The climb is raised while the player is near (eased, at most CLIMB_RAISE_MAX_SPEED),
+## never lowered during a flight, and set back to the swarm's own at the next take-off from rest.
+## On level ground the swarm's own climb is already enough, so nothing changes there.
+## Each firefly fades out over its climb, gone at the top (Kirill, 2026-10-20; the shader's
+## flee_fade_start), and its glint and the swarm light fade with it (_shown).
 ## Created by WorldGenerator via FireflyField.spawn(parent_node) after FireflyScatter.
 ## Debug: the J panel's "Fireflies" row; the benchmark's layer:fireflies; PerfDebug 1 / 2 switch
 ## the two kinds of light below.
@@ -30,6 +38,12 @@ const SCATTER_TIME := 2.0 ## s from home to fully fled (was 0.5: too quick to se
 const RETURN_DELAY := 2.5 ## s after the player has left before they start back
 const RETURN_TIME := 5.0 ## s from fled to home
 const MAP_AABB_HEIGHT := 400.0
+## -- Climbing above the player (TUNING) --
+const CLEARANCE_ABOVE_PLAYER := 1.5 ## m from the camera up to the lowest firefly within reach
+const CLIMB_REACH := 3.0 ## m, horizontal: fireflies whose home is this near the player must clear the head
+const CLIMB_RAISE_TIME := 0.5 ## s, the easing's time constant toward a higher climb
+const CLIMB_RAISE_MAX_SPEED := 4.0 ## m/s
+const MAX_CLIMB := 30.0 ## m (the MultiMesh's AABB is made tall enough for it)
 
 ## -- Swarm lights (TUNING) --
 const SWARM_LIGHTS_AT_START := true
@@ -53,7 +67,7 @@ const GLINT_PICK_INTERVAL := 0.25 ## s between new picks of the nearest fireflie
 const GLINT_SWAP_FLASH := 0.05 ## a light leaves its firefly only while the flash is below this (no visible jump)
 
 ## Salts of the shader's rand01, one per kind of number.
-enum { SALT_HX = 1, SALT_HY, SALT_HZ, SALT_GX, SALT_GY, SALT_GZ, SALT_START, SALT_JITTER, SALT_SWARM_UP }
+enum { SALT_HX = 1, SALT_HY, SALT_HZ, SALT_GX, SALT_GY, SALT_GZ, SALT_START, SALT_JITTER, SALT_SWARM_UP, SALT_SIDE, SALT_TURN }
 
 var _player: Node3D
 var _dots: MultiMeshInstance3D
@@ -79,8 +93,11 @@ var _h := PackedVector3Array()
 var _g := PackedVector3Array()
 var _start := PackedFloat32Array()
 var _jitter := PackedFloat32Array()
+var _side := PackedFloat32Array() ## the shader's side_rand
+var _turn := PackedFloat32Array() ## the shader's rand01(id, 11u), for its `turn`
 var _first := PackedInt32Array() ## per swarm: its first firefly; the swarm runs to the next one's
-var _swarm_up := PackedFloat32Array() ## per swarm
+var _swarm_up := PackedFloat32Array() ## per swarm: its own climb
+var _climb := PackedFloat32Array() ## per swarm: this flight's climb (>= _swarm_up), row 1 b of the state texture
 
 var _swarm_lights_on := SWARM_LIGHTS_AT_START
 var _glints_on := GLINTS_AT_START
@@ -144,12 +161,14 @@ func _ready() -> void:
 			_g.append(Vector3(_rand01(i, SALT_GX), _rand01(i, SALT_GY), _rand01(i, SALT_GZ)) * TAU)
 			_start.append(_rand01(i, SALT_START))
 			_jitter.append(_rand01(i, SALT_JITTER))
+			_side.append(_rand01(i, SALT_SIDE))
+			_turn.append(_rand01(i, SALT_TURN))
 			lo = lo.min(homes[k])
 			hi = hi.max(homes[k])
 			i += 1
 	_first.append(i)
 	var margin := Vector3(10.0, 10.0, 10.0) # hover + flight
-	mm.custom_aabb = AABB(lo - margin, hi - lo + 2.0 * margin)
+	mm.custom_aabb = AABB(lo - margin, hi - lo + 2.0 * margin + Vector3(0.0, MAX_CLIMB, 0.0))
 
 	_scatter.resize(swarms.size())
 	_calm.resize(swarms.size())
@@ -170,11 +189,15 @@ func _ready() -> void:
 	_dots.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_dots)
 
-	for param: String in ["hover_radius", "hover_speed", "blink_rate", "blink_width", "flee_up_min", "flee_up_max", "flee_jitter", "flee_stagger", "flee_wave_noise", "flee_wobble", "flee_wobble_speed"]:
+	for param: String in ["hover_radius", "hover_speed", "blink_rate", "blink_width", "flee_up_min", "flee_up_max", "flee_jitter", "flee_stagger", "flee_wave_noise", "flee_wobble", "flee_wobble_speed", "flee_fade_start", "flee_side_min", "flee_side_max", "flee_side_spread"]:
 		var v: Variant = _material.get_shader_parameter(param)
 		_p[param] = float(v if v != null else RenderingServer.shader_get_parameter_default(SHADER.get_rid(), param))
 	for si in swarms.size():
 		_swarm_up.append(lerpf(_p.flee_up_min, _p.flee_up_max, _rand01(si, SALT_SWARM_UP)))
+	_climb = _swarm_up.duplicate()
+	for si in swarms.size():
+		_write_row1(si)
+	_state_texture.update(_state_image)
 	_build_lights(swarms)
 	print("FIREFLIES: field ready -- %d swarm(s), %d firefl%s; swarm lights %s, %d glint lights %s" % [swarms.size(), total, "y" if total == 1 else "ies",
 		"on" if _swarm_lights_on else "off", GLINT_COUNT, "on" if _glints_on else "off"])
@@ -238,6 +261,8 @@ func _process(delta: float) -> void:
 
 func _update_scatter(delta: float) -> void:
 	var p := _player.global_position
+	var camera := get_viewport().get_camera_3d()
+	var head_y := camera.global_position.y if camera else p.y
 	var changed := false
 	for si in _centres.size():
 		var c := _centres[si]
@@ -245,7 +270,11 @@ func _update_scatter(delta: float) -> void:
 		var a := _scatter[si]
 		if near:
 			if a == 0.0:
+				_climb[si] = _swarm_up[si]
 				_set_wave_origin(si, Vector2(p.x, p.z))
+				changed = true
+			if _raise_climb(si, p, head_y, delta):
+				changed = true
 			_calm[si] = 0.0
 			a = minf(a + delta / SCATTER_TIME, 1.0)
 		else:
@@ -268,7 +297,28 @@ func _set_wave_origin(si: int, origin: Vector2) -> void:
 	_wave_origin[si] = origin
 	_wave_near[si] = near
 	_wave_span[si] = to_centre + FireflyScatter.SWARM_RADIUS - near
-	_state_image.set_pixel(si, 1, Color(_wave_near[si], _wave_span[si], 0.0, 0.0))
+	_write_row1(si)
+
+## Raises swarm si's climb toward what keeps the fireflies within CLIMB_REACH of the player
+## CLEARANCE_ABOVE_PLAYER above the head; true if it changed (row 1 is rewritten).
+func _raise_climb(si: int, p: Vector3, head_y: float, delta: float) -> bool:
+	var need := 0.0
+	var reach2 := CLIMB_REACH * CLIMB_REACH
+	for id in range(_first[si], _first[si + 1]):
+		var home := _homes[id]
+		if Vector2(home.x - p.x, home.z - p.z).length_squared() < reach2:
+			need = maxf(need, head_y + CLEARANCE_ABOVE_PLAYER - home.y)
+	need = minf(need, MAX_CLIMB)
+	var gap := need - _climb[si]
+	if gap <= 0.0:
+		return false
+	_climb[si] += minf(gap * minf(delta / CLIMB_RAISE_TIME, 1.0), CLIMB_RAISE_MAX_SPEED * delta)
+	_write_row1(si)
+	return true
+
+## Row 1 of the state texture for swarm si: r / g = the take-off wave's near / span, b = the climb.
+func _write_row1(si: int) -> void:
+	_state_image.set_pixel(si, 1, Color(_wave_near[si], _wave_span[si], _climb[si], 0.0))
 
 ## Each swarm's light: at its centre, raised by the climb of a firefly taking off half-way through
 ## the stagger, wavering slowly.
@@ -277,8 +327,11 @@ func _update_swarm_lights() -> void:
 	for si in _swarm_lights.size():
 		var climb := _smootherstep01((_scatter[si] - 0.5 * stagger) / (1.0 - stagger))
 		var light := _swarm_lights[si]
-		light.position = _centres[si] + Vector3(0.0, _swarm_up[si] * climb, 0.0)
-		light.light_energy = SWARM_LIGHT_ENERGY * (1.0 + SWARM_LIGHT_SHIMMER * sin(_clock * 0.8 + float(si) * 1.7) * sin(_clock * 1.9 + float(si) * 0.6))
+		var away := Vector2(_centres[si].x, _centres[si].z) - _wave_origin[si]
+		away = away.normalized() if away.length_squared() > 0.0001 else Vector2.ZERO
+		var side := away * 0.5 * (float(_p.flee_side_min) + float(_p.flee_side_max)) * climb
+		light.position = _centres[si] + Vector3(side.x, _climb[si] * climb, side.y)
+		light.light_energy = SWARM_LIGHT_ENERGY * _shown(climb) * (1.0 +SWARM_LIGHT_SHIMMER * sin(_clock * 0.8 + float(si) * 1.7) * sin(_clock * 1.9 + float(si) * 0.6))
 
 func _update_glints(delta: float) -> void:
 	_pick_timer -= delta
@@ -310,7 +363,7 @@ func _update_glints(delta: float) -> void:
 		if id < 0:
 			continue
 		light.position = _position(id)
-		light.light_energy = GLINT_ENERGY * (GLINT_FLOOR + (1.0 - GLINT_FLOOR) * _flash(id))
+		light.light_energy = GLINT_ENERGY * (GLINT_FLOOR + (1.0 - GLINT_FLOOR) * _flash(id)) * _shown(_smootherstep01(_own(id)))
 
 ## The GLINT_COUNT fireflies nearest the camera within GLINT_REACH, from the swarms near enough.
 func _pick_nearest() -> void:
@@ -319,12 +372,14 @@ func _pick_nearest() -> void:
 	if camera == null:
 		return
 	var eye := camera.global_position
-	var swarm_reach: float = GLINT_REACH + FireflyScatter.SWARM_RADIUS + float(_p.hover_radius) + float(_p.flee_up_max)
 	var found: Array = [] # [distance squared, firefly]
 	for si in _centres.size():
+		var swarm_reach: float = GLINT_REACH + FireflyScatter.SWARM_RADIUS + float(_p.hover_radius) + _climb[si] + float(_p.flee_side_max)
 		if _centres[si].distance_squared_to(eye) > swarm_reach * swarm_reach:
 			continue
 		for id in range(_first[si], _first[si + 1]):
+			if _scatter[si] > 0.0 and _shown(_smootherstep01(_own(id))) <= 0.0:
+				continue # gone: no light for it
 			var d2 := _position(id).distance_squared_to(eye)
 			if d2 < GLINT_REACH * GLINT_REACH:
 				found.append([d2, id])
@@ -342,17 +397,34 @@ func _position(id: int) -> Vector3:
 		0.5 * sin(t * (0.5 + 0.5 * h.z) + g.z) + 0.25 * sin(t * (1.3 + h.x) + g.x),
 		sin(t * (0.8 + 0.5 * h.y) + g.y) + 0.5 * sin(t * (1.7 + h.z) + g.z)) * (float(_p.hover_radius) / 1.5)
 	var si := _swarm_of[id]
-	var stagger: float = _p.flee_stagger
-	var home := _homes[id]
-	var order := clampf((Vector2(home.x, home.z).distance_to(_wave_origin[si]) - _wave_near[si]) / maxf(_wave_span[si], 0.001), 0.0, 1.0)
-	var start := lerpf(order, _start[id], float(_p.flee_wave_noise)) * stagger
-	var own := clampf((_scatter[si] - start) / (1.0 - stagger), 0.0, 1.0)
+	var own := _own(id)
 	var own_jitter := (_jitter[id] - 0.5) * 2.0 * float(_p.flee_jitter)
-	var flee := Vector3(0.0, (_swarm_up[si] + own_jitter) * _smootherstep01(own), 0.0)
+	var climb := _smootherstep01(own)
+	var home := _homes[id]
+	var away := Vector2(home.x, home.z) - _wave_origin[si]
+	var side_rand := _side[id]
+	away = away.normalized() if away.length_squared() > 0.0001 else Vector2(cos(side_rand * TAU), sin(side_rand * TAU))
+	away = away.rotated((_turn[id] - 0.5) * 2.0 * deg_to_rad(float(_p.flee_side_spread)))
+	var side := away * lerpf(float(_p.flee_side_min), float(_p.flee_side_max), side_rand) * climb
+	var flee := Vector3(side.x, (_climb[si] + own_jitter) * climb, side.y)
 	var ft := _clock * float(_p.flee_wobble_speed)
 	var flutter := Vector3(sin(ft * (1.0 + h.x) + g.z), sin(ft * (1.3 + h.y) + g.x), sin(ft * (0.9 + h.z) + g.y)) \
 		* float(_p.flee_wobble) * 4.0 * own * (1.0 - own)
 	return _homes[id] + drift + flutter + flee
+
+## Firefly id's own part of its swarm's flight, 0..1 (the shader's `own`).
+func _own(id: int) -> float:
+	var si := _swarm_of[id]
+	var stagger: float = _p.flee_stagger
+	var home := _homes[id]
+	var order := clampf((Vector2(home.x, home.z).distance_to(_wave_origin[si]) - _wave_near[si]) / maxf(_wave_span[si], 0.001), 0.0, 1.0)
+	var start := lerpf(order, _start[id], float(_p.flee_wave_noise)) * stagger
+	return clampf((_scatter[si] - start) / (1.0 - stagger), 0.0, 1.0)
+
+## How much of a firefly is shown for a climb of `climb` (0..1, eased): the shader's `shown`.
+func _shown(climb: float) -> float:
+	var fade_start: float = _p.flee_fade_start
+	return 1.0 - clampf((climb - fade_start) / maxf(1.0 - fade_start, 0.001), 0.0, 1.0)
 
 ## The shader's flash (0..1, without its blink_floor).
 func _flash(id: int) -> float:

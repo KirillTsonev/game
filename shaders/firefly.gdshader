@@ -6,9 +6,11 @@
 // swarm_state (one column per swarm, written by FireflyField): row 0 r = scatter 0..1 (linear in
 // time; the easing and stagger are worked out here per firefly), g / b = the world x / z where the
 // player was when the swarm took off; row 1 r = the nearest a home can be from that point, g = how
-// much farther the farthest can be. The take-offs run outward from that point as a wave (Kirill,
-// 2026-10-20: "the ones closest to the player rise first"). The whole swarm climbs straight up by
-// about one height, so it is as spread in the air as at home (Kirill, 2026-10-20).
+// much farther the farthest can be, b = how high the swarm climbs (m). The take-offs run outward
+// from that point as a wave (Kirill, 2026-10-20: "the ones closest to the player rise first"). The
+// whole swarm climbs by one height (Kirill, 2026-10-20), each firefly drifting sideways away from
+// the player as it goes (flee_side_*, same day): its own 3-4 m (flee_up_*, picked per swarm by FireflyField), or more, set by
+// FireflyField, when the player stands high beside it (on a cliff or outcrop).
 // Everything else -- hover, blink, flight, distance fade -- happens here, with no script work.
 // FireflyField repeats the motion and the blink in script for the few fireflies it gives a light
 // (2026-10-20), so the two must stay the same: the random numbers are an integer hash of
@@ -28,13 +30,21 @@ uniform float hover_speed = 0.35;
 uniform float blink_floor = 0.15; // glow between flashes, share of the peak
 uniform float blink_rate = 0.3; // flashes per second (each firefly a bit faster or slower)
 uniform float blink_width = 7.0; // larger = shorter flashes
-uniform float flee_up_min = 3.0; // m, straight up (one value per swarm, between these)
+uniform float flee_up_min = 3.0; // m, straight up (one value per swarm, between these; FireflyField picks it and may raise it)
 uniform float flee_up_max = 4.0;
 uniform float flee_jitter = 0.3; // m, how much one firefly's climb differs from its swarm's
+// While climbing, each firefly also drifts sideways AWAY from where the player stood at take-off
+// (Kirill, 2026-10-20), by this much at the top (one value per firefly, between these).
+uniform float flee_side_min = 2.0; // m
+uniform float flee_side_max = 4.0;
+uniform float flee_side_spread = 35.0; // deg, each firefly's direction turned off the away-line by up to this either side
 uniform float flee_stagger = 0.5; // share of the flight over which the fireflies' take-offs are spread (0 = all at once); each flies the rest, 1 - this
 uniform float flee_wave_noise = 0.15; // share of a take-off's moment that is random instead of by distance from the player (0 = a clean ring)
 uniform float flee_wobble = 0.12; // m, a quick flutter mid-flight, gone again at either end
 uniform float flee_wobble_speed = 3.0; // flutters a second
+// A fleeing firefly fades out as it climbs, gone at the top, and back in on the way down (Kirill,
+// 2026-10-20). The share of its climb before the fade starts (0 = from take-off).
+uniform float flee_fade_start = 0.0;
 uniform float fade_start = 60.0; // m from the camera
 uniform float fade_end = 80.0;
 
@@ -79,17 +89,23 @@ void vertex() {
 	// This firefly's own part of the swarm's flight: it takes off later than the swarm's start
 	// (up to flee_stagger) and every firefly flies for the same share (1 - flee_stagger), so all
 	// climb at one speed and the late ones arrive last (Kirill, 2026-10-20: flying the rest faster
-	// "yanked" the late ones up). Straight up, nothing sideways, so the swarm keeps its spread
-	// (Kirill, 2026-10-20: "only up, not spread, not bunch up").
+	// "yanked" the late ones up). Up, and sideways only away from the player (first straight up,
+	// "only up, not spread, not bunch up"; then "scatter to the side as they rise", both 2026-10-20).
 	int swarm = int(INSTANCE_CUSTOM.x + 0.5);
 	vec4 wave = texelFetch(swarm_state, ivec2(swarm, 1), 0);
 	float order = clamp((distance(home.xz, state.gb) - wave.r) / max(wave.g, 0.001), 0.0, 1.0);
 	float start = mix(order, rand01(id, 7u), flee_wave_noise) * flee_stagger;
 	float own = clamp((state.r - start) / (1.0 - flee_stagger), 0.0, 1.0);
 	float climb = smootherstep01(own);
-	float swarm_up = mix(flee_up_min, flee_up_max, rand01(uint(INSTANCE_CUSTOM.x + 0.5), 9u)); // the same for every firefly of the swarm
+	float swarm_up = wave.b; // the same for every firefly of the swarm
 	float own_jitter = (rand01(id, 8u) - 0.5) * 2.0 * flee_jitter;
-	vec3 flee = vec3(0.0, (swarm_up + own_jitter) * climb, 0.0);
+	vec2 away = home.xz - state.gb;
+	float side_rand = rand01(id, 10u);
+	away = dot(away, away) > 0.0001 ? normalize(away) : vec2(cos(side_rand * TAU), sin(side_rand * TAU));
+	float turn = (rand01(id, 11u) - 0.5) * 2.0 * radians(flee_side_spread);
+	away = vec2(away.x * cos(turn) - away.y * sin(turn), away.x * sin(turn) + away.y * cos(turn));
+	vec2 side = away * mix(flee_side_min, flee_side_max, side_rand) * climb;
+	vec3 flee = vec3(side.x, (swarm_up + own_jitter) * climb, side.y);
 	// The hover keeps its size; the flight only adds a quick flutter, largest mid-flight.
 	float ft = clock * flee_wobble_speed;
 	vec3 flutter = vec3(sin(ft * (1.0 + h.x) + g.z), sin(ft * (1.3 + h.y) + g.x), sin(ft * (0.9 + h.z) + g.y))
@@ -102,6 +118,8 @@ void vertex() {
 	float shrink = size / r;
 	float phase = fract(clock * blink_rate * (0.7 + 0.6 * h.z) + seed * 7.0);
 	float flash = exp(-pow((phase - 0.5) * blink_width, 2.0));
+	float shown = 1.0 - clamp((climb - flee_fade_start) / max(1.0 - flee_fade_start, 0.001), 0.0, 1.0);
+	fade *= shown;
 	v_glow = (blink_floor + (1.0 - blink_floor) * flash) * shrink * shrink * fade * energy;
 	v_colour = COLOR.rgb;
 

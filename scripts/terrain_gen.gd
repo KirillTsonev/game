@@ -303,10 +303,10 @@ func _ready() -> void:
 	t_ready_stage = Time.get_ticks_msec()
 
 	# Fireflies (TRIAL 2026-10-19): rare swarms in the dark under the canopy and by logs -- reads the
-	# canopy and the deadfall, so after both. Own cosmetic stream.
+	# canopy, the deadfall and the rock keep-outs, so after all three. Own cosmetic stream.
 	var firefly_rng := RandomNumberGenerator.new()
 	firefly_rng.seed = resolved_seed ^ 0x46464C59 # 'FFLY' salt
-	FireflyScatter.scatter_fireflies(maps.heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, heightmap_corner, firefly_rng, maps.road_weight)
+	FireflyScatter.scatter_fireflies(maps.heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, heightmap_corner, firefly_rng, maps.road_weight, maps.cliff_dressing_plan, maps.cliff_dressing_top_profiles, maps.outcrop_plan)
 	FireflyField.spawn(get_parent())
 	_log_stage("firefly scattering", t_ready_stage)
 	t_ready_stage = Time.get_ticks_msec()
