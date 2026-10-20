@@ -536,7 +536,42 @@ Not yet judged in-game (look, brightness, counts); render cost not measured.
 - **First run (seed 858829582):** 11,565 wood sorrel, 698 poppies (97 on road verges), 954
   dandelions, 484 clover pieces in 173 patches; 0.98 s of generation.
 - Not imported: the bigleaf hydrangea in `raw-assets/models/flowers/` (a garden shrub, 3.6k-7.1k
-  tris at LOD2 -- left for later, user decision). Mushrooms: no models yet.
+  tris at LOD2 -- left for later, user decision). Mushrooms: see "Mushrooms" below.
+
+---
+
+## Mushrooms -- fly agaric and bolete (built 2026-10-20)
+
+Not yet judged in game (look, size, brightness, counts); render cost not measured.
+
+- **Source:** `raw-assets/models/mushrooms/` -- two Megascans "mid" glTF packs (Fab), each several
+  separate closed scans sharing one texture set: spotted red (fly agaric, 9) and bolete (5). Licence
+  not checked. The third folder there (`mushroom_on_tree_baked_lighting_map_gltf`) is NOT used:
+  lighting baked into the albedo and both materials fully emissive, 26k tris.
+- **Import:** `tools/blender/import_megascans_glb.py`, one run per mushroom, e.g.
+  `-- <pack>.gltf mushroom_red_a --dir mushroom_red --mesh TIER2_000 --ratios 1,0.3 --tex-size 1024`
+  -> `ground_debris/mushroom_red/mushroom_red_a..i.glb`, `ground_debris/mushroom_bolete/mushroom_bolete_a..e.glb`
+  (LOD0 = the scan, LOD1 = 30 %), textures cut to 1K (`<dir>_{diff,nor_gl}_1k.jpg`, `_orm_1k.png`).
+  Scan pivots kept: base at the origin; the fly agarics' bulbs reach 1-2.5 cm below it. The `.import`
+  files were written by hand before the first scan (same params as `stump_old`'s).
+- **Sizes / tris:** red a-i 18 / 14 / 11 / 10 / 11 / 9 / 8 / 8 / 6 cm tall (a-c mature, wide caps),
+  1892-392 tris; bolete a-e 11 / 9 / 5 / 5 / 5 cm, 944-272 tris.
+- **Setup:** rows in `DEBRIS` of `tools/setup_ground_debris_assets.gd` (ids **89-97** MushroomRedA-I,
+  **98-102** MushroomBoleteA-E): StandardMaterial3D per kind, ORM read directly (metallic 0 -- the
+  ORM's blue channel is all 1.0), `albedo` 0.7 (first guess: the scans' mean linear luma 0.33 / 0.23
+  against ~0.045 for the ground), no shadows. LODs: red 10 m / culled at 35 m, bolete 8 / 25 m.
+- **Placement:** `scripts/terrain/mushroom_scatter.gd`, own rng (`'MUSH'`), right AFTER the ground
+  paint: each mushroom stands on the drawn ground (`TerrainDisplacement.drawn`), and the displaced
+  PineLitter is painted there. So `PlantField.spawn` moved after it (it was after the flowers).
+  Both kinds are mycorrhizal (grow from soil with tree roots), so troops of one kind: in the root
+  zone of 16 % of trees (0.7-2.5 m x tree scale), on a 5 m grid under the canopy in ~30 m patches
+  (a quarter of the fly agaric troops there are ring arcs), and a few beside stumps / logs. Upright,
+  lean up to 8 deg. Rejects: slope, road, mountain, rocks / cliffs / outcrops, deadfall, trunks,
+  grass coverage above 0.55. Knobs are the constants at the top of the module.
+- Drawn by `PlantField` (layer `mushrooms`; "Mushrooms" in the J panel; in the benchmark's
+  `layer:SMALL`).
+- **First run (seed 3082472107):** 1,766 fly agarics + 1,608 boletes in 414 tree troops, 263 floor
+  troops, 29 ring arcs, 119 by deadfall; 0.25 s (command-line launch).
 
 ---
 

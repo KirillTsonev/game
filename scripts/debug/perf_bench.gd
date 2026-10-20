@@ -70,7 +70,7 @@ const ABLATION_STATIONS := ["hub_overlook", "forest_dense", "mountain_foot"]
 ## Kept as before: layer:trees / understory / saplings (2 ms of CPU) / grass / ALL, sun_shadows,
 ## post:ALL, lantern, msaa_3d, render_scale_50, terrain_texturing, the env: switches, and every
 ## layer or switch added since (mountains, mountain_clouds, castle, terrain:*).
-const SMALL_LAYERS: Array[StringName] = [&"cliffs", &"outcrops", &"flowers", &"deadfall", &"rocks", &"instanced_other"]
+const SMALL_LAYERS: Array[StringName] = [&"cliffs", &"outcrops", &"flowers", &"mushrooms", &"deadfall", &"rocks", &"instanced_other"]
 const DETAIL_TOGGLES: Array[String] = ["lantern_shadow", "lantern_ground_pool", "sun_shadow_100m", "screen_space_aa", "terrain_shadows"]
 const DETAIL_PREFIXES: Array[String] = ["plants:", "grass:", "post:"] # except post:ALL
 const WALK_SPEED := 10.0 ## m/s along the road (the player walks at 4.5)

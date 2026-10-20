@@ -33,8 +33,11 @@ LogFallenLarge, BranchFallen, StickArbem, StickDebrisA-D), 50-52 litter mounds (
 `ground_debris/litter_mound/`, built by `tools/blender/bake_pine_litter.py`, material =
 `litter_mound.gdshader` on the PineLitter terrain textures -- see `docs/forest_floor_plan.md`),
 53-54 pine cones (ConeOpen, ConeLong: `ground_debris/cone_open/`, `cone_long/`, 1K textures, no
-ORM -- same plan, step 6), 55-63 lady ferns (LadyFernA-I, understory -- `docs/vegetation.md`).
-Ids are a contiguous list: a new asset is appended at the next id (**64**).
+ORM -- same plan, step 6), 55-63 lady ferns (LadyFernA-I, understory -- `docs/vegetation.md`),
+64-68 saplings, 69-70 elderberries, 71-88 flowers, 89-97 fly agarics (MushroomRedA-I) and 98-102
+boletes (MushroomBoleteA-E: `ground_debris/mushroom_red/`, `mushroom_bolete/` --
+`docs/vegetation.md`, "Mushrooms"). PlantField's run-time shadow twins take the ids after the last.
+Ids are a contiguous list: a new asset is appended at the next id (**103**).
 
 ---
 

@@ -6,7 +6,7 @@ extends Node
 ## tools/blender/import_megascans_glb.py) + textures/<dir>_{diff,nor_gl}_2k.jpg, <dir>_orm_2k.png.
 ##   configure_imports()  discard embedded images (rule 4, docs/adding_models.md), forced reimport
 ##   setup_materials()    <dir>_material.tres from the three textures (ORM read directly)
-##   setup_mesh_assets()  Terrain3D mesh assets, ids 38-54, material override + LOD ranges
+##   setup_mesh_assets()  Terrain3D mesh assets, ids 38-54 and 89-102 (mushrooms), material override + LOD ranges
 ##   debug_print_sizes()  LOD0 AABB + tris per LOD, loaded from disk
 ## Run via call_method(runtime:false) on the EDITOR process (tools/setup_ground_debris_assets.tscn,
 ## node "."): Play mode's separate process would never touch the editor's live Terrain3DAssets.
@@ -50,6 +50,26 @@ const DEBRIS := [
 	# shadow. These bring both to ~0.05. Specular is lowered with it (0.3, like the rocks).
 	{"id": 53, "dir": "cone_open", "name": "ConeOpen", "ranges": [12.0, 24.0, 40.0], "res": "1k", "roughness": 0.85, "albedo": 0.45, "shadows": false},
 	{"id": 54, "dir": "cone_long", "name": "ConeLong", "ranges": [12.0, 24.0, 40.0], "res": "1k", "roughness": 0.85, "albedo": 0.7, "shadows": false},
+	# 2026-10-20: mushrooms (raw-assets/models/mushrooms/, Megascans "mid" glTFs, one texture set per
+	# kind shared by every mushroom in the folder; textures cut to 1K at import). Fly agaric a-i (6-18 cm,
+	# a = the tallest) and bolete a-e (5-11 cm). LOD0 = the scan, LOD1 = 30 %. Drawn by PlantField (no
+	# shadows), placed by scripts/terrain/mushroom_scatter.gd. "albedo" as for the cones: the scans'
+	# average linear luma is 0.33 (red) / 0.23 (bolete) against ~0.045 for the ground -- lowered, but
+	# left brighter than the ground, they should catch the eye. First guess, not judged in game.
+	{"id": 89, "dir": "mushroom_red", "file": "mushroom_red_a", "name": "MushroomRedA", "ranges": [10.0, 35.0], "res": "1k", "albedo": 0.7, "shadows": false},
+	{"id": 90, "dir": "mushroom_red", "file": "mushroom_red_b", "name": "MushroomRedB", "ranges": [10.0, 35.0], "res": "1k", "albedo": 0.7, "shadows": false},
+	{"id": 91, "dir": "mushroom_red", "file": "mushroom_red_c", "name": "MushroomRedC", "ranges": [10.0, 35.0], "res": "1k", "albedo": 0.7, "shadows": false},
+	{"id": 92, "dir": "mushroom_red", "file": "mushroom_red_d", "name": "MushroomRedD", "ranges": [10.0, 35.0], "res": "1k", "albedo": 0.7, "shadows": false},
+	{"id": 93, "dir": "mushroom_red", "file": "mushroom_red_e", "name": "MushroomRedE", "ranges": [10.0, 35.0], "res": "1k", "albedo": 0.7, "shadows": false},
+	{"id": 94, "dir": "mushroom_red", "file": "mushroom_red_f", "name": "MushroomRedF", "ranges": [10.0, 35.0], "res": "1k", "albedo": 0.7, "shadows": false},
+	{"id": 95, "dir": "mushroom_red", "file": "mushroom_red_g", "name": "MushroomRedG", "ranges": [10.0, 35.0], "res": "1k", "albedo": 0.7, "shadows": false},
+	{"id": 96, "dir": "mushroom_red", "file": "mushroom_red_h", "name": "MushroomRedH", "ranges": [10.0, 35.0], "res": "1k", "albedo": 0.7, "shadows": false},
+	{"id": 97, "dir": "mushroom_red", "file": "mushroom_red_i", "name": "MushroomRedI", "ranges": [10.0, 35.0], "res": "1k", "albedo": 0.7, "shadows": false},
+	{"id": 98, "dir": "mushroom_bolete", "file": "mushroom_bolete_a", "name": "MushroomBoleteA", "ranges": [8.0, 25.0], "res": "1k", "albedo": 0.7, "shadows": false},
+	{"id": 99, "dir": "mushroom_bolete", "file": "mushroom_bolete_b", "name": "MushroomBoleteB", "ranges": [8.0, 25.0], "res": "1k", "albedo": 0.7, "shadows": false},
+	{"id": 100, "dir": "mushroom_bolete", "file": "mushroom_bolete_c", "name": "MushroomBoleteC", "ranges": [8.0, 25.0], "res": "1k", "albedo": 0.7, "shadows": false},
+	{"id": 101, "dir": "mushroom_bolete", "file": "mushroom_bolete_d", "name": "MushroomBoleteD", "ranges": [8.0, 25.0], "res": "1k", "albedo": 0.7, "shadows": false},
+	{"id": 102, "dir": "mushroom_bolete", "file": "mushroom_bolete_e", "name": "MushroomBoleteE", "ranges": [8.0, 25.0], "res": "1k", "albedo": 0.7, "shadows": false},
 ]
 
 func _glb(e: Dictionary) -> String:
@@ -135,6 +155,8 @@ func setup_materials(only_ids: Array = []) -> String:
 		mat.ao_enabled = true
 		mat.ao_texture = orm
 		mat.ao_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
+		var k: float = e.get("albedo", 1.0) # neutral multiplier (the mushrooms); 1 = the texture as it is
+		mat.albedo_color = Color(k, k, k)
 		for prop: String in ["albedo_texture", "normal_texture", "roughness_texture"]:
 			if mat.get(prop) == null:
 				push_error("setup_ground_debris_assets: %s failed to load for %s" % [prop, e.dir])

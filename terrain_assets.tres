@@ -129,6 +129,22 @@
 [ext_resource type="PackedScene" uid="uid://c7d3sxgm2vp5e" path="res://assets/models/understory/clover/CloverB.tscn" id="109_75214"]
 [ext_resource type="PackedScene" uid="uid://bdfhg5rgu6dhs" path="res://assets/models/understory/clover/CloverC.tscn" id="110_owur0"]
 [ext_resource type="PackedScene" uid="uid://ddy5lpa7xg40y" path="res://assets/models/understory/clover/CloverD.tscn" id="111_8rqvk"]
+[ext_resource type="Material" uid="uid://b280cyk552pfb" path="res://assets/models/ground_debris/mushroom_red/mushroom_red_material.tres" id="112_4taye"]
+[ext_resource type="PackedScene" uid="uid://ik1pjlluqy87" path="res://assets/models/ground_debris/mushroom_red/mushroom_red_a.glb" id="113_a22k2"]
+[ext_resource type="PackedScene" uid="uid://c5ciokho4s5ol" path="res://assets/models/ground_debris/mushroom_red/mushroom_red_b.glb" id="114_ydnfs"]
+[ext_resource type="PackedScene" uid="uid://bycnpj8tew650" path="res://assets/models/ground_debris/mushroom_red/mushroom_red_c.glb" id="115_1x77u"]
+[ext_resource type="PackedScene" uid="uid://wcdh4npqo6it" path="res://assets/models/ground_debris/mushroom_red/mushroom_red_d.glb" id="116_ggfek"]
+[ext_resource type="PackedScene" uid="uid://4b6ybvtgy3ci" path="res://assets/models/ground_debris/mushroom_red/mushroom_red_e.glb" id="117_mx0u3"]
+[ext_resource type="PackedScene" uid="uid://bpoykvlmj14ap" path="res://assets/models/ground_debris/mushroom_red/mushroom_red_f.glb" id="118_qwkn3"]
+[ext_resource type="PackedScene" uid="uid://yumf8ch2rp15" path="res://assets/models/ground_debris/mushroom_red/mushroom_red_g.glb" id="119_xu0up"]
+[ext_resource type="PackedScene" uid="uid://cotc7ldekbfoo" path="res://assets/models/ground_debris/mushroom_red/mushroom_red_h.glb" id="120_tkq8y"]
+[ext_resource type="PackedScene" uid="uid://b1wq5je1lo6ie" path="res://assets/models/ground_debris/mushroom_red/mushroom_red_i.glb" id="121_l7yvj"]
+[ext_resource type="Material" uid="uid://byi0ks4eup0oh" path="res://assets/models/ground_debris/mushroom_bolete/mushroom_bolete_material.tres" id="122_qd623"]
+[ext_resource type="PackedScene" uid="uid://dxukakgdiduex" path="res://assets/models/ground_debris/mushroom_bolete/mushroom_bolete_a.glb" id="123_tqiwc"]
+[ext_resource type="PackedScene" uid="uid://cdh2p34avpt5e" path="res://assets/models/ground_debris/mushroom_bolete/mushroom_bolete_b.glb" id="124_mqtuf"]
+[ext_resource type="PackedScene" uid="uid://csci21lp1l0t1" path="res://assets/models/ground_debris/mushroom_bolete/mushroom_bolete_c.glb" id="125_ohexe"]
+[ext_resource type="PackedScene" uid="uid://dn6kgltv0ko2b" path="res://assets/models/ground_debris/mushroom_bolete/mushroom_bolete_d.glb" id="126_311ed"]
+[ext_resource type="PackedScene" uid="uid://nypm6q43rpkd" path="res://assets/models/ground_debris/mushroom_bolete/mushroom_bolete_e.glb" id="127_gbau4"]
 [ext_resource type="Texture2D" uid="uid://bixq2rvsytrfp" path="res://textures/source/snow_albedo_height_1k.png" id="130_8x8qy"]
 [ext_resource type="Texture2D" uid="uid://kdsmwe1veli8" path="res://textures/source/snow_normal_roughness_1k.png" id="131_ul08q"]
 
@@ -1120,6 +1136,174 @@ last_lod = 0
 last_shadow_lod = 0
 lod0_range = 60.0
 
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_o4jxw"]
+name = "MushroomRedA"
+id = 89
+scene_file = ExtResource("113_a22k2")
+density = 0.05
+cast_shadows = 0
+material_override = ExtResource("112_4taye")
+last_lod = 1
+last_shadow_lod = 1
+lod0_range = 10.0
+lod1_range = 35.0
+
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_xunux"]
+name = "MushroomRedB"
+id = 90
+scene_file = ExtResource("114_ydnfs")
+density = 0.05
+cast_shadows = 0
+material_override = ExtResource("112_4taye")
+last_lod = 1
+last_shadow_lod = 1
+lod0_range = 10.0
+lod1_range = 35.0
+
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_tsunr"]
+name = "MushroomRedC"
+id = 91
+scene_file = ExtResource("115_1x77u")
+density = 0.05
+cast_shadows = 0
+material_override = ExtResource("112_4taye")
+last_lod = 1
+last_shadow_lod = 1
+lod0_range = 10.0
+lod1_range = 35.0
+
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_g3h1j"]
+name = "MushroomRedD"
+id = 92
+scene_file = ExtResource("116_ggfek")
+density = 0.05
+cast_shadows = 0
+material_override = ExtResource("112_4taye")
+last_lod = 1
+last_shadow_lod = 1
+lod0_range = 10.0
+lod1_range = 35.0
+
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_ssmj4"]
+name = "MushroomRedE"
+id = 93
+scene_file = ExtResource("117_mx0u3")
+density = 0.05
+cast_shadows = 0
+material_override = ExtResource("112_4taye")
+last_lod = 1
+last_shadow_lod = 1
+lod0_range = 10.0
+lod1_range = 35.0
+
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_41wlw"]
+name = "MushroomRedF"
+id = 94
+scene_file = ExtResource("118_qwkn3")
+density = 0.05
+cast_shadows = 0
+material_override = ExtResource("112_4taye")
+last_lod = 1
+last_shadow_lod = 1
+lod0_range = 10.0
+lod1_range = 35.0
+
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_wm5x6"]
+name = "MushroomRedG"
+id = 95
+scene_file = ExtResource("119_xu0up")
+density = 0.05
+cast_shadows = 0
+material_override = ExtResource("112_4taye")
+last_lod = 1
+last_shadow_lod = 1
+lod0_range = 10.0
+lod1_range = 35.0
+
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_t6sqb"]
+name = "MushroomRedH"
+id = 96
+scene_file = ExtResource("120_tkq8y")
+density = 0.05
+cast_shadows = 0
+material_override = ExtResource("112_4taye")
+last_lod = 1
+last_shadow_lod = 1
+lod0_range = 10.0
+lod1_range = 35.0
+
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_ugpvm"]
+name = "MushroomRedI"
+id = 97
+scene_file = ExtResource("121_l7yvj")
+density = 0.05
+cast_shadows = 0
+material_override = ExtResource("112_4taye")
+last_lod = 1
+last_shadow_lod = 1
+lod0_range = 10.0
+lod1_range = 35.0
+
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_uto85"]
+name = "MushroomBoleteA"
+id = 98
+scene_file = ExtResource("123_tqiwc")
+density = 0.05
+cast_shadows = 0
+material_override = ExtResource("122_qd623")
+last_lod = 1
+last_shadow_lod = 1
+lod0_range = 8.0
+lod1_range = 25.0
+
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_ag2em"]
+name = "MushroomBoleteB"
+id = 99
+scene_file = ExtResource("124_mqtuf")
+density = 0.05
+cast_shadows = 0
+material_override = ExtResource("122_qd623")
+last_lod = 1
+last_shadow_lod = 1
+lod0_range = 8.0
+lod1_range = 25.0
+
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_g2r62"]
+name = "MushroomBoleteC"
+id = 100
+scene_file = ExtResource("125_ohexe")
+density = 0.05
+cast_shadows = 0
+material_override = ExtResource("122_qd623")
+last_lod = 1
+last_shadow_lod = 1
+lod0_range = 8.0
+lod1_range = 25.0
+
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_vucpt"]
+name = "MushroomBoleteD"
+id = 101
+scene_file = ExtResource("126_311ed")
+density = 0.05
+cast_shadows = 0
+material_override = ExtResource("122_qd623")
+last_lod = 1
+last_shadow_lod = 1
+lod0_range = 8.0
+lod1_range = 25.0
+
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_115jt"]
+name = "MushroomBoleteE"
+id = 102
+scene_file = ExtResource("127_gbau4")
+density = 0.05
+cast_shadows = 0
+material_override = ExtResource("122_qd623")
+last_lod = 1
+last_shadow_lod = 1
+lod0_range = 8.0
+lod1_range = 25.0
+
 [sub_resource type="Terrain3DTextureAsset" id="Terrain3DTextureAsset_grass"]
 name = "Ground"
 albedo_texture = ExtResource("39_6bfbq")
@@ -1212,5 +1396,5 @@ detiling_rotation = 1.0
 detiling_shift = 1.0
 
 [resource]
-mesh_list = Array[Terrain3DMeshAsset]([SubResource("Terrain3DMeshAsset_81oi1"), SubResource("Terrain3DMeshAsset_y4pab"), SubResource("Terrain3DMeshAsset_vgup8"), SubResource("Terrain3DMeshAsset_x2oql"), SubResource("Terrain3DMeshAsset_3mt4f"), SubResource("Terrain3DMeshAsset_o3r11"), SubResource("Terrain3DMeshAsset_j3dbr"), SubResource("Terrain3DMeshAsset_ok3py"), SubResource("Terrain3DMeshAsset_j7xkl"), SubResource("Terrain3DMeshAsset_wafp7"), SubResource("Terrain3DMeshAsset_0bfyr"), SubResource("Terrain3DMeshAsset_4wc0o"), SubResource("Terrain3DMeshAsset_egd2s"), SubResource("Terrain3DMeshAsset_iq0fs"), SubResource("Terrain3DMeshAsset_ut3y1"), SubResource("Terrain3DMeshAsset_2ohup"), SubResource("Terrain3DMeshAsset_xplyh"), SubResource("Terrain3DMeshAsset_st3tx"), SubResource("Terrain3DMeshAsset_njita"), SubResource("Terrain3DMeshAsset_6bfbq"), SubResource("Terrain3DMeshAsset_vl2ef"), SubResource("Terrain3DMeshAsset_gv63u"), SubResource("Terrain3DMeshAsset_hasxv"), SubResource("Terrain3DMeshAsset_e33tj"), SubResource("Terrain3DMeshAsset_ierxv"), SubResource("Terrain3DMeshAsset_gdy8x"), SubResource("Terrain3DMeshAsset_v5bka"), SubResource("Terrain3DMeshAsset_r3kdc"), SubResource("Terrain3DMeshAsset_bwc52"), SubResource("Terrain3DMeshAsset_idynt"), SubResource("Terrain3DMeshAsset_xp8ly"), SubResource("Terrain3DMeshAsset_8027u"), SubResource("Terrain3DMeshAsset_81xqu"), SubResource("Terrain3DMeshAsset_1kr7w"), SubResource("Terrain3DMeshAsset_1of2d"), SubResource("Terrain3DMeshAsset_nj03w"), SubResource("Terrain3DMeshAsset_and2d"), SubResource("Terrain3DMeshAsset_e1eb4"), SubResource("Terrain3DMeshAsset_d2h71"), SubResource("Terrain3DMeshAsset_2acpf"), SubResource("Terrain3DMeshAsset_6wq5w"), SubResource("Terrain3DMeshAsset_41kqr"), SubResource("Terrain3DMeshAsset_br08d"), SubResource("Terrain3DMeshAsset_wpoff"), SubResource("Terrain3DMeshAsset_2bixs"), SubResource("Terrain3DMeshAsset_sp2r7"), SubResource("Terrain3DMeshAsset_x81x7"), SubResource("Terrain3DMeshAsset_nw0df"), SubResource("Terrain3DMeshAsset_e0lft"), SubResource("Terrain3DMeshAsset_55bbd"), SubResource("Terrain3DMeshAsset_xrnjs"), SubResource("Terrain3DMeshAsset_wakti"), SubResource("Terrain3DMeshAsset_aiiri"), SubResource("Terrain3DMeshAsset_0aw0g"), SubResource("Terrain3DMeshAsset_qtfnw"), SubResource("Terrain3DMeshAsset_sg5g8"), SubResource("Terrain3DMeshAsset_7d8dp"), SubResource("Terrain3DMeshAsset_w8jwu"), SubResource("Terrain3DMeshAsset_4c7jx"), SubResource("Terrain3DMeshAsset_465mp"), SubResource("Terrain3DMeshAsset_7hcll"), SubResource("Terrain3DMeshAsset_dmfls"), SubResource("Terrain3DMeshAsset_w622v"), SubResource("Terrain3DMeshAsset_vsqas"), SubResource("Terrain3DMeshAsset_e6ofu"), SubResource("Terrain3DMeshAsset_n4rve"), SubResource("Terrain3DMeshAsset_l4xyn"), SubResource("Terrain3DMeshAsset_1utdq"), SubResource("Terrain3DMeshAsset_pnyou"), SubResource("Terrain3DMeshAsset_bveh0"), SubResource("Terrain3DMeshAsset_lebte"), SubResource("Terrain3DMeshAsset_4taye"), SubResource("Terrain3DMeshAsset_a22k2"), SubResource("Terrain3DMeshAsset_ydnfs"), SubResource("Terrain3DMeshAsset_1x77u"), SubResource("Terrain3DMeshAsset_ggfek"), SubResource("Terrain3DMeshAsset_mx0u3"), SubResource("Terrain3DMeshAsset_qwkn3"), SubResource("Terrain3DMeshAsset_xu0up"), SubResource("Terrain3DMeshAsset_tkq8y"), SubResource("Terrain3DMeshAsset_l7yvj"), SubResource("Terrain3DMeshAsset_qd623"), SubResource("Terrain3DMeshAsset_tqiwc"), SubResource("Terrain3DMeshAsset_mqtuf"), SubResource("Terrain3DMeshAsset_ohexe"), SubResource("Terrain3DMeshAsset_311ed"), SubResource("Terrain3DMeshAsset_gbau4"), SubResource("Terrain3DMeshAsset_kmkyb"), SubResource("Terrain3DMeshAsset_62i5l")])
+mesh_list = Array[Terrain3DMeshAsset]([SubResource("Terrain3DMeshAsset_81oi1"), SubResource("Terrain3DMeshAsset_y4pab"), SubResource("Terrain3DMeshAsset_vgup8"), SubResource("Terrain3DMeshAsset_x2oql"), SubResource("Terrain3DMeshAsset_3mt4f"), SubResource("Terrain3DMeshAsset_o3r11"), SubResource("Terrain3DMeshAsset_j3dbr"), SubResource("Terrain3DMeshAsset_ok3py"), SubResource("Terrain3DMeshAsset_j7xkl"), SubResource("Terrain3DMeshAsset_wafp7"), SubResource("Terrain3DMeshAsset_0bfyr"), SubResource("Terrain3DMeshAsset_4wc0o"), SubResource("Terrain3DMeshAsset_egd2s"), SubResource("Terrain3DMeshAsset_iq0fs"), SubResource("Terrain3DMeshAsset_ut3y1"), SubResource("Terrain3DMeshAsset_2ohup"), SubResource("Terrain3DMeshAsset_xplyh"), SubResource("Terrain3DMeshAsset_st3tx"), SubResource("Terrain3DMeshAsset_njita"), SubResource("Terrain3DMeshAsset_6bfbq"), SubResource("Terrain3DMeshAsset_vl2ef"), SubResource("Terrain3DMeshAsset_gv63u"), SubResource("Terrain3DMeshAsset_hasxv"), SubResource("Terrain3DMeshAsset_e33tj"), SubResource("Terrain3DMeshAsset_ierxv"), SubResource("Terrain3DMeshAsset_gdy8x"), SubResource("Terrain3DMeshAsset_v5bka"), SubResource("Terrain3DMeshAsset_r3kdc"), SubResource("Terrain3DMeshAsset_bwc52"), SubResource("Terrain3DMeshAsset_idynt"), SubResource("Terrain3DMeshAsset_xp8ly"), SubResource("Terrain3DMeshAsset_8027u"), SubResource("Terrain3DMeshAsset_81xqu"), SubResource("Terrain3DMeshAsset_1kr7w"), SubResource("Terrain3DMeshAsset_1of2d"), SubResource("Terrain3DMeshAsset_nj03w"), SubResource("Terrain3DMeshAsset_and2d"), SubResource("Terrain3DMeshAsset_e1eb4"), SubResource("Terrain3DMeshAsset_d2h71"), SubResource("Terrain3DMeshAsset_2acpf"), SubResource("Terrain3DMeshAsset_6wq5w"), SubResource("Terrain3DMeshAsset_41kqr"), SubResource("Terrain3DMeshAsset_br08d"), SubResource("Terrain3DMeshAsset_wpoff"), SubResource("Terrain3DMeshAsset_2bixs"), SubResource("Terrain3DMeshAsset_sp2r7"), SubResource("Terrain3DMeshAsset_x81x7"), SubResource("Terrain3DMeshAsset_nw0df"), SubResource("Terrain3DMeshAsset_e0lft"), SubResource("Terrain3DMeshAsset_55bbd"), SubResource("Terrain3DMeshAsset_xrnjs"), SubResource("Terrain3DMeshAsset_wakti"), SubResource("Terrain3DMeshAsset_aiiri"), SubResource("Terrain3DMeshAsset_0aw0g"), SubResource("Terrain3DMeshAsset_qtfnw"), SubResource("Terrain3DMeshAsset_sg5g8"), SubResource("Terrain3DMeshAsset_7d8dp"), SubResource("Terrain3DMeshAsset_w8jwu"), SubResource("Terrain3DMeshAsset_4c7jx"), SubResource("Terrain3DMeshAsset_465mp"), SubResource("Terrain3DMeshAsset_7hcll"), SubResource("Terrain3DMeshAsset_dmfls"), SubResource("Terrain3DMeshAsset_w622v"), SubResource("Terrain3DMeshAsset_vsqas"), SubResource("Terrain3DMeshAsset_e6ofu"), SubResource("Terrain3DMeshAsset_n4rve"), SubResource("Terrain3DMeshAsset_l4xyn"), SubResource("Terrain3DMeshAsset_1utdq"), SubResource("Terrain3DMeshAsset_pnyou"), SubResource("Terrain3DMeshAsset_bveh0"), SubResource("Terrain3DMeshAsset_lebte"), SubResource("Terrain3DMeshAsset_4taye"), SubResource("Terrain3DMeshAsset_a22k2"), SubResource("Terrain3DMeshAsset_ydnfs"), SubResource("Terrain3DMeshAsset_1x77u"), SubResource("Terrain3DMeshAsset_ggfek"), SubResource("Terrain3DMeshAsset_mx0u3"), SubResource("Terrain3DMeshAsset_qwkn3"), SubResource("Terrain3DMeshAsset_xu0up"), SubResource("Terrain3DMeshAsset_tkq8y"), SubResource("Terrain3DMeshAsset_l7yvj"), SubResource("Terrain3DMeshAsset_qd623"), SubResource("Terrain3DMeshAsset_tqiwc"), SubResource("Terrain3DMeshAsset_mqtuf"), SubResource("Terrain3DMeshAsset_ohexe"), SubResource("Terrain3DMeshAsset_311ed"), SubResource("Terrain3DMeshAsset_gbau4"), SubResource("Terrain3DMeshAsset_kmkyb"), SubResource("Terrain3DMeshAsset_62i5l"), SubResource("Terrain3DMeshAsset_o4jxw"), SubResource("Terrain3DMeshAsset_xunux"), SubResource("Terrain3DMeshAsset_tsunr"), SubResource("Terrain3DMeshAsset_g3h1j"), SubResource("Terrain3DMeshAsset_ssmj4"), SubResource("Terrain3DMeshAsset_41wlw"), SubResource("Terrain3DMeshAsset_wm5x6"), SubResource("Terrain3DMeshAsset_t6sqb"), SubResource("Terrain3DMeshAsset_ugpvm"), SubResource("Terrain3DMeshAsset_uto85"), SubResource("Terrain3DMeshAsset_ag2em"), SubResource("Terrain3DMeshAsset_g2r62"), SubResource("Terrain3DMeshAsset_vucpt"), SubResource("Terrain3DMeshAsset_115jt")])
 texture_list = Array[Terrain3DTextureAsset]([SubResource("Terrain3DTextureAsset_grass"), SubResource("Terrain3DTextureAsset_road"), SubResource("Terrain3DTextureAsset_ldu0t"), SubResource("Terrain3DTextureAsset_141l7"), SubResource("Terrain3DTextureAsset_oc8my"), SubResource("Terrain3DTextureAsset_we7sw"), SubResource("Terrain3DTextureAsset_ree8b"), SubResource("Terrain3DTextureAsset_osfy8"), SubResource("Terrain3DTextureAsset_luudq"), SubResource("Terrain3DTextureAsset_afjso")])

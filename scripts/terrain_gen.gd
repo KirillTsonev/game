@@ -15,6 +15,7 @@
 ##   UnderstoryScatter understory_scatter.gd  shrubs + ferns, density from canopy + shaded cliff feet
 ##   SaplingScatter  sapling_scatter.gd  mid-storey saplings (scaled-down canopy trees) at grove edges
 ##   FlowerScatter   flower_scatter.gd   wood sorrel under canopy; poppies, dandelions, clover in the open
+##   MushroomScatter mushroom_scatter.gd fly agaric + bolete troops by trees, on the shaded floor, by deadfall
 ##   FireflyScatter  firefly_scatter.gd  rare firefly swarms in dark spots (TRIAL); FireflyField (a node) draws them
 ##   PlantField      plant_field.gd      (a node, like GrassField) GPU-culled drawing of plants handed over by the scatter modules
 ##   FoliageWind     foliage_wind.gd     the wind noise shared by grass and plants; switches the understory / flower sway on
@@ -39,6 +40,7 @@ func _ready() -> void:
 	UnderstoryScatter.reset_run_state()
 	SaplingScatter.reset_run_state()
 	FlowerScatter.reset_run_state()
+	MushroomScatter.reset_run_state()
 	PlantField.reset_run_state()
 	FoliageWind.reset_run_state()
 	DeadfallScatter.reset_run_state()
@@ -328,8 +330,6 @@ func _ready() -> void:
 	var flower_rng := RandomNumberGenerator.new()
 	flower_rng.seed = resolved_seed ^ 0x464C5752 # 'FLWR' salt
 	FlowerScatter.scatter_flowers(terrain, maps.heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, heightmap_corner, flower_rng, maps.road_weight, maps.cliff_dressing_plan, maps.cliff_dressing_top_profiles, maps.outcrop_plan)
-	# The GPU-culled renderer for the plants the scatter stages handed to PlantField.submit().
-	PlantField.spawn(get_parent())
 	_log_stage("flower scattering", t_ready_stage)
 	t_ready_stage = Time.get_ticks_msec()
 
@@ -341,6 +341,17 @@ func _ready() -> void:
 	paint_rng.seed = resolved_seed ^ 0x50414E54 # 'PANT' salt
 	TerrainGroundPaint.paint(get_parent(), terrain, maps, heightmap_corner, paint_rng)
 	_log_stage("ground painting", t_ready_stage)
+	t_ready_stage = Time.get_ticks_msec()
+
+	# Mushrooms (2026-10-20): troops by trees, on the shaded floor and by deadfall, standing on the
+	# DRAWN ground -- which depends on the textures just painted (the displaced pine litter), so
+	# after the paint. Own cosmetic stream.
+	var mushroom_rng := RandomNumberGenerator.new()
+	mushroom_rng.seed = resolved_seed ^ 0x4D555348 # 'MUSH' salt
+	MushroomScatter.scatter_mushrooms(terrain, maps.heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, heightmap_corner, mushroom_rng, maps.road_weight, maps.cliff_dressing_plan, maps.cliff_dressing_top_profiles, maps.outcrop_plan)	# The GPU-culled renderer for the plants the scatter stages handed to PlantField.submit() --
+	# after the last stage that submits (was right after the flowers until the mushrooms came).
+	PlantField.spawn(get_parent())
+	_log_stage("mushroom scattering", t_ready_stage)
 	t_ready_stage = Time.get_ticks_msec()
 
 	await _loading_step(6)

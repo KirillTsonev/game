@@ -22,6 +22,7 @@ const LAYERS := [
 	[&"understory", "Ferns / shrubs"],
 	[&"saplings", "Saplings"],
 	[&"flowers", "Flowers"],
+	[&"mushrooms", "Mushrooms"],
 	[&"deadfall", "Logs / stumps / branches"],
 	[&"cliffs", "Cliff meshes"],
 	[&"outcrops", "Outcrop meshes"],
@@ -124,6 +125,8 @@ static func mesh_ids(key: StringName) -> Array[int]:
 			return SaplingScatter.SAPLING_MESH_IDS
 		&"flowers":
 			return FlowerScatter.FLOWER_MESH_IDS
+		&"mushrooms":
+			return MushroomScatter.MUSHROOM_MESH_IDS
 		&"deadfall":
 			return DeadfallScatter.DEADFALL_MESH_IDS # stumps, logs, branches, sticks -- not mounds/cones
 	return []
