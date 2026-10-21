@@ -515,7 +515,7 @@ var startup_timings: Dictionary = {}
 ## understory, grass, flowers, ground paint) between a first and a second start to check.
 ## WORLD_CACHE_KEEP files are kept (about 6 MB each); the oldest go.
 const WORLD_CACHE := true
-const WORLD_CACHE_VERSION := 2 ## bump to throw every cached world away
+const WORLD_CACHE_VERSION := 5 ## bump to throw every cached world away (3-5: the far end's north apron sinks, then irregularly, 2026-10-21)
 const WORLD_CACHE_KEEP := 4
 const WORLD_CACHE_DIR := "user://world_cache"
 const WORLD_CACHE_DOWNSTREAM: Array[String] = [

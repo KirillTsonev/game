@@ -63,18 +63,28 @@ const LIGHT_STAND_OFF := 0.6 ## m a light stands off the surface it is on
 ## Kirill: the valley becomes five sections of about 1 km, the castle at the end of the last;
 ## only the section being played is built, the others are never seen except through fog. So the
 ## castle and the mountain rows behind it (MountainWalls.END_ROWS, the north cloud sheets) are
-## moved FAR_SHIFT m north of where they stood (four sections more), where there is no terrain:
-## the castle stands on nothing, its foot FAR_RISE m above the valley floor (below it: under
+## moved out into the last of the valley's sections (ValleyPath, far_shift() / far_side_shift()),
+## where there is no terrain: the castle stands on nothing, its foot far_rise() m above the valley floor (below it: under
 ## eye level, down in the fog), in mist. It is FAR_SIZE m, and it and those rows are drawn without the
 ## scene's fog -- their own haze instead (FAR_HAZE, MountainWalls.FAR_ROW_HAZE) -- so they stay
 ## in view over and through the fog bank that closes the section (FarEndView). The site on the map (SITE_PX:
 ## keep-outs, the road's end) is unchanged. false = everything as before. TUNING.
 const FAR_END := true
-const FAR_SHIFT := 4096.0
-## (150 at first, the valley "curving up": the feet were then above eye level from everywhere
-## and the castle and its mountains floated over the fog bank -- Kirill. Below the floor they
-## stand down in the fog and rise out of it.)
-const FAR_RISE := 1500.0 ## trying 150 again with the U-shaped fog bank (2026-10-21); was -50
+## Where it stands out there comes from the valley's sections (ValleyPath, 2026-10-21: they are
+## shifted sideways and stand higher or lower, not in a straight line north): far_shift() m north
+## of its site, far_side_shift() m in +X of it, its foot far_rise() m above the valley floor.
+## (Before: FAR_SHIFT 4096 straight north and FAR_RISE, which went 150 -> -50 -> 150 -> 1500:
+## at 150 at first the feet were above eye level from everywhere and the castle and its mountains
+## floated over the fog bank -- Kirill.)
+static func far_shift() -> float:
+	return ValleyPath.castle_along() + SITE_PX.y
+
+static func far_side_shift() -> float:
+	return ValleyPath.castle_place().x
+
+static func far_rise() -> float:
+	return ValleyPath.castle_place().y
+
 const FAR_SIZE := Vector3(84.0, 700.0, 67.0) ## "real distance, bigger" (Kirill): 250 m was about 40 px from the start
 ## A 1.6 x 2.4 m window 5 km away is a fraction of a pixel and flickers: these are about one.
 const FAR_LIGHT_SIZE := Vector2(7.0, 10.0)
@@ -88,6 +98,12 @@ const FAR_SHADER_PATH := "res://shaders/far_landmark.gdshader"
 ## 2026-10-21: "we need to see the castle and the mountains behind it, while having the terrain
 ## between ... along with side ridges, covered by fog"). Negative = drawn before it, hidden by it.
 const FAR_DRAW_ORDER := 10
+## false = none of that: the castle, its lights and every far mountain are plain opaque things
+## behind the bank, which covers them wherever it lies between the camera and them (Kirill,
+## 2026-10-21, seeing the far ranges over the cloud from high up: "I don't think we need these
+## exemptions at all now"). The bank's U and basin leave the view over the cloud clear from the
+## valley. true = drawn after the bank, as above. TRIAL.
+const FAR_OVER_BANK := false
 
 ## -- The north apron --
 ## Its length (Z), m. Terrain3D takes whole regions: with AREA_LENGTH and the hub's length it
@@ -163,15 +179,48 @@ static func filter_plan(plan: Array, reach: Callable) -> int:
 ## 2026-10-09: it was the one piece of mountain that was the same on every run).
 ## With FAR_END there is no mountain here: the import's row south of it (`edge_row`, its
 ## `edge_control` and `edge_color`) is repeated on every row, so the valley floor and its slopes
-## run straight on into the fog that closes the section (FarEndView).
+## run straight on into the fog that closes the section (FarEndView) -- except that from
+## FAR_APRON_SINK_FROM m north of the map it sinks, to FAR_APRON_SINK_DEPTH m below the valley
+## floor at its north end: repeated unchanged, the mountain strips beside the map (up to 220 m)
+## ran on as two straight ridges and stopped dead, "blocky chunks of terrain at the end of the first
+## playable area" (Kirill, 2026-10-21). Past WorldBounds' north wall (60 m out): seen, never walked.
+## Sunk alone they were still straight ("at least make them irregular like the rest of the terrain
+## ridges"), so: where the sinking starts wanders by up to FAR_APRON_SINK_RAGGED m per column and
+## row, and ridged noise (FAR_APRON_RELIEF_FREQUENCY) moves the ground by up to FAR_APRON_RELIEF of
+## its height above the floor -- eased in over FAR_APRON_RELIEF_EASE m from the map's edge (60 m
+## left unchanged at first, for the walkable strip: from above, its straight copy still showed --
+## Kirill. The noise scales with height above the floor, so the floor itself barely moves). TUNING.
+const FAR_APRON_SINK_FROM := 70.0
+const FAR_APRON_SINK_DEPTH := 30.0
+const FAR_APRON_SINK_RAGGED := 120.0
+const FAR_APRON_RELIEF := 0.4
+const FAR_APRON_RELIEF_FREQUENCY := 1.0 / 70.0
+const FAR_APRON_RELIEF_EASE := 40.0
+
 static func build_maps(edge_row: PackedFloat32Array, edge_color: PackedByteArray, width: int, master_seed: int, edge_control := PackedInt32Array()) -> Dictionary:
 	var t0 := Time.get_ticks_msec()
 	if FAR_END and edge_control.size() >= width and edge_color.size() >= width * 4:
 		var run_heights := PackedFloat32Array()
 		var run_control := PackedInt32Array()
 		var run_color := PackedByteArray()
+		var floor_level := TerrainHeightmap.BASE_LEVEL
+		var sunk := floor_level - FAR_APRON_SINK_DEPTH
+		var relief := _noise(master_seed ^ 0x4E524645, FAR_APRON_RELIEF_FREQUENCY, FastNoiseLite.FRACTAL_RIDGED, 4) # 'NRFE'
+		var ragged := _noise(master_seed ^ 0x4E524647, 1.0 / 90.0, FastNoiseLite.FRACTAL_FBM, 2) # 'NRFG'
 		for j in LENGTH:
-			run_heights.append_array(edge_row)
+			# j = 0 is the northmost row; `out` m north of the map.
+			var out := float(LENGTH - 1 - j)
+			if out <= 0.0:
+				run_heights.append_array(edge_row)
+			else:
+				var roughen := smoothstep(0.0, FAR_APRON_RELIEF_EASE, out)
+				var row := edge_row.duplicate()
+				for i in row.size():
+					var h := row[i]
+					h += maxf(h - floor_level, 0.0) * FAR_APRON_RELIEF * relief.get_noise_2d(float(i), float(j)) * roughen
+					var from := FAR_APRON_SINK_FROM + (ragged.get_noise_2d(float(i), float(j)) * 0.5 + 0.5) * FAR_APRON_SINK_RAGGED
+					row[i] = lerpf(h, minf(h, sunk), smoothstep(from, float(LENGTH - 1), out))
+				run_heights.append_array(row)
 			run_control.append_array(edge_control.slice(0, width))
 			run_color.append_array(edge_color.slice(0, width * 4))
 		north_apron_heights = run_heights
@@ -370,11 +419,11 @@ static func spawn_placeholder(parent_node: Node, terrain: Terrain3D, heightmap_c
 		old.name = PLACEHOLDER_NAME + "_old"
 		old.queue_free()
 	var data: Terrain3DData = terrain.get_data()
-	var centre := Vector3(heightmap_corner.x + SITE_PX.x, 0.0, heightmap_corner.z + SITE_PX.y - (FAR_SHIFT if FAR_END else 0.0))
+	var centre := Vector3(heightmap_corner.x + SITE_PX.x + (far_side_shift() if FAR_END else 0.0), 0.0, heightmap_corner.z + SITE_PX.y - (far_shift() if FAR_END else 0.0))
 	var size := FAR_SIZE if FAR_END else PLACEHOLDER_SIZE
 	var foot: Vector3
 	if FAR_END:
-		foot = Vector3(centre.x, TerrainHeightmap.BASE_LEVEL + FAR_RISE - PLACEHOLDER_SINK, centre.z)
+		foot = Vector3(centre.x, TerrainHeightmap.BASE_LEVEL + far_rise() - PLACEHOLDER_SINK, centre.z)
 	else:
 		# The lowest ground under the footprint.
 		var ground := INF
@@ -387,7 +436,7 @@ static func spawn_placeholder(parent_node: Node, terrain: Terrain3D, heightmap_c
 			push_warning("TERRAIN_GEN: castle placeholder -- no terrain at its site, skipped")
 			return
 		foot = Vector3(centre.x, ground - PLACEHOLDER_SINK, centre.z)
-	print("TERRAIN_GEN: castle placeholder -- %.0f x %.0f m at map pixel (%.0f, %.0f), %.0f m tall, top %.0f m above the valley floor%s" % [size.x, size.z, SITE_PX.x, SITE_PX.y - (FAR_SHIFT if FAR_END else 0.0), size.y, foot.y + size.y - TerrainHeightmap.BASE_LEVEL, " (FAR_END: %.0f m north of its site, no scene fog)" % FAR_SHIFT if FAR_END else ""])
+	print("TERRAIN_GEN: castle placeholder -- %.0f x %.0f m at map pixel (%.0f, %.0f), %.0f m tall, top %.0f m above the valley floor%s" % [size.x, size.z, SITE_PX.x + (far_side_shift() if FAR_END else 0.0), SITE_PX.y - (far_shift() if FAR_END else 0.0), size.y, foot.y + size.y - TerrainHeightmap.BASE_LEVEL, " (FAR_END: %.0f m north of its site, %.0f m sideways, in ValleyPath's last section; no scene fog)" % [far_shift(), far_side_shift()] if FAR_END else ""])
 
 	var body := StaticBody3D.new()
 	body.name = PLACEHOLDER_NAME
@@ -395,7 +444,7 @@ static func spawn_placeholder(parent_node: Node, terrain: Terrain3D, heightmap_c
 	var material: Material
 	if FAR_END:
 		var far_material := ShaderMaterial.new()
-		far_material.shader = load(FAR_SHADER_PATH) as Shader
+		far_material.shader = load(FAR_SHADER_PATH) as Shader if FAR_OVER_BANK else FarEndView.behind_bank(load(FAR_SHADER_PATH) as Shader)
 		far_material.set_shader_parameter("albedo", Color(0.12, 0.12, 0.14))
 		far_material.set_shader_parameter("haze_color", MountainWalls.HAZE_COLOR)
 		far_material.set_shader_parameter("mist_color", FarEndView.BANK_COLOR) # its foot vanishes into the bank
@@ -425,7 +474,7 @@ static func spawn_placeholder(parent_node: Node, terrain: Terrain3D, heightmap_c
 			castle_points.append(Vector3((size.x * 0.5 + LIGHT_STAND_OFF) * (1.0 if face == 0 else -1.0), up, along * size.z))
 		else:
 			castle_points.append(Vector3(along * size.x, up, (size.z * 0.5 + LIGHT_STAND_OFF) * (1.0 if face == 2 else -1.0)))
-	if FAR_END: # none under the fog bank's top: they are drawn over it, like the walls
+	if FAR_END and FAR_OVER_BANK: # none under the fog bank's top: they are drawn over it, like the walls
 		var bank_top := FarEndView.bank_top_at(body.position.x, body.position.z, heightmap_corner)
 		var above: Array[Vector3] = []
 		for p in castle_points:
@@ -451,10 +500,11 @@ static func _add_glow_points(parent: Node3D, node_name: String, points: Array[Ve
 	glow.emission_energy_multiplier = LIGHT_ENERGY
 	glow.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
 	glow.billboard_keep_scale = true
-	if FAR_END: # drawn with the castle against the fog bank, after its walls
+	if FAR_END: # beyond the scene's fog, like the castle
 		glow.disable_fog = true
-		glow.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		glow.render_priority = FAR_DRAW_ORDER + 1
+		if FAR_OVER_BANK: # drawn with the castle against the fog bank, after its walls
+			glow.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			glow.render_priority = FAR_DRAW_ORDER + 1
 	pane.material = glow
 	var multimesh := MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_3D

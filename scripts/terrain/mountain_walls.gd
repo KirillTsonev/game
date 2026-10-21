@@ -165,7 +165,10 @@ static func _build_cloud_sheets(root: Node3D, heightmap_corner: Vector3, floor_y
 	if shader == null:
 		push_warning("TERRAIN_GEN: %s could not be loaded -- no cloud sheets" % CLOUD_SHEET_SHADER_PATH)
 		return
-	var z_low := heightmap_corner.z - float(TerrainCastle.LENGTH) - CLOUD_SHEET_OVERRUN
+	# With TerrainCastle.FAR_END the long sides' sheets stop at the map's north edge (fading out
+	# over the CLOUD_SHEET_END_FADE m before it): run on past it, they hung over the next section
+	# in front of the fog bank and covered the lava zone's glows (FarEndView, Kirill 2026-10-21).
+	var z_low := heightmap_corner.z if TerrainCastle.FAR_END else heightmap_corner.z - float(TerrainCastle.LENGTH) - CLOUD_SHEET_OVERRUN
 	var z_high := heightmap_corner.z + float(TerrainConfig.AREA_LENGTH + TerrainHub.STRIP_LENGTH) + CLOUD_SHEET_OVERRUN
 	var x_low := heightmap_corner.x - float(APRON_WIDTH) - CLOUD_SHEET_OVERRUN
 	var x_high := heightmap_corner.x + float(TerrainConfig.AREA_WIDTH + APRON_WIDTH) + CLOUD_SHEET_OVERRUN
@@ -176,7 +179,7 @@ static func _build_cloud_sheets(root: Node3D, heightmap_corner: Vector3, floor_y
 		# bank, these veils just above its top read as fog in front of it (Kirill, 2026-10-21).
 		if far and not FAR_END_ROWS_VEILED:
 			continue
-		var sheet_floor_y := floor_y + (TerrainCastle.FAR_RISE if far else 0.0)
+		var sheet_floor_y := floor_y + (TerrainCastle.far_rise() if far else 0.0)
 		for index in CLOUD_SHEETS.size():
 			var def: Dictionary = CLOUD_SHEETS[index]
 			var along_low := z_low if place < 2 else x_low
@@ -211,7 +214,7 @@ static func _build_cloud_sheets(root: Node3D, heightmap_corner: Vector3, floor_y
 			var centre_y := sheet_floor_y + (float(def.top) + float(def.bottom)) * 0.5
 			var along_centre := (along_low + along_high) * 0.5
 			if place == 2:
-				sheet.position = Vector3(along_centre, centre_y, heightmap_corner.z - float(def.out) - (TerrainCastle.FAR_SHIFT if far else 0.0))
+				sheet.position = Vector3(along_centre + (TerrainCastle.far_side_shift() if far else 0.0), centre_y, heightmap_corner.z - float(def.out) - (TerrainCastle.far_shift() if far else 0.0))
 			else:
 				var x := heightmap_corner.x - float(def.out) if place == 0 else heightmap_corner.x + float(TerrainConfig.AREA_WIDTH - 1) + float(def.out)
 				sheet.position = Vector3(x, centre_y, along_centre)
@@ -557,8 +560,9 @@ const END_ROWS: Array[Dictionary] = [
 		"sources": ["horn", "alpine", "radial", "peak", "lake"], "size": 3.6, "length": 2.2, "out": 700.0, "base": 150.0, "height_min": 0.8, "height_max": 1.3, "haze": 0.55, "mist": 1.0, "mist_full": 800.0, "mist_clear": 1500.0, "detail_near": 160.0, "detail_far": 600.0},
 ]
 const END_ROW_MARGIN := 420.0
-## With TerrainCastle.FAR_END these rows (and the north cloud sheets) stand TerrainCastle.FAR_SHIFT
-## m further north on a level foot TerrainCastle.FAR_RISE m above (below) the valley floor, and are drawn
+## With TerrainCastle.FAR_END these rows (and the north cloud sheets) stand TerrainCastle.far_shift()
+## m further north and far_side_shift() m in +X (the castle's section, ValleyPath) on a level foot
+## TerrainCastle.far_rise() m above (below) the valley floor, and are drawn
 ## without the scene's fog: on top of its own haze each row is veiled this much more, standing in
 ## for the fog of the distance. TUNING.
 const FAR_ROW_HAZE := 0.35
@@ -572,7 +576,7 @@ const FAR_END_ROWS_VEILED := false
 ## "just add a bunch of new mountain meshes"). Each: "slice" (a segment's name, from any source),
 ## "x" (m from the castle in +X), "behind" (m north of the castle), "size" / "length" / "height"
 ## (scale of depth, along, and height, as in the rows), "base" (m above the far end's floor,
-## TerrainCastle.FAR_RISE). Drawn like END_ROWS' far row, and its look (haze, mist). Same on every
+## TerrainCastle.far_rise()). Drawn like END_ROWS' far row, and its look (haze, mist). Same on every
 ## seed. TUNING.
 const FAR_FILL: Array[Dictionary] = [
 	# Broad massifs, not spikes (Kirill: the alpine / peak slices first picked were "sharp spikes").
@@ -602,22 +606,30 @@ const FAR_FILL_SHOW_ABOVE := 700.0
 ## Also with FAR_END: the far ranges along both sides of the sections still to come (Kirill,
 ## 2026-10-21: "even if we hide the valley zones' ridges, the farmost mountains could still be
 ## visible"). Rows like ROWS' (same keys, no "out"), drawn like END_ROWS after the fog bank and
-## not below its top. Each side's runs on a slanting line: FAR_SIDE_OUT_FROM m out from the map's
-## edge at FAR_SIDE_FROM m north of its north edge (behind the side rows' far end), narrowing to
-## FAR_SIDE_OUT_TO m out FAR_SIDE_BEYOND_CASTLE m past the castle, where it meets END_ROWS (which
-## reach END_ROW_MARGIN + APRON_WIDTH, about 550 m, past each side of the map) -- so from the
+## not below its top. Each side's follows the wall of the basin round the valley's sections
+## (ValleyPath.basin: one wide valley, its floor a gentle rise), FAR_SIDE_OUT_FROM m out from the
+## basin's floor edge at FAR_SIDE_FROM m north of the map's north edge (behind the side rows' far
+## end), narrowing evenly to FAR_SIDE_OUT_TO m out FAR_SIDE_BEYOND_CASTLE m past the castle, where
+## it meets END_ROWS (which reach about 740 m from the castle's section's middle) -- so from the
 ## valley the ranges run in to the peaks behind the castle (Kirill: "should connect with the ones
-## behind the castle"; a first version stood level 2000 m out and showed off to the sides). Their
-## foot ("base") rises with the bank's curve (FarEndView.curve_rise_at), so they climb toward the
-## castle with it. Picked from their own random stream (the other rows' and the cloud sheets'
-## picks stay as they were). TUNING.
+## behind the castle"; a first version stood level 2000 m out and showed off to the sides). The
+## line is drawn through points FAR_SIDE_STEP m apart and the slices are bent along it
+## (_bend_on_line), so neighbours meet end to end on its curve. Their foot is "base" m above the basin's floor there. (For a few hours on 2026-10-21
+## the line and the foot followed each section's own middle and floor: the slices missed each
+## other at every bend -- Kirill: "weird cuts of the mountain meshes".) Picked from their own
+## random stream (the other rows' and the cloud sheets' picks stay as they were). TUNING.
 const FAR_SIDE_ROWS: Array[Dictionary] = [
 	{"sources": ["alpine", "rugged", "massif", "lake"], "size": 2.4, "length": 2.2, "base": 400.0, "height_min": 0.6, "height_max": 1.2, "haze": 0.5, "mist": 0.0, "mist_full": 0.0, "mist_clear": 1.0, "detail_near": 90.0, "detail_far": 350.0},
 ]
 const FAR_SIDE_FROM := 0.0
-const FAR_SIDE_OUT_FROM := 1500.0
-const FAR_SIDE_OUT_TO := 500.0
+## (Measured from the map's edges at first: 1500 / 500; then from the valley's middle: 1700 / 700.)
+const FAR_SIDE_OUT_FROM := 1200.0
+const FAR_SIDE_OUT_TO := 550.0
 const FAR_SIDE_BEYOND_CASTLE := 600.0
+const FAR_SIDE_STEP := 100.0
+## The line's sideways course is averaged over this many m (twice), so it bends no tighter than
+## the bent slices are deep (about 1 km): tighter, their rock folds through itself.
+const FAR_SIDE_SMOOTH := 2000.0
 
 ## A copy of `shader` that the scene's fog does not touch (for the far end, which carries its own
 ## haze and must show through the fog that closes a section). Cached per shader.
@@ -742,6 +754,8 @@ static func build(parent_node: Node, maps: Dictionary, heightmap_corner: Vector3
 					material.set_shader_parameter("veil_ramp_side", 1.0 if side == 0 else -1.0)
 				materials.append(material)
 			var tall: Callable = _seat_tall.bind(heightmap_corner.z, side) if seated else _full_tall
+			if TerrainCastle.FAR_END: # sink into the fog bank toward the north end, no end face showing
+				tall = _north_end_taper.bind(tall, heightmap_corner.z)
 			var height_min: float = row.get("height_min", HEIGHT_SCALE_MIN)
 			var height_max: float = row.get("height_max", HEIGHT_SCALE_MAX)
 			var last_pick := -1
@@ -764,8 +778,13 @@ static func build(parent_node: Node, maps: Dictionary, heightmap_corner: Vector3
 	# Behind the castle end: rows across the valley, their depth axis toward -Z (a quarter turn).
 	var end_span := float(TerrainConfig.AREA_WIDTH + 2 * APRON_WIDTH) + 2.0 * END_ROW_MARGIN
 	var far := TerrainCastle.FAR_END
-	var end_floor_y := floor_y + (TerrainCastle.FAR_RISE if far else 0.0)
-	var end_shader := _far_drawn(shader) if far else shader
+	var end_floor_y := floor_y + (TerrainCastle.far_rise() if far else 0.0)
+	var end_x_shift := TerrainCastle.far_side_shift() if far else 0.0 # the castle's section's middle (ValleyPath)
+	# Out there, beyond the scene's fog: their own haze. Drawn after the bank and not below its
+	# top (TerrainCastle.FAR_OVER_BANK), or as plain opaque rock behind it.
+	var end_shader := shader
+	if far:
+		end_shader = _far_drawn(shader) if TerrainCastle.FAR_OVER_BANK else _fogless(shader)
 	for row_index in END_ROWS.size():
 		var row: Dictionary = END_ROWS[row_index]
 		if far:
@@ -789,7 +808,7 @@ static func build(parent_node: Node, maps: Dictionary, heightmap_corner: Vector3
 		var seat_at: float = row.get("seat_at", -1.0) # m north of the map's edge, on the apron
 		var seated: bool = row.get("seat", false) or seat_at >= 0.0
 		var foot_north := seat_at if seat_at >= 0.0 else (float(TerrainCastle.LENGTH) - SEAT_OVERLAP if seated else float(TerrainCastle.LENGTH) + float(row.get("out", 0.0)))
-		var z := heightmap_corner.z - foot_north - (TerrainCastle.FAR_SHIFT if far else 0.0)
+		var z := heightmap_corner.z - foot_north - (TerrainCastle.far_shift() if far else 0.0)
 		var lift: Callable
 		if far: # no terrain out there: a level foot, sunk in the row's mist
 			lift = _level_lift.bind(end_floor_y + float(row.get("base", -SEAT_SINK)))
@@ -817,7 +836,7 @@ static func build(parent_node: Node, maps: Dictionary, heightmap_corner: Vector3
 					pick = (pick + 1 + rng.randi_range(0, sources.size() - 2)) % sources.size()
 				height_factor = rng.randf_range(float(row.height_min), float(row.height_max))
 			last_pick = pick
-			var origin := Vector3(heightmap_corner.x - float(APRON_WIDTH) - END_ROW_MARGIN + (float(i) + 0.5) * spacing, 0.0, z)
+			var origin := Vector3(heightmap_corner.x - float(APRON_WIDTH) - END_ROW_MARGIN + end_x_shift + (float(i) + 0.5) * spacing, 0.0, z)
 			var scale := Vector3(float(row.size), float(row.size) * height_factor * float(sources[pick].height), float(row.length) * spacing / pitch)
 			var instance := _place(sources[pick], Transform3D(Basis(Vector3.UP, PI * 0.5), origin), scale, lift, _full_tall)
 			instance.material_override = materials[pick]
@@ -829,20 +848,36 @@ static func build(parent_node: Node, maps: Dictionary, heightmap_corner: Vector3
 	if far:
 		var far_rng := RandomNumberGenerator.new()
 		far_rng.seed = master_seed ^ 0x46534944 # 'FSID'
-		var side_from_z := heightmap_corner.z - FAR_SIDE_FROM
-		var side_to_z := heightmap_corner.z + TerrainCastle.SITE_PX.y - TerrainCastle.FAR_SHIFT - FAR_SIDE_BEYOND_CASTLE
+		var side_to := ValleyPath.castle_along() + FAR_SIDE_BEYOND_CASTLE # along
+		var middle_x := heightmap_corner.x + float(TerrainConfig.AREA_WIDTH - 1) * 0.5
 		for side in 2:
-			# The line, from its south end (a) to its north end (b), and the segments' axes along it:
-			# depth (+X as cut) outward, along (+Z) south on the high-X side and north on the low-X
-			# side, as the side rows have them.
-			var edge_x := heightmap_corner.x if side == 0 else heightmap_corner.x + float(TerrainConfig.AREA_WIDTH - 1)
+			# The line, south to north, through points FAR_SIDE_STEP m apart along the valley, and its
+			# length so far at each.
 			var outward := -1.0 if side == 0 else 1.0
-			var a := Vector3(edge_x + outward * FAR_SIDE_OUT_FROM, 0.0, side_from_z)
-			var b := Vector3(edge_x + outward * FAR_SIDE_OUT_TO, 0.0, side_to_z)
-			var line_length := a.distance_to(b)
-			var north := (b - a) / line_length
-			var along_axis := north if side == 0 else -north
-			var facing := Basis(Vector3.UP.cross(along_axis), Vector3.UP, along_axis)
+			var points := PackedVector3Array()
+			var walked := PackedFloat32Array()
+			var steps := maxi(1, ceili((side_to - FAR_SIDE_FROM) / FAR_SIDE_STEP))
+			for k in steps + 1:
+				var along := lerpf(FAR_SIDE_FROM, side_to, float(k) / float(steps))
+				var out := lerpf(FAR_SIDE_OUT_FROM, FAR_SIDE_OUT_TO, float(k) / float(steps))
+				var basin := ValleyPath.basin(along)
+				points.append(Vector3(middle_x + (basin.x if side == 0 else basin.y) + outward * out, 0.0, heightmap_corner.z - along))
+			# Smoothed sideways: the slices are bent along it and reach about 1 km back from it, so
+			# a curve tighter than that folds the rock on its inside through itself (the basin's
+			# edge moves up to 400 m sideways within 800 m -- clipping, Kirill 2026-10-21).
+			var reach := int(FAR_SIDE_SMOOTH * 0.5 / FAR_SIDE_STEP)
+			for pass_index in 2:
+				var xs := PackedFloat32Array()
+				for k in points.size():
+					var sum := 0.0
+					for j in range(k - reach, k + reach + 1):
+						sum += points[clampi(j, 0, points.size() - 1)].x
+					xs.append(sum / float(2 * reach + 1))
+				for k in points.size():
+					points[k].x = xs[k]
+			for k in points.size():
+				walked.append(0.0 if k == 0 else walked[k - 1] + points[k].distance_to(points[k - 1]))
+			var line_length := walked[walked.size() - 1]
 			for row_index in FAR_SIDE_ROWS.size():
 				var row: Dictionary = FAR_SIDE_ROWS[row_index].duplicate()
 				row.haze = 1.0 - (1.0 - float(row.haze)) * (1.0 - FAR_ROW_HAZE)
@@ -858,16 +893,17 @@ static func build(parent_node: Node, maps: Dictionary, heightmap_corner: Vector3
 					material.render_priority = TerrainCastle.FAR_DRAW_ORDER - 1
 					FarEndView.set_bank_shape(material, heightmap_corner)
 					materials.append(material)
-				var lift: Callable = _far_curve_lift.bind(floor_y + float(row.base), heightmap_corner)
+				var lift: Callable = _path_floor_lift.bind(floor_y + float(row.base), heightmap_corner.z)
 				var last_pick := -1
 				for i in count:
 					var pick := far_rng.randi_range(0, sources.size() - 1)
 					if pick == last_pick:
 						pick = (pick + 1 + far_rng.randi_range(0, sources.size() - 2)) % sources.size()
 					last_pick = pick
-					var origin := a + north * (float(i) + 0.5) * spacing
+					# The slice bent along the line, its middle (float(i) + 0.5) * spacing m along it.
 					var scale := Vector3(float(row.size), float(row.size) * far_rng.randf_range(float(row.height_min), float(row.height_max)) * float(sources[pick].height), float(row.length) * spacing / pitch)
-					var instance := _place(sources[pick], Transform3D(facing, origin), scale, lift, _full_tall)
+					var bend := _bend_on_line.bind(points, walked, (float(i) + 0.5) * spacing, side)
+					var instance := _place(sources[pick], Transform3D.IDENTITY, scale, lift, _full_tall, bend)
 					instance.material_override = materials[pick]
 					instance.name = "%s_far%d_%02d_%s" % ["Left" if side == 0 else "Right", row_index, i, sources[pick].name]
 					root.add_child(instance)
@@ -883,8 +919,8 @@ static func build(parent_node: Node, maps: Dictionary, heightmap_corner: Vector3
 		var look: Dictionary = END_ROWS[END_ROWS.size() - 1].duplicate()
 		look.haze = 1.0 - (1.0 - float(look.haze)) * (1.0 - FAR_ROW_HAZE) if FAR_END_ROWS_VEILED else 0.0
 		look.mist = 1.0 if FAR_END_ROWS_VEILED else 0.0
-		var castle_x := heightmap_corner.x + TerrainCastle.SITE_PX.x
-		var castle_z := heightmap_corner.z + TerrainCastle.SITE_PX.y - TerrainCastle.FAR_SHIFT
+		var castle_x := heightmap_corner.x + TerrainCastle.SITE_PX.x + TerrainCastle.far_side_shift()
+		var castle_z := heightmap_corner.z + TerrainCastle.SITE_PX.y - TerrainCastle.far_shift()
 		for fill_index in FAR_FILL.size():
 			var fill: Dictionary = FAR_FILL[fill_index]
 			if not by_name.has(fill.slice):
@@ -1609,9 +1645,48 @@ static func _ramp_height(d: float, edge_grade: float) -> float:
 static func _level_lift(_v: Vector3, base: float) -> float:
 	return base
 
-## ... or `base` raised by the fog bank's curve along the valley there (FAR_SIDE_ROWS).
-static func _far_curve_lift(v: Vector3, base: float, heightmap_corner: Vector3) -> float:
-	return base + FarEndView.curve_rise_at(v.z, heightmap_corner)
+## With TerrainCastle.FAR_END the side rows end with the north apron, TerrainCastle.LENGTH m past
+## the map's north edge, where nothing meets them now: the shared cross-section every segment
+## ends in (END_OVERLAP) showed there as a flat-topped block on both sides (Kirill, 2026-10-21:
+## "blocky chunks of terrain at the end of the first playable area"). So over their last
+## SIDE_ROW_END_TAPER m they come down to nothing, into the fog bank. TUNING.
+const SIDE_ROW_END_TAPER := 400.0
+
+## `inner`'s share of the height, brought down to 0 over the last SIDE_ROW_END_TAPER m before the
+## side rows' north end (`map_north_z` = the generated map's north edge, world z).
+static func _north_end_taper(v: Vector3, inner: Callable, map_north_z: float) -> float:
+	var end := float(TerrainCastle.LENGTH)
+	return float(inner.call(v)) * smoothstep(end, end - SIDE_ROW_END_TAPER, map_north_z - v.z)
+
+## ... or `base` raised by the floor of the valley's basin there (FAR_SIDE_ROWS; ValleyPath.basin,
+## `map_north_z` = the generated map's north edge, world z).
+static func _path_floor_lift(v: Vector3, base: float, map_north_z: float) -> float:
+	return base + ValleyPath.basin(map_north_z - v.z).z
+
+## Where a far side row's segment vertex goes (`scaled`: x = depth, y = height, z = along, m),
+## bent along the line through `points` with its middle `centre` m along it: `scaled.z` m further
+## along it (north on the low-X side, south on the high-X side, as the side rows have them), then
+## `scaled.x` m out sideways from the line there (outward) and `scaled.y` up. The line's direction
+## is taken over FAR_SIDE_STEP m either way, so the bend is smooth. (Laid straight, neighbouring
+## slices parted where the line turned and showed sky, and lengthened to overlap they cut into each
+## other -- Kirill, 2026-10-21.)
+static func _bend_on_line(scaled: Vector3, points: PackedVector3Array, walked: PackedFloat32Array, centre: float, side: int) -> Vector3:
+	var at := centre + (scaled.z if side == 0 else -scaled.z)
+	var point := _on_line(points, walked, at)
+	var north := _on_line(points, walked, at + FAR_SIDE_STEP) - _on_line(points, walked, at - FAR_SIDE_STEP)
+	north.y = 0.0
+	north = north.normalized()
+	var along_axis := north if side == 0 else -north
+	return point + Vector3.UP.cross(along_axis) * scaled.x + Vector3.UP * scaled.y
+
+## The point `distance` m along the line through `points` (`walked`: the line's length at each).
+static func _on_line(points: PackedVector3Array, walked: PackedFloat32Array, distance: float) -> Vector3:
+	if points.size() < 2:
+		return points[0]
+	# The first point at or past `distance` (binary search: called for every vertex bent along it).
+	var k := clampi(walked.bsearch(distance), 1, points.size() - 1)
+	var span := walked[k] - walked[k - 1]
+	return points[k - 1].lerp(points[k], clampf((distance - walked[k - 1]) / span, 0.0, 1.0) if span > 0.0 else 0.0)
 
 ## How much of its height a segment keeps at world position `v`: all of it ...
 static func _full_tall(_v: Vector3) -> float:
@@ -1670,8 +1745,10 @@ static func _edge_height(heights: PackedFloat32Array, at: float, fallback: float
 ## A MeshInstance3D holding `source` in world space: scaled by `scale` (x = depth, y = height --
 ## fading to x's value at both ends, z = along the wall), turned and moved by `xform`, and every
 ## vertex's height multiplied by `tall` and raised by `lift` (both called with the vertex's world
-## position). Normals are rebuilt from the finished surface.
-static func _place(source: Dictionary, xform: Transform3D, scale: Vector3, lift: Callable, tall: Callable) -> MeshInstance3D:
+## position). Normals are rebuilt from the finished surface. With `bend` valid, it places each
+## scaled vertex instead of `xform` (called with it: x = depth, y = height, z = along; returns the
+## world position): a segment bent along a curved line.
+static func _place(source: Dictionary, xform: Transform3D, scale: Vector3, lift: Callable, tall: Callable, bend := Callable()) -> MeshInstance3D:
 	var arrays: Array = (source.arrays as Array).duplicate()
 	var vertices: PackedVector3Array = (arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array).duplicate()
 	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
@@ -1679,7 +1756,8 @@ static func _place(source: Dictionary, xform: Transform3D, scale: Vector3, lift:
 	for i in vertices.size():
 		var local := vertices[i]
 		var y_scale := lerpf(scale.y, scale.x, smoothstep(half - END_BLEND, half - END_OVERLAP, absf(local.z)))
-		var v := xform * Vector3(local.x * scale.x, local.y * y_scale, local.z * scale.z)
+		var scaled := Vector3(local.x * scale.x, local.y * y_scale, local.z * scale.z)
+		var v: Vector3 = bend.call(scaled) if bend.is_valid() else xform * scaled
 		v.y = v.y * float(tall.call(v)) + float(lift.call(v))
 		vertices[i] = v
 	# Smooth normals: every triangle's (area-weighted) normal added to its three corners. Godot's

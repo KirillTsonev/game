@@ -20,7 +20,7 @@ extends RefCounted
 
 ## -- How many and where --
 const CANDIDATE_STEP := 8.0 ## m, jittered candidate grid
-const SWARM_P := 0.05 ## chance per candidate at full darkness (before the spacing test)
+const SWARM_P := 0.045 ## chance per candidate at full darkness (before the spacing test)
 const CANOPY_LO := 0.35 ## canopy cover below this -> not dark enough
 const CANOPY_HI := 0.8 ## cover above this -> full darkness
 const LOG_BONUS := 0.5 ## added to the darkness next to a log / stump (inside DEADFALL_REACH)
