@@ -92,6 +92,16 @@ const FAR_HAZE := 0.45 ## 0..1, how far the castle is veiled toward MountainWall
 const FAR_MIST_FULL := 40.0 ## m above its base: fully in mist at / below this ...
 const FAR_MIST_CLEAR := 260.0 ## ... and clear from this
 const FAR_SHADER_PATH := "res://shaders/far_landmark.gdshader"
+## Its own light, the only one in the dead land before it (Kirill, 2026-10-21: "if there will be
+## any glow it will come from the castle itself, and not be reflected on any fog"; the fog there
+## is darkened, FarEndView.DEAD_*): a faint sickly glow in its walls, strongest at its foot and
+## gone FAR_AURA_HEIGHT m up, swelling and sinking once every FAR_AURA_PERIOD s, never below
+## FAR_AURA_LOW of its peak (far_landmark.gdshader's aura_*). TUNING.
+const FAR_AURA_COLOR := Color(0.55, 0.85, 0.6)
+const FAR_AURA_STRENGTH := 0.6
+const FAR_AURA_HEIGHT := 500.0
+const FAR_AURA_PERIOD := 9.0
+const FAR_AURA_LOW := 0.35
 ## Its draw order against FarEndView's fog bank (render_priority 0). Positive = drawn after it:
 ## the castle and the rows behind it (MountainWalls, one below / above this) are the only things
 ## seen through the bank, rising out of it with their feet in mist of its colour (Kirill,
@@ -451,6 +461,12 @@ static func spawn_placeholder(parent_node: Node, terrain: Terrain3D, heightmap_c
 		far_material.set_shader_parameter("haze_amount", FAR_HAZE)
 		far_material.set_shader_parameter("mist_full_y", foot.y + FAR_MIST_FULL)
 		far_material.set_shader_parameter("mist_clear_y", foot.y + FAR_MIST_CLEAR)
+		far_material.set_shader_parameter("aura_color", FAR_AURA_COLOR)
+		far_material.set_shader_parameter("aura_strength", FAR_AURA_STRENGTH)
+		far_material.set_shader_parameter("aura_base_y", foot.y)
+		far_material.set_shader_parameter("aura_top_y", foot.y + FAR_AURA_HEIGHT)
+		far_material.set_shader_parameter("aura_period", FAR_AURA_PERIOD)
+		far_material.set_shader_parameter("aura_low", FAR_AURA_LOW)
 		far_material.render_priority = FAR_DRAW_ORDER
 		FarEndView.set_bank_shape(far_material, heightmap_corner)
 		material = far_material

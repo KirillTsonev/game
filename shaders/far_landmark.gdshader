@@ -18,6 +18,16 @@ uniform float haze_amount = 0.45;
 uniform float mist_full_y = 0.0;
 uniform float mist_clear_y = 200.0;
 uniform float mist_amount = 1.0;
+/// Its own light (TerrainCastle.FAR_AURA_*, 2026-10-21: the only light in the dead land before it,
+/// coming from the castle, not from the fog -- Kirill): a faint sickly glow in its surface,
+/// strongest at `aura_base_y` and gone at `aura_top_y`, swelling and sinking once every
+/// `aura_period` s, never below `aura_low` of its peak. 0 strength = none.
+uniform vec3 aura_color : source_color = vec3(0.55, 0.85, 0.6);
+uniform float aura_strength = 0.0;
+uniform float aura_base_y = 0.0;
+uniform float aura_top_y = 700.0;
+uniform float aura_period = 9.0;
+uniform float aura_low = 0.35;
 // Not drawn below the fog bank's top (bank_reveal), so the bank shows there instead.
 #include "res://shaders/fog_bank_top.gdshaderinc"
 
@@ -32,6 +42,11 @@ void fragment() {
 	float veil = 1.0 - (1.0 - haze_amount) * (1.0 - mist);
 	ALBEDO = albedo * (1.0 - veil);
 	EMISSION = mix(haze_color, mist_color, mist) * veil;
+	if (aura_strength > 0.0) {
+		float swell = 0.5 - 0.5 * cos(6.2832 * TIME / aura_period);
+		float height = 1.0 - smoothstep(aura_base_y, aura_top_y, world_pos.y);
+		EMISSION += aura_color * aura_strength * mix(aura_low, 1.0, swell * swell) * height * height;
+	}
 	ROUGHNESS = roughness;
 	SPECULAR = 0.5 * (1.0 - veil);
 	ALPHA = bank_reveal(world_pos);

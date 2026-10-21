@@ -47,16 +47,17 @@ uniform vec2 drift = vec2(-4.0, -2.0);
 uniform float billow_height = 35.0;
 uniform float billow_scale = 180.0;
 uniform vec2 billow_drift = vec2(-2.0, -1.0);
-/// Glows in the cloud, lighting it from inside (FarEndView.LAVA_GLOWS / ICE_GLOWS, 2026-10-21):
-/// up to 8. Each: `glow_points` = where (xyz) and how far its light spreads (w, m); `glow_looks`
-/// = its colour (rgb, linear) and strength (a); `glow_times` = how it behaves: x 0 = flashes (the
-/// lava zone's volcanoes, "like lightning shows through storm clouds" -- Kirill: a dull steady
-/// glow, glow_steady of a flash, plus flashes at its own irregular times), 1 = breathes (the ice
-/// zone: swells and fades over y s, z = its place in that cycle, 0..1, never below
-/// breathe_low); w = how far it wanders (m), slowly.
-uniform vec4 glow_points[8];
-uniform vec4 glow_looks[8];
-uniform vec4 glow_times[8];
+/// Glows in the cloud, lighting it from inside (FarEndView.LAVA_GLOWS / ICE_GLOWS /
+/// FURNACE_GLOWS, 2026-10-21): up to 12. Each: `glow_points` = where (xyz) and how far its light
+/// spreads (w, m); `glow_looks` = its colour (rgb, linear) and strength (a); `glow_times` = how it
+/// behaves: x 0 = flashes (the lava zone's volcanoes, "like lightning shows through storm clouds"
+/// -- Kirill: a dull steady glow, glow_steady of a flash, plus flashes at its own irregular
+/// times), 1 = breathes (the ice zone: swells and fades over y s, z = its place in that cycle,
+/// 0..1, never below breathe_low), 2 = beats (the farmland's furnaces: swells and sinks like slow
+/// bellows every y s from z on, never below 0.3); w = how far it wanders (m), slowly.
+uniform vec4 glow_points[12];
+uniform vec4 glow_looks[12];
+uniform vec4 glow_times[12];
 uniform int glow_count = 0;
 uniform float glow_steady = 0.08;
 uniform float breathe_low = 0.15;
@@ -68,6 +69,43 @@ uniform float breathe_shape_low = 0.25;
 uniform float flash_period = 2.5;
 uniform float flash_chance = 0.45;
 uniform float flash_decay = 6.0;
+/// The delta's glowing water under the cloud (FarEndView.DELTA_*, 2026-10-21: the flooded zone, its
+/// light moving where the lava's flashes and the ice's breathes): blue-green streaks stretched
+/// along the valley (`delta_scale` m across, 3.5 x that along), meandering, drifting toward +Z at
+/// `delta_flow` m/s, brighter deeper in and in the hollows between the puffs -- light from below.
+/// Within a box round `delta_centre` (world xz) of half size `delta_half` (m), softened over
+/// `delta_soft` m. 0 strength = none.
+uniform vec3 delta_color : source_color = vec3(0.2, 0.85, 0.7);
+uniform float delta_strength = 0.0;
+uniform vec2 delta_centre = vec2(0.0);
+uniform vec2 delta_half = vec2(500.0);
+uniform float delta_soft = 300.0;
+uniform float delta_scale = 220.0;
+uniform float delta_flow = 6.0;
+/// The farmland's lights under the cloud (FarEndView.FARM_*, 2026-10-21): lamplit farmsteads
+/// seen through the mist -- in a grid of `farm_cell` m cells, a share `farm_chance` of them holds
+/// a warm light `farm_radius` m across at a random spot in it, flickering gently and now and then
+/// out for a while. Worked out once per pixel where its ray crosses the top (per step, lights this
+/// small sparkled with the steps), shining from below. Within a box round `farm_centre` (world xz)
+/// of half size `farm_half` (m), softened over `farm_soft` m. 0 strength = none.
+uniform vec3 farm_color : source_color = vec3(1.0, 0.62, 0.28);
+uniform float farm_strength = 0.0;
+uniform vec2 farm_centre = vec2(0.0);
+uniform vec2 farm_half = vec2(500.0);
+uniform float farm_soft = 300.0;
+uniform float farm_cell = 150.0;
+uniform float farm_radius = 45.0;
+uniform float farm_chance = 0.45;
+/// The dead land before the castle (FarEndView.DEAD_*, 2026-10-21): no light of its own -- the
+/// cloud there is darker and colder, `dead_amount` (0..1) of its colour gone and the rest tinted
+/// `dead_tint`, so the castle's own light is the only one left (Kirill: "if there will be any glow
+/// it will come from the castle itself"). Within a box round `dead_centre` (world xz) of half size
+/// `dead_half` (m), softened over `dead_soft` m. 0 amount = none.
+uniform vec3 dead_tint : source_color = vec3(0.75, 0.8, 0.9);
+uniform float dead_amount = 0.0;
+uniform vec2 dead_centre = vec2(0.0);
+uniform vec2 dead_half = vec2(1000.0);
+uniform float dead_soft = 500.0;
 // 10 while the bank was about 1 km deep; it now reaches to the castle, about 4 km. The steps
 // are offset per pixel, so their spacing shows as grain, not as bands.
 const int STEPS = 32;
@@ -115,6 +153,41 @@ float glow_hash(float n) {
 	return fract(sin(n * 12.9898) * 43758.5453);
 }
 
+float cell_hash(vec2 c) {
+	return fract(sin(dot(c, vec2(127.1, 311.7))) * 43758.5453);
+}
+
+// The farm lights' light at xz (the nearest cells' lights: its own and the eight round it).
+vec3 farm_light_at(vec2 xz) {
+	if (farm_strength <= 0.0) {
+		return vec3(0.0);
+	}
+	vec2 off = abs(xz - farm_centre) - farm_half;
+	float inside = 1.0 - smoothstep(-farm_soft, farm_soft, max(off.x, off.y));
+	if (inside <= 0.0) {
+		return vec3(0.0);
+	}
+	vec2 home = floor(xz / farm_cell);
+	float sum = 0.0;
+	for (int dz = -1; dz <= 1; dz++) {
+		for (int dx = -1; dx <= 1; dx++) {
+			vec2 c = home + vec2(float(dx), float(dz));
+			float h = cell_hash(c);
+			if (h > farm_chance) {
+				continue;
+			}
+			vec2 spot = (c + 0.2 + 0.6 * vec2(cell_hash(c + 17.3), cell_hash(c + 41.7))) * farm_cell;
+			vec2 d = xz - spot;
+			// Out about a sixth of the time, at its own moments, fading over a few seconds.
+			float cycle = fract(TIME / (25.0 + h * 60.0) + h * 7.0);
+			float on = smoothstep(0.0, 0.04, cycle) * (1.0 - smoothstep(0.82, 0.86, cycle));
+			float flicker = 0.85 + 0.15 * sin(TIME * (2.0 + h * 5.0) + h * 40.0) * sin(TIME * (3.1 + h * 2.0) + h * 9.0);
+			sum += exp(-dot(d, d) / (farm_radius * farm_radius)) * on * flicker * (0.6 + 0.4 * cell_hash(c + 5.1));
+		}
+	}
+	return farm_color * farm_strength * inside * sum;
+}
+
 // How bright glow `seed`'s flash is at time t (0 between flashes): in each flash_period one may
 // start, at a random moment, die away fast, and now and then strike again a moment later.
 float flash(float t, float seed) {
@@ -138,9 +211,9 @@ void fragment() {
 	vec3 cam = CAMERA_POSITION_WORLD;
 	// Each glow's light this frame (its colour x strength x how bright it is now) and where it is
 	// now, once per pixel.
-	vec3 glow_now[8];
-	vec3 glow_at[8];
-	for (int k = 0; k < 8; k++) {
+	vec3 glow_now[12];
+	vec3 glow_at[12];
+	for (int k = 0; k < 12; k++) {
 		glow_now[k] = vec3(0.0);
 		glow_at[k] = glow_points[k].xyz;
 		if (k >= glow_count) {
@@ -150,9 +223,15 @@ void fragment() {
 		float bright;
 		if (times.x < 0.5) {
 			bright = glow_steady + flash(TIME, float(k) * 1.731 + 0.37);
-		} else {
+		} else if (times.x < 1.5) {
 			float breath = 0.5 - 0.5 * cos(6.2832 * (TIME / times.y + times.z));
 			bright = mix(breathe_low, 1.0, breath * breath);
+		} else {
+			// Swells over a third of its cycle and sinks over the rest: slow bellows. (A quick double
+			// pulse at first, read as flashes -- Kirill: "slower and softer".)
+			float beat_phase = fract(TIME / times.y + times.z);
+			float beat = beat_phase < 0.35 ? smoothstep(0.0, 0.35, beat_phase) : 1.0 - smoothstep(0.35, 1.0, beat_phase);
+			bright = 0.3 + 0.7 * beat;
 		}
 		glow_now[k] = glow_looks[k].rgb * glow_looks[k].a * bright;
 		// A slow wander: loops of a minute and more, each glow its own.
@@ -184,6 +263,7 @@ void fragment() {
 	float facing = -1.0; // worked out once, where the ray first meets cloud
 	float outside_t = enter; // the last place along the ray found outside the cloud
 	float through_front = 0.0; // 1 = the ray came into the cloud through its front, 0 = through its top
+	vec3 farm_light = vec3(0.0); // the farm lights under where the ray meets the cloud
 	for (int i = 0; i < STEPS; i++) {
 		float t = enter + (float(i) + jitter) * step_length;
 		vec3 p = cam + dir * t;
@@ -229,6 +309,7 @@ void fragment() {
 			vec2 front_slope = vec2(front_bulge(s.xy + vec2(e, 0.0)) - s_skin, front_bulge(s.xy + vec2(0.0, e)) - s_skin) / e;
 			float front_facing = clamp(0.5 + 0.5 * dot(normalize(vec3(-front_slope.x, -front_slope.y, 1.0)), moon_toward), 0.0, 1.0);
 			through_front = smoothstep(0.0, 30.0, before_under);
+			farm_light = farm_light_at(s.xz);
 			facing = mix(top_facing, front_facing, through_front);
 		}
 		// Seen through the front, the light under the top and the cloud's thinning toward it follow
@@ -245,12 +326,33 @@ void fragment() {
 		float lit_front = exp(-max(skin - p.z, 0.0) / light_depth);
 		float lit = mix(lit_top, max(lit_top, lit_front), through_front);
 		vec3 sample_colour = mix(fog_color, mix(shade_color, top_color, facing), lit);
+		if (dead_amount > 0.0) {
+			vec2 dead_off = abs(p.xz - dead_centre) - dead_half;
+			float dead = 1.0 - smoothstep(-dead_soft, dead_soft, max(dead_off.x, dead_off.y));
+			sample_colour = mix(sample_colour, sample_colour * dead_tint * (1.0 - dead_amount), dead);
+		}
 		for (int k = 0; k < glow_count; k++) {
 			vec3 d = p - glow_at[k];
 			// A breathing glow is shaded by the top's slope (`facing`), so the puffs' contours show
 			// through its light (added flat, it washed them out to one bright spot -- Kirill).
-			float shaped = glow_times[k].x > 0.5 ? breathe_shape_low + (1.0 - breathe_shape_low) * facing : 1.0;
+			float shaped = abs(glow_times[k].x - 1.0) < 0.5 ? breathe_shape_low + (1.0 - breathe_shape_low) * facing : 1.0;
 			sample_colour += glow_now[k] * shaped * exp(-dot(d, d) / (glow_points[k].w * glow_points[k].w));
+		}
+		sample_colour += farm_light * (0.3 + 0.7 * smoothstep(0.0, 120.0, under_seen)) * (1.0 - 0.5 * facing);
+		if (delta_strength > 0.0) {
+			vec2 off = abs(p.xz - delta_centre) - delta_half;
+			float inside = 1.0 - smoothstep(-delta_soft, delta_soft, max(off.x, off.y));
+			if (inside > 0.0) {
+				vec2 q = vec2(p.x, p.z - delta_flow * TIME);
+				float warp = texture(noise, q / (delta_scale * 6.0)).r - 0.5;
+				vec2 uv = vec2((q.x + warp * delta_scale * 2.0) / delta_scale, q.y / (delta_scale * 3.5));
+				float n = texture(noise, uv * 0.25).r * 0.6 + texture(noise, uv * 0.6 + vec2(0.3, 0.7)).r * 0.4;
+				float streak = smoothstep(0.5, 0.75, n);
+				float pulse = 0.75 + 0.25 * sin(TIME * 0.5 + q.y * 0.004);
+				float from_below = 0.3 + 0.7 * smoothstep(0.0, 120.0, under_seen);
+				float hollow = 1.0 - 0.6 * facing;
+				sample_colour += delta_color * delta_strength * inside * streak * pulse * from_below * hollow;
+			}
 		}
 		float absorbed = 1.0 - exp(-f * step_length);
 		colour += transmit * absorbed * sample_colour;

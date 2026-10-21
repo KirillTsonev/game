@@ -111,9 +111,9 @@ const LAVA_GLOWS: Array[Dictionary] = [
 	# turn, hardly seen from the spawn (Kirill).
 	{"along": 150.0, "x": -260.0, "up": 150.0, "radius": 400.0},
 ]
-## The shader's room for glows, lava and ice together (fog_bank.gdshader's arrays; its loops stop
-## at the count used). Lava's are taken first.
-const LAVA_GLOW_MAX := 8
+## The shader's room for glows, lava, ice and furnaces together (fog_bank.gdshader's arrays; its
+## loops stop at the count used). Taken in that order.
+const LAVA_GLOW_MAX := 12
 const LAVA_GLOW_COLOR := Color(1.0, 0.35, 0.08)
 const LAVA_GLOW_STRENGTH := 1.5 ## added to the cloud's colour at a flash's peak, at its middle
 const LAVA_GLOW_STEADY := 0.08 ## the dull glow between flashes, as a share of a flash
@@ -130,10 +130,11 @@ const LAVA_FLASH_DECAY := 6.0 ## 1/s: how fast a flash dies away
 ## "radius" (m). TUNING, all of it.
 const ICE_SECTION := 2
 const ICE_GLOWS: Array[Dictionary] = [
-	# On the valley's right side (Kirill; -150 / 200 / -50 at first, in its middle).
-	{"along": 200.0, "x": 280.0, "up": 100.0, "radius": 500.0, "period": 7.0, "phase": 0.0, "drift": 150.0},
-	{"along": 550.0, "x": 380.0, "up": 110.0, "radius": 550.0, "period": 9.0, "phase": 0.33, "drift": 200.0},
-	{"along": 900.0, "x": 320.0, "up": 100.0, "radius": 500.0, "period": 8.0, "phase": 0.66, "drift": 150.0},
+	# On the valley's right side (Kirill; -150 / 200 / -50 at first, in its middle, then 280 / 380 /
+	# 320). The floor's right edge is about 440 m out here: past it the top climbs, so they sit higher.
+	{"along": 200.0, "x": 430.0, "up": 110.0, "radius": 500.0, "period": 7.0, "phase": 0.0, "drift": 150.0},
+	{"along": 550.0, "x": 530.0, "up": 130.0, "radius": 550.0, "period": 9.0, "phase": 0.33, "drift": 200.0},
+	{"along": 900.0, "x": 470.0, "up": 120.0, "radius": 500.0, "period": 8.0, "phase": 0.66, "drift": 150.0},
 ]
 const ICE_GLOW_COLOR := Color(0.55, 0.85, 1.0)
 ## Added to the cloud's colour at a breath's peak, at its middle. (0.9 at first: overlapping, the
@@ -143,6 +144,58 @@ const ICE_GLOW_LOW := 0.15 ## between breaths, as a share of the peak
 ## On slopes of the cloud's top turned away from the moon, the glow's light as a share of its light
 ## on those facing it: the puffs' contours show in it. TUNING.
 const ICE_GLOW_SHAPE_LOW := 0.25
+## The fourth section is a flooded river delta (ValleyPath.SECTIONS[DELTA_SECTION]; Kirill,
+## 2026-10-21): glowing water under the cloud there, its light moving where the lava's flashes and
+## the ice's breathes (fog_bank.gdshader's delta_*): blue-green streaks along the valley, drifting
+## toward the start at DELTA_FLOW m/s, strongest deep in and in the hollows between the puffs.
+## Over the section, DELTA_REACH (x: m each way from its middle; y: m past each end), softened over
+## DELTA_SOFT m. TUNING, all of it.
+const DELTA_SECTION := 3
+const DELTA_COLOR := Color(0.2, 0.85, 0.7)
+const DELTA_STRENGTH := 0.8 ## (0.5 at first: "a bit brighter" -- Kirill)
+const DELTA_SCALE := 220.0 ## m across a streak's pattern (3.5 x that along the valley)
+const DELTA_FLOW := 6.0
+const DELTA_REACH := Vector2(500.0, 150.0) ## (x no longer used: DELTA_LEFT / DELTA_RIGHT)
+## How far it reaches left / right of the section's middle, m. (Centred 200 m left of it, 500 m
+## each way, then wider on the left: "some more lights on the left of the river glows" -- Kirill.)
+const DELTA_LEFT := 1000.0
+const DELTA_RIGHT := 300.0
+const DELTA_SOFT := 300.0
+## The fifth section is farmland and mills (ValleyPath.SECTIONS[FARM_SECTION]; Kirill, 2026-10-21):
+## man-made light, warm and orderly after the wild light before it. Farm lights
+## (fog_bank.gdshader's farm_*): lamplit farmsteads blurred through the mist, a share FARM_CHANCE of
+## FARM_CELL m cells holding one FARM_RADIUS m across, flickering gently and now and then out for
+## a while; over the section, FARM_REACH (x: m each way from its middle, y: m past each end).
+## Furnaces (FURNACE_GLOWS, glows of the lava's / ice's kind): mills and forges swelling and
+## sinking like slow bellows, once every "period" s. Each: "along" (m past the section's start), "x" (m
+## sideways from its middle), "up" (m above the basin's floor), "radius", "period", "phase" (0..1).
+## TUNING, all of it.
+const FARM_SECTION := 4
+const FARM_COLOR := Color(1.0, 0.62, 0.28)
+const FARM_STRENGTH := 1.2
+const FARM_CELL := 150.0
+const FARM_RADIUS := 45.0
+const FARM_CHANCE := 0.45
+const FARM_REACH := Vector2(550.0, 100.0)
+const FARM_SOFT := 250.0
+const FURNACE_GLOWS: Array[Dictionary] = [
+	# (Periods 2.4 / 3.0 / 2.7 s with a quick double pulse at first: read as flashes -- Kirill.)
+	{"along": 250.0, "x": -250.0, "up": 100.0, "radius": 330.0, "period": 4.5, "phase": 0.0},
+	{"along": 600.0, "x": 220.0, "up": 100.0, "radius": 330.0, "period": 5.5, "phase": 0.4},
+	{"along": 900.0, "x": -60.0, "up": 100.0, "radius": 300.0, "period": 5.0, "phase": 0.7},
+]
+## The last section, the castle's, is dead barren land (ValleyPath.SECTIONS[DEAD_SECTION]; Kirill,
+## 2026-10-21): no light in the cloud there -- it goes darker and colder (fog_bank.gdshader's
+## dead_*: DEAD_AMOUNT of its colour gone, the rest tinted DEAD_TINT), across DEAD_REACH (x: m
+## each way from the section's middle; y: m past each end), softened over DEAD_SOFT m. The only
+## light is the castle's own (TerrainCastle.FAR_AURA_*), "not reflected on any fog". TUNING.
+const DEAD_SECTION := 5
+const DEAD_TINT := Color(0.75, 0.8, 0.9)
+const DEAD_AMOUNT := 0.55
+const DEAD_REACH := Vector2(1600.0, 300.0)
+const DEAD_SOFT := 500.0
+const FURNACE_COLOR := Color(1.0, 0.45, 0.12)
+const FURNACE_STRENGTH := 1.2
 ## (10000 while the castle stood 4 km out; ValleyPath puts it about 6 km out, its rows up to 3 km
 ## behind it.)
 const CAMERA_FAR := 14000.0
@@ -297,6 +350,34 @@ static func _build_bank(heightmap_corner: Vector3) -> MeshInstance3D:
 			glows.append(Vector4(heightmap_corner.x + _MAP_MIDDLE + middle + float(glow.x), floor_y + basin_at(along).z + float(glow.up), heightmap_corner.z - along, float(glow.radius)))
 			looks.append(Vector4(ice.r, ice.g, ice.b, ICE_GLOW_STRENGTH))
 			times.append(Vector4(1.0, float(glow.period), float(glow.phase), float(glow.drift)))
+	if FARM_SECTION < ValleyPath.SECTIONS.size():
+		var furnace := FURNACE_COLOR.srgb_to_linear()
+		var farm_span: Vector2 = ValleyPath.spans()[FARM_SECTION]
+		var farm_mid := ValleyPath.at((farm_span.x + farm_span.y) * 0.5).x
+		for glow: Dictionary in FURNACE_GLOWS:
+			var along := farm_span.x + float(glow.along)
+			glows.append(Vector4(heightmap_corner.x + _MAP_MIDDLE + farm_mid + float(glow.x), floor_y + basin_at(along).z + float(glow.up), heightmap_corner.z - along, float(glow.radius)))
+			looks.append(Vector4(furnace.r, furnace.g, furnace.b, FURNACE_STRENGTH))
+			times.append(Vector4(2.0, float(glow.period), float(glow.phase), 0.0))
+		# The farm lights, over the section.
+		var farm_middle := (farm_span.x + farm_span.y) * 0.5
+		material.set_shader_parameter("farm_color", FARM_COLOR)
+		material.set_shader_parameter("farm_strength", FARM_STRENGTH)
+		material.set_shader_parameter("farm_centre", Vector2(heightmap_corner.x + _MAP_MIDDLE + farm_mid, heightmap_corner.z - farm_middle))
+		material.set_shader_parameter("farm_half", Vector2(FARM_REACH.x, (farm_span.y - farm_span.x) * 0.5 + FARM_REACH.y))
+		material.set_shader_parameter("farm_soft", FARM_SOFT)
+		material.set_shader_parameter("farm_cell", FARM_CELL)
+		material.set_shader_parameter("farm_radius", FARM_RADIUS)
+		material.set_shader_parameter("farm_chance", FARM_CHANCE)
+	# The dead land before the castle: the cloud darker and colder there.
+	if DEAD_SECTION < ValleyPath.SECTIONS.size():
+		var dead_span: Vector2 = ValleyPath.spans()[DEAD_SECTION]
+		var dead_middle := (dead_span.x + dead_span.y) * 0.5
+		material.set_shader_parameter("dead_tint", DEAD_TINT)
+		material.set_shader_parameter("dead_amount", DEAD_AMOUNT)
+		material.set_shader_parameter("dead_centre", Vector2(heightmap_corner.x + _MAP_MIDDLE + ValleyPath.at(dead_middle).x, heightmap_corner.z - dead_middle))
+		material.set_shader_parameter("dead_half", Vector2(DEAD_REACH.x, (dead_span.y - dead_span.x) * 0.5 + DEAD_REACH.y))
+		material.set_shader_parameter("dead_soft", DEAD_SOFT)
 	if glows.size() > LAVA_GLOW_MAX:
 		push_warning("TERRAIN_GEN: far end -- %d glows, the bank's shader takes %d: the rest left out" % [glows.size(), LAVA_GLOW_MAX])
 	var count := mini(glows.size(), LAVA_GLOW_MAX)
@@ -314,6 +395,17 @@ static func _build_bank(heightmap_corner: Vector3) -> MeshInstance3D:
 	material.set_shader_parameter("glow_steady", LAVA_GLOW_STEADY)
 	material.set_shader_parameter("breathe_low", ICE_GLOW_LOW)
 	material.set_shader_parameter("breathe_shape_low", ICE_GLOW_SHAPE_LOW)
+	# The delta's glowing water, over its section.
+	if DELTA_SECTION < ValleyPath.SECTIONS.size():
+		var delta_span: Vector2 = ValleyPath.spans()[DELTA_SECTION]
+		var delta_middle := (delta_span.x + delta_span.y) * 0.5
+		material.set_shader_parameter("delta_color", DELTA_COLOR)
+		material.set_shader_parameter("delta_strength", DELTA_STRENGTH)
+		material.set_shader_parameter("delta_centre", Vector2(heightmap_corner.x + _MAP_MIDDLE + ValleyPath.at(delta_middle).x + (DELTA_RIGHT - DELTA_LEFT) * 0.5, heightmap_corner.z - delta_middle))
+		material.set_shader_parameter("delta_half", Vector2((DELTA_LEFT + DELTA_RIGHT) * 0.5, (delta_span.y - delta_span.x) * 0.5 + DELTA_REACH.y))
+		material.set_shader_parameter("delta_soft", DELTA_SOFT)
+		material.set_shader_parameter("delta_scale", DELTA_SCALE)
+		material.set_shader_parameter("delta_flow", DELTA_FLOW)
 	material.set_shader_parameter("flash_period", LAVA_FLASH_PERIOD)
 	material.set_shader_parameter("flash_chance", LAVA_FLASH_CHANCE)
 	material.set_shader_parameter("flash_decay", LAVA_FLASH_DECAY)
