@@ -193,7 +193,7 @@ static func join_images(maps: Dictionary, hub_heights: PackedFloat32Array, regio
 	# The north apron: TerrainCastle.LENGTH rows of mountain north of the map, as wide as map + aprons. They come
 	# first in the image (row 0 = northmost), so the generated map's pixel (0, 0) is then that many
 	# rows in +Z from the corner Terrain3D reports (WorldGenerator adds it to heightmap_corner).
-	var castle := TerrainCastle.build_maps(height_bytes.slice(0, width * 4).to_float32_array(), color_bytes.slice(0, width * 4), width, master_seed)
+	var castle := TerrainCastle.build_maps(height_bytes.slice(0, width * 4).to_float32_array(), color_bytes.slice(0, width * 4), width, master_seed, control_bytes.slice(0, width * 4).to_int32_array())
 	var castle_heights: PackedByteArray = (castle.heights as PackedFloat32Array).to_byte_array()
 	castle_heights.append_array(height_bytes)
 	height_bytes = castle_heights

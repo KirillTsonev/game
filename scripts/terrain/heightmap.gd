@@ -610,7 +610,13 @@ static func build_heightmap(master_seed: int = TerrainConfig.MASTER_SEED) -> Dic
 	var mountain_foot := MountainWalls.raise_foot(heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, cliff_obstacle_mask, master_seed, 0)
 	var mountain_foot_right := MountainWalls.raise_foot(heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, cliff_obstacle_mask, master_seed, 1)
 	# 2026-10-09: and across the north end, where the mountain closes the valley (one entry per column).
-	var mountain_foot_north := MountainWalls.raise_foot(heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, cliff_obstacle_mask, master_seed, 2)
+	# Not with TerrainCastle.FAR_END (2026-10-21, Kirill: "we don't need the rock ridge at the old
+	# north, fog instead"): the valley runs on north into the fog that closes the section.
+	var mountain_foot_north := PackedFloat32Array()
+	if TerrainCastle.FAR_END:
+		MountainWalls.foot_lines[2] = PackedFloat32Array()
+	else:
+		mountain_foot_north = MountainWalls.raise_foot(heights, TerrainConfig.AREA_WIDTH, TerrainConfig.AREA_LENGTH, cliff_obstacle_mask, master_seed, 2)
 
 	# 2026-10-10: round the creases every stage above left (see round_creases). Last of the
 	# shaping, before the road, which grades its own bed. The knots' levels are flooded before and

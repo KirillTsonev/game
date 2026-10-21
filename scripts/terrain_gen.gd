@@ -380,6 +380,8 @@ func _ready() -> void:
 	# The mountain walls that carry the valley's slopes on beyond the map's edge (scenery only).
 	t_ready_stage = Time.get_ticks_msec()
 	MountainWalls.build(get_parent(), maps, heightmap_corner, resolved_seed)
+	# PROTOTYPE (TerrainCastle.FAR_END): the fog that closes the section, and the camera's reach.
+	FarEndView.spawn(get_parent(), heightmap_corner)
 	# The mountain strips are fitted to maps.heights: the terrain actually drawn must agree with it
 	# along both long edges, and step on smoothly 1 m outside them (the first metre of a strip
 	# continues the map's own grade, so the step there is at most that grade's 1.3 m).

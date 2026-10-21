@@ -170,6 +170,9 @@ static func _build_cloud_sheets(root: Node3D, heightmap_corner: Vector3, floor_y
 	var x_low := heightmap_corner.x - float(APRON_WIDTH) - CLOUD_SHEET_OVERRUN
 	var x_high := heightmap_corner.x + float(TerrainConfig.AREA_WIDTH + APRON_WIDTH) + CLOUD_SHEET_OVERRUN
 	for place in 3: # 0 = low-X side, 1 = high-X side, 2 = north end
+		# The north end's sheets go with its rows to the far end (TerrainCastle.FAR_END).
+		var far := place == 2 and TerrainCastle.FAR_END
+		var sheet_floor_y := floor_y + (TerrainCastle.FAR_RISE if far else 0.0)
 		for index in CLOUD_SHEETS.size():
 			var def: Dictionary = CLOUD_SHEETS[index]
 			var along_low := z_low if place < 2 else x_low
@@ -179,7 +182,9 @@ static func _build_cloud_sheets(root: Node3D, heightmap_corner: Vector3, floor_y
 			var quad := QuadMesh.new()
 			quad.size = Vector2(along_high - along_low, span * 1.6)
 			var material := ShaderMaterial.new()
-			material.shader = shader
+			material.shader = _fogless(shader) if far else shader
+			if far: # after the far rows and the castle, which they hang in front of or behind
+				material.render_priority = TerrainCastle.FAR_DRAW_ORDER + 2
 			material.set_shader_parameter("cloud_noise", _cloud_noise_texture())
 			material.set_shader_parameter("cloud_color", CLOUD_COLOR)
 			material.set_shader_parameter("cloud_amount", float(def.amount))
@@ -189,8 +194,8 @@ static func _build_cloud_sheets(root: Node3D, heightmap_corner: Vector3, floor_y
 			material.set_shader_parameter("along_axis", Vector3.BACK if place < 2 else Vector3.RIGHT)
 			material.set_shader_parameter("drift", CLOUD_SHEET_DRIFT)
 			material.set_shader_parameter("noise_offset", Vector2(rng.randf(), rng.randf()))
-			material.set_shader_parameter("bottom_y", floor_y + float(def.bottom))
-			material.set_shader_parameter("top_y", floor_y + float(def.top))
+			material.set_shader_parameter("bottom_y", sheet_floor_y + float(def.bottom))
+			material.set_shader_parameter("top_y", sheet_floor_y + float(def.top))
 			material.set_shader_parameter("end_low", along_low)
 			material.set_shader_parameter("end_high", along_high)
 			material.set_shader_parameter("end_fade", CLOUD_SHEET_END_FADE)
@@ -199,10 +204,10 @@ static func _build_cloud_sheets(root: Node3D, heightmap_corner: Vector3, floor_y
 			var sheet := MeshInstance3D.new()
 			sheet.mesh = quad
 			sheet.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			var centre_y := floor_y + (float(def.top) + float(def.bottom)) * 0.5
+			var centre_y := sheet_floor_y + (float(def.top) + float(def.bottom)) * 0.5
 			var along_centre := (along_low + along_high) * 0.5
 			if place == 2:
-				sheet.position = Vector3(along_centre, centre_y, heightmap_corner.z - float(def.out))
+				sheet.position = Vector3(along_centre, centre_y, heightmap_corner.z - float(def.out) - (TerrainCastle.FAR_SHIFT if far else 0.0))
 			else:
 				var x := heightmap_corner.x - float(def.out) if place == 0 else heightmap_corner.x + float(TerrainConfig.AREA_WIDTH - 1) + float(def.out)
 				sheet.position = Vector3(x, centre_y, along_centre)
@@ -548,6 +553,57 @@ const END_ROWS: Array[Dictionary] = [
 		"sources": ["horn", "alpine", "radial", "peak", "lake"], "size": 3.6, "length": 2.2, "out": 700.0, "base": 150.0, "height_min": 0.8, "height_max": 1.3, "haze": 0.55, "mist": 1.0, "mist_full": 800.0, "mist_clear": 1500.0, "detail_near": 160.0, "detail_far": 600.0},
 ]
 const END_ROW_MARGIN := 420.0
+## With TerrainCastle.FAR_END these rows (and the north cloud sheets) stand TerrainCastle.FAR_SHIFT
+## m further north on a level foot TerrainCastle.FAR_RISE m above (below) the valley floor, and are drawn
+## without the scene's fog: on top of its own haze each row is veiled this much more, standing in
+## for the fog of the distance. TUNING.
+const FAR_ROW_HAZE := 0.35
+## Also with FAR_END: the far ranges along both sides of the sections still to come (Kirill,
+## 2026-10-21: "even if we hide the valley zones' ridges, the farmost mountains could still be
+## visible"). Rows like ROWS' (same keys, no "out"), drawn like END_ROWS after the fog bank and
+## not below its top. Each side's runs on a slanting line: FAR_SIDE_OUT_FROM m out from the map's
+## edge at FAR_SIDE_FROM m north of its north edge (behind the side rows' far end), narrowing to
+## FAR_SIDE_OUT_TO m out FAR_SIDE_BEYOND_CASTLE m past the castle, where it meets END_ROWS (which
+## reach END_ROW_MARGIN + APRON_WIDTH, about 550 m, past each side of the map) -- so from the
+## valley the ranges run in to the peaks behind the castle (Kirill: "should connect with the ones
+## behind the castle"; a first version stood level 2000 m out and showed off to the sides). Their
+## foot ("base") rises with the bank's curve (FarEndView.curve_rise_at), so they climb toward the
+## castle with it. Picked from their own random stream (the other rows' and the cloud sheets'
+## picks stay as they were). TUNING.
+const FAR_SIDE_ROWS: Array[Dictionary] = [
+	{"sources": ["alpine", "rugged", "massif", "lake"], "size": 2.4, "length": 2.2, "base": 400.0, "height_min": 0.6, "height_max": 1.2, "haze": 0.5, "mist": 0.0, "mist_full": 0.0, "mist_clear": 1.0, "detail_near": 90.0, "detail_far": 350.0},
+]
+const FAR_SIDE_FROM := 0.0
+const FAR_SIDE_OUT_FROM := 1500.0
+const FAR_SIDE_OUT_TO := 500.0
+const FAR_SIDE_BEYOND_CASTLE := 600.0
+
+## A copy of `shader` that the scene's fog does not touch (for the far end, which carries its own
+## haze and must show through the fog that closes a section). Cached per shader.
+static var _fogless_shaders := {}
+static func _fogless(shader: Shader) -> Shader:
+	if not _fogless_shaders.has(shader):
+		var copy := Shader.new()
+		var regex := RegEx.create_from_string("render_mode ([^;]*);")
+		copy.code = regex.sub(shader.code, "render_mode $1, fog_disabled;")
+		_fogless_shaders[shader] = copy
+	return _fogless_shaders[shader]
+
+## The same, for an opaque shader that must be drawn after FarEndView's fog bank: moved into the
+## transparent pass (writing depth), where render_priority orders it, and not drawn below the
+## bank's top (fog_bank_top.gdshaderinc, uniforms set by FarEndView.set_bank_shape), or its foot
+## is painted over the fog. Appends to the last function, which must be fragment() and have
+## `world_pos`.
+static var _far_shaders := {}
+static func _far_drawn(shader: Shader) -> Shader:
+	if not _far_shaders.has(shader):
+		var copy := Shader.new()
+		var code := RegEx.create_from_string("render_mode ([^;]*);").sub(shader.code, "render_mode $1, fog_disabled, depth_draw_always;\n#include \"res://shaders/fog_bank_top.gdshaderinc\"")
+		var last := code.rfind("}")
+		copy.code = code.substr(0, last) + "\tALPHA = bank_reveal(world_pos);\n" + code.substr(last)
+		_far_shaders[shader] = copy
+	return _far_shaders[shader]
+
 ## A north row over the apron keeps this far above the apron's ground, from NORTH_DRAPE_RUN m
 ## behind its foot (at the foot itself it is sunk by SEAT_SINK, like every seated row).
 const NORTH_DRAPE_CLEAR := 1.5
@@ -666,8 +722,15 @@ static func build(parent_node: Node, maps: Dictionary, heightmap_corner: Vector3
 	parent_node.add_child.call_deferred(root)
 	# Behind the castle end: rows across the valley, their depth axis toward -Z (a quarter turn).
 	var end_span := float(TerrainConfig.AREA_WIDTH + 2 * APRON_WIDTH) + 2.0 * END_ROW_MARGIN
+	var far := TerrainCastle.FAR_END
+	var end_floor_y := floor_y + (TerrainCastle.FAR_RISE if far else 0.0)
+	var end_shader := _far_drawn(shader) if far else shader
 	for row_index in END_ROWS.size():
 		var row: Dictionary = END_ROWS[row_index]
+		if far:
+			row = row.duplicate()
+			row.haze = 1.0 - (1.0 - float(row.haze)) * (1.0 - FAR_ROW_HAZE)
+			row.mist = 1.0 # a flat foot on nothing: fully in mist, of the fog bank's colour
 		var pitch := (SEGMENT_LENGTH - END_OVERLAP) * float(row.length)
 		var count := maxi(1, roundi(end_span / pitch))
 		var spacing := end_span / float(count)
@@ -676,12 +739,23 @@ static func build(parent_node: Node, maps: Dictionary, heightmap_corner: Vector3
 			sources.append_array(loaded[source_name])
 		var materials: Array[ShaderMaterial] = []
 		for source in sources:
-			materials.append(_row_material(shader, source, row, floor_y))
+			var material := _row_material(end_shader, source, row, end_floor_y)
+			if far: # seen through FarEndView's fog bank, behind the castle (TerrainCastle.FAR_DRAW_ORDER)
+				material.render_priority = TerrainCastle.FAR_DRAW_ORDER - 1
+				material.set_shader_parameter("mist_color", FarEndView.BANK_COLOR)
+				FarEndView.set_bank_shape(material, heightmap_corner)
+			materials.append(material)
 		var seat_at: float = row.get("seat_at", -1.0) # m north of the map's edge, on the apron
 		var seated: bool = row.get("seat", false) or seat_at >= 0.0
 		var foot_north := seat_at if seat_at >= 0.0 else (float(TerrainCastle.LENGTH) - SEAT_OVERLAP if seated else float(TerrainCastle.LENGTH) + float(row.get("out", 0.0)))
-		var z := heightmap_corner.z - foot_north
-		var lift: Callable = _north_seat_lift.bind(heightmap_corner.x - float(MAP_OFFSET_X), z, heightmap_corner.z, TerrainCastle.north_row_heights(foot_north)) if seated else _level_lift.bind(floor_y + float(row.base))
+		var z := heightmap_corner.z - foot_north - (TerrainCastle.FAR_SHIFT if far else 0.0)
+		var lift: Callable
+		if far: # no terrain out there: a level foot, sunk in the row's mist
+			lift = _level_lift.bind(end_floor_y + float(row.get("base", -SEAT_SINK)))
+		elif seated:
+			lift = _north_seat_lift.bind(heightmap_corner.x - float(MAP_OFFSET_X), z, heightmap_corner.z, TerrainCastle.north_row_heights(foot_north))
+		else:
+			lift = _level_lift.bind(floor_y + float(row.base))
 		var fixed: Array = row.get("fixed", [])
 		var last_pick := -1
 		for i in count:
@@ -711,6 +785,55 @@ static func build(parent_node: Node, maps: Dictionary, heightmap_corner: Vector3
 			tris += int(sources[pick].tris)
 			placed += 1
 		summary.append("north row %d (%s): %d x %.0f m" % [row_index, " + ".join(row.sources), count, spacing])
+	if far:
+		var far_rng := RandomNumberGenerator.new()
+		far_rng.seed = master_seed ^ 0x46534944 # 'FSID'
+		var side_from_z := heightmap_corner.z - FAR_SIDE_FROM
+		var side_to_z := heightmap_corner.z + TerrainCastle.SITE_PX.y - TerrainCastle.FAR_SHIFT - FAR_SIDE_BEYOND_CASTLE
+		for side in 2:
+			# The line, from its south end (a) to its north end (b), and the segments' axes along it:
+			# depth (+X as cut) outward, along (+Z) south on the high-X side and north on the low-X
+			# side, as the side rows have them.
+			var edge_x := heightmap_corner.x if side == 0 else heightmap_corner.x + float(TerrainConfig.AREA_WIDTH - 1)
+			var outward := -1.0 if side == 0 else 1.0
+			var a := Vector3(edge_x + outward * FAR_SIDE_OUT_FROM, 0.0, side_from_z)
+			var b := Vector3(edge_x + outward * FAR_SIDE_OUT_TO, 0.0, side_to_z)
+			var line_length := a.distance_to(b)
+			var north := (b - a) / line_length
+			var along_axis := north if side == 0 else -north
+			var facing := Basis(Vector3.UP.cross(along_axis), Vector3.UP, along_axis)
+			for row_index in FAR_SIDE_ROWS.size():
+				var row: Dictionary = FAR_SIDE_ROWS[row_index].duplicate()
+				row.haze = 1.0 - (1.0 - float(row.haze)) * (1.0 - FAR_ROW_HAZE)
+				var pitch := (SEGMENT_LENGTH - END_OVERLAP) * float(row.length)
+				var count := maxi(1, roundi(line_length / pitch))
+				var spacing := line_length / float(count)
+				var sources: Array[Dictionary] = []
+				for source_name: String in row.sources:
+					sources.append_array(loaded[source_name])
+				var materials: Array[ShaderMaterial] = []
+				for source in sources:
+					var material := _row_material(end_shader, source, row, floor_y)
+					material.render_priority = TerrainCastle.FAR_DRAW_ORDER - 1
+					FarEndView.set_bank_shape(material, heightmap_corner)
+					materials.append(material)
+				var lift: Callable = _far_curve_lift.bind(floor_y + float(row.base), heightmap_corner)
+				var last_pick := -1
+				for i in count:
+					var pick := far_rng.randi_range(0, sources.size() - 1)
+					if pick == last_pick:
+						pick = (pick + 1 + far_rng.randi_range(0, sources.size() - 2)) % sources.size()
+					last_pick = pick
+					var origin := a + north * (float(i) + 0.5) * spacing
+					var scale := Vector3(float(row.size), float(row.size) * far_rng.randf_range(float(row.height_min), float(row.height_max)) * float(sources[pick].height), float(row.length) * spacing / pitch)
+					var instance := _place(sources[pick], Transform3D(facing, origin), scale, lift, _full_tall)
+					instance.material_override = materials[pick]
+					instance.name = "%s_far%d_%02d_%s" % ["Left" if side == 0 else "Right", row_index, i, sources[pick].name]
+					root.add_child(instance)
+					tris += int(sources[pick].tris)
+					placed += 1
+				if side == 0:
+					summary.append("far side row %d (%s): %d x %.0f m" % [row_index, " + ".join(row.sources), count, spacing])
 	_build_cloud_sheets(root, heightmap_corner, floor_y, rng)
 	if not FOG_ON_AT_START:
 		toggle_fog()
@@ -1413,6 +1536,10 @@ static func _ramp_height(d: float, edge_grade: float) -> float:
 
 static func _level_lift(_v: Vector3, base: float) -> float:
 	return base
+
+## ... or `base` raised by the fog bank's curve along the valley there (FAR_SIDE_ROWS).
+static func _far_curve_lift(v: Vector3, base: float, heightmap_corner: Vector3) -> float:
+	return base + FarEndView.curve_rise_at(v.z, heightmap_corner)
 
 ## How much of its height a segment keeps at world position `v`: all of it ...
 static func _full_tall(_v: Vector3) -> float:
