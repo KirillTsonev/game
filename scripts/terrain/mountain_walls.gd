@@ -172,6 +172,10 @@ static func _build_cloud_sheets(root: Node3D, heightmap_corner: Vector3, floor_y
 	for place in 3: # 0 = low-X side, 1 = high-X side, 2 = north end
 		# The north end's sheets go with its rows to the far end (TerrainCastle.FAR_END).
 		var far := place == 2 and TerrainCastle.FAR_END
+		# Not with the rows behind the castle unveiled (FAR_END_ROWS_VEILED false): drawn after the
+		# bank, these veils just above its top read as fog in front of it (Kirill, 2026-10-21).
+		if far and not FAR_END_ROWS_VEILED:
+			continue
 		var sheet_floor_y := floor_y + (TerrainCastle.FAR_RISE if far else 0.0)
 		for index in CLOUD_SHEETS.size():
 			var def: Dictionary = CLOUD_SHEETS[index]
@@ -558,6 +562,43 @@ const END_ROW_MARGIN := 420.0
 ## without the scene's fog: on top of its own haze each row is veiled this much more, standing in
 ## for the fog of the distance. TUNING.
 const FAR_ROW_HAZE := 0.35
+## false = the rows behind the castle (END_ROWS and FAR_FILL, with FAR_END) have no veil at all,
+## neither haze nor mist: clear rock above the bank (Kirill, 2026-10-21: "try removing the fog on
+## the mountains behind the castle"), and the north end's cloud sheets are left out. The bank
+## still hides them below its top. TRIAL.
+const FAR_END_ROWS_VEILED := false
+## Also with FAR_END: single slices placed by hand behind the castle, filling the sky left of,
+## between and right of END_ROWS' two pinned peaks (Kirill, 2026-10-21, drawn on a screenshot:
+## "just add a bunch of new mountain meshes"). Each: "slice" (a segment's name, from any source),
+## "x" (m from the castle in +X), "behind" (m north of the castle), "size" / "length" / "height"
+## (scale of depth, along, and height, as in the rows), "base" (m above the far end's floor,
+## TerrainCastle.FAR_RISE). Drawn like END_ROWS' far row, and its look (haze, mist). Same on every
+## seed. TUNING.
+const FAR_FILL: Array[Dictionary] = [
+	# Broad massifs, not spikes (Kirill: the alpine / peak slices first picked were "sharp spikes").
+	# Heights from Kirill's outline, seen from the hub's plateau: crests about 3300 m over the
+	# floor left and in the middle, 3100 m right -- near the pinned peaks' tops. Measured on his
+	# screenshot, these slices crest about 230 m over their foot per unit of size x height. Grown
+	# through "size" (even) more than "height" (a stretch: mountain_1_b at height 2.0 became a
+	# spike). (3.6 x 1.2-1.5 first: too low, the right one hidden entirely.)
+	{"slice": "mountain_lakes_211109_c", "x": -900.0, "behind": 1500.0, "size": 4.8, "length": 3.0, "height": 1.5, "base": 150.0},
+	{"slice": "rugged_mountain_c", "x": 0.0, "behind": 1500.0, "size": 4.8, "length": 3.0, "height": 1.5, "base": 150.0},
+	# The sides (Kirill: "current center looks good, can we add some more to the sides"): the right
+	# one was rugged_mountain_b at 4.8 x 1.35, which crested too low to clear the bank -- bigger
+	# now; one more on the left, further out. Rugged slices, broad: mountain_lakes_211109_a / _b
+	# were tried here and came out as spikes (Kirill).
+	{"slice": "rugged_mountain_b", "x": 950.0, "behind": 1500.0, "size": 6.0, "length": 3.0, "height": 1.35, "base": 150.0},
+	{"slice": "rugged_mountain_a", "x": -1300.0, "behind": 1500.0, "size": 6.0, "length": 3.0, "height": 1.3, "base": 150.0},
+]
+## They stand far behind where the bank's top stops rising, so the view to their lower parts
+## passes under the bank's top nearer the castle: drawn from there, those parts showed through the
+## bank in front of the castle (2026-10-21, a wider range tried at 1.8 km). So they are hidden up
+## to FAR_FILL_HIDE_ABOVE m over the bank's top and fully shown from FAR_FILL_SHOW_ABOVE m over it.
+## From the plateau, the view to a point 1.5 km behind the castle passes under the bank's top
+## (near the castle) below about 2200 m over the floor in the middle and 2800 m 900 m to the side,
+## where the top at the slice itself is about 1660 / 2200 m: hence about 550. (300 / 500 first.)
+const FAR_FILL_HIDE_ABOVE := 550.0
+const FAR_FILL_SHOW_ABOVE := 700.0
 ## Also with FAR_END: the far ranges along both sides of the sections still to come (Kirill,
 ## 2026-10-21: "even if we hide the valley zones' ridges, the farmost mountains could still be
 ## visible"). Rows like ROWS' (same keys, no "out"), drawn like END_ROWS after the fog bank and
@@ -729,8 +770,8 @@ static func build(parent_node: Node, maps: Dictionary, heightmap_corner: Vector3
 		var row: Dictionary = END_ROWS[row_index]
 		if far:
 			row = row.duplicate()
-			row.haze = 1.0 - (1.0 - float(row.haze)) * (1.0 - FAR_ROW_HAZE)
-			row.mist = 1.0 # a flat foot on nothing: fully in mist, of the fog bank's colour
+			row.haze = 1.0 - (1.0 - float(row.haze)) * (1.0 - FAR_ROW_HAZE) if FAR_END_ROWS_VEILED else 0.0
+			row.mist = 1.0 if FAR_END_ROWS_VEILED else 0.0 # a flat foot on nothing: fully in mist, of the fog bank's colour
 		var pitch := (SEGMENT_LENGTH - END_OVERLAP) * float(row.length)
 		var count := maxi(1, roundi(end_span / pitch))
 		var spacing := end_span / float(count)
@@ -834,6 +875,37 @@ static func build(parent_node: Node, maps: Dictionary, heightmap_corner: Vector3
 					placed += 1
 				if side == 0:
 					summary.append("far side row %d (%s): %d x %.0f m" % [row_index, " + ".join(row.sources), count, spacing])
+		# The hand-placed fill behind the castle: across the valley like END_ROWS (depth toward -Z).
+		var by_name := {}
+		for source_name: String in loaded:
+			for source: Dictionary in loaded[source_name]:
+				by_name[source.name] = source
+		var look: Dictionary = END_ROWS[END_ROWS.size() - 1].duplicate()
+		look.haze = 1.0 - (1.0 - float(look.haze)) * (1.0 - FAR_ROW_HAZE) if FAR_END_ROWS_VEILED else 0.0
+		look.mist = 1.0 if FAR_END_ROWS_VEILED else 0.0
+		var castle_x := heightmap_corner.x + TerrainCastle.SITE_PX.x
+		var castle_z := heightmap_corner.z + TerrainCastle.SITE_PX.y - TerrainCastle.FAR_SHIFT
+		for fill_index in FAR_FILL.size():
+			var fill: Dictionary = FAR_FILL[fill_index]
+			if not by_name.has(fill.slice):
+				push_warning("TERRAIN_GEN: far fill %d wants slice %s, which is not loaded -- skipped" % [fill_index, fill.slice])
+				continue
+			var source: Dictionary = by_name[fill.slice]
+			var material := _row_material(end_shader, source, look, end_floor_y)
+			material.render_priority = TerrainCastle.FAR_DRAW_ORDER - 1
+			material.set_shader_parameter("mist_color", FarEndView.BANK_COLOR)
+			FarEndView.set_bank_shape(material, heightmap_corner)
+			material.set_shader_parameter("bank_reveal_below", -FAR_FILL_HIDE_ABOVE)
+			material.set_shader_parameter("bank_reveal_above", FAR_FILL_SHOW_ABOVE)
+			var origin := Vector3(castle_x + float(fill.x), 0.0, castle_z - float(fill.behind))
+			var scale := Vector3(float(fill.size), float(fill.size) * float(fill.height) * float(source.height), float(fill.length))
+			var instance := _place(source, Transform3D(Basis(Vector3.UP, PI * 0.5), origin), scale, _level_lift.bind(end_floor_y + float(fill.base)), _full_tall)
+			instance.material_override = material
+			instance.name = "North_fill%02d_%s" % [fill_index, source.name]
+			root.add_child(instance)
+			tris += int(source.tris)
+			placed += 1
+		summary.append("far fill: %d slice(s) behind the castle" % FAR_FILL.size())
 	_build_cloud_sheets(root, heightmap_corner, floor_y, rng)
 	if not FOG_ON_AT_START:
 		toggle_fog()

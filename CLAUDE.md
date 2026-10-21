@@ -929,7 +929,8 @@ placed at`res://compositor_effects/`directly, every effect throws
   (`scripts/debug/animation_panel.gd`, see `docs/weapons.md`). Every other PerfDebug key named in these notes and in `docs/` (T, P,
   R, H, G, K, O, M, F1-F4, F6, F7, F9-F11) is gone; the code is in git up to commit `0c93048`.
   The functions they called (`MountainWalls.toggle_fog`, `RockScatter.debug_probe`, ...) are
-  still there. Free keys for new debug tools: E, F, U, Z, C, Tab, 1-0, F12 (and the old
+  still there. C (2026-10-21) puts the player on the castle's roof and back. Free keys for new
+  debug tools: E, F, U, Z, Tab, 3-0, F12 (and the old
   ones above), never F5 or F8.
 - User preference: do not call `take_screenshot` -- screenshots are
   user-provided only. Verify changes via console logs, diagnostic stats
