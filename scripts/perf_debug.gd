@@ -14,6 +14,8 @@ extends Node
 ##       (FireflyField.toggle_swarm_lights / toggle_glints, 2026-10-20).
 ##   C = to the castle's roof (TerrainCastle's placeholder block, far beyond the section with
 ##       FAR_END) and, pressed again, back to where the player was (2026-10-21).
+##   U = one enemy 8 m in front of the player, Shift+U = ten, Ctrl+U = remove them all
+##       (EnemyDirector, scripts/enemies/; 2026-10-21). The first U builds the enemies' grid.
 ## The benchmark (scripts/debug/perf_bench.gd) runs, then quits, when the game is launched with
 ## the user argument --bench [--bench-label=<name>]. Its F9 / F10 keys, and T, P, R, H, G, K, O,
 ## M, F1-F4, F6, F7, F11, were removed on 2026-10-14 (Kirill: "leave only Y, J, V"); they are in
@@ -70,6 +72,23 @@ func _teleport_to_castle() -> void:
 	if player is CharacterBody3D:
 		(player as CharacterBody3D).velocity = Vector3.ZERO
 
+## U: enemies in front of the player (Shift = ten), Ctrl+U: none.
+func _spawn_enemies(key: InputEventKey) -> void:
+	var director := EnemyDirector.ensure(get_tree())
+	if director == null:
+		print("[PerfDebug] no enemies before the world is built")
+		return
+	if key.ctrl_pressed:
+		director.clear()
+		return
+	var player := get_tree().current_scene.get_node_or_null("Player") as Node3D
+	if player == null:
+		return
+	var forward := -player.global_basis.z
+	forward.y = 0.0
+	var at := player.global_position + forward.normalized() * 8.0 if forward.length_squared() > 0.0001 else player.global_position
+	director.spawn_group(at, 10 if key.shift_pressed else 1)
+
 func _input(event: InputEvent) -> void:
 	if not (event is InputEventKey and event.pressed and not event.echo):
 		return
@@ -101,6 +120,8 @@ func _input(event: InputEvent) -> void:
 			print(fireflies.toggle_glints())
 	elif event.physical_keycode == KEY_C:
 		_teleport_to_castle()
+	elif event.physical_keycode == KEY_U:
+		_spawn_enemies(event as InputEventKey)
 	elif event.physical_keycode == KEY_V:
 		var player := get_tree().current_scene.get_node_or_null("Player")
 		if player:

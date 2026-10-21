@@ -113,6 +113,7 @@ func _ready() -> void:
 	var maps: Dictionary = cached.maps if not cached.is_empty() else TerrainHeightmap.build_heightmap(resolved_seed)
 	_debug_maps = maps # 2026-09-29 DEBUG (landmark capture / listing)
 	_debug_seed = resolved_seed
+	world_maps = maps
 	print("TERRAIN_GEN: heightmap build took %d ms (noise+erosion+smoothing+features+road, no I/O)" % (Time.get_ticks_msec() - t_start))
 	startup_timings.stage_ms["heightmap build"] = Time.get_ticks_msec() - t_start
 
@@ -205,6 +206,7 @@ func _ready() -> void:
 	# APRON_WIDTH columns (MountainWalls.apron_maps), and past the castle end, which takes its first
 	# TerrainCastle.LENGTH rows (TerrainCastle.build_maps).
 	var heightmap_corner := Vector3(min_region_x * region_size + MountainWalls.MAP_OFFSET_X, 0, min_region_z * region_size + TerrainCastle.LENGTH)
+	world_corner = heightmap_corner
 	# The import is padded with holes to whole regions on its +X side, beyond the high-X apron.
 	var padding_x := float(TerrainConfig.AREA_WIDTH + MountainWalls.APRON_WIDTH) + 32.0
 	print("TERRAIN_GEN: padding check -- hole beyond the high-X apron: %s (must be true), on the low-X apron: %s (must be false), just inside the map: %s (must be false)" % [
@@ -500,6 +502,10 @@ func _loading_step(index: int) -> void:
 ## Startup timings of this run, in ms: "stage_ms" (one entry per _log_stage call) plus the absolute
 ## timestamps since process start. Read by the benchmark (scripts/debug/perf_bench.gd).
 var startup_timings: Dictionary = {}
+## This run's maps (TerrainHeightmap.build_heightmap, plus "hub_heights") and the world position of
+## the generated map's pixel (0, 0). Read by EnemyGrid (scripts/enemies/enemy_grid.gd).
+var world_maps: Dictionary = {}
+var world_corner := Vector3.ZERO
 
 ## World cache (2026-10-10, Kirill: startup "takes around 30 seconds now and my laptop's fans go
 ## crazy"). The heightmap build and the joined terrain import (hub, aprons, north end) were about

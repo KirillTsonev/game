@@ -57,6 +57,11 @@ automatically) -- a local copy also lives at
   (detiling, ground paint, rock detail, macro variation -- a trial), what was found about
   Terrain3D's macro variation and iq's / Heitz-Neyret's techniques, and the options left
   (distance blend, iq's technique 3, the mountain shader) with their costs.
+- `docs/enemies.md` -- (2026-10-21) the rudimentary enemy system (`scripts/enemies/`): a 1 m
+  A* grid instead of a navmesh, a 0.333 s think tick, cell reservations instead of physics, where
+  the idea came from, Kirill's choices, the grid's blocking rules, measured costs, the debug keys
+  (PerfDebug U), limits and next steps. **A new scatter layer with collision must be added to
+  `EnemyGrid._block_obstacles`**, or enemies walk through it. Read before touching enemies.
 - This file stays the reference for pitfalls and _why_ things are done the way they are.
 
 ## Local tooling paths (this machine)
