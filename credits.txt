@@ -29,6 +29,7 @@ Khempavee - https://www.fab.com/sellers/Khempavee
 --- Code ---
 
 Ethan Truong - https://github.com/2Retr0/GodotGrass
+pintseeker - enemies https://old.reddit.com/r/IndieDev/comments/1wzwp8v/my_game_just_landed_2000_wishlists_in_its_first/
 
 --- Post-processing ---
 

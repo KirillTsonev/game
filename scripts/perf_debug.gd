@@ -16,6 +16,8 @@ extends Node
 ##       FAR_END) and, pressed again, back to where the player was (2026-10-21).
 ##   U = one enemy 8 m in front of the player, Shift+U = ten, Ctrl+U = remove them all
 ##       (EnemyDirector, scripts/enemies/; 2026-10-21). The first U builds the enemies' grid.
+##   Z = a blow on the shield while blocking (PlayerBody.block_hit, 2026-10-21): hold the right
+##       mouse button, press Z.
 ## The benchmark (scripts/debug/perf_bench.gd) runs, then quits, when the game is launched with
 ## the user argument --bench [--bench-label=<name>]. Its F9 / F10 keys, and T, P, R, H, G, K, O,
 ## M, F1-F4, F6, F7, F11, were removed on 2026-10-14 (Kirill: "leave only Y, J, V"); they are in
@@ -122,6 +124,10 @@ func _input(event: InputEvent) -> void:
 		_teleport_to_castle()
 	elif event.physical_keycode == KEY_U:
 		_spawn_enemies(event as InputEventKey)
+	elif event.physical_keycode == KEY_Z:
+		var body := get_tree().current_scene.get_node_or_null("Player/Body") as PlayerBody
+		if body:
+			body.block_hit() # only while blocking (right mouse held)
 	elif event.physical_keycode == KEY_V:
 		var player := get_tree().current_scene.get_node_or_null("Player")
 		if player:

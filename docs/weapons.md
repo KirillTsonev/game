@@ -21,6 +21,7 @@ Everything here was judged in game by Kirill unless a line says otherwise. The c
 10. Rules learnt, each from a fault
 11. Open items
 12. References: Skyrim, the Mixamo pack
+13. Attack and defence (2026-10-21)
 
 ## 1. The pieces
 
@@ -892,6 +893,10 @@ The probes (`tools/weapon_probes/`, kept out of the editor's scan by `.gdignore`
 | `arm_against_trunk_mesh.gd` | | The left arm against the trunk's own skinned mesh. |
 | `lantern_end_jump.gd` | `JANK` | Frame-by-frame steps of sword, shield, hands, eyes at the action's end. |
 | `draw_from_back.gd` | | The draw and the sheathing: the sword's mesh through it, the fist in the view. |
+| `combat.gd` | `COMBAT`, `COMBO` | Section 13: the swings, the block, the bash and the blows, either foot, per 1/20: sword's room to eyes, body, shield; shield's to eyes and body; the right forearm's to the trunk; wrist bend and forearm roll; tip and shield in the picture; the fastest tip and elbow step. Then a chained combo: the tip's step at each join. `-- --only=<text>`. |
+| `swing_search.gd` | `SEARCH` | REMOVED 2026-10-22 with the hand-keyed swings (in git before): it fitted each swing key's fist, elbow way and edge turn. |
+| `arm_lengths.gd` | `ARMS` | Our right arm's lengths, against the mod's (`tools/skyrim_reference/arm_lengths.py`). |
+| `stance_numbers.gd` | `STANCE` | Both stances in numbers: grip, shoulders, reach, blade, edge, palm, the shield's middle and face, where they are in the picture. |
 
 How a probe is built:
 
@@ -1044,3 +1049,232 @@ left arm and a combat crouch. Three are in the project and only their right arm 
 (`ARM_CLIPS`, `weapon_arm_from_clips`, off). The pack is made to be seen from outside: its
 idle holds the sword hand 0.2-0.4 m BEHIND the eyes, and the sword passes 0.15-0.2 m from
 them. Not usable as it is for first person.
+
+## 13. Attack and defence (2026-10-21)
+
+Kirill: "let's do some attack and defence animation", with the Sigma first-person shield clips
+(`raw-assets/animations/Skyrim - Shield animations - 1st person`) as the reference. His choices:
+keyed and measured (not the clips played), all four moves in the first pass, animation only (no
+hits yet). **Nothing here is judged in game yet.**
+
+### Controls
+
+- Left click: a swing, in the order of `SWING_ORDER` (since 2026-10-22 the vertical slashes:
+  down, then rising). A click from a swing's `"chain"` on starts the next at once from where the
+  blade is; an earlier one waits for that moment; a click with no swing playing always starts
+  with the first (the rising slash starts low, where the down slash ends).
+- Right mouse held: the block (`PlayerBody.blocking`, set by `player.gd`). Left click while
+  blocking: the bash.
+- Z (PerfDebug): a blow on the shield while blocking (`block_hit`). For enemy hits later.
+- While anything of this is on (`combat_busy`): no Q, no lantern, no fidgets.
+- The animation panel (I) lists the swings (`swing_down`, `swing_up`, `swing_up_diagonal`), `bash` (block held up) and
+  `block_hit_0..2`.
+
+### The reference, measured (`hkx.py`, nothing copied)
+
+The Sigma pack is 9 Skyrim clips for the shield arm only. From the camera:
+
+| Clip | What it does |
+|---|---|
+| Block idle | Shield's middle 0.45 m ahead, 18 deg left and 37 below the picture's middle, face ahead. |
+| Block anticipate | Pulls 10 cm toward the body over 0.5 s. |
+| Block hit (3) | Knocked 9 cm back and 4 down in 0.07 s, back by 0.8 s; variant A to the left and rolled, B down and in. Camera 1-2 deg. |
+| Bash (and power bash, the same clip) | Out to 60 deg left, edge-on, by 0.47 s; thrust to 0.65 m ahead in 0.13 s; held 0.1 s; back by 0.8 s. Camera about 3 deg. |
+
+The sword attacks came from Skyrim's own right attack (section 12): out to the right 0-0.27 s, cut
+across 0.27-0.5, follow-through to 0.9, back by 1.47. The one-handed stance mod (now in
+`raw-assets/animations/Skyrim - One handed sword`; `measure.py`'s path fixed for it) has only two-hit
+combat flourishes with spins, not single cuts.
+
+### How it runs (`scripts/player_body.gd`)
+
+- `SWINGS`: keys of [seconds, fist from the eyes, blade's way, edge's way, shoulder moved, view
+  turn / tilt, elbow way], the Player's axes, turned with the view's pitch as the stance is.
+  `_swing_pose` makes one smooth curve from the stance (or, chained, from `_combat_from`) through
+  them and back; the hand's turn goes through the keys as quaternions (`_through_turn`).
+  `_hold_weapon` adds it to the stance and solves the arm as usual (keep-off included), then
+  `_limit_swing_wrist` holds the wrist within `swing_wrist_max` of the stance's.
+- `BLOCK`, `BASH`, `BLOCK_HITS`: offsets of the shield stance's hand / shoulder, the forearm's roll
+  and the sword hand (the sword drawn back while blocking), summed each frame by
+  `_update_combat` and added in `_hold_shield` (as the shield fidgets' are). The block comes up
+  over `block_raise_time`, down over `block_lower_time`. A blow is an impulse peaking at
+  `"peak"` s, faded out over `"time"`.
+- The view's share (`_combat_pitch / _turn / _tilt`) is added in `view_offset()` only: the
+  camera turns a few degrees with a swing, a bash and a blow; the arms do not follow it.
+
+### What went wrong on the way (each found by `combat.gd`)
+
+- **Keyed by the blade alone, the wrist bent 50-140 deg**: the blade lay along the forearm. A hand
+  holds a blade at about 50-115 deg to the forearm; what moves it is the elbow's place. A
+  per-frame steering of the elbow (the point on its circle where the wrist bends least) fixed the
+  wrist but flipped the elbow 0.45 m in a frame and spun the forearm over 250 deg; made
+  continuous it no longer reached the keyed blades. So the fist, the edge and the elbow way of
+  every key are FOUND by `swing_search.gd` for the keyed blade, and keyed.
+- **Blade and edge interpolated as two vectors** ran nearly parallel on the way back from the
+  follow-through: the frame flipped and the tip jumped 1.4 m in a frame. Now one turn.
+- **The forehand's follow-through down to the left (as Skyrim's) cut through the shield's upper
+  half.** It ends level, 30 deg left of ahead, in front of the board (3.6 cm clear), and the
+  shield gives way 12 cm down and in (`"shield"`).
+- **A chained swing started 0.1 s into its curve** skipped the start of its way: the tip jumped
+  0.35-0.4 m at each join. Its clock now starts at `"chain_into"` with the curve there.
+- **"During swing backhand the elbow is bent the wrong way"** (Kirill, same day; the first thing
+  judged in game). Three causes, each measured by `combat.gd` (`hinge`, `twist`, `--trace=`):
+  1. `WeaponHold.solve_arm` turns the upper arm the shortest way and never rolls it, so the
+     forearm can fold about the elbow's hinge from the wrong side: 166 deg off the stance's hinge
+     in the backhand's wind-up (45 deg in the forehand). `_align_swing_elbow` rolls the upper arm
+     about its own line after each swing solve so the elbow folds about the stance's hinge, the
+     forearm and hand left where they were.
+  2. The keyed elbow ways were interpolated as directions; between two keys the way passed along
+     the shoulder-fist line and the elbow flipped 0.39 m in a frame. It now goes round that line
+     as an angle (`_elbow_angle` / `_elbow_way`), and a turn of more than 120 deg between keys
+     goes round the outside (to the right): the nearer way took the elbow across in front of the
+     chest, the shoulder turning the upper arm through 180 deg.
+  3. The backhand itself was palm down, the edge leading. With the blade ahead a palm-down right
+     hand needs the forearm across to the left: every pose the search found for it either swung
+     the elbow from over the shoulder to under the arm in 0.07 s, turned the upper arm 165 deg in
+     the shoulder, or the forearm over 120-160 deg. It is now the forehand's way run back, palm
+     up, the back edge leading (the sword is double-edged), wound up with the hand in front of the
+     chest and the blade cocked up to the left. Measured: hinge 0-2 deg off throughout, the
+     shoulder's turn of the upper arm -21..+26 deg (the forehand's up to 72), the elbow at most
+     6 cm a frame, the wrist at most 57 deg, sword to shield 2 cm, to body 8 cm, to eyes 0.30 m;
+     the shield gives way 14 cm down (`"shield"`) as the blade passes over its top edge.
+  `swing_search.gd` now also scores the shoulder's turn of the upper arm (`twist`, against the
+  stance's), a folded arm (bend over 135 deg) and the elbow way's change from the last key scaled
+  by how far the elbow is off the shoulder-wrist line; options `--previous=`, `--wide-edges`,
+  `--blade-cone=`, `--hard`, `--continuity=`, `--key=<swing>` (all its keys in order).
+
+### Measured (`combat.gd`, either foot)
+
+| Move | Tip fastest | Wrist | Sword to eyes / body / shield | Shield's middle |
+|---|---|---|---|---|
+| Forehand (1.1 s) | 19.5 m/s | 50 deg at most (stance 33) | 0.26 / 0.10 / 0.035 m | gives way to 51 left / 54 below |
+| Backhand (1.1 s; since the elbow fix) | 19.1 m/s | 57 | 0.30 / 0.08 / 0.02 | gives way 14 cm down |
+| Block | | | | 11 left / 36 below (stance 33 / 50), face ahead |
+| Bash (0.85 s) | | | | wound to 36 left, thrust to 3 left / 23 below, 0.60 m from the eyes |
+| Blows | | | | knocked about 5 deg, back within 0.6 s |
+| Combo joins | 1.6-2.1 cm in the join's frame | | | |
+
+The elbow moves at most 6 cm a frame in either swing. The right forearm comes within 0.27 m of
+the trunk's capsules (a hanging arm reads -0.03).
+
+### The vertical slashes (later the same day)
+
+Kirill: the combat is upgradeable -- first one enemy at a time (vertical slashes), then up to
+three (diagonal strikes), then all (wide horizontal ones), the stroke picked by how many enemies
+are in front. The forehand / backhand above "looked like hitting with a stick" and "scooping";
+`tools/skyrim_reference/attack_analysis.py` measured why against the Stances mod (raw-assets/
+animations/Skyrim - One handed sword): the mod's cuts lead with the true edge (+0.98..1.00),
+the arm drives the blade (the pivot 0.2-0.5 m behind the hand), the blade near the forearm's
+line (26-67 deg), a 0.08-0.2 s strike at 30-42 m/s and a hard stop; ours turned about the wrist
+(pivot 0.07 m), the blade square to the forearm (95 deg), the flat leading half the time. Run it
+on ours with `combat.gd -- --dump=<file>` and `attack_analysis.py --ours <file>`.
+
+- `swing_down` from the high stance's right attack (S_H_C/1hm_attackright), `swing_up` from the
+  second hit of S_M_C/_variants_1hm_attackleft/1hm_attackleft_3 (Kirill: combos may be broken
+  into single slashes); `SWING_ORDER` = down, up. Kirill: down then rising; hold 0.15 s.
+- The rising one leads with the BACK edge (a rising false-edge cut): the true edge would need the
+  hand turned over about 180 deg after the down slash.
+- **The handle turns in the fist** (`_grip_turn`, a key's 8th entry, `_socket_with_grip_turn`;
+  Kirill chose it over a more bent wrist, shallower slashes or re-posing the stance): our stance
+  holds the blade square to the forearm, so with the blade low ahead the wrist bent 52-88 deg.
+  60 deg at the bottom of both slashes; 0 elsewhere.
+- Every key fitted by `swing_search.gd` (`--hard --blade-cone --pivots`); the fist comes down
+  12-16 cm right of the middle (20-29 cm read as a diagonal: a vertical plane off to the side
+  looks slanted from the eyes; nearer the middle the cocked blade passes too close to the eyes).
+- Measured (`combat.gd`, either foot): down -- strike 0.12 s, 40 m/s, edge +0.92, plane 67 deg
+  (the mod's 88: the tip passes 21 deg right at the top of the arc, about 50 deg up, above the
+  picture), ends in the middle 46 deg down; sword to eyes 0.23 m, body 0.16, shield clear; the
+  shoulder turns the upper arm up to -77 deg at the hold. Up -- strike 0.11 s, 30 m/s, edge
+  -0.92 (back edge), plane 86 deg, 5-10 deg right of the middle; eyes 0.48, body 0.35. Combo
+  joins 0.5-7 cm.
+- Faults found on the way: the search's keyed-pose print failed when `--pivots` left out the
+  key's own turn and the headless run hung for an hour (now guarded; kill leftover Godot processes
+  after a timed-out probe -- `timeout` stops only the console wrapper); an edge carried over
+  pre-turned from an earlier search let the flat lead; a chained swing started at its first key's
+  own time skipped to that key (1.18 m in a frame) -- the start is now kept 0.05 s before it.
+
+### The vertical slashes as copied clips (2026-10-22)
+
+The keyed slashes raised the elbow over a hanging forearm at the bottom (Kirill's screenshots:
+"bends the elbow the wrong way", for both): the search had bought the wrist's comfort with it, and
+no probe measured it. `combat.gd` now prints `elbow_up` (cm the elbow is above the higher of
+shoulder and wrist; + = that look). Kirill then asked why not copy the mod's strokes, and the
+reasons against did not hold: our arms are drawn apart too (placed for the camera, the shoulder
+free), and the mod's first-person arm hardly stretches in these clips (upper arm 0.284-0.301 m,
+forearm 0.233-0.251, against our 0.285 / 0.280; `tools/skyrim_reference/arm_lengths.py`,
+`tools/weapon_probes/arm_lengths.gd`). Licence: fine (Kirill).
+
+- A SWINGS entry with `"clip"` plays an ArmClip window (`_clip_swing_pose`): shoulder, elbow's
+  way, wrist (scaled by our arm's length over the clip's), hand turn and the sword in the hand
+  from the clip, turned with the view; blended in from the stance or the last swing and out to the
+  stance; the elbow folded about the stance's hinge. Converted with `export_arm_clip.py` into
+  `assets/animations/first_person/stances_*.json`.
+- `swing_down`: S_H_C/1hm_attackright 0.27-0.82 s. `swing_up`: S_H_P/1hm_attackpowerforwardsprint
+  0.85-1.08 s -- Kirill pointed at the power attacks: that clip is the down slash, a dip and a
+  vertical rising cut with the back edge leading, ending with the blade upright. The keyed ones
+  stay as `swing_down_keyed` / `swing_up_keyed`; the mod's diagonal rising cut (true edge, 47 deg)
+  as `swing_up_diagonal` for the diagonal upgrade (its hold passes 12 cm from the eyes).
+- Measured against the mod (`attack_analysis.py --ours`): down -- 173 deg behind -> middle -> 50
+  below, plane 89 deg (mod 88), edge +1.00, pivot 0.17 m behind the hand (0.19), 46 m/s (36);
+  rising -- 33 below -> 34 above, 21-26 deg right, plane 86 (86), edge -1.00 (-1.00), 18 m/s (19).
+  `elbow_up` below zero throughout both. Sword to eyes: down 0.15 m while cocked (the blade
+  behind the head; the camera does not see it, the body's shadow might), up 0.59; body 0.10 /
+  0.20; shield clear. Chain joins 3 cm.
+
+**Removed the same day (Kirill):** the hand-keyed swings (`swing_down_keyed`, `swing_up_keyed`,
+`swing_forehand`, `swing_backhand`) with what only they used -- `_swing_pose`, the handle turn in
+the fist, the elbow-angle interpolation, the keyed swings' wrist limit (`swing_wrist_max`) and
+`tools/weapon_probes/swing_search.gd`. All in git before 2026-10-22. The notes above about them are
+history. Kept: the elbow's fold about the stance's hinge (`_align_swing_elbow`, used by the clip
+swings) and the idle hold's wrist (`_stance_wrist`, held through a dodge).
+
+**The head with the swings (same day; Kirill: "a head tilt when swinging sword, similar to how we
+do for shield bash and block"):** copied from the mod too. `export_arm_clip.py` records the
+camera's turn, nod and tilt against the clip's first frame (`"view"` per frame; `ArmClip.sample`
+returns it), and `_clip_swing_pose` adds it to the view (`_combat_pitch` / `_turn` / `_tilt`, as
+the bash and the blows do), blended in and out with the arm and from one swing into the next.
+`swing_head_follow` (1.0) scales it. Measured (`combat.gd`, the "view nods ..." line): down -- up
+2.7 deg while cocking, down 3.8 through the strike, tilt about 1 each way, turn under 1; rising --
+up from -2.4 to +0.9, tilt 0.3; diagonal -- turn 5, tilt 2.5; never more than 0.94 deg in a frame
+(the diagonal 1.7).
+
+**The down slash animated in Blender (same day):** `swing_down_blender`, a SWINGS entry with
+`"rig"` instead of `"clip"`, played from `fp_arms.glb` through an AnimationTree and read back as an
+ArmClip frame, so everything above applies to it. `swings_from_blender` (on) puts it in the click
+order in place of `swing_down`. The pipeline and its checks: `docs/blender_animation.md`.
+
+### The arms in a dodge (2026-10-22)
+
+Kirill: "add the dodge/dash animations to the sword, the ones we have on double tap", "a dodge
+from idle holding into idle holding". With the weapons drawn, a dash also plays the mod's
+first-person dodge (`dodge_neutral`: back, left, right; forward = its forward roll's arms) on both
+arms, as a CHANGE on our idle hold (`DODGE_ARMS`, `_dodge_delta`): the clip's wrist move, hand turn
+and elbow turn since its first frame. `dodge_arm_time` 0.7 s (the clips 1.0 / 1.17 s; the dash
+0.4). The block, a bash or a blow fade the shield arm's share out in 0.1 s, a swing the sword
+arm's. Converted with `export_arm_clip.py` (`--left` for the shield arm) into
+`assets/animations/first_person/dodge/`. `combat.gd -- --only=dodge`.
+- The wrist is held as in the idle hold through a dodge: the clip's hand turn added whole bent our
+  wrist 33 -> 87 deg (the mod's straightens 44 -> 3-22: its hand turn is mostly the forearm
+  swinging); split into forearm and wrist shares by shortest turns it reached 110 and the blade
+  came 7 cm from the eyes.
+- Measured, either foot: the blade dips 10-23 deg in the picture and back, the sword 0.66 m or more
+  from the eyes, 0.30 from the body, the shield clear; lands within 1-3 cm of where it left. The
+  tip moves up to 0.26 m in a frame as the hop starts; the elbow rises up to 7 cm over the shoulder
+  for a moment in the right dodge.
+
+### Open
+
+- Not judged in game: the arms' dodges.
+- Not judged in game: the copied vertical slashes. The keyed ones' handle turn is no longer played.
+- Not judged in game: the vertical slashes; the handle turning 60 deg in the fist may show at the
+  fist's edges at the bottom.
+- Not judged in game: how the swings, the block and the bash look and feel; their timings
+  (`"time"`, key seconds) are first guesses from Skyrim's.
+- No hits: `"hit"` in `SWINGS` / `BASH` marks when the blade or board could hit, for the next step
+  (a sweep test against `scripts/enemies/`).
+- A chained swing starts from rest (its curve is flat at its start), so a combo has a short
+  beat at each join instead of carrying the speed on.
+- The swings have no room test (`FIDGET_ROOMS`): a wall in front does not stop a swing.
+- Moving while blocking is as fast as without.
+- Fitted to this sword and shield (section 8): every key's fist, edge and elbow way, the block's
+  offsets, the forehand's follow-through.

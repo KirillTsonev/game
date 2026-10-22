@@ -144,7 +144,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	# Q = weapon up / down (into combat and out of it): drawn from the back, sheathed onto it.
 	# Not while the hands are at the lantern.
-	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_Q and body and not body.turning_lantern():
+	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_Q and body and not body.turning_lantern() and not body.combat_busy():
 		body.weapon_raised = not body.weapon_raised
 
 	# Shift = sprint on/off, Ctrl = crouch on/off, Space while crouched = stand up (no jump).
@@ -175,6 +175,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and body:
 			body.attack() # a click that only takes the cursor back is not a swing
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	# Right mouse held = the shield up in the block (PlayerBody.blocking), only with the cursor captured.
+	if body and event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
+		body.blocking = event.pressed and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 
 ## Plain, standard CharacterBody3D FPS pattern (the same shape used by
 ## Godot's own demos/docs) -- gravity only while not on the floor, WASD

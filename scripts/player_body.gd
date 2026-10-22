@@ -458,6 +458,45 @@ var _fidget_dip: float = 0.0 ## radians of _view_dip the drawn weapons do NOT fo
 var _fidget_rest: float = 0.0 ## 0-1: how far a "rest" fidget has the blade on the shoulder (the keep-off is let go by as much)
 var _fidget_hang: Vector3 = Vector3.DOWN ## from the hook to the lantern's middle before lantern_look lifts it
 var _lantern_spin: float = 0.0 ## radians the lantern is turned about its own long axis just now (lantern_look)
+var _combat: StringName = &"" ## the swing (SWINGS) or &"bash" playing, or none
+var _combat_at: float = 0.0 ## seconds into it
+var _combat_queued: StringName = &"" ## a swing clicked for before the playing one's "chain"
+var _combat_driven: bool = false ## the animation debug panel sets its time
+var _block: float = 0.0 ## 0-1: how far the shield is up in the block
+var _block_driven: bool = false ## the animation debug panel holds the block up
+var _hit_at: float = -1.0 ## seconds into a blow on the shield (BLOCK_HITS), or -1
+var _hit_index: int = -1
+var _hit_driven: bool = false
+var _combat_shield_hand: Vector3 = Vector3.ZERO ## this frame's block / bash / hit / counterweight, added to the shield stance (m, its axes)
+var _combat_shield_shoulder: Vector3 = Vector3.ZERO
+var _combat_shield_roll: float = 0.0 ## radians, + = the face toward the eyes
+var _combat_sword: Vector3 = Vector3.ZERO ## added to the sword stance's fist (m, the Player's axes, turned with the view)
+var _combat_pitch: float = 0.0 ## the view's share (radians; pitch + = up, turn + = right, tilt + = left ear down)
+var _combat_turn: float = 0.0
+var _combat_tilt: float = 0.0
+var _stance_wrist: Quaternion = Quaternion.IDENTITY ## the right hand's turn on the forearm in the stance (held through a dodge)
+var _stance_wrist_set: bool = false
+var _stance_hinge: Vector3 = Vector3.ZERO ## the axis the right elbow folds about in the stance, in the upper arm bone's axes
+var _arm_clips: Dictionary = {} ## path -> ArmClip (null when missing), for the clip swings
+## The Blender rig (_rig_ready): fp_arms.glb instanced hidden under the Body, played by an AnimationTree.
+var _rig: Node3D = null
+var _rig_skeleton: Skeleton3D
+var _rig_tree: AnimationTree
+var _rig_playback: AnimationNodeStateMachinePlayback
+var _rig_bones: Dictionary = {} ## name -> bone index in the rig
+var _rig_hand_rest := Basis.IDENTITY ## the right hand bone's rest the rig was built from (eyes' space)
+var _rig_socket := Transform3D.IDENTITY ## the sword's socket the rig was built with (hand bone's axes)
+var _rig_state: StringName = &"" ## the clip last started or travelled to (&"" = start afresh)
+var _rig_time: float = 0.0 ## where the tree is in that clip
+var _rig_chained: bool = false ## this swing cross-fades from the last in the tree, not in _clip_mix
+var _clip_socket: Transform3D = Transform3D.IDENTITY ## the sword in the hand as a clip swing has it this frame
+var _clip_socket_on: bool = false
+var _clip_last: Dictionary = {} ## a clip swing's pose this frame, in the view's own terms (_clip_swing_pose)
+var _clip_from: Dictionary = {} ## the pose a chained clip swing blends in from; empty = the stance
+var _dodge_arm: String = "" ## the dodge the arms play (DODGE_ARMS' direction), or none
+var _dodge_arm_at: float = 0.0 ## seconds into it
+var _dodge_sword_mute: float = 0.0 ## 0-1: how far the sword arm's dodge is faded out (a swing took the arm)
+var _dodge_shield_mute: float = 0.0 ## the same for the shield arm (the block, a bash, a blow)
 var _shield_tug: Vector3 = Vector3.ZERO ## how far the strap fidget's tug moves the shield just now (the Player's axes)
 var _brush_line: Array = [] ## brush_off's line once the arm is up: [start, end, start + the way off the surface], in the board's (or forearm's) own space
 var _brush_into: Vector3 = Vector3.ZERO ## brush_off: the way into the surface brushed, last frame (the Player's axes)
@@ -800,6 +839,29 @@ var _room_box: BoxShape3D
 ## markers, as before. The fingers are the stance's either way.
 @export var weapon_arm_from_reference: bool = false
 @export_file("*.json") var weapon_reference_clip: String = "res://assets/animations/first_person/sword_neutral_idle.json"
+@export_group("Combat")
+## Held by the Player while the right mouse button is down: the shield up in the block (BLOCK).
+@export var blocking: bool = false
+## Seconds to bring the shield up into the block, and to let it down again.
+@export var block_raise_time: float = 0.18
+@export var block_lower_time: float = 0.3
+## How much of the mod's head movement a swing adds to the view (its camera's turn, nod and tilt
+## through the clip; _clip_swing_pose): 1 = as the mod has it -- the down slash nods about 3 deg
+## up while cocking and 4 down through the strike, tilting about 1 deg each way; the rising one
+## comes up about 5 deg. 0 = none.
+@export var swing_head_follow: float = 1.0
+## The arms react to a dash with the weapons drawn (DODGE_ARMS).
+@export var dodge_arms: bool = true
+## Seconds the arms' dodge takes (the mod's clips are 1.0 s, the forward roll 1.17; the dash
+## itself 0.4): sped up so the main reaction falls in the dash and the arms settle back into the
+## idle hold after it.
+@export var dodge_arm_time: float = 0.7
+## The down slash animated in Blender (swing_down_blender, played from fp_arms.glb through an
+## AnimationTree; docs/blender_animation.md) instead of the copied ArmClip one (swing_down). The
+## pilot of the Blender pipeline: switch to compare.
+@export var swings_from_blender: bool = true
+## Seconds one Blender clip cross-fades into the next when chained (the AnimationTree's transitions).
+@export var rig_crossfade: float = 0.1
 @export_group("")
 var _skeleton: Skeleton3D
 var _animations: AnimationPlayer
@@ -969,6 +1031,7 @@ func _ready() -> void:
 	_model.add_child(_arm_animations)
 	_arm_animations.add_animation_library(&"", arm_library)
 	_arm_animations.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
+	_rig_ready() # the Blender rig now, not at the first click
 
 ## body_specular onto every material of the model (they are shared by its meshes; the files
 ## are not written).
@@ -1113,6 +1176,9 @@ func start_dash(local_direction: Vector3, duration: float) -> void:
 	elif local_direction.z > 0.0:
 		clip = &"dash_bwd"
 	var part: Array = DASH_PARTS[clip]
+	if dodge_arms and _weapon_node != null and _weapon_up >= 1.0 and not _weapon_on_back:
+		_dodge_arm = DODGE_ARMS[clip]
+		_dodge_arm_at = 0.0
 	_dash_left = duration
 	_turn_wanted = 0.0
 	_clip = clip
@@ -1193,7 +1259,7 @@ func set_motion(local_velocity: Vector3, on_floor: bool, crouching: bool, sprint
 ## its fist. See _place_lantern.
 func toggle_lantern() -> void:
 	# Not in the air (a jump, a fall): the press is dropped, nothing happens.
-	if _toggle_at >= 0.0 or _lantern_light == null or not _was_on_floor or (_weapon_node != null and _weapon_up > 0.0 and _weapon_up < 1.0):
+	if _toggle_at >= 0.0 or _lantern_light == null or not _was_on_floor or (_weapon_node != null and _weapon_up > 0.0 and _weapon_up < 1.0) or combat_busy():
 		return
 	_toggle_at = 0.0
 	_toggle_shield_roll = 0.0
@@ -1226,7 +1292,10 @@ func view_offset() -> Vector3:
 	if weapon_sheath_on_back and _weapon_node != null and _stance != null and _weapon_up > 0.0 and _weapon_up < 1.0:
 		# Most at the moment the hand grips the weapon on the back.
 		lean = smoothstep(0.0, weapon_draw_grab, _weapon_up) * (1.0 - smoothstep(weapon_draw_grab, 1.0, _weapon_up))
-	return Vector3(_view_dip, -deg_to_rad(toggle_turn_degrees) * _toggle_view - _fidget_turn + deg_to_rad(weapon_draw_head_turn) * lean,-deg_to_rad(toggle_roll_degrees) * _toggle_view + deg_to_rad(weapon_draw_head_tilt) * lean + _fidget_tilt)
+	# The combat moves' share (a swing's and a bash's turn and tilt, a blow's jolt) is the camera's
+	# alone: the weapons stay as the Player looks.
+	return Vector3(_view_dip + _combat_pitch, -deg_to_rad(toggle_turn_degrees) * _toggle_view - _fidget_turn + deg_to_rad(weapon_draw_head_turn) * lean - _combat_turn,
+			-deg_to_rad(toggle_roll_degrees) * _toggle_view + deg_to_rad(weapon_draw_head_tilt) * lean + _fidget_tilt + _combat_tilt)
 
 ## One frame of turning the lantern on / off: the light, the view, the body's bend.
 func _advance_toggle(delta: float, camera_pitch: float) -> void:
@@ -1319,6 +1388,7 @@ func advance(delta: float, camera_pitch: float) -> void:
 	_eye_valid = true
 	_breathe(player, delta)
 	_update_fidget(delta)
+	_update_combat(delta)
 	_hold_weapon(player, delta) # before the lantern: the reach to it sets off from this pose
 	_hold_shield(player, delta)
 	_place_lantern(player, delta)
@@ -1326,7 +1396,7 @@ func advance(delta: float, camera_pitch: float) -> void:
 	if _weapon_node and _weapon_on_back:
 		_weapon_node.global_transform = _skeleton.global_transform * _skeleton.get_bone_global_pose(_chest_bone) * WeaponHold.in_hand(_back_socket(), weapon)
 	elif _weapon_node:
-		_weapon_node.global_transform = _skeleton.global_transform * _skeleton.get_bone_global_pose(_arms["Right"]["hand"]) * WeaponHold.in_hand(_weapon_socket, weapon)
+		_weapon_node.global_transform = _skeleton.global_transform * _skeleton.get_bone_global_pose(_arms["Right"]["hand"]) * WeaponHold.in_hand(_socket_now(), weapon)
 	if _shield_node:
 		_shield_node.global_transform = _skeleton.global_transform * _skeleton.get_bone_global_pose(_shield_bone) * WeaponHold.in_hand(_shield_now, shield)
 		if _shield_tug.length_squared() > 0.0:
@@ -1392,7 +1462,7 @@ func _pose_shadow_arms() -> void:
 		if _weapon_on_back:
 			_weapon_shadow.global_transform = _weapon_node.global_transform
 		else:
-			_weapon_shadow.global_transform = _shadow_skeleton.global_transform * _shadow_skeleton.get_bone_global_pose(_arms["Right"]["hand"]) * WeaponHold.in_hand(_weapon_socket, weapon)
+			_weapon_shadow.global_transform = _shadow_skeleton.global_transform * _shadow_skeleton.get_bone_global_pose(_arms["Right"]["hand"]) * WeaponHold.in_hand(_socket_now(), weapon)
 	if _shield_shadow:
 		_shield_shadow.global_transform = _shadow_skeleton.global_transform * _shadow_skeleton.get_bone_global_pose(_shield_bone) * WeaponHold.in_hand(_shield_now, shield)
 
@@ -1523,14 +1593,430 @@ func _advance_arm(delta: float) -> void:
 		_arm_animations.play(&"sword_idle")
 	_arm_animations.advance(delta)
 
-## A swing of the held weapon (the Player's left click). One at a time; the arm goes back to
-## its idle after it.
+## The Player's left click: a swing of the held weapon, or with the shield up a bash. Swings
+## alternate (SWING_ORDER); a click late in one (its "chain" on) starts the next from where the
+## blade is, an earlier one waits for that moment. With weapon_arm_from_clips: the sword pack's
+## clips instead, one at a time.
 func attack() -> void:
-	if _weapon_node == null or not weapon_arm_from_clips or _arm_animations.current_animation in ARM_SWINGS:
+	if weapon_arm_from_clips:
+		if _weapon_node == null or _arm_animations.current_animation in ARM_SWINGS:
+			return
+		_arm_animations.play(ARM_SWINGS[_swing_next % ARM_SWINGS.size()], weapon_arm_blend)
+		_arm_animations.queue(&"sword_idle")
+		_swing_next += 1
 		return
-	_arm_animations.play(ARM_SWINGS[_swing_next % ARM_SWINGS.size()], weapon_arm_blend)
-	_arm_animations.queue(&"sword_idle")
+	if not _can_fight():
+		return
+	if blocking and _shield_ready() and _block > 0.5:
+		if _combat == &"":
+			_combat = &"bash"
+			_combat_at = 0.0
+		return
+	if _combat == &"bash":
+		return
+	if _combat == &"":
+		# A click with no swing playing starts the order again: the rising slash starts low, where
+		# the down slash ends, and from the stance it first flicked the blade down at 35 m/s.
+		_swing_next = 0
+	var order := _swing_order()
+	var next: StringName = order[_swing_next % order.size()]
+	if _combat == &"":
+		_start_swing(next, false)
+	elif _combat_at >= float((SWINGS[_combat] as Dictionary)["chain"]):
+		_start_swing(next, true)
+	else:
+		_combat_queued = next
+
+## SWING_ORDER, with the Blender down slash in place of the copied one (swings_from_blender).
+func _swing_order() -> Array[StringName]:
+	var order := SWING_ORDER.duplicate()
+	if swings_from_blender:
+		order[order.find(&"swing_down")] = &"swing_down_blender"
+	return order
+
+func _start_swing(swing_name: StringName, chained: bool) -> void:
+	# From one Blender clip into another the tree cross-fades; anything else blends in _clip_mix.
+	_rig_chained = chained and SWINGS.has(_combat) and (SWINGS[_combat] as Dictionary).has("rig") and (SWINGS[swing_name] as Dictionary).has("rig")
+	if not _rig_chained:
+		_rig_state = &""
+	_clip_from = _clip_last.duplicate() if chained and not _clip_last.is_empty() and not _rig_chained else {}
+	_combat = swing_name
+	_combat_at = 0.0 # it blends in from wherever the arm is (_clip_from)
+	_combat_queued = &""
 	_swing_next += 1
+	interrupt_fidget()
+
+## The shield hit while blocking (an enemy's blow; for now PerfDebug Z): it is knocked back and
+## recovers, the view jolts. One of BLOCK_HITS, never the same twice running. Nothing without the
+## shield up.
+func block_hit() -> void:
+	if _block < 0.5 or not _shield_ready():
+		return
+	var index := randi() % BLOCK_HITS.size()
+	if index == _hit_index and BLOCK_HITS.size() > 1:
+		index = (index + 1) % BLOCK_HITS.size()
+	_hit_index = index
+	_hit_at = 0.0
+
+## True while a swing, a bash or the block is on (or the shield still coming down): the weapons
+## are not lowered, the lantern not turned, no fidget plays meanwhile.
+func combat_busy() -> bool:
+	return _combat != &"" or _block > 0.0 or _hit_at >= 0.0
+
+## The swing or bash playing (&"" = none), and how far into it (s): for probes and, later, hits.
+func combat_playing() -> StringName:
+	return _combat
+
+func combat_time() -> float:
+	return _combat_at
+
+## Weapons up and in the stance, the hands free (not at the lantern).
+func _can_fight() -> bool:
+	return _weapon_node != null and _weapon_up >= 1.0 and not _weapon_on_back and not weapon_arm_from_clips and not weapon_arm_from_reference \
+			and not weapon_shoulder_on_body and _stance != null and _toggle_at < 0.0
+
+func _shield_ready() -> bool:
+	return _shield_node != null and shield != null and shield.on_forearm and _shield_stance != null and _shield_up >= 1.0
+
+## One frame of the combat moves that are offsets (the block, the bash, a hit on the shield, the
+## shield's counterweight to a swing): sets the _combat_* offsets _hold_weapon and _hold_shield
+## add to the stances, and the view's share. The swing's own pose is _clip_swing_pose (it needs
+## the stance as placed).
+func _update_combat(delta: float) -> void:
+	_combat_shield_hand = Vector3.ZERO
+	_combat_shield_shoulder = Vector3.ZERO
+	_combat_shield_roll = 0.0
+	_combat_sword = Vector3.ZERO
+	_combat_pitch = 0.0
+	_combat_turn = 0.0
+	_combat_tilt = 0.0
+	_clip_socket_on = false # set again by _clip_swing_pose while a swing plays
+	if _dodge_arm != "":
+		_dodge_arm_at += delta
+		if _dodge_arm_at >= dodge_arm_time:
+			_dodge_arm = ""
+	_dodge_sword_mute = move_toward(_dodge_sword_mute, 1.0 if SWINGS.has(_combat) else 0.0, delta / 0.1)
+	_dodge_shield_mute = move_toward(_dodge_shield_mute, 1.0 if (_block > 0.0 or _combat == &"bash" or _hit_at >= 0.0) else 0.0, delta / 0.1)
+	var ready := _can_fight()
+	# The block: up while held, and down again.
+	var up := 1.0 if (blocking or _block_driven) and ready and _shield_ready() else 0.0
+	_block = move_toward(_block, up, delta / maxf(block_raise_time if up > _block else block_lower_time, 0.01))
+	var raised := _ease(0.0, 1.0, _block)
+	_combat_shield_hand += (BLOCK["hand"] as Vector3) * raised
+	_combat_shield_shoulder += (BLOCK["shoulder"] as Vector3) * raised
+	_combat_shield_roll += deg_to_rad(float(BLOCK["roll"])) * raised
+	_combat_sword += (BLOCK["sword"] as Vector3) * raised
+	if _combat != &"":
+		if not _combat_driven:
+			_combat_at += delta
+		if SWINGS.has(_combat):
+			var swing: Dictionary = SWINGS[_combat]
+			if _combat_queued != &"" and _combat_at >= float(swing["chain"]):
+				_start_swing(_combat_queued, true)
+				swing = SWINGS[_combat]
+			# The shield arm gives way to the swing a little (a counterweight): in with the wind-up,
+			# out with the recovery.
+			var time := float(swing["time"])
+			_combat_shield_hand += (swing.get("shield", Vector3.ZERO) as Vector3) * _clip_weight(swing, _combat_at)
+			if _combat_at >= time and not _combat_driven:
+				_combat = &""
+				_clip_from = {}
+		elif _combat == &"bash":
+			var bash: Array = _bash_pose(clampf(_combat_at / float(BASH["time"]), 0.0, 1.0))
+			_combat_shield_hand += bash[0]
+			_combat_shield_shoulder += bash[1]
+			_combat_shield_roll += bash[2]
+			_combat_sword += bash[3]
+			_combat_turn += (bash[4] as Vector3).x
+			_combat_tilt += (bash[4] as Vector3).y
+			if _combat_at >= float(BASH["time"]) and not _combat_driven:
+				_combat = &""
+	else:
+		_clip_last = {}
+	# A hit on the shield: knocked by an impulse that rises at once and dies away (peak at
+	# "peak" s), faded out over the last 30 % of its "time".
+	if _hit_at >= 0.0:
+		var hit: Dictionary = BLOCK_HITS[_hit_index]
+		var time := float(hit["time"])
+		if not _hit_driven:
+			_hit_at += delta
+		if _hit_at >= time and not _hit_driven:
+			_hit_at = -1.0
+		else:
+			var x := _hit_at / maxf(float(hit["peak"]), 0.001)
+			var knocked := x * exp(1.0 - x) * (1.0 - smoothstep(0.7 * time, time, _hit_at)) * raised
+			_combat_shield_hand += (hit["hand"] as Vector3) * knocked
+			_combat_shield_shoulder += (hit["shoulder"] as Vector3) * knocked
+			_combat_shield_roll += deg_to_rad(float(hit["roll"])) * knocked
+			_combat_sword += (hit.get("sword", Vector3.ZERO) as Vector3) * knocked
+			var view: Vector3 = hit["view"]
+			_combat_pitch += deg_to_rad(view.x) * knocked
+			_combat_turn += deg_to_rad(view.y) * knocked
+			_combat_tilt += deg_to_rad(view.z) * knocked
+	if not ready and not _combat_driven:
+		_combat = &""
+		_combat_queued = &""
+
+## The bash at `share` (0-1) of its time: [shield hand moved, shoulder moved (m, the stance's axes:
+## +X right, +Y up, +Z back toward the eyes), forearm roll (radians, + = face toward the eyes),
+## sword hand moved, view (radians turned right, tilted)], on top of the block.
+func _bash_pose(share: float) -> Array:
+	var keys: Array = BASH["keys"]
+	var time := float(BASH["time"])
+	var at_times: Array[float] = [0.0]
+	var times: Array[float] = [0.0]
+	var hands: Array[Vector3] = [Vector3.ZERO]
+	var shoulders: Array[Vector3] = [Vector3.ZERO]
+	var swords: Array[Vector3] = [Vector3.ZERO]
+	var rest: Array[Vector3] = [Vector3.ZERO] # x roll, y turn, z tilt
+	for i in keys.size():
+		var key: Array = keys[i]
+		at_times.append(float(key[0]) / time)
+		times.append(float(i + 1) / (keys.size() + 1))
+		hands.append(key[1] as Vector3)
+		shoulders.append(key[2] as Vector3)
+		swords.append(key[4] as Vector3)
+		var view: Vector2 = key[5]
+		rest.append(Vector3(deg_to_rad(float(key[3])), deg_to_rad(view.x), deg_to_rad(view.y)))
+	at_times.append(1.0)
+	times.append(1.0)
+	hands.append(Vector3.ZERO)
+	shoulders.append(Vector3.ZERO)
+	swords.append(Vector3.ZERO)
+	rest.append(Vector3.ZERO)
+	var along := _smooth_through(at_times, times, share)
+	var others := _through(rest, times, along)
+	return [_through(hands, times, along), _through(shoulders, times, along), others.x, _through(swords, times, along), Vector3(others.y, others.z, 0.0)]
+
+## The sword's socket in the right hand just now: as a clip swing has it while one plays,
+## else the stance's.
+func _socket_now() -> Transform3D:
+	return _clip_socket if _clip_socket_on else _weapon_socket
+
+## A CLIP SWING (a SWINGS entry with "clip"; 2026-10-22, Kirill: copy the Stances mod's strokes
+## rather than key them). The right arm follows an ArmClip converted from the mod by
+## tools/skyrim_reference/export_arm_clip.py: its shoulder, its elbow's way, its wrist (its distance
+## from the shoulder scaled by our arm's length over the clip's, so the elbow bends as much as the
+## clip's: the mod's arm is a rigid one 0.52 m long, ours 0.565 -- tools/*/arm_lengths.*), the
+## hand's turn and the sword's place in the hand, all from the eyes and turned with the view as the
+## stance is. "clip_from" / "clip_to": the window played (s of the clip); it blends in over
+## "blend_in" from the stance or from where the last swing was (chained), holds its last frame and
+## blends out to the stance by "time". After each solve the elbow is folded about the stance's
+## hinge (_align_swing_elbow). Called after the stance's own solve (keep-off included), which it
+## reads as the stance.
+func _clip_swing_pose(arm: Dictionary, to_skeleton: Transform3D, held_from: Vector3, with_view: Basis, stance_turn: Basis) -> void:
+	var swing: Dictionary = SWINGS[_combat]
+	var play_end := float(swing["clip_to"]) - float(swing["clip_from"])
+	var frame: Dictionary
+	if swing.has("rig"):
+		frame = _rig_sample(swing["rig"], float(swing["clip_from"]) + clampf(_combat_at, 0.0, play_end), arm)
+	else:
+		var clip := _arm_clip(String(swing["clip"]))
+		if clip != null:
+			frame = clip.sample(float(swing["clip_from"]) + clampf(_combat_at, 0.0, play_end))
+	if frame.is_empty():
+		return
+	var to_player := to_skeleton.affine_inverse()
+	var s_shoulder := to_player * _skeleton.get_bone_global_pose(arm["upper"]).origin
+	var s_elbow := to_player * _skeleton.get_bone_global_pose(arm["lower"]).origin
+	var stance := {"shoulder": s_shoulder, "wrist": to_player * _skeleton.get_bone_global_pose(arm["hand"]).origin,
+			"elbow": (s_elbow - s_shoulder).normalized(), "hand": stance_turn, "socket": _weapon_socket, "view": Vector3.ZERO}
+	var source := stance if _clip_from.is_empty() else _clip_unlocal(_clip_from, held_from, with_view)
+	var c_shoulder := held_from + with_view * (frame["shoulder"] as Vector3)
+	var c_elbow := held_from + with_view * (frame["elbow"] as Vector3)
+	var c_wrist := held_from + with_view * (frame["wrist"] as Vector3)
+	var theirs := c_elbow.distance_to(c_shoulder) + c_wrist.distance_to(c_elbow)
+	c_wrist = c_shoulder + (c_wrist - c_shoulder) * (_arm_length() / maxf(theirs, 0.01))
+	# The clip's hand axes (-X the palm, +Y the thumb's side, -Z the fingers) in the hand bone's, as
+	# in the reference path of _hold_weapon and WeaponStance.socket.
+	var grip: Transform3D = frame["grip"]
+	var marker := Basis(-(arm["palm_out"] as Vector3), (arm["fingers_out"] as Vector3).cross(arm["palm_out"] as Vector3), -(arm["fingers_out"] as Vector3))
+	var played := {"shoulder": c_shoulder, "wrist": c_wrist, "elbow": (c_elbow - c_shoulder).normalized(), "hand": with_view * (frame["hand"] as Basis),
+			"socket": Transform3D(marker * grip.basis * WeaponStance.SOCKET_IN_GRIP, marker * grip.origin), "view": frame["view"]}
+	# Chained from another swing (not the stance), "chain_blend_in" when given: a clip starting in
+	# the idle hold blends in quickly from the stance but needs longer from where a swing ended.
+	var blend_in := float(swing.get("chain_blend_in", swing["blend_in"])) if not _clip_from.is_empty() else float(swing["blend_in"])
+	var pose := played if _rig_chained else _clip_mix(source, played, _ease(0.0, blend_in, _combat_at))
+	pose = _clip_mix(pose, stance, _ease(play_end, float(swing["time"]), _combat_at))
+	# The head as the clip's camera moves (degrees: turned right, nodded up, tilted; Kirill: a head
+	# tilt with the swings, as with the bash and the blows), blended as the arm is.
+	var head: Vector3 = (pose["view"] as Vector3) * swing_head_follow
+	_combat_turn += deg_to_rad(head.x)
+	_combat_pitch += deg_to_rad(head.y)
+	_combat_tilt += deg_to_rad(head.z)
+	WeaponHold.solve_arm(_skeleton, "Right", to_skeleton, pose["shoulder"], pose["wrist"], pose["elbow"], pose["hand"], Vector3.ZERO, 1.0)
+	if _stance_hinge != Vector3.ZERO:
+		_align_swing_elbow()
+	_clip_socket = pose["socket"]
+	_clip_socket_on = true
+	# For a swing chained on from here (_clip_from): in the view's own terms.
+	var from_view := with_view.inverse()
+	_clip_last = {"shoulder": from_view * ((pose["shoulder"] as Vector3) - held_from), "wrist": from_view * ((pose["wrist"] as Vector3) - held_from),
+			"elbow": from_view * (pose["elbow"] as Vector3), "hand": from_view * (pose["hand"] as Basis), "socket": pose["socket"], "view": pose["view"]}
+
+## A clip swing's share at `at` (s): eased in over "blend_in", out after its window.
+func _clip_weight(swing: Dictionary, at: float) -> float:
+	var play_end := float(swing["clip_to"]) - float(swing["clip_from"])
+	return _ease(0.0, float(swing["blend_in"]), at) * (1.0 - _ease(play_end, float(swing["time"]), at))
+
+static func _clip_mix(a: Dictionary, b: Dictionary, weight: float) -> Dictionary:
+	var sa: Transform3D = a["socket"]
+	var sb: Transform3D = b["socket"]
+	return {"shoulder": (a["shoulder"] as Vector3).lerp(b["shoulder"], weight), "wrist": (a["wrist"] as Vector3).lerp(b["wrist"], weight),
+			"elbow": (a["elbow"] as Vector3).slerp(b["elbow"], weight).normalized(),
+			"hand": Basis((a["hand"] as Basis).get_rotation_quaternion().slerp((b["hand"] as Basis).get_rotation_quaternion(), weight)),
+			"socket": Transform3D(Basis(sa.basis.get_rotation_quaternion().slerp(sb.basis.get_rotation_quaternion(), weight)), sa.origin.lerp(sb.origin, weight)),
+			"view": (a.get("view", Vector3.ZERO) as Vector3).lerp(b.get("view", Vector3.ZERO), weight)}
+
+static func _clip_unlocal(local: Dictionary, held_from: Vector3, with_view: Basis) -> Dictionary:
+	return {"shoulder": held_from + with_view * (local["shoulder"] as Vector3), "wrist": held_from + with_view * (local["wrist"] as Vector3),
+			"elbow": with_view * (local["elbow"] as Vector3), "hand": with_view * (local["hand"] as Basis), "socket": local["socket"], "view": local.get("view", Vector3.ZERO)}
+
+## Our right arm's length, shoulder to wrist (m), from its rest.
+func _arm_length() -> float:
+	var arm: Dictionary = _arms["Right"]
+	return _skeleton.get_bone_rest(arm["lower"]).origin.length() + _skeleton.get_bone_rest(arm["hand"]).origin.length()
+
+func _arm_clip(path: String) -> ArmClip:
+	if not _arm_clips.has(path):
+		_arm_clips[path] = ArmClip.from_file(path)
+	return _arm_clips[path]
+
+## THE BLENDER RIG (2026-10-22; Kirill: animate the moves in Blender, the procedural layers stay in
+## code; docs/blender_animation.md). fp_arms.glb is exported from animation_sources/fp_arms/
+## fp_arms.blend by tools/blender/fp_arms/export_clips.py: the rogue's right arm with the eyes at
+## the origin, Eyes (the head's turn) and Weapon (the sword's grip) bones, one animation per move.
+## It is instanced hidden under the Body and played by an AnimationTree (a state machine of its
+## clips, cross-fading rig_crossfade between them), advanced by hand to the swing's time. Nothing
+## of its skeleton is drawn: _rig_sample reads it back as an ArmClip frame, which _clip_swing_pose
+## then plays as it plays a copied clip (view-follow, keep-off, the elbow's hinge on top).
+const FP_RIG_PATH := "res://assets/animations/first_person/fp_arms.glb"
+const FP_RIG_DATA := "res://assets/animations/first_person/fp_arms_rig.json"
+
+func _rig_ready() -> bool:
+	if _rig != null:
+		return true
+	if not ResourceLoader.exists(FP_RIG_PATH) or not FileAccess.file_exists(FP_RIG_DATA):
+		return false
+	_rig = (load(FP_RIG_PATH) as PackedScene).instantiate() as Node3D
+	_rig.name = "BlenderArmRig"
+	add_child(_rig)
+	_rig.visible = false
+	_rig_skeleton = _rig.find_children("*", "Skeleton3D", true, false)[0] as Skeleton3D
+	for bone_name: String in ["Eyes", "RightUpperArm", "RightLowerArm", "RightHand", "Weapon"]:
+		_rig_bones[bone_name] = _rig_skeleton.find_bone(bone_name)
+	var player := _rig.find_children("*", "AnimationPlayer", true, false)[0] as AnimationPlayer
+	player.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
+	var machine := AnimationNodeStateMachine.new()
+	var clips := player.get_animation_list()
+	for clip_name in clips:
+		var node := AnimationNodeAnimation.new()
+		node.animation = clip_name
+		machine.add_node(clip_name, node)
+	for from in clips:
+		for to in clips:
+			if from != to:
+				var transition := AnimationNodeStateMachineTransition.new()
+				transition.xfade_time = rig_crossfade
+				machine.add_transition(from, to, transition)
+	_rig_tree = AnimationTree.new()
+	_rig.add_child(_rig_tree)
+	_rig_tree.anim_player = _rig_tree.get_path_to(player)
+	_rig_tree.tree_root = machine
+	_rig_tree.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
+	_rig_tree.active = true
+	_rig_playback = _rig_tree.get("parameters/playback") as AnimationNodeStateMachinePlayback
+	var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(FP_RIG_DATA))
+	var rest: Array = data["hand_rest"]
+	var socket: Array = data["socket"]
+	_rig_hand_rest = Basis(Vector3(rest[0], rest[1], rest[2]), Vector3(rest[3], rest[4], rest[5]), Vector3(rest[6], rest[7], rest[8])).orthonormalized()
+	_rig_socket = Transform3D(Basis(Vector3(socket[0], socket[1], socket[2]), Vector3(socket[3], socket[4], socket[5]), Vector3(socket[6], socket[7], socket[8])), Vector3(socket[9], socket[10], socket[11]))
+	return true
+
+## The rig's clip `clip` at `at` s, as ArmClip.sample gives a frame (the eyes' space, the Player's
+## axes). Everything is read as a turn from the rig's rest in the eyes' space, so the bones' own
+## axes (which Blender turns its own way) never matter: the hand's turn is that change applied to
+## the game's own hand rest (_rig_hand_rest). Empty if the rig is missing.
+func _rig_sample(clip: StringName, at: float, arm: Dictionary) -> Dictionary:
+	if not _rig_ready() or not _rig_playback:
+		return {}
+	if _rig_state != clip:
+		if _rig_chained and _rig_state != &"":
+			_rig_playback.travel(clip)
+		else:
+			_rig_playback.start(clip, true)
+		_rig_state = clip
+		_rig_time = 0.0
+		_rig_tree.advance(0.0)
+	elif at < _rig_time - 0.0001 or at - _rig_time > 0.25: # scrubbed back or far ahead (the animation panel)
+		_rig_playback.start(clip, true)
+		_rig_tree.advance(0.0)
+		_rig_time = 0.0
+	_rig_tree.advance(maxf(at - _rig_time, 0.0))
+	_rig_time = at
+	var in_eyes := _rig.global_transform.affine_inverse() * _rig_skeleton.global_transform
+	var pose_of := func(bone_name: String) -> Transform3D: return in_eyes * _rig_skeleton.get_bone_global_pose(_rig_bones[bone_name])
+	var turn_of := func(bone_name: String) -> Basis:
+		var rest := (in_eyes * _rig_skeleton.get_bone_global_rest(_rig_bones[bone_name])).basis.orthonormalized()
+		return (pose_of.call(bone_name) as Transform3D).basis.orthonormalized() * rest.inverse()
+	var wrist: Vector3 = (pose_of.call("RightHand") as Transform3D).origin
+	var hand: Basis = (turn_of.call("RightHand") as Basis) * _rig_hand_rest
+	var palm_out: Vector3 = arm["palm_out"]
+	var fingers_out: Vector3 = arm["fingers_out"]
+	var marker := Basis(-palm_out, fingers_out.cross(palm_out), -fingers_out)
+	# The sword: the Weapon bone's turn applied to the grip as the scene was built with it.
+	var grip_now: Basis = (turn_of.call("Weapon") as Basis) * _rig_hand_rest * _rig_socket.basis
+	var socket := Transform3D(hand.inverse() * grip_now, hand.inverse() * ((pose_of.call("Weapon") as Transform3D).origin - wrist))
+	var eyes: Basis = turn_of.call("Eyes")
+	var ahead := eyes * Vector3.FORWARD
+	var up := eyes * Vector3.UP
+	return {"shoulder": (pose_of.call("RightUpperArm") as Transform3D).origin, "elbow": (pose_of.call("RightLowerArm") as Transform3D).origin, "wrist": wrist,
+			"hand": hand * marker,
+			"grip": Transform3D(marker.inverse() * socket.basis * WeaponStance.SOCKET_IN_GRIP.inverse(), marker.inverse() * socket.origin),
+			"view": Vector3(rad_to_deg(atan2(ahead.x, -ahead.z)), rad_to_deg(asin(clampf(ahead.y, -1.0, 1.0))), rad_to_deg(atan2(-up.x, up.y)))}
+
+## The dodge playing (DODGE_ARMS) for one arm ("right" / "left"), as a change from the clip's first
+## frame (its idle hold), `weight` of it, in the eyes' own axes (the stance's, before the view's
+## turn): {"move": the wrist's move (m), "turn": the hand's turn, "elbow": the elbow way's turn}.
+## Empty with no dodge playing or nothing of it left.
+func _dodge_delta(side: String, weight: float) -> Dictionary:
+	if _dodge_arm == "" or weight <= 0.001:
+		return {}
+	var clip := _arm_clip(DODGE_ARM_PATH % [_dodge_arm, side])
+	if clip == null:
+		return {}
+	var now := clip.sample(clampf(_dodge_arm_at / maxf(dodge_arm_time, 0.01), 0.0, 0.999) * clip.length)
+	var first := clip.sample(0.0)
+	var turn := ((now["hand"] as Basis) * (first["hand"] as Basis).inverse()).get_rotation_quaternion()
+	var elbow_then := ((first["elbow"] as Vector3) - (first["shoulder"] as Vector3)).normalized()
+	var elbow_now := ((now["elbow"] as Vector3) - (now["shoulder"] as Vector3)).normalized()
+	var elbow_turn := Quaternion(elbow_then, elbow_now) if elbow_then.cross(elbow_now).length_squared() > 0.000001 else Quaternion.IDENTITY
+	return {"move": ((now["wrist"] as Vector3) - (first["wrist"] as Vector3)) * weight,
+			"turn": Basis(Quaternion.IDENTITY.slerp(turn, weight)), "elbow": Basis(Quaternion.IDENTITY.slerp(elbow_turn, weight))}
+
+## After a swing's solve: the upper arm rolled about its own line until the elbow folds about the
+## same axis of it as in the stance (_stance_hinge), the elbow, forearm and hand left where they
+## are. WeaponHold.solve_arm turns the upper arm the shortest way and never rolls it, so with the
+## elbow steered in toward the chest the forearm folded about the hinge from the wrong side
+## (Kirill, 2026-10-21: "during swing backhand the elbow is bent the wrong way"; measured 166 deg
+## off the stance's hinge in the (since removed) keyed backhand's wind-up).
+func _align_swing_elbow() -> void:
+	var arm: Dictionary = _arms["Right"]
+	var upper := _skeleton.get_bone_global_pose(arm["upper"])
+	var lower := _skeleton.get_bone_global_pose(arm["lower"])
+	var wrist := _skeleton.get_bone_global_pose(arm["hand"]).origin
+	var along := lower.origin - upper.origin
+	var hinge := along.cross(wrist - lower.origin)
+	if hinge.length_squared() < 0.000001 or along.length_squared() < 0.000001:
+		return # straight: no fold to put right
+	along = along.normalized()
+	var wanted := upper.basis.orthonormalized() * _stance_hinge # where the hinge would be with the upper arm as it is
+	var now := (hinge - along * hinge.dot(along)).normalized()
+	wanted = (wanted - along * wanted.dot(along)).normalized()
+	var angle := atan2(along.dot(wanted.cross(now)), wanted.dot(now))
+	upper.basis = Basis(along, angle) * upper.basis
+	_skeleton.set_bone_global_pose(arm["upper"], upper)
+	_skeleton.set_bone_global_pose(arm["lower"], lower) # the forearm (and the hand on it) where it was
 
 ## How far the held weapon's stance is moved from its place just now by the steps (the
 ## Player's axes). Its pace is that of the clip playing, kept as a count of its own so that a
@@ -1555,6 +2041,104 @@ func _breathe(player: Node3D, delta: float) -> void:
 		_chest_average_valid = true
 	_chest_average = _chest_average.lerp(chest, 1.0 - exp(-delta / maxf(breathing_average, 0.01)))
 	_breath_now = (chest - _chest_average).limit_length(breathing_limit) * (1.0 - clampf(_weapon_bob_amount, 0.0, 1.0))
+
+## ATTACK AND DEFENCE (2026-10-21; Kirill: "let's do some attack and defence animation"; the
+## Sigma first-person shield clips as the reference; docs/weapons.md section 13).
+##
+## THE SWINGS: copied from the Stances mod (raw-assets/animations/Skyrim - One handed sword), each a
+## window of an ArmClip converted by tools/skyrim_reference/export_arm_clip.py and played by
+## _clip_swing_pose. The combat is to be upgradeable (Kirill, 2026-10-21): first one enemy at a time
+## (vertical slashes), then up to three (diagonal strikes), then all (wide horizontal ones), the
+## stroke picked by how many enemies are in front. Hand-keyed swings (a forehand / backhand, then
+## keyed vertical slashes) were tried and removed on 2026-10-22 (Kirill): they read as hitting with
+## a stick and scooping, and their elbow bent the wrong way; they are in git before that day.
+##
+## An entry: "clip" (the ArmClip) or "rig" (a clip of the Blender rig, _rig_sample), "clip_from" /
+## "clip_to" (the window played, s of the clip),
+## "blend_in" (s: from the stance, or chained from where the last swing was; "chain_blend_in" for the
+## latter when given), "time" (s in all; it
+## holds the window's last frame and blends out to the stance from "clip_to" - "clip_from" on),
+## "chain" (from when a click starts the next swing at once; an earlier click waits for it), "hit"
+## (the window the blade can hit, in the swing's own time, for the hits to come), "shield" (the
+## shield hand moved as a counterweight, m in the stance's axes: +Z back), "stages" / "bounds"
+## (for the animation panel, I).
+const SWINGS := {
+	# THE VERTICAL SLASHES (2026-10-22; what a click plays). The windows as measured by
+	# attack_analysis.py: the down slash from the high stance's right attack (S_H_C/1hm_attackright)
+	# -- cocked from 0.27 (the blade hanging down the back, then levered straight back behind the
+	# head), the strike 0.53-0.67 down the middle with the true edge leading, held to 0.82 (Kirill: a
+	# short hold; the mod holds to 1.07); the rising one from the high stance's forward sprint power
+	# attack (S_H_P/1hm_attackpowerforwardsprint; Kirill's pointer to the power attacks), which is the
+	# whole combo in one: the same down slash at 0.57-0.73, a dip low, then a vertical rising cut
+	# 0.93-1.07 with the BACK edge leading, 20-26 deg right of the middle, ending with the blade
+	# upright (as the stance holds it) -- played from 0.85 (low, where the down slash ends) to 1.08.
+	&"swing_down": {"clip": "res://assets/animations/first_person/stances_high_attackright.json", "clip_from": 0.27, "clip_to": 0.82,
+		"blend_in": 0.2, "time": 1.0, "chain": 0.5, "hit": Vector2(0.26, 0.4), "shield": Vector3(-0.02, -0.04, 0.03),
+		"stages": ["cock", "strike", "hold", "recover"], "bounds": [0.26, 0.4, 0.55]},
+	# The same down slash animated in Blender (the pipeline's pilot; swings_from_blender puts it in
+	# the order): "rig" names the clip in fp_arms.glb, played whole. Since 2026-10-22 the clip
+	# starts in the idle hold and has its own wind-up (0.2 s, Kirill: animate it rather than leave
+	# it to the blend), then the window above (0.53 s), then its own recovery back into the hold
+	# (0.47 s, the time the blend out took): 1.2 s in all. So it blends in over only 0.05 s
+	# (breathing, view-follow, small stance edits) and out over 0.05 s, every time is 0.2 s later
+	# than above, and a chained click (from "chain" on) cuts the recovery off.
+	&"swing_down_blender": {"rig": &"swing_down", "clip_from": 0.0, "clip_to": 1.2,
+		"blend_in": 0.05, "chain_blend_in": 0.15, "time": 1.25, "chain": 0.7, "hit": Vector2(0.46, 0.6), "shield": Vector3(-0.02, -0.04, 0.03),
+		"stages": ["wind up", "cock", "strike", "hold", "recover"], "bounds": [0.2, 0.46, 0.6, 0.75]},
+	&"swing_up": {"clip": "res://assets/animations/first_person/stances_high_powerforwardsprint.json", "clip_from": 0.85, "clip_to": 1.08,
+		"blend_in": 0.12, "time": 0.6, "chain": 0.26, "hit": Vector2(0.08, 0.22), "shield": Vector3(-0.02, -0.04, 0.03),
+		"stages": ["dip", "strike", "recover"], "bounds": [0.133, 0.383]},
+	# The mod's fast rising cut as it is: diagonal (47 deg), low right to up-left, the true edge
+	# leading (S_M_C/_variants_1hm_attackleft/1hm_attackleft_3, 1.02-1.40). For the diagonal upgrade;
+	# not played now. Its hold up-left passes 12-13 cm from the eyes.
+	&"swing_up_diagonal": {"clip": "res://assets/animations/first_person/stances_mid_attackleft_3.json", "clip_from": 1.02, "clip_to": 1.4,
+		"blend_in": 0.15, "time": 0.78, "chain": 0.33, "hit": Vector2(0.15, 0.23), "shield": Vector3(-0.02, -0.04, 0.03),
+		"stages": ["cock low", "strike", "hold", "recover"], "bounds": [0.192, 0.295, 0.487]},
+}
+## THE ARMS IN A DODGE (2026-10-22; Kirill: "add the dodge/dash animations to the sword, the
+## ones we have on double tap"; "a dodge from idle holding into idle holding"). With the weapons
+## drawn, a dash also plays the Stances mod's first-person dodge of the neutral stance (its idle
+## hold is the nearest to ours) on both arms, as a CHANGE on our idle hold: each frame, how far
+## the clip's wrist has moved and its hand and elbow have turned since its first frame (its idle
+## hold) is added to our stance (_dodge_delta), so every dodge leaves our idle hold and comes back
+## to it. The mod has no forward dodge: forward uses its forward roll's arms. Converted by
+## export_arm_clip.py (--left for the shield arm) into assets/animations/first_person/dodge/.
+## Measured: the sword wrist moves 0.15-0.27 m and the hand turns 42-53 deg, the shield wrist
+## 0.13-0.24 m and 15-17 deg; every clip ends within 2 mm of its start.
+const DODGE_ARMS := {&"dash_fwd": "forward", &"dash_bwd": "back", &"dash_left": "left", &"dash_right": "right"}
+const DODGE_ARM_PATH := "res://assets/animations/first_person/dodge/neutral_%s_%s_arm.json" # direction, "right" / "left"
+
+## The swings a click goes through in turn (the vertical slashes: one enemy at a time).
+const SWING_ORDER: Array[StringName] = [&"swing_down", &"swing_up"]
+
+## The block (right mouse held): the shield arm's stance moved -- "hand" and "shoulder" (m, the
+## stance's axes: +X right, +Y up, +Z back toward the eyes), the forearm rolled "roll" degrees (+ =
+## the face toward the eyes) -- and the sword hand drawn back ("sword", the Player's axes).
+## Sigma's block holds the shield's middle 0.45 m ahead, 18 deg left and 37 below the picture's
+## middle, face ahead; the stance has it 33 left and 50 below (a bigger board: 0.44 x 0.96 m).
+const BLOCK := {"hand": Vector3(0.12, 0.21, -0.04), "shoulder": Vector3(0.04, 0.05, -0.03), "roll": 0.0, "sword": Vector3(0.04, -0.08, 0.08)}
+
+## The bash (left click while blocking), on top of the block: "keys" [seconds, shield hand moved,
+## shoulder moved (m, as in BLOCK), forearm roll (degrees), sword hand moved, view [degrees turned
+## right, tilted]]; from the block and back to it on one smooth curve. Sigma's: out to 60 deg left
+## and turned edge-on by 0.47 s, the thrust to 0.65 m ahead in about 0.13 s, held 0.1 s, back in
+## the block by 0.8. Here quicker in (the shield is already up): wound out by 0.3 s, the thrust at
+## 0.43, held to 0.52, back by 0.85. "hit": the part of the time it can hit.
+const BASH := {"time": 0.85, "hit": Vector2(0.4, 0.55), "stages": ["wind out", "thrust", "back"], "bounds": [0.353, 0.612], "keys": [
+	[0.3, Vector3(-0.18, -0.04, 0.1), Vector3(-0.05, 0.0, 0.05), -35.0, Vector3(0.03, -0.04, 0.06), Vector2(-2.0, 0.0)],
+	[0.43, Vector3(0.06, 0.04, -0.22), Vector3(0.03, 0.02, -0.15), 5.0, Vector3(0.04, -0.08, 0.1), Vector2(1.0, -1.0)],
+	[0.52, Vector3(0.05, 0.03, -0.2), Vector3(0.03, 0.02, -0.14), 3.0, Vector3(0.04, -0.08, 0.1), Vector2(0.5, -0.5)],
+]}
+
+## A blow taken on the shield (block_hit): the block moved by an impulse, "hand" / "shoulder" (m,
+## as in BLOCK), "roll" (degrees), "sword" (m), "view" [degrees up, right, tilt], all at the
+## impulse's peak ("peak" s), dying away over "time". Sigma's: knocked 9 cm back and 4 down in
+## 0.07 s, back by 0.8 s; variant A to the left and rolled, B down and in; the camera 1-2 deg.
+const BLOCK_HITS := [
+	{"peak": 0.07, "time": 0.8, "hand": Vector3(0.0, -0.04, 0.09), "shoulder": Vector3(0.0, -0.01, 0.03), "roll": 0.0, "sword": Vector3(0.0, -0.01, 0.02), "view": Vector3(1.5, 0.0, 0.0)},
+	{"peak": 0.08, "time": 0.95, "hand": Vector3(-0.06, -0.03, 0.07), "shoulder": Vector3(-0.02, 0.0, 0.02), "roll": 12.0, "sword": Vector3(0.0, -0.01, 0.02), "view": Vector3(1.0, -1.5, 1.5)},
+	{"peak": 0.08, "time": 0.95, "hand": Vector3(0.03, -0.07, 0.05), "shoulder": Vector3(0.0, -0.02, 0.02), "roll": -8.0, "sword": Vector3(0.0, -0.02, 0.01), "view": Vector3(-1.0, 1.0, -1.0)},
+]
 
 ## The fidgets. "keys": [share of the time, where the fist goes from the eyes, the way the
 ## blade points, the way its leading edge faces], in the Player's axes (+X right, +Y up, -Z
@@ -1909,11 +2493,47 @@ func debug_animations() -> Array[Dictionary]:
 		for i in bounds.size() - 1:
 			stages.append([names[i] if i < names.size() else "stage %d" % (i + 1), bounds[i] * time, bounds[i + 1] * time])
 		list.append({"name": fidget_name, "time": time, "stages": stages})
+	# The combat moves: the swings, the bash (with the block held up) and the blows on the shield.
+	var combat := {}
+	for swing_name: StringName in SWINGS:
+		combat[swing_name] = SWINGS[swing_name]
+	combat[&"bash"] = BASH
+	for move_name: StringName in combat:
+		var move: Dictionary = combat[move_name]
+		var time := float(move["time"])
+		var bounds: Array[float] = [0.0]
+		for bound: float in move["bounds"]:
+			bounds.append(bound)
+		bounds.append(1.0)
+		var stages: Array = []
+		for i in bounds.size() - 1:
+			stages.append([move["stages"][i], bounds[i] * time, bounds[i + 1] * time])
+		list.append({"name": move_name, "time": time, "stages": stages})
+	for i in BLOCK_HITS.size():
+		var time := float(BLOCK_HITS[i]["time"])
+		list.append({"name": StringName("block_hit_%d" % i), "time": time, "stages": [["knocked", 0.0, float(BLOCK_HITS[i]["peak"])], ["recover", float(BLOCK_HITS[i]["peak"]), time]]})
 	return list
 
 ## The animation debug panel holds the animation at `seconds` into it: the weapons up or down
 ## as the fidget asks, and the lantern lit for one that needs it.
 func debug_drive(animation: StringName, seconds: float) -> void:
+	if SWINGS.has(animation) or animation == &"bash":
+		weapon_raised = true
+		_block_driven = animation == &"bash" # a bash comes from the block
+		if _combat != animation:
+			_combat = animation
+			_clip_from = {}
+			_combat_queued = &""
+		_combat_driven = true
+		_combat_at = seconds
+		return
+	if String(animation).begins_with("block_hit_"):
+		weapon_raised = true
+		_block_driven = true
+		_hit_index = String(animation).trim_prefix("block_hit_").to_int()
+		_hit_driven = true
+		_hit_at = seconds
+		return
 	if not FIDGETS.has(animation):
 		return
 	var fidget: Dictionary = FIDGETS[animation]
@@ -1927,6 +2547,10 @@ func debug_drive(animation: StringName, seconds: float) -> void:
 
 ## ... and lets it go: the arm eases back to the stance.
 func debug_release() -> void:
+	# A combat move held by the panel plays on from there and ends by itself; the block comes down.
+	_combat_driven = false
+	_block_driven = false
+	_hit_driven = false
 	if _fidget_driven:
 		_fidget_driven = false
 		_fidget_cancelled = true
@@ -2090,7 +2714,7 @@ func _update_fidget(delta: float) -> void:
 	if _fidget_driven:
 		_fidget_fade = 1.0
 		return
-	var still := _ground_speed < still_speed and _was_on_floor and _dash_left <= 0.0 and _toggle_at < 0.0
+	var still := _ground_speed < still_speed and _was_on_floor and _dash_left <= 0.0 and _toggle_at < 0.0 and not combat_busy()
 	if _fidget != &"":
 		_fidget_at += delta
 		if not still or not _fidget_fits(_fidget) or (not _fidget_cancelled and not _fidget_has_room(_fidget)):
@@ -3177,6 +3801,7 @@ func _hold_shield(player: Node3D, delta: float) -> void:
 	var to_skeleton := (player.global_transform.affine_inverse() * _skeleton.global_transform).affine_inverse()
 	var held_from := _eye + _bob_now + _breath_now * shield_breathing
 	var fist := _shield_stance.fist_in_hand(_skeleton, shield.grip_radius)
+	var combat_moved := false
 	if weapon_shoulder_on_body:
 		var own_shoulder := _skeleton.get_bone_global_pose(arm["upper"]).origin
 		WeaponHold.solve_arm(_skeleton, "Left", to_skeleton, to_skeleton.affine_inverse() * own_shoulder, held_from + _shield_stance.hand_from_eyes(), _shield_stance.elbow_toward(), _shield_stance.hand_turn(), fist, weapon_body_reach)
@@ -3214,10 +3839,26 @@ func _hold_shield(player: Node3D, delta: float) -> void:
 			hand_from += (rest["hand"] as Vector3) * resting
 			shoulder_from += (rest.get("shoulder", Vector3.ZERO) as Vector3) * resting
 			tip = deg_to_rad(float(rest.get("tip", 0.0))) * resting
+		# The block, the bash, a blow on the shield, the counterweight to a swing (_update_combat).
+		combat_moved = _combat_shield_hand.length_squared() > 0.0000001 or _combat_shield_shoulder.length_squared() > 0.0000001 or absf(_combat_shield_roll) > 0.0001
+		if combat_moved:
+			hand_from += _combat_shield_hand
+			shoulder_from += _combat_shield_shoulder
+			roll += _combat_shield_roll * _glance_sign
+		# A dash's dodge on the shield arm (DODGE_ARMS), a change on its idle hold, as on the sword's;
+		# the block, a bash or a blow fade it out.
+		var shield_elbow := with_view * _shield_stance.elbow_toward()
+		var dodge := _dodge_delta("left", 1.0 - _dodge_shield_mute)
+		if not dodge.is_empty():
+			combat_moved = true # not the stance: the shield's seat is not read from it
+			hand_from += dodge["move"]
+			shield_turn = with_view * (dodge["turn"] as Basis) * with_view.inverse() * shield_turn
+			shield_elbow = with_view * (dodge["elbow"] as Basis) * with_view.inverse() * shield_elbow
+		var off_stance := fidgeting or combat_moved
 		for attempt in 2:
 			var from := held_from + (_shield_push if attempt == 1 else Vector3.ZERO)
 			WeaponHold.solve_arm(_skeleton, "Left", to_skeleton, from + with_view * shoulder_from, from + with_view * hand_from,
-					with_view * _shield_stance.elbow_toward(), shield_turn, fist, _shield_stance.max_reach)
+					shield_elbow, shield_turn, fist, _shield_stance.max_reach)
 			if absf(elbow_up) > 0.0001:
 				# The elbow raised (m): the upper arm swung up from the shoulder, then the forearm
 				# turned back about the elbow so the wrist stays where it was solved to.
@@ -3271,17 +3912,17 @@ func _hold_shield(player: Node3D, delta: float) -> void:
 				var upper := _skeleton.get_bone_global_pose(arm["upper"])
 				upper.origin -= moved
 				_skeleton.set_bone_global_pose(arm["upper"], upper)
-			if fidgeting and shield.on_forearm:
+			if off_stance and shield.on_forearm:
 				# The hand kept on the forearm as in the stance, so it stays in the grip as the shield
 				# (fixed to the forearm) moves: turned as the solver asks it, its back went into the
 				# board through most of the glance and the palm's lower edge through the handle in
 				# the settle's jostles (2026-10-14, Kirill: "does the lower part of the shield handle
 				# clip with the bottom part of the palm?").
 				_skeleton.set_bone_pose_rotation(arm["hand"], _shield_hand_in_stance)
-			if shield.on_forearm and not fidgeting:
+			if shield.on_forearm and not off_stance:
 				# Read every frame, with the arm fully in the stance (before the blend with the
 				# clip): the Grip marker can be changed while the game runs. Not during a shield
-				# fidget, whose arm is not in the stance.
+				# fidget or a combat move, whose arm is not in the stance.
 				_shield_socket = _shield_stance.forearm_socket(_skeleton, shield.grip_radius)
 				_shield_socket_set = true
 				_shield_hand_in_stance = _skeleton.get_bone_pose_rotation(arm["hand"])
@@ -3332,7 +3973,7 @@ func _hold_shield(player: Node3D, delta: float) -> void:
 				var lift_out: Vector2 = shake["lift_out"]
 				var loose := _fidget_in_out(0.0, loosen.z, loosen.w, lift_out.y)
 				_set_fingers(arm, [loosen.y, loosen.x, loosen.x, loosen.x, loosen.x], loose)
-	if weight >= 0.999 and not weapon_shoulder_on_body and (_fidget == &"" or not (FIDGETS[_fidget] as Dictionary).has("shield_keys")):
+	if weight >= 0.999 and not weapon_shoulder_on_body and not combat_moved and (_fidget == &"" or not (FIDGETS[_fidget] as Dictionary).has("shield_keys")):
 		_read_glance_axes(player)
 
 ## For the shield fidgets, from the arm in the stance: the forearm's line (the Player's axes) and
@@ -3843,19 +4484,27 @@ func _hold_weapon(player: Node3D, delta: float) -> void:
 				_draw_arm(arm, arm_bones, in_clip, to_skeleton, held_from, fist)
 			else:
 				var with_view := Basis(Vector3.RIGHT, _look_pitch * weapon_follows_view)
-				var hand_at := held_from + with_view * _stance.hand_from_eyes()
+				# The block's and the bash's sword drawn back (_combat_sword) moves the stance itself,
+				# so a swing started or ended while blocking comes from and goes back to it.
+				var hand_at := held_from + with_view * (_stance.hand_from_eyes() + _combat_sword)
 				var hand_turn := with_view * _stance.hand_turn()
 				if _fidget != &"" and (FIDGETS[_fidget] as Dictionary).get("when", &"drawn") == &"drawn" and not (FIDGETS[_fidget] as Dictionary).has("shield_keys"):
 					var posed := _fidget_pose(hand_at, hand_turn, held_from, with_view, to_skeleton.affine_inverse() * _skeleton.get_bone_global_pose(arm["upper"]).origin)
 					hand_at = posed[0]
 					hand_turn = posed[1]
-				var shoulder_at := held_from + with_view * _stance.shoulder_from_eyes()
 				var elbow_toward := with_view * _stance.elbow_toward()
 				if _fidget != &"" and _fidget_rest > 0.0 and (FIDGETS[_fidget] as Dictionary).has("rest"):
 					# A "rest" fidget's own elbow way, as far as the blade is on the shoulder.
 					var rest_elbow: Vector3 = ((FIDGETS[_fidget] as Dictionary)["rest"] as Dictionary).get("elbow", Vector3.ZERO)
 					if rest_elbow != Vector3.ZERO:
 						elbow_toward = elbow_toward.normalized().lerp((with_view * rest_elbow).normalized(), _fidget_rest * _fidget_fade)
+				# A dash's dodge on the arm (DODGE_ARMS): a change on the idle hold, turned with the view.
+				var dodge := _dodge_delta("right", 1.0 - _dodge_sword_mute)
+				if not dodge.is_empty():
+					hand_at += with_view * (dodge["move"] as Vector3)
+					hand_turn = with_view * (dodge["turn"] as Basis) * with_view.inverse() * hand_turn
+					elbow_toward = with_view * (dodge["elbow"] as Basis) * with_view.inverse() * elbow_toward
+				var shoulder_at := held_from + with_view * _stance.shoulder_from_eyes()
 				for attempt in 2:
 					var push := _weapon_push if attempt == 1 else Vector3.ZERO
 					WeaponHold.solve_arm(_skeleton, "Right", to_skeleton, shoulder_at + push, hand_at + push,
@@ -3866,7 +4515,7 @@ func _hold_weapon(player: Node3D, delta: float) -> void:
 					var wanted := Vector3.ZERO
 					if weapon_body_clearance > 0.0:
 						var to_player := to_skeleton.affine_inverse()
-						var held := to_player * _skeleton.get_bone_global_pose(arm["hand"]) * WeaponHold.in_hand(_weapon_socket, weapon)
+						var held := to_player * _skeleton.get_bone_global_pose(arm["hand"]) * WeaponHold.in_hand(_socket_now(), weapon)
 						wanted = _weapon_off_body(to_player, held)
 					if _fidget != &"" and (FIDGETS[_fidget] as Dictionary).has("rest"):
 						wanted *= 1.0 - _fidget_rest * _fidget_fade #a blade laid on the shoulder touches the body on purpose
@@ -3877,6 +4526,26 @@ func _hold_weapon(player: Node3D, delta: float) -> void:
 					_skeleton.set_bone_pose_position(arm["upper"], in_clip[0] as Vector3)
 					for i in arm_bones.size():
 						_skeleton.set_bone_pose_rotation(arm_bones[i], in_clip[i + 1] as Quaternion)
+				if not dodge.is_empty() and _stance_wrist_set:
+					# The wrist kept as in the idle hold: the clip's hand turn is mostly its forearm
+					# swinging, and added whole on our arm the wrist bent 33 -> 87 deg where the mod's
+					# straightens 44 -> 3-22 (splitting it into a forearm and a wrist share by their
+					# shortest turns made it 110). The forearm still rolls as the hand turn asks; the
+					# sword goes with the hand.
+					_skeleton.set_bone_pose_rotation(arm["hand"], _stance_wrist)
+				if SWINGS.has(_combat):
+					_clip_swing_pose(arm, to_skeleton, held_from, with_view, hand_turn)
+				if _combat == &"" and _fidget == &"" and not weapon_shoulder_on_body and not (drawing and _weapon_up < 1.0):
+					# The stance's wrist, held through a dodge (_dodge_delta): read here, with the arm
+					# as the stance holds it.
+					_stance_wrist = _skeleton.get_bone_pose_rotation(arm["hand"])
+					_stance_wrist_set = true
+					# ... and the axis the elbow folds about, in the upper arm's own axes (_align_swing_elbow).
+					var upper_pose := _skeleton.get_bone_global_pose(arm["upper"])
+					var elbow_at := _skeleton.get_bone_global_pose(arm["lower"]).origin
+					var fold := (elbow_at - upper_pose.origin).cross(_skeleton.get_bone_global_pose(arm["hand"]).origin - elbow_at)
+					if fold.length_squared() > 0.000001:
+						_stance_hinge = (upper_pose.basis.orthonormalized().inverse() * fold).normalized()
 			# Looking down: toward the same hold with the shoulder left on the body.
 			var on_body := smoothstep(weapon_on_body_from, maxf(weapon_on_body_by, weapon_on_body_from + 0.1), rad_to_deg(-_look_pitch)) if weapon_on_body_slide else 0.0
 			if on_body > 0.001:

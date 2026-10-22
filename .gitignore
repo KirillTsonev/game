@@ -10,6 +10,9 @@ godot_notes/knot_diag.txt
 # Godot's temporary working copies of the Terrain3D library (made while the editor runs)
 addons/terrain_3d/bin/~*
 
+# Blender's backup of the previous save (animation_sources/)
+*.blend1
+
 # OS cruft
 .DS_Store
 Thumbs.db

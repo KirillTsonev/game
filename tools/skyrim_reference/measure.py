@@ -4,7 +4,7 @@ import sys, math, os
 from hkx import *
 
 UNIT = 0.01428
-MOD = r"D:\Downloads\Godot_v4.7.2-stable_win64.exe\raw-assets\animations\All in one 161095 3.4 2026-06-22T12-57Z rvwm2BZae\meshes\actors\character\_1stperson\animations\OpenAnimationReplacer\mod"
+MOD = r"D:\Downloads\Godot_v4.7.2-stable_win64.exe\raw-assets\animations\Skyrim - One handed sword\meshes\actors\character\_1stperson\animations\OpenAnimationReplacer\mod"
 sk = Skeleton("meshes__actors__character___1stperson__characterassets__skeletonfirst.hkx")
 B = {k: sk.index(v) for k, v in dict(cam="Camera1st", hand="R Hand", fore="R Forearm [", upper="R UpperArm [", clav="R Clavicle", index="RF10", little="RF40",
                                      middle="RF20", lhand="L Hand", shield="Shield", head="NPC Head [", spine2="Spine2").items()}

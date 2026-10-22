@@ -4,13 +4,12 @@
 # solves the rogue's own arm to those (WeaponHold.solve_arm), so nothing of Skyrim's skeleton
 # or rest pose has to match the rogue's.
 #
-#   python export_arm_clip.py <clip.hkx> <out.json> [<skeletonfirst.hkx>]
+#   python export_arm_clip.py <clip.hkx> <out.json> [<skeletonfirst.hkx>] [--left]
 #
-# The clips of the mod in raw-assets/animations/All in one ... may be converted with credit to
-# their author (docs/weapons.md). Skyrim's own clips are Bethesda's: measure them, do not ship them.
+# --left: the left arm instead (the shield arm; its "grip" is then the Shield bone's place).
 import sys, os, json, math
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from hkx import Skeleton, Animation, qrot
+from hkx import Skeleton, Animation, qrot, qmul
 
 UNIT = 0.01428  # metres in one Skyrim unit
 ROGUE_HAND = 0.0977  # the rogue's hand bone to its middle knuckle (m): the weapon's place in the hand is scaled by it
@@ -31,12 +30,14 @@ def in_frame(frame, v):  # a vector in the axes of a frame given as three column
     return (dot(frame[0], v), dot(frame[1], v), dot(frame[2], v))
 
 
-def main(clip, out, skeleton_path):
+def main(clip, out, skeleton_path, left=False):
     sk = Skeleton(skeleton_path)
     bone = lambda part: sk.index(part)
-    names = dict(cam="Camera1st", hand="R Hand", fore="R Forearm [", upper="R UpperArm [", index="RF10", little="RF40", middle="RF20")
+    s = "L" if left else "R"
+    names = dict(cam="Camera1st", hand=s + " Hand", fore=s + " Forearm [", upper=s + " UpperArm [", index=s + "F10", little=s + "F40", middle=s + "F20")
     b = {k: bone(v) for k, v in names.items()}
-    b["weapon"] = [i for i, n in enumerate(sk.bones) if n == "Weapon"][0]
+    # The left arm (--left) carries the shield, not a weapon: its "grip" is the Shield bone's place.
+    b["weapon"] = [i for i, n in enumerate(sk.bones) if n == ("Shield" if left else "Weapon")][0]
     anim = Animation(clip)
 
     # Which of the Weapon bone's axes is the leading edge: the one nearest the way the fingers
@@ -51,9 +52,18 @@ def main(clip, out, skeleton_path):
     hand_length = math.dist(rest[b["middle"]][0], rest[b["hand"]][0]) * UNIT
 
     frames = []
+    cam_first = sk.world(anim.pose(sk, 0))[b["cam"]][1]
+    cam_first_inverse = (-cam_first[0], -cam_first[1], -cam_first[2], cam_first[3])
     for f in range(anim.frames):
         w = sk.world(anim.pose(sk, f))
         cam = w[b["cam"]][0]
+        # The camera's turn against the first frame (the idle), in the first frame's camera axes:
+        # degrees turned right, nodded up, tilted (+ = left ear down) -- the head's own movement
+        # through the clip (PlayerBody adds it to the view: swing_head_follow).
+        turned = qmul(cam_first_inverse, w[b["cam"]][1])
+        ahead = qrot(turned, (0, 1, 0))
+        up = qrot(turned, (0, 0, 1))
+        view = (math.degrees(math.atan2(ahead[0], ahead[1])), math.degrees(math.asin(max(-1.0, min(1.0, ahead[2])))), math.degrees(math.atan2(-up[0], up[2])))
         at = lambda key: player(scale(sub(w[b[key]][0], cam), UNIT))
         wrist = at("hand")
         fingers = unit(sub(at("middle"), wrist))
@@ -71,6 +81,7 @@ def main(clip, out, skeleton_path):
             "hand": [c for column in marker for c in column],
             "grip": [c for column in grip for c in in_frame(marker, column)],
             "grip_at": scale(in_frame(marker, sub(at("weapon"), wrist)), ROGUE_HAND / hand_length),
+            "view": view,
         })
     data = {"source": os.path.basename(os.path.dirname(clip)) + "/" + os.path.basename(clip), "fps": round(1.0 / anim.frame_duration, 3), "length": anim.duration,
             "events": [[t, e] for t, e in anim.events], "frames": frames}
@@ -82,4 +93,6 @@ def main(clip, out, skeleton_path):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "skeletonfirst.hkx"))
+    left = "--left" in sys.argv
+    args = [a for a in sys.argv[1:] if a != "--left"]
+    main(args[0], args[1], args[2] if len(args) > 2 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "skeletonfirst.hkx"), left)

@@ -27,6 +27,7 @@ static func from_file(path: String) -> ArmClip:
 		clip._frames.append({
 			"shoulder": _vector(frame["shoulder"]), "elbow": _vector(frame["elbow"]), "wrist": _vector(frame["wrist"]),
 			"hand": _basis(frame["hand"]).get_rotation_quaternion(), "grip": _basis(frame["grip"]).get_rotation_quaternion(), "grip_at": _vector(frame["grip_at"]),
+			"view": _vector(frame["view"]) if frame.has("view") else Vector3.ZERO,
 		})
 	clip.length = float(data.get("length", (clip._frames.size() - 1) / clip.fps))
 	return clip
@@ -39,7 +40,9 @@ static func _basis(a: Array) -> Basis: # three columns
 
 ## The arm at a time in seconds (the clip goes round): "shoulder", "elbow", "wrist" (places from
 ## the eyes), "hand" (a Basis: -Z the way the fingers point, +Y the thumb's side, -X the palm's)
-## and "grip" (a Transform3D in that hand's axes, from the wrist: +Y the blade, -Z the leading edge).
+## and "grip" (a Transform3D in that hand's axes, from the wrist: +Y the blade, -Z the leading edge),
+## "view" (the clip's camera against its first frame, degrees: x turned right, y nodded up, z
+## tilted, + = left ear down; zero in clips exported before 2026-10-22).
 func sample(time: float) -> Dictionary:
 	var at := fposmod(time, maxf(length, 0.001)) * fps
 	var first := mini(int(at), _frames.size() - 1)
@@ -51,4 +54,5 @@ func sample(time: float) -> Dictionary:
 		"shoulder": (a["shoulder"] as Vector3).lerp(b["shoulder"], part), "elbow": (a["elbow"] as Vector3).lerp(b["elbow"], part), "wrist": (a["wrist"] as Vector3).lerp(b["wrist"], part),
 		"hand": Basis((a["hand"] as Quaternion).slerp(b["hand"], part)),
 		"grip": Transform3D(Basis((a["grip"] as Quaternion).slerp(b["grip"], part)), (a["grip_at"] as Vector3).lerp(b["grip_at"], part)),
+		"view": (a["view"] as Vector3).lerp(b["view"], part),
 	}
