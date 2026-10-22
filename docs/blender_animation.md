@@ -23,10 +23,18 @@ Editing a move step by step (for Kirill): `docs/editing_animations_in_blender.md
 | 5. Into Godot | rescan (the editor's FileSystem, or the Godot MCP's `rescan_filesystem`) | the import |
 | 6. Use it | a `SWINGS` entry with `"rig": &"<action>"` in `scripts/player_body.gd` | |
 
-- Steps 1 and 2 are needed only for a new scene: after the stance changes (re-run 1, then 2),
-  or for a new weapon. **Step 2 clears the open scene and rebuilds every action listed in its
-  `SWINGS` from the ArmClips: hand edits are lost.** Once a move has been adjusted by hand, take
-  it out of that list.
+- Steps 1 and 2 are needed only for a new scene or a new weapon. **Step 2 clears the open scene
+  and rebuilds every action listed in its `SWINGS` from the ArmClips: hand edits are lost.** Once
+  a move has been adjusted by hand, take it out of that list.
+- **After the stance changes in Godot** (the WeaponStance markers): step 1, then
+  `tools/blender/fp_arms/update_stance.py` in Blender, then step 4. It keeps hand edits: it
+  replaces only the keys that hold the OLD stance (every channel equal to the old `hold`'s,
+  quaternions either sign: `hold` itself, a move's first and last frame, the fingers' key), moves
+  the Weapon bone's rest onto the new grip and lays the Sword object on it. A turn of the sword in
+  the stance then turns it through every move, the keyed turns on top (the game draws the sword
+  from the socket the export writes). First used 2026-10-22 on Kirill's Grip turned 14 deg: the
+  arm unchanged, the sword 14.1 deg turned on every frame, the swing starting and ending on the
+  new stance. Its maths is `build_scene.py`'s: keep the two the same.
 - The Blender scripts run in the open Blender (the Blender MCP's `execute_blender_code`:
   `exec(compile(open(path).read(), path, "exec"), {"__file__": path})`, or the Text editor) or
   in the background (`blender.exe -b ... --python ...`, full path: CLAUDE.md "Local tooling").
@@ -111,6 +119,38 @@ stance**: after a real stance change re-run steps 1-2 and adjust the wind-up.
 cuts the recovery off, so in a combo it is never seen (the rising slash starts low, where the
 stroke ends). Measured: it ends within 3 cm and 2 deg of where it started, combo joins unchanged.
 
+## Smoothed and retimed (same day, after Kirill's own edit)
+
+Measured by sampling the sword's tip (the `sword` mesh's vertex furthest along +Z) every frame in
+Blender, with the hand control's distance from the shoulder against the arm's length (0.565 m).
+Fixed one at a time, each tried on a snapshot of the keys first:
+
+- **The arm locked straight at the bottom** (CTRL_hand 17.4 cm out of reach on frame 20, then a
+  0 -> 55 deg elbow bend in three frames): the frame-20 key moved 19.5 cm toward the shoulder.
+- **The wind-up started at full speed** (12.8 m/s on its first frame): the frame-1/2 keys were far
+  from the stance on frame 0; moved later (deleting them instead lost the pose and threw the elbow
+  out to 97 deg).
+- **A jolt early in the cock and a wrist snap in the strike** (15 -> 1 -> 13 deg in two frames):
+  CTRL_hand's rotation keys there set to the mean of their neighbours. The cause was the hand's
+  turn both times, not its place or the elbow.
+- **Retimed** (Kirill: more frames where it was rushed; length free): wind-up 0-11 (was 0-8, it
+  peaked faster than the strike), cock 11-16 (was 8-14, resampled with an ease at both ends),
+  strike 16-22 (unchanged), a new follow-through key on 25 (the wrist carries on one frame of its
+  strike turn, the hand half a frame of its travel: a whole frame locked the arm again), recovery
+  25-38. 38 frames, 1.267 s; the tip now slows 16.8 -> 10.9 -> 5.6 -> 2.0 -> 0.6 m/s past the
+  bottom instead of stopping in one frame. The game's entry was moved to match (`clip_to`, `time`,
+  `chain`, `hit`, `view_cap`, `bounds`, a "follow through" stage).
+
+Tried after this and reverted the same day (Kirill): holding the strike to the screen's centre
+line (first the tip, then the whole blade). Seen from the eyes the strike still wanders sideways
+(the tip 14 cm right, 10 left, back right over frames 18-22) and the blade lies up to 17 deg across
+its own path. Holding the blade on a vertical plane bent the wrist up to 72 deg; a line leaning
+about 6 deg toward the lower right eased it to 64 (12 deg: 62, but the elbow folds).
+
+Rule from it: **after moving the hand control, check its distance from the shoulder on every
+frame**. Blender's IK only stretches the arm straight when the control is out of reach; nothing
+warns, and it shows as a locked elbow and a sudden bend after it.
+
 ## Rules learnt, each from a fault
 
 1. **The rogue's skin is bound in the FBX's A-pose, its rest is the T-pose** ("fix silhouette").
@@ -128,7 +168,10 @@ stroke ends). Measured: it ends within 3 cm and 2 deg of where it started, combo
 5. **Godot reimports only when the file's content changes** (it compares md5): an export that
    writes the same bytes is not reimported, so an unchanged probe result can mean an unchanged
    export, not a missed rescan.
-6. A Godot-exported glb drops leaf bones with no weights (`weapon_r`, some twist helpers);
+6. **The export takes the clip's timing from the scene's frame rate**: lowered to 12 to watch
+   the move slowly, it made the 1.2 s swing 3.0 s long. `export_clips.py` sets 30 for the export
+   and puts the scene's own back.
+7. A Godot-exported glb drops leaf bones with no weights (`weapon_r`, some twist helpers);
    nothing uses them.
 
 ## Open

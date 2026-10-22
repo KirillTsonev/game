@@ -42,13 +42,13 @@ finger_pose = Array[Quaternion]([Quaternion(-0.31789613, 0.7681954, 0.34829098, 
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.3023697, -0.3480185, -0.02284278)
 
 [node name="Elbow" type="Marker3D" parent="WeaponStance" unique_id=433905415]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5600919, -0.4016657, -0.13186057)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.48532, -0.51856, -0.16015)
 
 [node name="Hand" type="Marker3D" parent="WeaponStance" unique_id=759822060]
 transform = Transform3D(0.83299065, 0.4040843, -0.37794518, -0.52944803, 0.7804998, -0.33242276, 0.16065922, 0.47700733, 0.8640907, 0.52455103, -0.3650658, -0.48719817)
 
 [node name="Grip" type="Marker3D" parent="WeaponStance/Hand" unique_id=593546726]
-transform = Transform3D(0.781708, -0.6018123, 0.16356975, 0.48407942, 0.7508871, 0.44925952, -0.39319292, -0.27200863, 0.8783001, 0.008040965, 0.004613161, -0.009065986)
+transform = Transform3D(0.72138125, -0.5905118, 0.36180836, 0.35817525, 0.7652652, 0.5348627, -0.59272283, -0.25624874, 0.7635553, 0.008040905, 0.004613161, -0.0090658665)
 
 [node name="Fingers" type="Node3D" parent="WeaponStance" unique_id=161809430]
 

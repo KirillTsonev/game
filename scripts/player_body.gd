@@ -489,6 +489,7 @@ var _rig_socket := Transform3D.IDENTITY ## the sword's socket the rig was built 
 var _rig_state: StringName = &"" ## the clip last started or travelled to (&"" = start afresh)
 var _rig_time: float = 0.0 ## where the tree is in that clip
 var _rig_chained: bool = false ## this swing cross-fades from the last in the tree, not in _clip_mix
+var _swing_overreach: float = 0.0 ## m the swing's wrist was put past the arm's reach this frame (_clip_swing_pose)
 var _clip_socket: Transform3D = Transform3D.IDENTITY ## the sword in the hand as a clip swing has it this frame
 var _clip_socket_on: bool = false
 var _clip_last: Dictionary = {} ## a clip swing's pose this frame, in the view's own terms (_clip_swing_pose)
@@ -850,6 +851,15 @@ var _room_box: BoxShape3D
 ## up while cocking and 4 down through the strike, tilting about 1 deg each way; the rising one
 ## comes up about 5 deg. 0 = none.
 @export var swing_head_follow: float = 1.0
+## How far below level (degrees) a swing is turned with the view at most (_swing_view). The hold
+## turns with weapon_follows_view of the pitch (up to 56 deg looking all the way down), and turned
+## that far the down slash ended behind the Player, through the legs (Kirill, 2026-10-22). The
+## limit fades in over the swing's wind-up and out over its recovery, so it leaves and comes back
+## to the hold as turned. 90 = no limit. Measured looking all the way down (combat.gd --pitch=-1.4
+## --view-down-limit=), the down slashes' least room to the body: none -16 cm (inside), 20 deg
+## -2..+6 cm, 10 deg +1..+12 cm; the Blender slash's elbow then moves up to 14.7 cm a frame as
+## the limit fades in over its wind-up (9.7 without), the copied one's 22.6.
+@export_range(0.0, 90.0, 1.0) var swing_view_down_limit: float = 10.0
 ## The arms react to a dash with the weapons drawn (DODGE_ARMS).
 @export var dodge_arms: bool = true
 ## Seconds the arms' dodge takes (the mod's clips are 1.0 s, the forward roll 1.17; the dash
@@ -1807,6 +1817,11 @@ func _socket_now() -> Transform3D:
 func _clip_swing_pose(arm: Dictionary, to_skeleton: Transform3D, held_from: Vector3, with_view: Basis, stance_turn: Basis) -> void:
 	var swing: Dictionary = SWINGS[_combat]
 	var play_end := float(swing["clip_to"]) - float(swing["clip_from"])
+	# The shoulder and the elbow's way turn with the view as the hold does; the wrist, the hand and
+	# the sword with the swing's limited turn (_swing_view). With the shoulder limited too the arm,
+	# shoulder end and all, lay in front of the feet looking down (Kirill's screenshot, 2026-10-22).
+	var full_view := with_view
+	with_view = _swing_view(swing, play_end)
 	var frame: Dictionary
 	if swing.has("rig"):
 		frame = _rig_sample(swing["rig"], float(swing["clip_from"]) + clampf(_combat_at, 0.0, play_end), arm)
@@ -1822,11 +1837,16 @@ func _clip_swing_pose(arm: Dictionary, to_skeleton: Transform3D, held_from: Vect
 	var stance := {"shoulder": s_shoulder, "wrist": to_player * _skeleton.get_bone_global_pose(arm["hand"]).origin,
 			"elbow": (s_elbow - s_shoulder).normalized(), "hand": stance_turn, "socket": _weapon_socket, "view": Vector3.ZERO}
 	var source := stance if _clip_from.is_empty() else _clip_unlocal(_clip_from, held_from, with_view)
-	var c_shoulder := held_from + with_view * (frame["shoulder"] as Vector3)
-	var c_elbow := held_from + with_view * (frame["elbow"] as Vector3)
-	var c_wrist := held_from + with_view * (frame["wrist"] as Vector3)
-	var theirs := c_elbow.distance_to(c_shoulder) + c_wrist.distance_to(c_elbow)
-	c_wrist = c_shoulder + (c_wrist - c_shoulder) * (_arm_length() / maxf(theirs, 0.01))
+	var l_shoulder: Vector3 = frame["shoulder"]
+	var l_elbow: Vector3 = frame["elbow"]
+	var l_wrist: Vector3 = frame["wrist"]
+	var theirs := l_elbow.distance_to(l_shoulder) + l_wrist.distance_to(l_elbow)
+	var l_reach := (l_wrist - l_shoulder) * (_arm_length() / maxf(theirs, 0.01))
+	var c_shoulder := held_from + full_view * l_shoulder
+	var c_elbow := held_from + full_view * l_elbow
+	var c_wrist := held_from + with_view * (l_shoulder + l_reach)
+	# How far the wrist is put past the arm's reach (the two turns differ): for the probes.
+	_swing_overreach = maxf(c_wrist.distance_to(c_shoulder) - _arm_length(), 0.0)
 	# The clip's hand axes (-X the palm, +Y the thumb's side, -Z the fingers) in the hand bone's, as
 	# in the reference path of _hold_weapon and WeaponStance.socket.
 	var grip: Transform3D = frame["grip"]
@@ -1853,6 +1873,18 @@ func _clip_swing_pose(arm: Dictionary, to_skeleton: Transform3D, held_from: Vect
 	var from_view := with_view.inverse()
 	_clip_last = {"shoulder": from_view * ((pose["shoulder"] as Vector3) - held_from), "wrist": from_view * ((pose["wrist"] as Vector3) - held_from),
 			"elbow": from_view * (pose["elbow"] as Vector3), "hand": from_view * (pose["hand"] as Basis), "socket": pose["socket"], "view": pose["view"]}
+
+## The view's turn a swing is placed with: the hold's (weapon_follows_view of the pitch), held to at
+## most swing_view_down_limit below level during the stroke -- the limit faded in until "view_cap".x
+## s and out from "view_cap".y to "time" (by default over "blend_in" and after the window: a swing
+## with its own wind-up and recovery gives their ends, so the fades fall on them). The arm and the
+## sword only: the camera still looks where it looks.
+func _swing_view(swing: Dictionary, play_end: float) -> Basis:
+	var full := _look_pitch * weapon_follows_view
+	var capped := maxf(full, -deg_to_rad(swing_view_down_limit))
+	var cap: Vector2 = swing.get("view_cap", Vector2(float(swing["blend_in"]), play_end))
+	var weight := _ease(0.0, cap.x, _combat_at) * (1.0 - _ease(cap.y, float(swing["time"]), _combat_at))
+	return Basis(Vector3.RIGHT, lerpf(full, capped, weight))
 
 ## A clip swing's share at `at` (s): eased in over "blend_in", out after its window.
 func _clip_weight(swing: Dictionary, at: float) -> float:
@@ -2056,7 +2088,8 @@ func _breathe(player: Node3D, delta: float) -> void:
 ## An entry: "clip" (the ArmClip) or "rig" (a clip of the Blender rig, _rig_sample), "clip_from" /
 ## "clip_to" (the window played, s of the clip),
 ## "blend_in" (s: from the stance, or chained from where the last swing was; "chain_blend_in" for the
-## latter when given), "time" (s in all; it
+## latter when given), "view_cap" (s: until when the view-down limit fades in and from when it fades
+## out, _swing_view; by default "blend_in" and the window's end), "time" (s in all; it
 ## holds the window's last frame and blends out to the stance from "clip_to" - "clip_from" on),
 ## "chain" (from when a click starts the next swing at once; an earlier click waits for it), "hit"
 ## (the window the blade can hit, in the swing's own time, for the hits to come), "shield" (the
@@ -2082,9 +2115,14 @@ const SWINGS := {
 	# (0.47 s, the time the blend out took): 1.2 s in all. So it blends in over only 0.05 s
 	# (breathing, view-follow, small stance edits) and out over 0.05 s, every time is 0.2 s later
 	# than above, and a chained click (from "chain" on) cuts the recovery off.
-	&"swing_down_blender": {"rig": &"swing_down", "clip_from": 0.0, "clip_to": 1.2,
-		"blend_in": 0.05, "chain_blend_in": 0.15, "time": 1.25, "chain": 0.7, "hit": Vector2(0.46, 0.6), "shield": Vector3(-0.02, -0.04, 0.03),
-		"stages": ["wind up", "cock", "strike", "hold", "recover"], "bounds": [0.2, 0.46, 0.6, 0.75]},
+	# Kirill's edit (same day): frames 0-37 (1.233 s), the stance on 0 and 37, the wind-up to 8, the
+	# cock to 15, the strike 15-20 (lowest on 20), one movement back from 20 to 37 (no hold).
+	# Retimed the same day (Kirill: more frames where it was rushed): frames 0-38 (1.267 s), the
+	# wind-up to 11, the cock to 17, the strike 17-22, a follow-through to 25 (the blade slowing
+	# past the bottom), back from 25 to 38. "chain" stays one frame after the strike's end.
+	&"swing_down_blender": {"rig": &"swing_down", "clip_from": 0.0, "clip_to": 1.267,
+		"blend_in": 0.05, "chain_blend_in": 0.15, "time": 1.317, "chain": 0.767, "view_cap": Vector2(0.367, 0.733), "hit": Vector2(0.567, 0.733), "shield": Vector3(-0.02, -0.04, 0.03),
+		"stages": ["wind up", "cock", "strike", "follow through", "recover"], "bounds": [0.367, 0.567, 0.733, 0.833]},
 	&"swing_up": {"clip": "res://assets/animations/first_person/stances_high_powerforwardsprint.json", "clip_from": 0.85, "clip_to": 1.08,
 		"blend_in": 0.12, "time": 0.6, "chain": 0.26, "hit": Vector2(0.08, 0.22), "shield": Vector3(-0.02, -0.04, 0.03),
 		"stages": ["dip", "strike", "recover"], "bounds": [0.133, 0.383]},

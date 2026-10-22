@@ -31,7 +31,20 @@ why: `docs/blender_animation.md`.
 - Timeline → Playback → Sync: **Frame Dropping** (real speed).
 - **Space** plays (it loops), **←** / **→** one frame, or drag the frame number.
 - Smoother, like 60 fps (optional): Output Properties → Frame Rate **60**, Time Stretching
-  Old **30** / New **60**. **Set back to 30 and 30 / 30 before exporting.**
+  Old **30** / New **60**. Slower: a lower Frame Rate (e.g. 12). The export always uses 30 and
+  puts your setting back, so there is nothing to undo before exporting.
+
+### Ghosts (onion skin)
+
+- **N** over the 3D view → the **FP Arms** tab → **Ghosts**: see-through copies of the arm and
+  the sword a few frames before (blue) and after (orange) the current one, fainter further away.
+- **Show** draws them around the current frame, **Clear** removes them. They are frozen: press
+  Show again after moving to another frame or changing a pose.
+- *Frames before / after* (3 each), *Every n frames* (1 = each frame, 2 = every other one...).
+- They never reach the game. If the tab is missing after opening the file, Blender blocked the
+  file's scripts: allow them (the bar at the top), or run `tools\blender\fp_arms\ghosts.py` once
+  from the Scripting tab.
+- Bones' paths instead: Armature properties → Motion Paths → Calculate.
 
 ## 4. Pose
 
@@ -81,6 +94,19 @@ why: `docs/blender_animation.md`.
 3. Click into the Godot editor: it reimports `fp_arms.glb` when it gets focus.
 4. Play: left click. The Body's **Swings From Blender** (Combat group) must be on.
 
+## 8. After changing the stance in Godot
+
+When you move the WeaponStance's markers (the hand, the elbow, the sword's turn in the fist), the
+moves still start and end on the old stance. To bring them over, keeping your edits:
+
+1. Ask Claude to re-run step 1 (it writes the new stance from the game), or run
+   `export_arm_source.gd` yourself (`docs/blender_animation.md`, the pipeline table).
+2. In Blender, the Scripting tab: open `tools\blender\fp_arms\update_stance.py` → **Run Script**.
+   It replaces only the keys that are the old stance (`hold`, a move's first and last frame, the
+   fingers) and lays the sword on the new grip; your keys are left alone. A turn of the sword
+   in the stance carries through the whole move.
+3. Export (section 7).
+
 ## Don't
 
 - **Don't run `build_scene.py`**: it rebuilds the moves from the copied clips and throws your
@@ -88,7 +114,6 @@ why: `docs/blender_animation.md`.
 - Don't edit `hold` or move frame 1 / the last frame off the stance: the game blends into and out
   of the clip in only 0.05 s, so a start or end away from the stance jumps.
 - Don't rename `FPArms`, its bones or the actions: the game finds them by name.
-- Don't change the scene's frame rate for good: the export uses it for the timing.
 
 ## If something looks wrong
 

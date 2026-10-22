@@ -1243,6 +1243,24 @@ up from -2.4 to +0.9, tilt 0.3; diagonal -- turn 5, tilt 2.5; never more than 0.
 ArmClip frame, so everything above applies to it. `swings_from_blender` (on) puts it in the click
 order in place of `swing_down`. The pipeline and its checks: `docs/blender_animation.md`.
 
+**Looking down (same day; Kirill: looking all the way down, a slash cut through torso and legs):**
+a swing is turned with the view as the hold is (`weapon_follows_view`, so up to 56 deg down), and
+the down slash then ended behind the Player. `swing_view_down_limit` (10 deg) holds how far below
+level a swing is turned during the stroke; the limit fades in over the wind-up and out over the
+recovery (`"view_cap"`, `_swing_view`), so the swing still leaves and returns to the hold as
+turned. The camera itself still looks down. Least room to the body looking all the way down:
+none -16 cm, 20 deg -2..+6, 10 deg +1..+12 (both down slashes, either foot). Options weighed and
+not taken: bending the body forward (a visible body turn), the keep-off during a swing (distorts a
+fast stroke), hiding the legs, a separate low attack (later, perhaps, for enemies on the ground).
+The block and the bash follow the view the same way and are not checked yet.
+The limit holds back only the wrist, the hand and the sword: limited too, the shoulder (the drawn-
+apart arm's, in front of the eyes) came into the picture looking down, the whole arm lying in
+front of the feet with its end showing (Kirill's screenshot). The shoulder and the elbow's way now
+turn with the view as the hold does. Looking all the way down: the shoulder 1.48 half-pictures
+from the middle (outside), the sword at least 1 cm from the body, the arm 8 cm; the cost is that
+the wrist is asked up to 0.2 m past the arm's reach (8 cm looking half-way down), where the arm
+goes straight and the stroke is shallower (`combat.gd` prints both per move).
+
 ### The arms in a dodge (2026-10-22)
 
 Kirill: "add the dodge/dash animations to the sword, the ones we have on double tap", "a dodge

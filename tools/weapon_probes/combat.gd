@@ -1,6 +1,6 @@
 extends SceneTree
 # The combat moves (PlayerBody.SWINGS, the block, BASH, BLOCK_HITS), weapons up, either foot forward, at 60 frames a second. Per 1/20 of each: where the fist is from the eyes (the Player's axes), the blade's way, the tip and the shield's middle in the picture (degrees right / up), the least room of the sword to the eyes, the body's capsules and the shield, of the shield to the eyes and the body, of the right forearm to the trunk; the wrist's bend and the forearm's roll; the shield's face. Then per move: the tip's fastest move in a frame (and when), the elbow's largest step in a frame (a flip, R7). Then a chained combo (forehand, backhand, forehand, clicked at "chain") and a swing clicked while blocking (a bash): the largest step of the tip at the joins.
-# -- --only=<text>: only moves whose name contains it. -- --pitch=<rad>: the view's pitch.
+# -- --only=<text>: only moves whose name contains it. -- --pitch=<rad>: the view's pitch. -- --view-down-limit=<deg>: PlayerBody.swing_view_down_limit.
 var player: Node3D
 var body: PlayerBody
 var sk: Skeleton3D
@@ -136,9 +136,23 @@ func play(label: String, length: float, start: Callable) -> void:
 	var head_step := 0.0
 	var head_before := Vector3.ZERO
 	var frames := 0
+	var overreach := 0.0
+	var shoulder_seen := 9.0 # the drawn arm's shoulder in the picture at its nearest: shares of the half-picture (above 1 = outside)
 	while frames < int(length * 60.0) + 2:
 		step()
 		frames += 1
+		overreach = maxf(overreach, body.get("_swing_overreach") as float)
+		var apart_now: Dictionary = body.get("_apart")
+		if (apart_now["Right"]["model"] as Node3D).visible:
+			var arm_sk: Skeleton3D = apart_now["Right"]["skeleton"]
+			var shoulder_at := player.global_transform.affine_inverse() * (arm_sk.global_transform * arm_sk.get_bone_global_pose(arm_sk.find_bone("RightUpperArm"))).origin - (body.get("_eye") as Vector3)
+			# In the picture (75 deg high, 16:9): how far from the middle in shares of the half-picture,
+			# the larger of across and up / down; above 1 = outside it. Behind the camera = 9.
+			var in_camera := Basis(Vector3.RIGHT, pitch).inverse() * shoulder_at
+			var share := 9.0
+			if in_camera.z < -0.001:
+				share = maxf(absf(in_camera.x / -in_camera.z) / (tan(deg_to_rad(37.5)) * 16.0 / 9.0), absf(in_camera.y / -in_camera.z) / tan(deg_to_rad(37.5)))
+			shoulder_seen = minf(shoulder_seen, share)
 		var m := measure()
 		var tip := tip_world()
 		var elbow := elbow_world()
@@ -186,6 +200,7 @@ func play(label: String, length: float, start: Callable) -> void:
 		dump_frames.clear()
 	print("COMBAT %s: the view nods %+.1f..%+.1f deg, turns %+.1f..%+.1f (- = right), tilts %+.1f..%+.1f, at most %.2f deg in a frame" % [label, head_low.x, head_high.x, head_low.y, head_high.y, head_low.z, head_high.z, head_step])
 	print("COMBAT %s: the tip at most %.3f m in a frame (%.1f m/s) at %.2f s; the elbow at most %.3f m in a frame at %.2f s" % [label, tip_most, tip_most * 60.0, tip_when, elbow_most, elbow_when])
+	print("COMBAT %s: the wrist put at most %.3f m past the arm's reach; the arm's shoulder at its nearest %.2f of the way to the picture's edge (above 1 = outside the picture)" % [label, overreach, shoulder_seen])
 	var least := {}
 	for n: String in ["sword-eyes", "sword-body", "sword-shield", "shield-eyes", "shield-body", "arm-body"]:
 		var line := "COMBAT   %-12s" % n
@@ -226,6 +241,8 @@ func _run() -> void:
 			pitch = arg.trim_prefix("--pitch=").to_float()
 		if arg.begins_with("--only="):
 			only = arg.trim_prefix("--only=")
+		if arg.begins_with("--view-down-limit="): # PlayerBody.swing_view_down_limit (degrees; 90 = none)
+			body.swing_view_down_limit = arg.trim_prefix("--view-down-limit=").to_float()
 		if arg.begins_with("--dump="):
 			dump_path = arg.trim_prefix("--dump=")
 		if arg.begins_with("--trace="):

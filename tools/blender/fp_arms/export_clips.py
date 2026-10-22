@@ -17,6 +17,10 @@ PROJECT = os.path.normpath(os.path.join(HERE, "..", "..", ".."))
 SRC = os.path.join(PROJECT, "animation_sources", "fp_arms")
 OUT_DIR = os.path.join(PROJECT, "assets", "animations", "first_person")
 OUT = os.path.join(OUT_DIR, "fp_arms.glb")
+# The clips' frame rate: the export takes the timing from the scene's, so it is set to this for
+# the export and put back after -- the scene's own may be lowered to watch a move slowly (it was
+# 12 once, and a 1.2 s swing came out 3.0 s long).
+FPS = 30
 
 
 def main():
@@ -34,6 +38,9 @@ def main():
             child.select_set(True)
     bpy.context.view_layer.objects.active = arm
     os.makedirs(OUT_DIR, exist_ok=True)
+    render = bpy.context.scene.render
+    preview = (render.fps, render.fps_base, render.frame_map_old, render.frame_map_new)
+    render.fps, render.fps_base, render.frame_map_old, render.frame_map_new = FPS, 1.0, 100, 100
     bpy.ops.export_scene.gltf(filepath=OUT, export_format='GLB', use_selection=True, export_animations=True,
                               export_animation_mode='ACTIONS', export_def_bones=True, export_force_sampling=True,
                               export_frame_step=1, export_materials='NONE', export_cameras=False, export_lights=False,
@@ -42,10 +49,11 @@ def main():
                               export_anim_slide_to_zero=True,
                               # Not reset: the forearm's small unkeyed bend is what lets the IK solve (build_scene.py).
                               export_reset_pose_bones=False)
+    render.fps, render.fps_base, render.frame_map_old, render.frame_map_new = preview
     arm.animation_data.action = editing
     src = json.load(open(os.path.join(SRC, "arm_source.json")))
     with open(os.path.join(OUT_DIR, "fp_arms_rig.json"), "w", newline="\n") as fh:
-        json.dump({"hand_rest": src["bones"]["RightHand"]["rest"], "socket": src["socket"], "fps": bpy.context.scene.render.fps}, fh, indent=1)
+        json.dump({"hand_rest": src["bones"]["RightHand"]["rest"], "socket": src["socket"], "fps": FPS}, fh, indent=1)
     print("FP_ARMS exported %s: %s" % (OUT, ", ".join(sorted(a.name for a in bpy.data.actions))))
 
 
