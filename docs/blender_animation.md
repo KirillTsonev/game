@@ -142,10 +142,27 @@ Fixed one at a time, each tried on a snapshot of the keys first:
   `chain`, `hit`, `view_cap`, `bounds`, a "follow through" stage).
 
 Tried after this and reverted the same day (Kirill): holding the strike to the screen's centre
-line (first the tip, then the whole blade). Seen from the eyes the strike still wanders sideways
-(the tip 14 cm right, 10 left, back right over frames 18-22) and the blade lies up to 17 deg across
-its own path. Holding the blade on a vertical plane bent the wrist up to 72 deg; a line leaning
-about 6 deg toward the lower right eased it to 64 (12 deg: 62, but the elbow folds).
+line by script (first the tip, then the whole blade on a vertical plane, which bent the wrist up
+to 72 deg; a line leaning about 6 deg toward the lower right eased it to 64). The aim was never a
+vertical line: **the cut is to be a straight line on screen through the centre, inside a cone of
+about +-20 deg from vertical** (Kirill drew it as an hourglass over the eyes camera's view). Kirill
+then edited the keys by hand to that: the tip crosses the top of the picture about 3 deg left of
+centre (frame 19.4), the centre within a few pixels (20.7) and the bottom about 3 deg right
+(22.4), a line leaning about 9 deg, within 1 deg of straight over frames 19-25. The blade still
+lies 8-14 deg across that line (the guard right of the tip); not visible in play. Check a cut
+from the eyes camera (numpad 0) with the ghosts, not from the side.
+
+**Every swing leans at random** (2026-10-23, Kirill: "every slash random within that hourglass"):
+`PlayerBody.swing_lean_range` (default -20..+20 deg, + = the cut's top right) picks the cut's lean
+per swing, and `_clip_swing_pose` turns the whole move about the eyes' forward axis by the
+difference from the clip's own (`"lean"` in SWINGS: -8.6 measured in game), full from the
+wind-up's end and back over the recovery (`"lean_at"`). Turning about that axis keeps a line
+through the picture's middle straight and through it, so ONE clip gives every lean. Measured by
+`tools/weapon_probes/slash_lean.gd` (headless; prints where the tip crosses the top, the middle's
+height and the bottom): each lean within 0.6 deg of the one asked, the tip within 1.3 deg of
+straight, the middle crossed 1.6 deg left of centre at every lean, the hand never past reach. A
+new swing that is to lean needs its "lean" measured by that probe (at `--leans=` its own value,
+the line's lean is printed) and its "lean_at".
 
 Rule from it: **after moving the hand control, check its distance from the shoulder on every
 frame**. Blender's IK only stretches the arm straight when the control is out of reach; nothing

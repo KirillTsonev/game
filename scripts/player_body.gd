@@ -490,6 +490,8 @@ var _rig_state: StringName = &"" ## the clip last started or travelled to (&"" =
 var _rig_time: float = 0.0 ## where the tree is in that clip
 var _rig_chained: bool = false ## this swing cross-fades from the last in the tree, not in _clip_mix
 var _swing_overreach: float = 0.0 ## m the swing's wrist was put past the arm's reach this frame (_clip_swing_pose)
+var _swing_turn: float = 0.0 ## degrees this swing is turned about the eyes' forward axis at full (swing_lean_range)
+var debug_lean: float = NAN ## the animation panel's (I) fixed lean for every swing, degrees; NAN = random
 var _clip_socket: Transform3D = Transform3D.IDENTITY ## the sword in the hand as a clip swing has it this frame
 var _clip_socket_on: bool = false
 var _clip_last: Dictionary = {} ## a clip swing's pose this frame, in the view's own terms (_clip_swing_pose)
@@ -860,6 +862,13 @@ var _room_box: BoxShape3D
 ## -2..+6 cm, 10 deg +1..+12 cm; the Blender slash's elbow then moves up to 14.7 cm a frame as
 ## the limit fades in over its wind-up (9.7 without), the copied one's 22.6.
 @export_range(0.0, 90.0, 1.0) var swing_view_down_limit: float = 10.0
+## The cut's lean on screen, picked at random per swing between x and y (degrees from vertical;
+## + = the cut's top right of the centre and its bottom left). Only for swings with a "lean" (how
+## the clip leans as animated): the whole move is turned about the eyes' forward axis by the
+## difference, so the cut stays a straight line through the middle of the picture (Kirill,
+## 2026-10-22: every slash random within an hourglass round the centre). The turn builds over the
+## wind-up and goes back over the recovery ("lean_at"), so the idle hold is never tilted.
+@export var swing_lean_range: Vector2 = Vector2(-20.0, 20.0)
 ## The arms react to a dash with the weapons drawn (DODGE_ARMS).
 @export var dodge_arms: bool = true
 ## Seconds the arms' dodge takes (the mod's clips are 1.0 s, the forward roll 1.17; the dash
@@ -1653,8 +1662,29 @@ func _start_swing(swing_name: StringName, chained: bool) -> void:
 	_combat = swing_name
 	_combat_at = 0.0 # it blends in from wherever the arm is (_clip_from)
 	_combat_queued = &""
+	_pick_swing_turn(swing_name)
 	_swing_next += 1
 	interrupt_fidget()
+
+## Picks the lean of a swing that has one: debug_lean when the animation panel fixes it, else at
+## random in swing_lean_range; turned from the clip's own "lean" (_clip_swing_pose).
+func _pick_swing_turn(swing_name: StringName) -> void:
+	_swing_turn = 0.0
+	var swing: Dictionary = SWINGS.get(swing_name, {})
+	if swing.has("lean"):
+		var lean := debug_lean if not is_nan(debug_lean) else randf_range(swing_lean_range.x, swing_lean_range.y)
+		_swing_turn = lean - float(swing["lean"])
+
+## The lean of the swing playing (degrees from vertical, + = the cut's top right), NAN with none.
+func swing_lean_now() -> float:
+	var swing: Dictionary = SWINGS.get(_combat, {})
+	return float(swing["lean"]) + _swing_turn if swing.has("lean") else NAN
+
+## The animation panel's lean controls: a fixed lean (NAN = random again), or a new pick for the
+## swing it holds.
+func debug_set_lean(lean: float) -> void:
+	debug_lean = lean
+	_pick_swing_turn(_combat)
 
 ## The shield hit while blocking (an enemy's blow; for now PerfDebug Z): it is knocked back and
 ## recovers, the view jolts. One of BLOCK_HITS, never the same twice running. Nothing without the
@@ -1837,9 +1867,17 @@ func _clip_swing_pose(arm: Dictionary, to_skeleton: Transform3D, held_from: Vect
 	var stance := {"shoulder": s_shoulder, "wrist": to_player * _skeleton.get_bone_global_pose(arm["hand"]).origin,
 			"elbow": (s_elbow - s_shoulder).normalized(), "hand": stance_turn, "socket": _weapon_socket, "view": Vector3.ZERO}
 	var source := stance if _clip_from.is_empty() else _clip_unlocal(_clip_from, held_from, with_view)
-	var l_shoulder: Vector3 = frame["shoulder"]
-	var l_elbow: Vector3 = frame["elbow"]
-	var l_wrist: Vector3 = frame["wrist"]
+	# The swing's lean (swing_lean_range): the whole move turned about the eyes' forward axis, which
+	# keeps a cut through the middle of the picture straight and through it. + turns clockwise as
+	# seen (the cut's top to the right).
+	var lean := Basis.IDENTITY
+	if _swing_turn != 0.0 and swing.has("lean_at"):
+		var lean_at: Vector2 = swing["lean_at"]
+		var lean_share := _ease(0.0, lean_at.x, _combat_at) * (1.0 - _ease(lean_at.y, play_end, _combat_at))
+		lean = Basis(Vector3.FORWARD, deg_to_rad(_swing_turn * lean_share))
+	var l_shoulder: Vector3 = lean * (frame["shoulder"] as Vector3)
+	var l_elbow: Vector3 = lean * (frame["elbow"] as Vector3)
+	var l_wrist: Vector3 = lean * (frame["wrist"] as Vector3)
 	var theirs := l_elbow.distance_to(l_shoulder) + l_wrist.distance_to(l_elbow)
 	var l_reach := (l_wrist - l_shoulder) * (_arm_length() / maxf(theirs, 0.01))
 	var c_shoulder := held_from + full_view * l_shoulder
@@ -1851,7 +1889,7 @@ func _clip_swing_pose(arm: Dictionary, to_skeleton: Transform3D, held_from: Vect
 	# in the reference path of _hold_weapon and WeaponStance.socket.
 	var grip: Transform3D = frame["grip"]
 	var marker := Basis(-(arm["palm_out"] as Vector3), (arm["fingers_out"] as Vector3).cross(arm["palm_out"] as Vector3), -(arm["fingers_out"] as Vector3))
-	var played := {"shoulder": c_shoulder, "wrist": c_wrist, "elbow": (c_elbow - c_shoulder).normalized(), "hand": with_view * (frame["hand"] as Basis),
+	var played := {"shoulder": c_shoulder, "wrist": c_wrist, "elbow": (c_elbow - c_shoulder).normalized(), "hand": with_view * lean * (frame["hand"] as Basis),
 			"socket": Transform3D(marker * grip.basis * WeaponStance.SOCKET_IN_GRIP, marker * grip.origin), "view": frame["view"]}
 	# Chained from another swing (not the stance), "chain_blend_in" when given: a clip starting in
 	# the idle hold blends in quickly from the stance but needs longer from where a swing ended.
@@ -2094,7 +2132,9 @@ func _breathe(player: Node3D, delta: float) -> void:
 ## "chain" (from when a click starts the next swing at once; an earlier click waits for it), "hit"
 ## (the window the blade can hit, in the swing's own time, for the hits to come), "shield" (the
 ## shield hand moved as a counterweight, m in the stance's axes: +Z back), "stages" / "bounds"
-## (for the animation panel, I).
+## (for the animation panel, I), "lean" (the cut's lean on screen as animated, degrees from
+## vertical, + = its top right; swing_lean_range turns the move from it) and "lean_at" (s: by when
+## that turn is full, and from when it goes back, by the window's end).
 const SWINGS := {
 	# THE VERTICAL SLASHES (2026-10-22; what a click plays). The windows as measured by
 	# attack_analysis.py: the down slash from the high stance's right attack (S_H_C/1hm_attackright)
@@ -2122,7 +2162,8 @@ const SWINGS := {
 	# past the bottom), back from 25 to 38. "chain" stays one frame after the strike's end.
 	&"swing_down_blender": {"rig": &"swing_down", "clip_from": 0.0, "clip_to": 1.267,
 		"blend_in": 0.05, "chain_blend_in": 0.15, "time": 1.317, "chain": 0.767, "view_cap": Vector2(0.367, 0.733), "hit": Vector2(0.567, 0.733), "shield": Vector3(-0.02, -0.04, 0.03),
-		"stages": ["wind up", "cock", "strike", "follow through", "recover"], "bounds": [0.367, 0.567, 0.733, 0.833]},
+		"stages": ["wind up", "cock", "strike", "follow through", "recover"], "bounds": [0.367, 0.567, 0.733, 0.833],
+		"lean": -8.6, "lean_at": Vector2(0.367, 0.833)},
 	&"swing_up": {"clip": "res://assets/animations/first_person/stances_high_powerforwardsprint.json", "clip_from": 0.85, "clip_to": 1.08,
 		"blend_in": 0.12, "time": 0.6, "chain": 0.26, "hit": Vector2(0.08, 0.22), "shield": Vector3(-0.02, -0.04, 0.03),
 		"stages": ["dip", "strike", "recover"], "bounds": [0.133, 0.383]},
@@ -2562,6 +2603,7 @@ func debug_drive(animation: StringName, seconds: float) -> void:
 			_combat = animation
 			_clip_from = {}
 			_combat_queued = &""
+			_pick_swing_turn(animation)
 		_combat_driven = true
 		_combat_at = seconds
 		return
