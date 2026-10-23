@@ -499,6 +499,9 @@ var _clip_fingers: Dictionary = {} ## the playing Blender swing's fingers agains
 var _clip_fingers_weight: float = 0.0 ## how much of them is played this frame (0 outside a Blender swing)
 var _swing_chest := Quaternion.IDENTITY ## the chest's turn this frame in the Player's axes (swing_chest_from_rig), read and cleared by _turn_chest_with_swing
 var _rig_left_hold: Dictionary = {} ## the rig's left arm in its "hold": what _rig_left is played as a change from
+var _rig_player: AnimationPlayer ## the rig's own player: its clips, read straight for a blended clip (_rig_pose_direct)
+var _rig_tracks: Dictionary = {} ## clip -> [[track, type, bone], ...] (_rig_pose_direct)
+var _swing_down_share: float = 0.0 ## 0-1: how much of a swing's looking-down clip plays now (swing_down_clip_*)
 var _swing_overreach: float = 0.0 ## m the swing's wrist was put past the arm's reach this frame (_clip_swing_pose)
 var _swing_turn: float = 0.0 ## degrees this swing is turned about the eyes' forward axis at full (swing_lean_range)
 var debug_lean: float = NAN ## the animation panel's (I) fixed lean for every swing, degrees; NAN = random
@@ -911,6 +914,20 @@ var _room_box: BoxShape3D
 @export var swing_fingers_from_rig: bool = true
 ## Seconds one Blender clip cross-fades into the next when chained (the AnimationTree's transitions).
 @export var rig_crossfade: float = 0.1
+## A Blender swing's leaned clips ("lean_rig" / "down_rig" in SWINGS; docs/blender_animation.md,
+## "The leaned clips"; Kirill, 2026-10-24): leaned between its own "lean" and "lean_rig_lean" the
+## swing is a blend of its clip and the leaned one, each turned the rest of the way to the lean;
+## the leaned one is blended with its looking-down copy by how far the view is down. Off: the
+## swing's clip turned by the whole lean, as before. Switch to compare.
+@export var swing_lean_clips: bool = true
+## Degrees below level where the looking-down clip starts to blend in, and where it plays alone
+## (Kirill: from about 30; the clip was posed looking 80.2 deg down, as far as the view goes).
+@export var swing_down_clip_from: float = 30.0
+@export var swing_down_clip_full: float = 80.2
+## Seconds the looking-down clip's share takes to go all the way. It follows the view live through
+## the swing (Kirill chose that over picking it once at the start), held to this pace so a quick
+## look does not snap the arm.
+@export var swing_down_clip_time: float = 0.3
 @export_group("")
 var _skeleton: Skeleton3D
 var _animations: AnimationPlayer
@@ -1405,6 +1422,7 @@ func advance(delta: float, camera_pitch: float) -> void:
 	_fidget_view(camera_pitch)
 	camera_pitch += _view_dip
 	_look_pitch = camera_pitch - _fidget_dip # a "dip_alone" fidget's look down leaves the weapons where they are
+	_swing_down_share = move_toward(_swing_down_share, _swing_down_target(), delta / maxf(swing_down_clip_time, 0.001))
 	# Half a turn (the model faces +Z, the Player looks along -Z) plus the turn into a diagonal.
 	_turn = lerp_angle(_turn, _turn_wanted, 1.0 - exp(-delta * diagonal_turn_rate))
 	_model.rotation.y = PI + _turn
@@ -1726,6 +1744,7 @@ func _start_swing(swing_name: StringName, chained: bool) -> void:
 	_combat_at = 0.0 # it blends in from wherever the arm is (_clip_from)
 	_combat_queued = &""
 	_pick_swing_turn(swing_name)
+	_swing_down_share = _swing_down_target() # as the view is at the start; followed from there
 	_swing_next += 1
 	interrupt_fidget()
 
@@ -1737,6 +1756,10 @@ func _pick_swing_turn(swing_name: StringName) -> void:
 	if swing.has("lean"):
 		var lean := debug_lean if not is_nan(debug_lean) else randf_range(swing_lean_range.x, swing_lean_range.y)
 		_swing_turn = lean - float(swing["lean"])
+
+## The looking-down clip's share the view asks for now (swing_down_clip_from / _full).
+func _swing_down_target() -> float:
+	return smoothstep(swing_down_clip_from, swing_down_clip_full, -rad_to_deg(_look_pitch))
 
 ## The lean of the swing playing (degrees from vertical, + = the cut's top right), NAN with none.
 func swing_lean_now() -> float:
@@ -1926,6 +1949,11 @@ func _clip_swing_pose(arm: Dictionary, to_skeleton: Transform3D, held_from: Vect
 			frame = clip.sample(float(swing["clip_from"]) + clampf(_combat_at, 0.0, play_end))
 	if frame.is_empty():
 		return
+	# The leaned clips (swing_lean_clips): the frame is a blend of the swing's clip and its leaned
+	# one, each already turned its share of the lean, so the plain turn below is left out.
+	var leaned := _lean_clips_frame(swing, frame, float(swing["clip_from"]) + clampf(_combat_at, 0.0, play_end), play_end, arm)
+	if not leaned.is_empty():
+		frame = leaned
 	if swing_chest_from_rig and frame.has("chest"):
 		_swing_chest = Quaternion.IDENTITY.slerp(frame["chest"] as Quaternion, _clip_weight(swing, _combat_at)) # the body turned by it next frame
 	if swing_fingers_from_rig and frame.has("fingers"):
@@ -1941,10 +1969,8 @@ func _clip_swing_pose(arm: Dictionary, to_skeleton: Transform3D, held_from: Vect
 	# keeps a cut through the middle of the picture straight and through it. + turns clockwise as
 	# seen (the cut's top to the right).
 	var lean := Basis.IDENTITY
-	if _swing_turn != 0.0 and swing.has("lean_at"):
-		var lean_at: Vector2 = swing["lean_at"]
-		var lean_share := _ease(0.0, lean_at.x, _combat_at) * (1.0 - _ease(lean_at.y, play_end, _combat_at))
-		lean = Basis(Vector3.FORWARD, deg_to_rad(_swing_turn * lean_share))
+	if _swing_turn != 0.0 and swing.has("lean_at") and leaned.is_empty():
+		lean = Basis(Vector3.FORWARD, deg_to_rad(_swing_turn * _lean_share(swing, play_end)))
 	var l_shoulder: Vector3 = lean * (frame["shoulder"] as Vector3)
 	var l_elbow: Vector3 = lean * (frame["elbow"] as Vector3)
 	var l_wrist: Vector3 = lean * (frame["wrist"] as Vector3)
@@ -1993,6 +2019,70 @@ func _swing_view(swing: Dictionary, play_end: float) -> Basis:
 	var cap: Vector2 = swing.get("view_cap", Vector2(float(swing["blend_in"]), play_end))
 	var weight := _ease(0.0, cap.x, _combat_at) * (1.0 - _ease(cap.y, float(swing["time"]), _combat_at))
 	return Basis(Vector3.RIGHT, lerpf(full, capped, weight))
+
+## How much of a swing's lean is on now: built up by "lean_at".x, gone again from "lean_at".y to
+## the window's end, so the idle hold is never tilted.
+func _lean_share(swing: Dictionary, play_end: float) -> float:
+	var lean_at: Vector2 = swing["lean_at"]
+	return _ease(0.0, lean_at.x, _combat_at) * (1.0 - _ease(lean_at.y, play_end, _combat_at))
+
+## A swing with a leaned clip ("lean_rig", animated at "lean_rig_lean" where the swing's own clip is
+## at its "lean") whose lean falls above its own: the two clips' frames blended by where the lean
+## falls between theirs (all of the leaned one from "lean_rig_lean" up), each turned about the eyes'
+## forward axis the rest of the way to it, faded over "lean_at" as the plain turn is. At exactly
+## "lean_rig_lean" the leaned clip plays as animated. Before that the leaned clip is blended with
+## its looking-down copy ("down_rig") by _swing_down_share. The shield arm (_rig_left), the chest and
+## the fingers are blended the same way, unturned (the plain turn leaves them too). Empty when the
+## lean is at or below the swing's own (the plain turn plays it, as before) or swing_lean_clips is off.
+func _lean_clips_frame(swing: Dictionary, frame: Dictionary, at: float, play_end: float, arm: Dictionary) -> Dictionary:
+	if not swing_lean_clips or not swing.has("lean_rig") or not swing.has("lean_at"):
+		return {}
+	var span := float(swing["lean_rig_lean"]) - float(swing["lean"])
+	var weight := clampf(_swing_turn / span, 0.0, 1.0) if span > 0.0 else 0.0
+	if weight <= 0.0:
+		return {}
+	var other := _rig_sample_direct(swing["lean_rig"], at, arm)
+	if other.is_empty():
+		return {}
+	if swing.has("down_rig") and _swing_down_share > 0.0:
+		var down := _rig_sample_direct(swing["down_rig"], at, arm)
+		if not down.is_empty():
+			other = _mix_rig_frames(other, down, _swing_down_share)
+	var share := _lean_share(swing, play_end)
+	var mixed := _mix_rig_frames(_turn_rig_frame(frame, Basis(Vector3.FORWARD, deg_to_rad(_swing_turn * share))),
+			_turn_rig_frame(other, Basis(Vector3.FORWARD, deg_to_rad((_swing_turn - span) * share))), weight)
+	if mixed.has("left"):
+		_rig_left = mixed["left"]
+	return mixed
+
+## A rig frame (_rig_read) with its sword arm turned by `turn` about the eyes.
+static func _turn_rig_frame(frame: Dictionary, turn: Basis) -> Dictionary:
+	var turned := frame.duplicate()
+	for key: String in ["shoulder", "elbow", "wrist"]:
+		turned[key] = turn * (frame[key] as Vector3)
+	turned["hand"] = turn * (frame["hand"] as Basis)
+	return turned
+
+## Two rig frames (_rig_read) blended, `weight` of `b`: places straight, turns along the shortest way.
+static func _mix_rig_frames(a: Dictionary, b: Dictionary, weight: float) -> Dictionary:
+	var turn := func(x: Basis, y: Basis) -> Basis: return Basis(x.get_rotation_quaternion().slerp(y.get_rotation_quaternion(), weight))
+	var ga: Transform3D = a["grip"]
+	var gb: Transform3D = b["grip"]
+	var fingers := {}
+	var fa: Dictionary = a["fingers"]
+	var fb: Dictionary = b["fingers"]
+	for bone_name: String in fa:
+		fingers[bone_name] = turn.call(fa[bone_name], fb.get(bone_name, fa[bone_name]))
+	var mixed := {"shoulder": (a["shoulder"] as Vector3).lerp(b["shoulder"], weight), "elbow": (a["elbow"] as Vector3).lerp(b["elbow"], weight),
+			"wrist": (a["wrist"] as Vector3).lerp(b["wrist"], weight), "hand": turn.call(a["hand"], b["hand"]),
+			"grip": Transform3D(turn.call(ga.basis, gb.basis), ga.origin.lerp(gb.origin, weight)),
+			"view": (a["view"] as Vector3).lerp(b["view"], weight), "chest": (a["chest"] as Quaternion).slerp(b["chest"], weight), "fingers": fingers, "left": a.get("left", {})}
+	var la: Dictionary = a.get("left", {})
+	var lb: Dictionary = b.get("left", {})
+	if not la.is_empty() and not lb.is_empty():
+		mixed["left"] = {"shoulder": (la["shoulder"] as Vector3).lerp(lb["shoulder"], weight), "elbow": (la["elbow"] as Vector3).lerp(lb["elbow"], weight),
+				"wrist": (la["wrist"] as Vector3).lerp(lb["wrist"], weight), "forearm": turn.call(la["forearm"], lb["forearm"])}
+	return mixed
 
 ## A clip swing's share at `at` (s): eased in over "blend_in", out after its window.
 func _clip_weight(swing: Dictionary, at: float) -> float:
@@ -2046,6 +2136,7 @@ func _rig_ready() -> bool:
 	for bone_name: String in ["Eyes", "RightUpperArm", "RightLowerArm", "RightHand", "Weapon", "LeftUpperArm", "LeftLowerArm", "LeftHand", "forearm_roll_l", "CTRL_chest"] + RIG_FINGER_BONES:
 		_rig_bones[bone_name] = _rig_skeleton.find_bone(bone_name)
 	var player := _rig.find_children("*", "AnimationPlayer", true, false)[0] as AnimationPlayer
+	_rig_player = player
 	player.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
 	var machine := AnimationNodeStateMachine.new()
 	var clips := player.get_animation_list()
@@ -2117,7 +2208,46 @@ func _rig_sample(clip: StringName, at: float, arm: Dictionary) -> Dictionary:
 		_rig_time = 0.0
 	_rig_tree.advance(maxf(at - _rig_time, 0.0))
 	_rig_time = at
-	_rig_left = _rig_left_pose() if not _rig_left_hold.is_empty() else {}
+	var frame := _rig_read(arm)
+	_rig_left = frame.get("left", {})
+	return frame
+
+## `clip` at `at` s read straight from its Animation, not through the tree (which goes on playing
+## the swing's own clip): a second clip blended in (_lean_clips_frame). Leaves _rig_left alone; the
+## frame's "left" is that clip's shield arm. Empty if the rig or the clip is missing.
+func _rig_sample_direct(clip: StringName, at: float, arm: Dictionary) -> Dictionary:
+	if not _rig_ready() or not _rig_pose_direct(clip, at):
+		return {}
+	return _rig_read(arm)
+
+## Poses the rig's skeleton as `clip` has it at `at` s, from the clip's tracks. The tree poses it
+## afresh on its next advance.
+func _rig_pose_direct(clip: StringName, at: float) -> bool:
+	if _rig_player == null or not _rig_player.has_animation(clip):
+		return false
+	var animation := _rig_player.get_animation(clip)
+	if not _rig_tracks.has(clip):
+		var tracks: Array = []
+		for track in animation.get_track_count():
+			var bone := _rig_skeleton.find_bone(String(animation.track_get_path(track).get_concatenated_subnames()))
+			if bone >= 0:
+				tracks.append([track, animation.track_get_type(track), bone])
+		_rig_tracks[clip] = tracks
+	var t := clampf(at, 0.0, animation.length)
+	for entry: Array in _rig_tracks[clip]:
+		match entry[1]:
+			Animation.TYPE_POSITION_3D:
+				_rig_skeleton.set_bone_pose_position(entry[2], animation.position_track_interpolate(entry[0], t))
+			Animation.TYPE_ROTATION_3D:
+				_rig_skeleton.set_bone_pose_rotation(entry[2], animation.rotation_track_interpolate(entry[0], t))
+			Animation.TYPE_SCALE_3D:
+				_rig_skeleton.set_bone_pose_scale(entry[2], animation.scale_track_interpolate(entry[0], t))
+	return true
+
+## The rig's skeleton as it is posed now, as _rig_sample describes; "left" is its shield arm
+## (_rig_left_pose), empty without a "hold".
+func _rig_read(arm: Dictionary) -> Dictionary:
+	var left := _rig_left_pose() if not _rig_left_hold.is_empty() else {}
 	var in_eyes := _rig.global_transform.affine_inverse() * _rig_skeleton.global_transform
 	var pose_of := func(bone_name: String) -> Transform3D: return in_eyes * _rig_skeleton.get_bone_global_pose(_rig_bones[bone_name])
 	var turn_of := func(bone_name: String) -> Basis:
@@ -2144,7 +2274,7 @@ func _rig_sample(clip: StringName, at: float, arm: Dictionary) -> Dictionary:
 	for bone_name: String in RIG_FINGER_BONES:
 		if _rig_bones.get(bone_name, -1) >= 0:
 			fingers[bone_name] = hand_turn.inverse() * (turn_of.call(bone_name) as Basis)
-	return {"chest": chest, "fingers": fingers, "shoulder": (pose_of.call("RightUpperArm") as Transform3D).origin, "elbow": (pose_of.call("RightLowerArm") as Transform3D).origin, "wrist": wrist,
+	return {"left": left, "chest": chest, "fingers": fingers, "shoulder": (pose_of.call("RightUpperArm") as Transform3D).origin, "elbow": (pose_of.call("RightLowerArm") as Transform3D).origin, "wrist": wrist,
 			"hand": hand * marker,
 			"grip": Transform3D(marker.inverse() * socket.basis * WeaponStance.SOCKET_IN_GRIP.inverse(), marker.inverse() * socket.origin),
 			"view": Vector3(rad_to_deg(atan2(ahead.x, -ahead.z)), rad_to_deg(asin(clampf(ahead.y, -1.0, 1.0))), rad_to_deg(atan2(-up.x, up.y)))}
@@ -2240,7 +2370,8 @@ func _breathe(player: Node3D, delta: float) -> void:
 ## vertical, + = its top right; swing_lean_range turns the move from it) and "lean_at" (s: by when
 ## that turn is full, and from when it goes back, by the window's end), "shield_from_rig" (a
 ## Blender swing whose clip moves the shield arm too, _hold_shield; its "shield" is then used only
-## with shield_arm_from_rig off).
+## with shield_arm_from_rig off), "lean_rig" / "lean_rig_lean" / "down_rig" (a Blender swing's
+## clip animated at another lean, and that one's copy posed looking down: _lean_clips_frame).
 const SWINGS := {
 	# THE VERTICAL SLASHES (2026-10-22; what a click plays). The windows as measured by
 	# attack_analysis.py: the down slash from the high stance's right attack (S_H_C/1hm_attackright)
@@ -2269,7 +2400,11 @@ const SWINGS := {
 	&"swing_down_blender": {"rig": &"swing_down", "clip_from": 0.0, "clip_to": 1.267,
 		"blend_in": 0.05, "chain_blend_in": 0.15, "time": 1.317, "chain": 0.767, "view_cap": Vector2(0.367, 0.733), "hit": Vector2(0.567, 0.733), "shield": Vector3(-0.02, -0.04, 0.03), "shield_from_rig": true,
 		"stages": ["wind up", "cock", "strike", "follow through", "recover"], "bounds": [0.367, 0.567, 0.733, 0.833],
-		"lean": -8.6, "lean_at": Vector2(0.367, 0.833)},
+		"lean": -8.6, "lean_at": Vector2(0.367, 0.833),
+		# Leaned right (2026-10-24, swing_lean_clips): from -8.6 to +20 blended with swing_down_right,
+		# Kirill's own +20 cut (the arm turned whole into the torso there), and that with its copy
+		# posed looking all the way down, swing_down_right_down.
+		"lean_rig": &"swing_down_right", "lean_rig_lean": 20.0, "down_rig": &"swing_down_right_down"},
 	&"swing_up": {"clip": "res://assets/animations/first_person/stances_high_powerforwardsprint.json", "clip_from": 0.85, "clip_to": 1.08,
 		"blend_in": 0.12, "time": 0.6, "chain": 0.26, "hit": Vector2(0.08, 0.22), "shield": Vector3(-0.02, -0.04, 0.03),
 		"stages": ["dip", "strike", "recover"], "bounds": [0.133, 0.383]},

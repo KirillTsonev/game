@@ -26,7 +26,8 @@ FOLLOWS_VIEW = 0.8       # PlayerBody.weapon_follows_view
 MOST_DOWN = math.degrees(1.4)  # the furthest the Player can look down (player.gd clamps its pitch to 1.4 rad): the default
 DOWN_LIMIT = 10.0        # PlayerBody.swing_view_down_limit (degrees)
 # Per action: the swing's "view_cap" and "time" (s) in PlayerBody.SWINGS; an action not listed is a hold.
-VIEW_CAPS = {"swing_down": (0.367, 0.733, 1.317), "swing_down_right": (0.367, 0.733, 1.317)}
+VIEW_CAPS = {"swing_down": (0.367, 0.733, 1.317), "swing_down_right": (0.367, 0.733, 1.317),
+             "swing_down_right_down": (0.367, 0.733, 1.317)}
 FPS = 30.0
 ARMS = ("CTRL_chest", "CTRL_elbow", "CTRL_hand_l", "CTRL_elbow_l")
 HAND = ("CTRL_hand",)

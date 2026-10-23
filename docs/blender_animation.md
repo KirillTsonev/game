@@ -50,6 +50,20 @@ Editing a move step by step (for Kirill): `docs/editing_animations_in_blender.md
   gloves cut away, as the game shrinks it into the shoulder). Bone collections: Controls and
   Fingers shown; Arm (the bones the IK drives) and Body hidden. Bones drawn octahedral: B-bones
   came out as boxes thicker than the arm and hid it.
+  **The arm's shoulder end closes as in the game** (2026-10-23; Kirill: "the arm mesh has these gaps
+  at the shoulder"): the game moves every bone of a drawn arm's copy that is not of the arm into the
+  arm's shoulder and shrinks it to `ARM_APART_SHRINK` (0.001, `PlayerBody._draw_arm_apart`), so the
+  cloth shared with the chest closes over the arm's end. Here the body bones stayed at the body while
+  the arm hung from `CTRL_shoulder`, and vertices weighted to both (`spine_04`, `Chest`, the collarbone,
+  `clavicle_*`: 357 in `topA_geo`, 198 in `shoulderPad_geo`) tore into spikes up to 22 cm long. Each
+  arm's meshes now carry those weights on `APART_r` / `APART_l` (child of the upper arm at its head,
+  held at 0.001 scale by a Limit Scale constraint, hidden); longest edge 8.3 cm on every frame, looking
+  straight or down. They are exported into `fp_arms.glb` as deforming bones; the game reads none of it.
+  That still left holes (Kirill: "still texture gaps"): `build_scene.py` and `add_shield_arm.py`
+  DELETE every vertex less than half on the arm, so the cut edge stayed open where the game's full
+  shirt closes it. The same day the arm meshes were put back whole from `arm_source.glb` /
+  `shield_source.glb` (placed on the cut pieces exactly: 0 mm), everything not on the arm on
+  `APART_*`, as the game draws them. Re-running either script cuts them again.
 - **What to move** (the Controls collection):
   - `CTRL_hand` (red): the hand. Move it AND turn it; the arm follows by IK.
   - `CTRL_elbow` (blue): where the elbow points (the IK's pole).
@@ -219,6 +233,46 @@ deg put the arm through the torso -- the lean turns the whole move rigidly, shou
   out of the middle of the torso" and, looking down, into it. Procedural fixes tried the same day and
   taken back (the shoulder left unturned, kept out of the picture, put on the body; a keep-off; a
   lean limit looking down): each bent the wrist or the elbow, or moved the problem elsewhere.
+  Reworked by hand on 2026-10-23, judged good looking straight by Kirill. Script passes that day
+  (each on Kirill's say-so, checked by per-frame steps): the left shoulder and elbow controls keyed
+  every frame at frame 0's offset from the torso's left edge (`topA_geo_body` vertex 4866), turned
+  with `BodyRef`'s UpperChest; the shield hand eased right on the cock / left on the cut, its
+  distance from the shoulder kept over 1-11 so the arm does not fold; the sword wrist over 0-16
+  smoothed by the blade tip's path (eased out of the hold) and its roll about the blade; the sword
+  shoulder's path smoothed over 1-37; the shield's return retimed over 25-37 with a 2.2 cm overshoot.
+  All of that holds looking STRAIGHT only: looking down, the arms turn with the view about the eyes
+  and the body does not, and the left shoulder stood 30-53 cm from the torso's edge (22 straight).
+- **`swing_down_right_down`** (2026-10-23, fake user): the same cut for looking DOWN, started as a
+  copy of `swing_down_right` and to be posed with the look-down preview on (`VIEW_CAPS` has it).
+  One clip cannot sit on the body in both views, because the game turns the arms with the view and
+  not the body (Kirill chose a second clip over changing how the game turns the arms, which was
+  tried before). Smoothed the same day looking down (blade tip retimed from its own path, the bounce
+  at 24-28 and a drop to 114 cm below the eyes at 31 taken out, the sword-in-hand `Weapon` keys
+  smoothed so the wrist turns evenly, a stray `CTRL_elbow` key on 25 and a `CTRL_shoulder` key on 52
+  removed -- the latter had made the action, and so the exported clip, 52 frames long).
+- **The leaned clips in the game** (2026-10-24, `PlayerBody._lean_clips_frame`, switch
+  `swing_lean_clips`): `swing_down_blender` has `"lean_rig": swing_down_right`, `"lean_rig_lean": 20`,
+  `"down_rig": swing_down_right_down`. A lean at or below -8.6 (the clip's own) plays as before
+  (`swing_down` turned by it). Above it the swing is `swing_down` turned by the whole lean blended
+  with `swing_down_right` turned by (lean - 20), the share (lean + 8.6) / 28.6, both turns faded over
+  `lean_at`; at +20 `swing_down_right` plays as animated. Before that blend, `swing_down_right` is
+  blended with `swing_down_right_down` by the view: none above 30 deg down, all of it at 80.2
+  (`swing_down_clip_from` / `_full`, smoothstep), FOLLOWED LIVE through the swing (Kirill chose that
+  over picking it at the start) at most 1 / `swing_down_clip_time` (0.3 s) a second, set at once when
+  the swing starts. Shield arm, chest and fingers blend alike (unturned, as the plain turn leaves
+  them). The tree plays the swing's own clip; the other two are read straight from their
+  Animations (`_rig_pose_direct`) into the same skeleton, which the tree poses afresh next frame.
+  Check: `tools/weapon_probes/lean_clips_check.gd` (leans -20..+20 level, +20 at 40 / 80 deg down,
+  and a look down from level mid-swing; `-- --off` for the old turn). First run: -20 and -8.6 as
+  before; the tip's largest change of step 25.7 -> 17.8 cm at +20 level; looking 80 deg down the
+  wrist past its reach 30 -> 0 cm. Looking down from level in 0.15 s mid-swing the shield moves 25 cm
+  in a frame (14 with the switch off: most of it is the view and the shield's keep-off).
+- **The shield's keep-off in a swing** (`tools/weapon_probes/shield_swing_clearance.gd`, 2026-10-24,
+  `swing_down_blender`): looking level it never acts; 40 deg down it is the stance's own 22.5 deg
+  forearm turn, unchanged through the swing; 80 deg down the stance's 80 deg turn and 5.3 cm push,
+  the push 9 cm in the wind-up and easing to 0.3 cm / 63 deg as the shield swings clear (22-32). So it
+  stays on in swings (off, the shield would jump 80 deg as a swing starts looking down). The Blender
+  look-down preview does not show it: the down clip's shield is not what the game draws there.
 - **The body as a reference** (Kirill: "we need the body and legs to properly ascertain"):
   `tools/blender/fp_arms/export_body_source.gd` (headless) records the body as the game draws it
   through `swing_down` -- torso, belts, legs, boots; not the head and hood; its own arms shrunk into
