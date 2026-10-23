@@ -490,6 +490,13 @@ var _rig_state: StringName = &"" ## the clip last started or travelled to (&"" =
 var _rig_time: float = 0.0 ## where the tree is in that clip
 var _rig_chained: bool = false ## this swing cross-fades from the last in the tree, not in _clip_mix
 var _rig_left: Dictionary = {} ## the rig's left arm as last sampled (_rig_left_pose); the shield arm of a swing
+## The sword hand's finger bones a Blender swing carries (_play_clip_fingers), each finger from the
+## hand outward.
+const RIG_FINGER_BONES: Array[String] = ["RightThumbMetacarpal", "RightThumbProximal", "RightThumbDistal",
+		"RightIndexProximal", "RightIndexIntermediate", "RightIndexDistal", "RightMiddleProximal", "RightMiddleIntermediate", "RightMiddleDistal",
+		"RightRingProximal", "RightRingIntermediate", "RightRingDistal", "RightLittleProximal", "RightLittleIntermediate", "RightLittleDistal"]
+var _clip_fingers: Dictionary = {} ## the playing Blender swing's fingers against the hand (_rig_sample's "fingers")
+var _clip_fingers_weight: float = 0.0 ## how much of them is played this frame (0 outside a Blender swing)
 var _swing_chest := Quaternion.IDENTITY ## the chest's turn this frame in the Player's axes (swing_chest_from_rig), read and cleared by _turn_chest_with_swing
 var _rig_left_hold: Dictionary = {} ## the rig's left arm in its "hold": what _rig_left is played as a change from
 var _swing_overreach: float = 0.0 ## m the swing's wrist was put past the arm's reach this frame (_clip_swing_pose)
@@ -896,6 +903,12 @@ var _room_box: BoxShape3D
 ## way (its chest carries their shoulders); this turns the body you see looking down and its
 ## shadow. Switch to compare.
 @export var swing_chest_from_rig: bool = true
+## The sword hand's fingers of a Blender swing played from its clip (_play_clip_fingers), blended
+## in and out with the swing; off, the stance's posed fist is kept through it. The clip's fingers
+## are keyed round the handle where the swing has it (Kirill, 2026-10-23: in the swing "the palm
+## is not actually gripping the hilt tightly" -- the swing moves the handle in the hand up to 52
+## deg and 3 cm, and the stance's fist then stood open round it). Switch to compare.
+@export var swing_fingers_from_rig: bool = true
 ## Seconds one Blender clip cross-fades into the next when chained (the AnimationTree's transitions).
 @export var rig_crossfade: float = 0.1
 @export_group("")
@@ -1781,6 +1794,7 @@ func _update_combat(delta: float) -> void:
 	_combat_turn = 0.0
 	_combat_tilt = 0.0
 	_clip_socket_on = false # set again by _clip_swing_pose while a swing plays
+	_clip_fingers_weight = 0.0 # the same
 	if _dodge_arm != "":
 		_dodge_arm_at += delta
 		if _dodge_arm_at >= dodge_arm_time:
@@ -1914,6 +1928,9 @@ func _clip_swing_pose(arm: Dictionary, to_skeleton: Transform3D, held_from: Vect
 		return
 	if swing_chest_from_rig and frame.has("chest"):
 		_swing_chest = Quaternion.IDENTITY.slerp(frame["chest"] as Quaternion, _clip_weight(swing, _combat_at)) # the body turned by it next frame
+	if swing_fingers_from_rig and frame.has("fingers"):
+		_clip_fingers = frame["fingers"]
+		_clip_fingers_weight = _clip_weight(swing, _combat_at) # played over the stance's fist by _play_clip_fingers
 	var to_player := to_skeleton.affine_inverse()
 	var s_shoulder := to_player * _skeleton.get_bone_global_pose(arm["upper"]).origin
 	var s_elbow := to_player * _skeleton.get_bone_global_pose(arm["lower"]).origin
@@ -2026,7 +2043,7 @@ func _rig_ready() -> bool:
 	add_child(_rig)
 	_rig.visible = false
 	_rig_skeleton = _rig.find_children("*", "Skeleton3D", true, false)[0] as Skeleton3D
-	for bone_name: String in ["Eyes", "RightUpperArm", "RightLowerArm", "RightHand", "Weapon", "LeftUpperArm", "LeftLowerArm", "LeftHand", "forearm_roll_l", "CTRL_chest"]:
+	for bone_name: String in ["Eyes", "RightUpperArm", "RightLowerArm", "RightHand", "Weapon", "LeftUpperArm", "LeftLowerArm", "LeftHand", "forearm_roll_l", "CTRL_chest"] + RIG_FINGER_BONES:
 		_rig_bones[bone_name] = _rig_skeleton.find_bone(bone_name)
 	var player := _rig.find_children("*", "AnimationPlayer", true, false)[0] as AnimationPlayer
 	player.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
@@ -2120,7 +2137,14 @@ func _rig_sample(clip: StringName, at: float, arm: Dictionary) -> Dictionary:
 	# The chest's turn (CTRL_chest, which carries both shoulders round the spine in the clip): its
 	# twist and tilt in the eyes' space, as _turn_chest_with_swing plays it.
 	var chest: Quaternion = (turn_of.call("CTRL_chest") as Basis).get_rotation_quaternion() if _rig_bones["CTRL_chest"] >= 0 else Quaternion.IDENTITY
-	return {"chest": chest, "shoulder": (pose_of.call("RightUpperArm") as Transform3D).origin, "elbow": (pose_of.call("RightLowerArm") as Transform3D).origin, "wrist": wrist,
+	# The fingers (keyed in Blender round the handle, tools/blender/fp_arms/wrap_fingers.py): each
+	# one's turn from its rest against the hand's, in the eyes' space (_play_clip_fingers).
+	var fingers := {}
+	var hand_turn: Basis = turn_of.call("RightHand")
+	for bone_name: String in RIG_FINGER_BONES:
+		if _rig_bones.get(bone_name, -1) >= 0:
+			fingers[bone_name] = hand_turn.inverse() * (turn_of.call(bone_name) as Basis)
+	return {"chest": chest, "fingers": fingers, "shoulder": (pose_of.call("RightUpperArm") as Transform3D).origin, "elbow": (pose_of.call("RightLowerArm") as Transform3D).origin, "wrist": wrist,
 			"hand": hand * marker,
 			"grip": Transform3D(marker.inverse() * socket.basis * WeaponStance.SOCKET_IN_GRIP.inverse(), marker.inverse() * socket.origin),
 			"view": Vector3(rad_to_deg(atan2(ahead.x, -ahead.z)), rad_to_deg(asin(clampf(ahead.y, -1.0, 1.0))), rad_to_deg(atan2(-up.x, up.y)))}
@@ -4761,6 +4785,31 @@ func _hold_weapon(player: Node3D, delta: float) -> void:
 		_stance.pose_fingers(_skeleton, weapon.grip_radius) # as posed by hand in the editor
 	else:
 		_set_fingers(arm, _weapon_fist, 1.0)
+	if _stance and (not drawing or smoothstep(weapon_draw_grab * 0.5, weapon_draw_grab, _weapon_up) >= 0.999):
+		_play_clip_fingers(player) # a Blender swing's fingers over the stance's fist
+
+## See swing_fingers_from_rig. The sword hand's fingers as the playing Blender swing has them
+## against the hand (_clip_fingers, read by _rig_sample as each finger's turn from its rest against
+## the hand's, in the eyes' space), blended over the stance's fist by _clip_fingers_weight. Read as
+## turns from the rest, like everything of the rig: the two programs' bone axes are never compared.
+func _play_clip_fingers(player: Node3D) -> void:
+	if _clip_fingers_weight <= 0.001 or _clip_fingers.is_empty():
+		return
+	# The eyes' space has the Player's axes: into the skeleton's.
+	var to_player := (player.global_transform.affine_inverse() * _skeleton.global_transform).basis.orthonormalized()
+	var hand_bone: int = _arms["Right"]["hand"]
+	var hand_turn := _skeleton.get_bone_global_pose(hand_bone).basis.orthonormalized() * _skeleton.get_bone_global_rest(hand_bone).basis.orthonormalized().inverse()
+	for bone_name: String in RIG_FINGER_BONES:
+		if not _clip_fingers.has(bone_name):
+			continue
+		var bone := _skeleton.find_bone(bone_name)
+		if bone < 0:
+			continue
+		var against_hand := to_player.inverse() * (_clip_fingers[bone_name] as Basis) * to_player
+		var wanted := (hand_turn * against_hand * _skeleton.get_bone_global_rest(bone).basis.orthonormalized()).get_rotation_quaternion()
+		var now := _skeleton.get_bone_global_pose(bone)
+		var turn := now.basis.orthonormalized().get_rotation_quaternion().slerp(wanted, _clip_fingers_weight)
+		_skeleton.set_bone_global_pose(bone, Transform3D(Basis(turn).scaled(now.basis.get_scale()), now.origin))
 
 ## A smooth curve through `points`, which it is at when `at` is the matching one of `times`
 ## (rising, from 0 to 1).

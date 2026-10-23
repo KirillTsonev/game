@@ -56,8 +56,9 @@ Editing a move step by step (for Kirill): `docs/editing_animations_in_blender.md
   - `CTRL_shoulder` (green): where the arm hangs from (the game's drawn-apart shoulder). Usually left.
   - `Weapon` (orange): the sword's grip in the fist. Turn it to turn the handle in the hand.
   - `Eyes` (yellow): the head. Its turn is added to the view during the move (`swing_head_follow`).
-  - The fingers: plain bones, rotate them. **The game ignores them for now** (it closes the
-    stance's fist on the handle).
+  - The fingers: plain bones, rotate them. The game plays them during a Blender swing (outside
+    one the stance's fist); `wrap_fingers.py` keys them round the handle on every frame and
+    replaces hand edits, so edit them after running it ("The fist closes on the handle", below).
 - Textured as in the game in Material Preview (Z): `tools/blender/fp_arms/game_materials.py`
   copies the game's materials (albedo, normal, packed roughness / metallic, each times the
   material's value -- the rogue's metallic is 0, the sword's 1) onto the arm and the sword, the
@@ -310,8 +311,27 @@ warns, and it shows as a locked elbow and a sudden bend after it.
 ## Open
 
 - Not judged in game: `swing_down_blender`, and how editing in Blender feels.
-- The fingers of a clip are not played (the stance's fist is). Playing them = reading their turns
-  the same way and blending them in `_hold_weapon`.
+- **The fist closes on the handle where it is; the clip's fingers are played** (2026-10-23,
+  Kirill: in the swing "the palm is not actually gripping the hilt tightly"; then "keep single
+  source of truth"). The `Weapon` keys of `swing_down` turn the sword in the hand up to 52 deg and
+  move it 3 cm (a looser grip that spares the wrist: holding the sword fixed in the fist instead,
+  tried and taken back the same day, bent the wrist up to 88 deg in the cock), and the stance's
+  fixed fist then stood open round the handle (the thumb's and forefinger's tips 7 cm from its
+  middle, 4.2 in the idle).
+  - In Blender: `tools/blender/fp_arms/wrap_fingers.py` keys the right hand's fingers on every frame
+    of every action, each wrapped round the handle (the `Weapon` bone's line) in three stages until
+    it touches (all three joints, then the outer two, then the last: with the first stage alone
+    the middle joint touched first and the finger made a ring, not a grip). Re-run it after
+    changing a move's hand or `Weapon` keys; it replaces the finger keys.
+  - In the game: `PlayerBody._play_clip_fingers` plays the clip's fingers during a Blender swing
+    (`swing_fingers_from_rig`, on), read as each finger's turn from its rest against the hand's and
+    blended with the swing; outside one the stance's posed fist is kept. A first version worked the
+    wrap out in the game itself (`_wrap_fingers_round_handle`, removed the same day for this).
+  - Measured (`tools/weapon_probes/grip_fingers.gd`, tip from the handle's middle; the handle's
+    radius 2.2 cm): the four fingers 3.1-4.0 cm through the swing (4-7 before), the game within
+    0.1-0.3 cm of Blender on the same frames; the thumb 5.7-6.3 (7.1). Measured on the glove mesh in
+    Blender the fingers touch the handle or lie up to 2 cm into it on some swing frames (the wrap
+    works from the bones). Not judged in game.
 - A clip is made for this sword: `socket` is the stance's grip with this sword. Another weapon
   needs the scene rebuilt (steps 1-2) or a correction on top.
 - Chaining one rig clip into another (the tree's cross-fade) is written but untested: only one
