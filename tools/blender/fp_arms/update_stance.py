@@ -179,4 +179,12 @@ def main():
     print("FP_ARMS stance updated: the grip moved %.4f m; stance keys replaced per action: %s" % (moved, ", ".join("%s %d" % kv for kv in replaced.items())))
 
 
-main()
+# The "Look down" preview (view_preview.py) off while this reads the scene, back after.
+_looking = getattr(bpy.context.scene, "fp_look_down", False)
+if _looking:
+    bpy.context.scene.fp_look_down = False
+try:
+    main()
+finally:
+    if _looking:
+        bpy.context.scene.fp_look_down = _looking

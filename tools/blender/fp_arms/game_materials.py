@@ -24,6 +24,7 @@ MATERIALS = {
     "rogue_leathera": (ROGUE % ("leathera", "albedo"), ROGUE % ("leathera", "normal"), ROGUE % ("leathera", "orm"), 0.0, 1.0, BODY_SPECULAR),
     "rogue_leatherb": (ROGUE % ("leatherb", "albedo"), ROGUE % ("leatherb", "normal"), ROGUE % ("leatherb", "orm"), 0.0, 1.0, BODY_SPECULAR),
     "rogue_metal": (ROGUE % ("metal", "albedo"), ROGUE % ("metal", "normal"), ROGUE % ("metal", "orm"), 0.0, 1.0, BODY_SPECULAR),
+    "rogue_cloth": (ROGUE % ("cloth", "albedo"), ROGUE % ("cloth", "normal"), ROGUE % ("cloth", "orm"), 0.0, 1.0, BODY_SPECULAR),  # the body reference's pants and shirt
     "sword": (SWORD % "albedo", SWORD % "normal", SWORD % "metal_rough", 1.0, 1.0, 0.5),
     "shield": (SHIELD % "albedo", SHIELD % "normal", SHIELD % "metal_rough", 1.0, 1.0, 0.5),
 }

@@ -28,6 +28,11 @@ def main():
         bpy.ops.object.mode_set(mode='OBJECT')
     arm = bpy.data.objects["FPArms"]
     editing = arm.animation_data.action
+    # The "Look down" preview (view_preview.py) turns the arms and the camera: never into a clip.
+    scene = bpy.context.scene
+    looking = getattr(scene, "fp_look_down", False)
+    if looking:
+        scene.fp_look_down = False
     # The exporter (ACTIONS mode) writes every action that has been assigned to the armature once,
     # "hold" included (harmless: one frame). A new move = a new action made with the armature
     # selected (the Action editor's New); delete an action to leave it out.
@@ -37,6 +42,21 @@ def main():
         if child.type == 'MESH':
             child.select_set(True)
     bpy.context.view_layer.objects.active = arm
+    # Only FPArms' own actions: the exporter takes every action in the file otherwise (the body
+    # reference's "body_reference" came in as a clip). Its action filter skips those listed with keep off.
+    import io_scene_gltf2
+    if not hasattr(bpy.types.Scene, "gltf_action_filter"):
+        bpy.types.Scene.gltf_action_filter = bpy.props.CollectionProperty(type=io_scene_gltf2.GLTF2_filter_action)
+        bpy.types.Scene.gltf_action_filter_active = bpy.props.IntProperty()
+    action_filter = bpy.data.scenes[0].gltf_action_filter
+    action_filter.clear()
+    kept = []
+    for action in bpy.data.actions:
+        item = action_filter.add()
+        item.action = action
+        item.keep = any(slot.identifier == "OB" + arm.name for slot in action.slots)
+        if item.keep:
+            kept.append(action.name)
     os.makedirs(OUT_DIR, exist_ok=True)
     render = bpy.context.scene.render
     preview = (render.fps, render.fps_base, render.frame_map_old, render.frame_map_new)
@@ -50,11 +70,14 @@ def main():
                               # Not reset: the forearm's small unkeyed bend is what lets the IK solve (build_scene.py).
                               export_reset_pose_bones=False)
     render.fps, render.fps_base, render.frame_map_old, render.frame_map_new = preview
+    action_filter.clear()
     arm.animation_data.action = editing
+    if looking:
+        scene.fp_look_down = looking
     src = json.load(open(os.path.join(SRC, "arm_source.json")))
     with open(os.path.join(OUT_DIR, "fp_arms_rig.json"), "w", newline="\n") as fh:
         json.dump({"hand_rest": src["bones"]["RightHand"]["rest"], "socket": src["socket"], "fps": FPS}, fh, indent=1)
-    print("FP_ARMS exported %s: %s" % (OUT, ", ".join(sorted(a.name for a in bpy.data.actions))))
+    print("FP_ARMS exported %s: %s" % (OUT, ", ".join(sorted(kept))))
 
 
 main()

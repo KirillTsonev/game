@@ -488,4 +488,12 @@ def thin(action, prefixes):
             fc.update()
 
 
-main()
+# The "Look down" preview (view_preview.py) off while this reads the scene, back after.
+_looking = getattr(bpy.context.scene, "fp_look_down", False)
+if _looking:
+    bpy.context.scene.fp_look_down = False
+try:
+    main()
+finally:
+    if _looking:
+        bpy.context.scene.fp_look_down = _looking

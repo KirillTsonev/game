@@ -184,6 +184,60 @@ deg put the arm through the torso -- the lean turns the whole move rigidly, shou
   turn read back in the game: exactly the keys' (12 / 8, 25 / 8). `slash_lean.gd` unchanged (each
   lean within 0.2 deg, the tip within 1.4 deg of straight). Not judged in game.
 
+## The right-leaning cut, the body as a reference, looking down (2026-10-23)
+
+- **Looking down in Blender** (Kirill: the body looked "farther away from the arms when I look down
+  than in-game"): in the game the arms follow the view down (`weapon_follows_view` 0.8; the sword's
+  wrist and hand held to `swing_view_down_limit` during the stroke) and the body does not, so
+  looking down the arms come nearer the body; a clip is posed for a level view. The 3D view's
+  sidebar -> FP Arms -> **Looking down / Looking straight** (one toggle) shows it as the game does: helper bones at the eyes,
+  `VIEW_arms` (parent of `CTRL_chest`, `CTRL_elbow` and the shield arm's controls), `VIEW_hand`
+  (`CTRL_hand`) and `VIEW_camera` (`Eyes`, and so the camera), turned on every frame by
+  `tools/blender/fp_arms/view_preview.py` (a text block registered on load, as the ghosts; its
+  `VIEW_CAPS` must follow the swings' "view_cap" and "time"). Not keyed, deforming nothing:
+  adding them moved nothing, and at 60 deg the camera turns 60, the arms 48, the sword hand 48 in
+  the hold and 10 in the stroke (checked). Down is 80.2 deg, the furthest the game lets the Player
+  look down (player.gd clamps the pitch to 1.4 rad); it is on by default (Kirill: a toggle, not
+  numbers). `export_clips.py`, `wrap_fingers.py`, `add_shield_arm.py` and `update_stance.py` switch it
+  off while they run and back after; a new script that reads places from the scene must do the same. The
+  Blender IK solves the previewed arm, the game its own solver: the elbow can differ by millimetres.
+  **The swing line** (same panel, debug only): the path of the sword's tip through the downward cut
+  of the move FPArms plays (the run of frames in which the tip keeps falling that drops it furthest,
+  found looking straight: frames 18-25 in both slashes; not the wind-up nor the return), every
+  frame, as the view is set -- `SwingLine` in the collection "Debug" (not under
+  FPArms, not selectable, drawn in front). Rebuilt on every switch of the view; "Update the swing
+  line" after editing keys or changing the action.
+
+- **`swing_down_right`** (an action with a fake user): the start of a second down slash for a
+  cut leaned +20 deg, to be blended with `swing_down` by lean in the game (not wired in yet). Made
+  as an exact copy of what the game plays at +20 (Kirill: "just copy the exact same swing we have now
+  in game when we set it to +20"): `swing_down` with the sword arm's three controls (`CTRL_shoulder`,
+  `CTRL_elbow`, `CTRL_hand`) turned about the eyes' forward axis by the game's lean on every frame
+  (28.6 deg at full, faded in and out over the swing's "lean_at" as `PlayerBody._ease` does); the
+  chest, the shield arm, the head, `Weapon` and the fingers as in `swing_down`. Those three controls
+  are keyed on every frame. To be reworked by hand: the turned whole arm is what put the arm "growing
+  out of the middle of the torso" and, looking down, into it. Procedural fixes tried the same day and
+  taken back (the shoulder left unturned, kept out of the picture, put on the body; a keep-off; a
+  lean limit looking down): each bent the wrist or the elbow, or moved the problem elsewhere.
+- **The body as a reference** (Kirill: "we need the body and legs to properly ascertain"):
+  `tools/blender/fp_arms/export_body_source.gd` (headless) records the body as the game draws it
+  through `swing_down` -- torso, belts, legs, boots; not the head and hood; its own arms shrunk into
+  the shoulders as the game leaves them -- from the eyes on every frame (`body_source.glb` + `.json`);
+  `tools/blender/fp_arms/add_body_reference.py` imports it as the armature `BodyRef` with its meshes
+  (`*_body`, the game's materials) in the collection "Body reference", not under FPArms (the clip
+  export leaves it out), unselectable, its bones hidden, keyed on every frame by each bone's change
+  from its rest (checked: every bone where the game has it, 0 mm). Hide it with the collection's eye.
+  The legs stand still (the idle).
+  **The torso follows `CTRL_chest` live** (Kirill: rotating the shoulder line "doesn't rotate the
+  torso"): the recording leaves the swing's chest turn out (`swing_chest_from_rig` off while
+  recording), and the reference's Spine / Chest / UpperChest each copy a third of `CTRL_chest`'s own
+  turn (Copy Rotation, owner Local, target Local with Owner Orientation, Before Original), as the
+  game shares it; and `view_preview.py`'s `_hold_head` moves `BodyRef` after every update so its head
+  stays where the recording has it (the game keeps the camera at the eyes and moves the body under
+  it -- without it the body stood up to 4 cm off sideways). Against a recording with the game's own
+  chest turn: chest, neck and shoulders within 0.3-1.4 cm and 1.7-3.9 deg (the game turns the chest a
+  game frame late), hips within 2.8 cm. So any edit of `CTRL_chest`, in either slash, shows at once.
+
 ## How the game reads it (`PlayerBody._rig_ready` / `_rig_sample`)
 
 - `fp_arms.glb` is instanced hidden under the Body (`BlenderArmRig`), with an AnimationTree:
@@ -307,6 +361,15 @@ warns, and it shows as a locked elbow and a sudden bend after it.
    and puts the scene's own back.
 7. A Godot-exported glb drops leaf bones with no weights (`weapon_r`, some twist helpers);
    nothing uses them.
+8. **The glTF exporter (ACTIONS mode) takes every action in the file**, an armature's or not
+   (2026-10-23): the body reference's `body_reference` came into `fp_arms.glb` as a clip, and while
+   sampling it the exporter posed FPArms' bones of the same names with it and, with
+   `export_reset_pose_bones` off, left them so -- `RightUpperArm` kept the body's arm shrink
+   (scale 0.001), the sword arm collapsed into its shoulder in the scene, and the next export gave
+   the game a swing whose cuts all leant 6.6 deg further right. `export_clips.py` now keeps only
+   the actions with FPArms' slot (the exporter's `gltf_action_filter`). Fixed by setting every
+   FPArms bone no action keys back to rest (45 of them). After any export, the game's swing can be
+   checked against the committed file with `slash_lean.gd` (the cut's line at each lean).
 
 ## Open
 
