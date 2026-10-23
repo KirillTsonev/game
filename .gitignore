@@ -13,6 +13,10 @@ addons/terrain_3d/bin/~*
 # Blender's backup of the previous save (animation_sources/)
 *.blend1
 
+# Python's bytecode cache (made when one tools/ script imports another)
+__pycache__/
+*.pyc
+
 # OS cruft
 .DS_Store
 Thumbs.db
