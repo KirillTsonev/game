@@ -490,6 +490,7 @@ var _rig_state: StringName = &"" ## the clip last started or travelled to (&"" =
 var _rig_time: float = 0.0 ## where the tree is in that clip
 var _rig_chained: bool = false ## this swing cross-fades from the last in the tree, not in _clip_mix
 var _rig_left: Dictionary = {} ## the rig's left arm as last sampled (_rig_left_pose); the shield arm of a swing
+var _swing_chest := Quaternion.IDENTITY ## the chest's turn this frame in the Player's axes (swing_chest_from_rig), read and cleared by _turn_chest_with_swing
 var _rig_left_hold: Dictionary = {} ## the rig's left arm in its "hold": what _rig_left is played as a change from
 var _swing_overreach: float = 0.0 ## m the swing's wrist was put past the arm's reach this frame (_clip_swing_pose)
 var _swing_turn: float = 0.0 ## degrees this swing is turned about the eyes' forward axis at full (swing_lean_range)
@@ -890,6 +891,11 @@ var _room_box: BoxShape3D
 ## sleeve and the elbow pad (2026-10-23, Kirill: "twisted and clipping"). The shield and the hand
 ## are where they were either way. Needs weapon_arm_drawn_apart. Switch to compare.
 @export var shield_forearm_twist_spread: bool = true
+## The body's chest turned as a Blender swing's CTRL_chest turns (docs/blender_animation.md, "The
+## chest"; Kirill, 2026-10-23: try a chest turn with the attack). The arms follow the clip either
+## way (its chest carries their shoulders); this turns the body you see looking down and its
+## shadow. Switch to compare.
+@export var swing_chest_from_rig: bool = true
 ## Seconds one Blender clip cross-fades into the next when chained (the AnimationTree's transitions).
 @export var rig_crossfade: float = 0.1
 @export_group("")
@@ -1390,6 +1396,7 @@ func advance(delta: float, camera_pitch: float) -> void:
 	_turn = lerp_angle(_turn, _turn_wanted, 1.0 - exp(-delta * diagonal_turn_rate))
 	_model.rotation.y = PI + _turn
 	_lean_to_weapon(player) # before the eyes are found: it moves the head
+	_turn_chest_with_swing(player) # the same
 	_place_feet(player, delta) # before the eyes are found: it can lower the hips, and the head with them
 	# The head bone in the Player's space. On the humanoid skeleton its +Y runs up the skull
 	# and its +Z out of the face, so the eyes are found along the head's own axes: a crouched
@@ -1459,6 +1466,30 @@ func _lean_to_weapon(player: Node3D) -> void:
 	var collar_pose := _skeleton.get_bone_global_pose(collar)
 	collar_pose.basis = Basis(upright, deg_to_rad(weapon_collar_forward) * weight) * collar_pose.basis
 	_skeleton.set_bone_global_pose(collar, collar_pose)
+	var head := _skeleton.get_bone_global_pose(_head_bone)
+	head.basis = head_turn
+	_skeleton.set_bone_global_pose(_head_bone, head)
+
+## See swing_chest_from_rig: the body's spine turned by the swing's chest turn (_swing_chest: the
+## twist about the upright and the tilt of the shoulder line, set by _clip_swing_pose the frame
+## before: the clip is sampled after the eyes are found, and the turn must come before), shared by
+## the three spine bones. The head keeps its turn, so the view does not swing with the chest. The
+## arms are drawn apart from the clip's shoulders, which the clip's chest already carries: only the
+## body (seen looking down, and its shadow) shows this.
+func _turn_chest_with_swing(player: Node3D) -> void:
+	var turn := _swing_chest
+	_swing_chest = Quaternion.IDENTITY
+	if turn.get_angle() < 0.0001:
+		return
+	var head_turn := _skeleton.get_bone_global_pose(_head_bone).basis
+	var to_player := (player.global_transform.affine_inverse() * _skeleton.global_transform).basis.orthonormalized()
+	# A share of the turn, in the skeleton's axes.
+	var each := to_player.inverse() * Basis(Quaternion.IDENTITY.slerp(turn, 1.0 / POSTURE_SPINE.size())) * to_player
+	for bone_name: String in POSTURE_SPINE:
+		var bone := _skeleton.find_bone(bone_name)
+		var pose := _skeleton.get_bone_global_pose(bone)
+		pose.basis = each * pose.basis
+		_skeleton.set_bone_global_pose(bone, pose)
 	var head := _skeleton.get_bone_global_pose(_head_bone)
 	head.basis = head_turn
 	_skeleton.set_bone_global_pose(_head_bone, head)
@@ -1881,6 +1912,8 @@ func _clip_swing_pose(arm: Dictionary, to_skeleton: Transform3D, held_from: Vect
 			frame = clip.sample(float(swing["clip_from"]) + clampf(_combat_at, 0.0, play_end))
 	if frame.is_empty():
 		return
+	if swing_chest_from_rig and frame.has("chest"):
+		_swing_chest = Quaternion.IDENTITY.slerp(frame["chest"] as Quaternion, _clip_weight(swing, _combat_at)) # the body turned by it next frame
 	var to_player := to_skeleton.affine_inverse()
 	var s_shoulder := to_player * _skeleton.get_bone_global_pose(arm["upper"]).origin
 	var s_elbow := to_player * _skeleton.get_bone_global_pose(arm["lower"]).origin
@@ -1993,7 +2026,7 @@ func _rig_ready() -> bool:
 	add_child(_rig)
 	_rig.visible = false
 	_rig_skeleton = _rig.find_children("*", "Skeleton3D", true, false)[0] as Skeleton3D
-	for bone_name: String in ["Eyes", "RightUpperArm", "RightLowerArm", "RightHand", "Weapon", "LeftUpperArm", "LeftLowerArm", "LeftHand", "forearm_roll_l"]:
+	for bone_name: String in ["Eyes", "RightUpperArm", "RightLowerArm", "RightHand", "Weapon", "LeftUpperArm", "LeftLowerArm", "LeftHand", "forearm_roll_l", "CTRL_chest"]:
 		_rig_bones[bone_name] = _rig_skeleton.find_bone(bone_name)
 	var player := _rig.find_children("*", "AnimationPlayer", true, false)[0] as AnimationPlayer
 	player.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
@@ -2084,7 +2117,10 @@ func _rig_sample(clip: StringName, at: float, arm: Dictionary) -> Dictionary:
 	var eyes: Basis = turn_of.call("Eyes")
 	var ahead := eyes * Vector3.FORWARD
 	var up := eyes * Vector3.UP
-	return {"shoulder": (pose_of.call("RightUpperArm") as Transform3D).origin, "elbow": (pose_of.call("RightLowerArm") as Transform3D).origin, "wrist": wrist,
+	# The chest's turn (CTRL_chest, which carries both shoulders round the spine in the clip): its
+	# twist and tilt in the eyes' space, as _turn_chest_with_swing plays it.
+	var chest: Quaternion = (turn_of.call("CTRL_chest") as Basis).get_rotation_quaternion() if _rig_bones["CTRL_chest"] >= 0 else Quaternion.IDENTITY
+	return {"chest": chest, "shoulder": (pose_of.call("RightUpperArm") as Transform3D).origin, "elbow": (pose_of.call("RightLowerArm") as Transform3D).origin, "wrist": wrist,
 			"hand": hand * marker,
 			"grip": Transform3D(marker.inverse() * socket.basis * WeaponStance.SOCKET_IN_GRIP.inverse(), marker.inverse() * socket.origin),
 			"view": Vector3(rad_to_deg(atan2(ahead.x, -ahead.z)), rad_to_deg(asin(clampf(ahead.y, -1.0, 1.0))), rad_to_deg(atan2(-up.x, up.y)))}

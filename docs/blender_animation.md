@@ -138,6 +138,51 @@ game. Added to the existing scene, not by rebuilding it (the sword arm's hand ed
   frame. Recorded from the eyes before the swing, that move came into the clip as a shoulder move
   and the game added it a second time (1.6 cm off).
 
+## The chest (2026-10-23)
+
+Kirill: try a chest turn with the attack (the plan: stage 1 the turn in the down slash, judged in
+game; stage 2 a right-leaning variant of the slash blended by lean, because leans from -8.6 to +20
+deg put the arm through the torso -- the lean turns the whole move rigidly, shoulder included).
+
+- **Rig:** `CTRL_chest` (purple, Controls) on the body's spine line (`UpperChest`: 3 cm left, 17 cm
+  behind the eyes), upright, parent of `CTRL_shoulder` and `CTRL_shoulder_l`: turning it carries
+  both shoulders round the spine; the hand controls are not under it, so the sword's and the
+  shield's paths stay as keyed and the arms reach for them by IK. Added by
+  `tools/blender/fp_arms/add_chest.py` (nothing moved: 0 mm, 0 deg on every frame). Marked
+  deforming (no weights) so the exporter keeps it.
+- **Keys in `swing_down`** (second version, the same day; the first, 5 deg right / 9 left, the
+  turn the shield's keys imitated, could not be seen in game -- Kirill asked for the shoulder line
+  to twist and turn as a body does in an attack). On the shield's frames:
+  - `CTRL_chest`: twisted 12 deg right and tilted 8 deg sword shoulder up by frame 14 (the cock),
+    back from 16, 25 deg left and 8 deg sword shoulder down at 25, an even return, a hair past
+    rest on 36, rest on 38. Its twist and tilt are the shoulder line's; the camera stays out of it.
+  - `CTRL_shoulder` (the sword's clavicle, on top of the chest): up 4 cm and back 2 in the cock,
+    forward 5 and down 1 at the peak; keys on 17 and 18 bring it forward ahead of the strike
+    (between 16 and 19 it lagged and the hand went 1.1 cm out of reach: the elbow locked straight
+    and snapped 23 cm in a frame). `CTRL_shoulder_l`: a smaller opposite move (forward 1.5 cm,
+    down 1 in the cock; back 2, up 1 at the peak).
+  - Measured in Blender: the sword hand at most 0.530 m from its shoulder (the arm 0.565), the
+    elbow never under 41 deg of bend, at most 16 cm a frame in the strike (the wrist 28); the
+    sword's path within 1.1 cm of before; the shield, whose hand path is as keyed, turned up to
+    8.3 deg further by its shoulder swinging 16 cm back with the chest (its face more open at the
+    peak); the blade 24 cm from it at the nearest, the shield 47 cm from the eyes at the nearest.
+  - `hold` has the chest keyed at rest.
+- **Game:** `_rig_sample` reads the chest's turn ("chest", a quaternion in the eyes' space: twist
+  and tilt), `_clip_swing_pose` weights it with the swing (`_clip_weight`) into `_swing_chest`, and
+  `_turn_chest_with_swing` turns Spine / Chest / UpperChest by a third of it each the NEXT frame, before the eyes
+  are found (the clip is sampled after them), the head's turn kept. The drawn arms come from the
+  clip's shoulders anyway: this turns only the body seen looking down and its shadow. The Body's
+  `swing_chest_from_rig` (on) switches it. (`weapon_body_toward_weapon`, the stance's own chest
+  turn, has been off since 2026-10-13: in the stance the chest is the idle clip's, 13 deg right.)
+- **Measured** (`tools/weapon_probes/chest_turn.gd`, a fresh Player per run so both runs stand at
+  the same moment of the idle; the heading read from the body's shoulder line -- the chest bone's
+  facing leans forward in the idle, and the tilt then reads as 4-5 deg of extra twist): the
+  shoulder line from 18.5 deg right to 30.5 in the cock and 6 deg left at frame 24, tilted from
+  +1.4 to +8.3 and -5.8 deg; the camera's eyes and the sword's tip at most 1.7 cm from the run
+  without it (the recovery, frames 24-33: the tilted body carries the head a little). The clip's
+  turn read back in the game: exactly the keys' (12 / 8, 25 / 8). `slash_lean.gd` unchanged (each
+  lean within 0.2 deg, the tip within 1.4 deg of straight). Not judged in game.
+
 ## How the game reads it (`PlayerBody._rig_ready` / `_rig_sample`)
 
 - `fp_arms.glb` is instanced hidden under the Body (`BlenderArmRig`), with an AnimationTree:
