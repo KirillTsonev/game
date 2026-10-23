@@ -8,7 +8,7 @@ keep-off, the elbow's hinge, feet) stay in code. Playback is glTF + AnimationTre
 **The pilot:** the down slash (`swing_down_blender`), built from the copied ArmClip down slash.
 On a round trip with nothing edited it plays like the copied one (numbers below). **Not judged in
 game yet.** Moves not moved over yet: the rising slash, the dodges, the fidgets, the lantern
-action, the shield arm.
+action. The shield arm is in the scene and the down slash since 2026-10-23 ("The shield arm" below).
 
 Editing a move step by step (for Kirill): `docs/editing_animations_in_blender.md`.
 
@@ -66,6 +66,47 @@ Editing a move step by step (for Kirill): `docs/editing_animations_in_blender.md
 - Actions: `hold` (the stance, one frame: a reference to start a move from) and the moves.
   30 frames a second; frame 1 is the start. A new move = a new action (the Action editor's
   New, the armature selected). The exporter writes every action the armature has had.
+
+## The shield arm (2026-10-23)
+
+Kirill: the shield hand and the shield in the Blender animation, animated there, played by the
+game. Added to the existing scene, not by rebuilding it (the sword arm's hand edits stay):
+
+| Step | Run | Writes |
+|---|---|---|
+| 1. Record | `Godot_v4.7.2-stable_win64_console.exe --headless --path herald-of-oblivion --script res://tools/blender/fp_arms/export_shield_source.gd` | `animation_sources/fp_arms/shield_source.glb` + `.json` |
+| 2. Add / re-key | `tools/blender/fp_arms/add_shield_arm.py` in the open Blender | the open scene (save it) |
+| 3. Export, rescan | `export_clips.py`, as for the sword arm | `fp_arms.glb` |
+| 4. Check | `--script res://tools/weapon_probes/shield_rig_check.gd` | prints the arm against the recording |
+
+- **The controls:** `CTRL_hand_l` (the wrist: MOVE it to move the shield arm; TURN it about the
+  forearm to roll the forearm and the shield on it), `CTRL_elbow_l` (which way the elbow points),
+  `CTRL_shoulder_l` (where the arm hangs from). The shield (object `Shield`) is fixed to the left
+  forearm, as in the game; the hand and fingers are keyed once (the game keeps the stance's grip
+  on the handle). The left arm's meshes are `*_left`.
+- **The rig:** the IK solves hidden `MCH_upper_l` / `MCH_lower_l`; the real arm copies them and the
+  forearm then turns toward `CTRL_shield_face_l` (a helper on the hand control) about its own
+  length (Locked Track). Blender's IK solver runs after the chain bones' own constraints, so a
+  roll on the IK's own forearm was lost (the shield 6.4 deg off through the whole swing).
+- **What it was keyed from:** the game's arm through the swing before the clip had a shield arm
+  (the stance plus the swing's `"shield"` counterweight, 2-4 cm): step 1 records it with
+  `shield_arm_from_rig` off. Re-running step 2 on a scene that has the shield arm REPLACES the
+  shield arm's keys in the recorded swings (hand edits of it there are lost, the sword arm's are
+  not); the first run adds everything.
+- **How the game plays it** (`PlayerBody._hold_shield`, a swing with `"shield_from_rig"`, the
+  Body's `shield_arm_from_rig` on): as changes from the clip's `hold` (read once, `_rig_left_hold`),
+  which is the stance -- the shoulder moved as the clip's; the fist carried with the clip's
+  forearm turn; the hand's turn given that turn, so the solver gives the forearm (and the shield)
+  the clip's roll; the elbow pointed where the clip's is. Faded with the swing (`_clip_weight`);
+  the keep-off and the view-follow still on top. With `shield_arm_from_rig` off the `"shield"`
+  counterweight plays instead (switch to compare).
+- **Measured** (step 4, nothing edited): the arm and the shield within 5 mm and 0.7 deg of the
+  recording, the most on frame 1 (the counterweight's 0.05 s ease in, which the thinned keys make
+  a straight line); in Blender the keys within 0.5 mm of it.
+- **Rule from it: record from the eyes as they are on each frame.** The camera follows the head,
+  which moves up to 1.6 cm during the down slash, and the game places both arms from the eyes every
+  frame. Recorded from the eyes before the swing, that move came into the clip as a shoulder move
+  and the game added it a second time (1.6 cm off).
 
 ## How the game reads it (`PlayerBody._rig_ready` / `_rig_sample`)
 

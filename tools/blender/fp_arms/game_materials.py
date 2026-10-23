@@ -16,6 +16,7 @@ except NameError:
 PROJECT = os.path.normpath(os.path.join(HERE, "..", "..", ".."))
 ROGUE = os.path.join("assets", "models", "characters", "rogue", "textures", "rogue_%s_%s.png")
 SWORD = os.path.join("assets", "models", "weapons", "sword", "textures", "sword_%s.png")
+SHIELD = os.path.join("assets", "models", "weapons", "shield", "textures", "shield_%s.png")
 BODY_SPECULAR = 0.2  # PlayerBody.body_specular (metallic_specular on the rogue's materials)
 
 # Blender material name -> (albedo, normal, packed map, metallic, roughness, specular)
@@ -24,6 +25,7 @@ MATERIALS = {
     "rogue_leatherb": (ROGUE % ("leatherb", "albedo"), ROGUE % ("leatherb", "normal"), ROGUE % ("leatherb", "orm"), 0.0, 1.0, BODY_SPECULAR),
     "rogue_metal": (ROGUE % ("metal", "albedo"), ROGUE % ("metal", "normal"), ROGUE % ("metal", "orm"), 0.0, 1.0, BODY_SPECULAR),
     "sword": (SWORD % "albedo", SWORD % "normal", SWORD % "metal_rough", 1.0, 1.0, 0.5),
+    "shield": (SHIELD % "albedo", SHIELD % "normal", SHIELD % "metal_rough", 1.0, 1.0, 0.5),
 }
 
 

@@ -489,6 +489,8 @@ var _rig_socket := Transform3D.IDENTITY ## the sword's socket the rig was built 
 var _rig_state: StringName = &"" ## the clip last started or travelled to (&"" = start afresh)
 var _rig_time: float = 0.0 ## where the tree is in that clip
 var _rig_chained: bool = false ## this swing cross-fades from the last in the tree, not in _clip_mix
+var _rig_left: Dictionary = {} ## the rig's left arm as last sampled (_rig_left_pose); the shield arm of a swing
+var _rig_left_hold: Dictionary = {} ## the rig's left arm in its "hold": what _rig_left is played as a change from
 var _swing_overreach: float = 0.0 ## m the swing's wrist was put past the arm's reach this frame (_clip_swing_pose)
 var _swing_turn: float = 0.0 ## degrees this swing is turned about the eyes' forward axis at full (swing_lean_range)
 var debug_lean: float = NAN ## the animation panel's (I) fixed lean for every swing, degrees; NAN = random
@@ -879,6 +881,10 @@ var _room_box: BoxShape3D
 ## AnimationTree; docs/blender_animation.md) instead of the copied ArmClip one (swing_down). The
 ## pilot of the Blender pipeline: switch to compare.
 @export var swings_from_blender: bool = true
+## The shield arm of a Blender swing played from its clip ("shield_from_rig"; animated in Blender,
+## docs/blender_animation.md "The shield arm"). Off: the swing's "shield" counterweight in code, as
+## before the clip had one. Switch to compare.
+@export var shield_arm_from_rig: bool = true
 ## Seconds one Blender clip cross-fades into the next when chained (the AnimationTree's transitions).
 @export var rig_crossfade: float = 0.1
 @export_group("")
@@ -1757,7 +1763,8 @@ func _update_combat(delta: float) -> void:
 			# The shield arm gives way to the swing a little (a counterweight): in with the wind-up,
 			# out with the recovery.
 			var time := float(swing["time"])
-			_combat_shield_hand += (swing.get("shield", Vector3.ZERO) as Vector3) * _clip_weight(swing, _combat_at)
+			if not _shield_from_rig(swing):
+				_combat_shield_hand += (swing.get("shield", Vector3.ZERO) as Vector3) * _clip_weight(swing, _combat_at)
 			if _combat_at >= time and not _combat_driven:
 				_combat = &""
 				_clip_from = {}
@@ -1973,7 +1980,7 @@ func _rig_ready() -> bool:
 	add_child(_rig)
 	_rig.visible = false
 	_rig_skeleton = _rig.find_children("*", "Skeleton3D", true, false)[0] as Skeleton3D
-	for bone_name: String in ["Eyes", "RightUpperArm", "RightLowerArm", "RightHand", "Weapon"]:
+	for bone_name: String in ["Eyes", "RightUpperArm", "RightLowerArm", "RightHand", "Weapon", "LeftUpperArm", "LeftLowerArm", "LeftHand"]:
 		_rig_bones[bone_name] = _rig_skeleton.find_bone(bone_name)
 	var player := _rig.find_children("*", "AnimationPlayer", true, false)[0] as AnimationPlayer
 	player.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
@@ -2001,7 +2008,27 @@ func _rig_ready() -> bool:
 	var socket: Array = data["socket"]
 	_rig_hand_rest = Basis(Vector3(rest[0], rest[1], rest[2]), Vector3(rest[3], rest[4], rest[5]), Vector3(rest[6], rest[7], rest[8])).orthonormalized()
 	_rig_socket = Transform3D(Basis(Vector3(socket[0], socket[1], socket[2]), Vector3(socket[3], socket[4], socket[5]), Vector3(socket[6], socket[7], socket[8])), Vector3(socket[9], socket[10], socket[11]))
+	# The shield arm's "hold" (the stance it was keyed from): the swings' shield arm is played as
+	# changes from it (_hold_shield).
+	if _rig_bones["LeftLowerArm"] >= 0 and clips.has("hold"):
+		_rig_playback.start(&"hold", true)
+		_rig_tree.advance(0.0)
+		_rig_left_hold = _rig_left_pose()
 	return true
+
+## Whether `swing`'s shield arm comes from its Blender clip (_hold_shield) rather than its "shield"
+## counterweight (_update_combat).
+func _shield_from_rig(swing: Dictionary) -> bool:
+	return shield_arm_from_rig and bool(swing.get("shield_from_rig", false)) and not _rig_left_hold.is_empty()
+
+## The rig's left arm as it stands now, in the eyes' space: the shoulder, elbow and wrist, and the
+## forearm's turn from its rest.
+func _rig_left_pose() -> Dictionary:
+	var in_eyes := _rig.global_transform.affine_inverse() * _rig_skeleton.global_transform
+	var lower := in_eyes * _rig_skeleton.get_bone_global_pose(_rig_bones["LeftLowerArm"])
+	var lower_rest := (in_eyes * _rig_skeleton.get_bone_global_rest(_rig_bones["LeftLowerArm"])).basis.orthonormalized()
+	return {"shoulder": (in_eyes * _rig_skeleton.get_bone_global_pose(_rig_bones["LeftUpperArm"])).origin, "elbow": lower.origin,
+			"wrist": (in_eyes * _rig_skeleton.get_bone_global_pose(_rig_bones["LeftHand"])).origin, "forearm": lower.basis.orthonormalized() * lower_rest.inverse()}
 
 ## The rig's clip `clip` at `at` s, as ArmClip.sample gives a frame (the eyes' space, the Player's
 ## axes). Everything is read as a turn from the rig's rest in the eyes' space, so the bones' own
@@ -2024,6 +2051,7 @@ func _rig_sample(clip: StringName, at: float, arm: Dictionary) -> Dictionary:
 		_rig_time = 0.0
 	_rig_tree.advance(maxf(at - _rig_time, 0.0))
 	_rig_time = at
+	_rig_left = _rig_left_pose() if not _rig_left_hold.is_empty() else {}
 	var in_eyes := _rig.global_transform.affine_inverse() * _rig_skeleton.global_transform
 	var pose_of := func(bone_name: String) -> Transform3D: return in_eyes * _rig_skeleton.get_bone_global_pose(_rig_bones[bone_name])
 	var turn_of := func(bone_name: String) -> Basis:
@@ -2134,7 +2162,9 @@ func _breathe(player: Node3D, delta: float) -> void:
 ## shield hand moved as a counterweight, m in the stance's axes: +Z back), "stages" / "bounds"
 ## (for the animation panel, I), "lean" (the cut's lean on screen as animated, degrees from
 ## vertical, + = its top right; swing_lean_range turns the move from it) and "lean_at" (s: by when
-## that turn is full, and from when it goes back, by the window's end).
+## that turn is full, and from when it goes back, by the window's end), "shield_from_rig" (a
+## Blender swing whose clip moves the shield arm too, _hold_shield; its "shield" is then used only
+## with shield_arm_from_rig off).
 const SWINGS := {
 	# THE VERTICAL SLASHES (2026-10-22; what a click plays). The windows as measured by
 	# attack_analysis.py: the down slash from the high stance's right attack (S_H_C/1hm_attackright)
@@ -2161,7 +2191,7 @@ const SWINGS := {
 	# wind-up to 11, the cock to 17, the strike 17-22, a follow-through to 25 (the blade slowing
 	# past the bottom), back from 25 to 38. "chain" stays one frame after the strike's end.
 	&"swing_down_blender": {"rig": &"swing_down", "clip_from": 0.0, "clip_to": 1.267,
-		"blend_in": 0.05, "chain_blend_in": 0.15, "time": 1.317, "chain": 0.767, "view_cap": Vector2(0.367, 0.733), "hit": Vector2(0.567, 0.733), "shield": Vector3(-0.02, -0.04, 0.03),
+		"blend_in": 0.05, "chain_blend_in": 0.15, "time": 1.317, "chain": 0.767, "view_cap": Vector2(0.367, 0.733), "hit": Vector2(0.567, 0.733), "shield": Vector3(-0.02, -0.04, 0.03), "shield_from_rig": true,
 		"stages": ["wind up", "cock", "strike", "follow through", "recover"], "bounds": [0.367, 0.567, 0.733, 0.833],
 		"lean": -8.6, "lean_at": Vector2(0.367, 0.833)},
 	&"swing_up": {"clip": "res://assets/animations/first_person/stances_high_powerforwardsprint.json", "clip_from": 0.85, "clip_to": 1.08,
@@ -3925,9 +3955,32 @@ func _hold_shield(player: Node3D, delta: float) -> void:
 			hand_from += _combat_shield_hand
 			shoulder_from += _combat_shield_shoulder
 			roll += _combat_shield_roll * _glance_sign
+		# A Blender swing with a shield arm ("shield_from_rig"; docs/blender_animation.md, "The shield
+		# arm"): the clip's left arm as a change from its "hold", which is the stance. The shoulder
+		# moves as the clip's; the fist is carried with the clip's forearm turn; the hand's turn
+		# takes that turn too, so the solver gives the forearm (and the shield on it) the clip's
+		# roll; the elbow points where the clip's is. Faded with the swing (_clip_weight).
+		var rig_weight := 0.0
+		var rig_pole := Vector3.ZERO
+		var swing_now: Dictionary = SWINGS.get(_combat, {})
+		if _shield_from_rig(swing_now) and not _rig_left.is_empty():
+			rig_weight = _clip_weight(swing_now, _combat_at)
+			var turned: Basis = (_rig_left["forearm"] as Basis) * (_rig_left_hold["forearm"] as Basis).inverse()
+			var fist_now: Vector3 = (_rig_left["wrist"] as Vector3) + turned * (hand_from - (_rig_left_hold["wrist"] as Vector3))
+			hand_from = hand_from.lerp(fist_now, rig_weight)
+			shoulder_from += ((_rig_left["shoulder"] as Vector3) - (_rig_left_hold["shoulder"] as Vector3)) * rig_weight
+			shield_turn = with_view * Basis(Quaternion.IDENTITY.slerp(turned.get_rotation_quaternion(), rig_weight)) * _shield_stance.hand_turn()
+			var s: Vector3 = _rig_left["shoulder"]
+			var w: Vector3 = _rig_left["wrist"]
+			var e: Vector3 = _rig_left["elbow"]
+			var foot := s + (w - s) * clampf((e - s).dot(w - s) / maxf((w - s).length_squared(), 0.000001), 0.0, 1.0)
+			rig_pole = (e - foot).normalized()
+			combat_moved = combat_moved or rig_weight > 0.0
 		# A dash's dodge on the shield arm (DODGE_ARMS), a change on its idle hold, as on the sword's;
 		# the block, a bash or a blow fade it out.
 		var shield_elbow := with_view * _shield_stance.elbow_toward()
+		if rig_weight > 0.0 and rig_pole != Vector3.ZERO:
+			shield_elbow = shield_elbow.normalized().lerp(with_view * rig_pole, rig_weight).normalized()
 		var dodge := _dodge_delta("left", 1.0 - _dodge_shield_mute)
 		if not dodge.is_empty():
 			combat_moved = true # not the stance: the shield's seat is not read from it
