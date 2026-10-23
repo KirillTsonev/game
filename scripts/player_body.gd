@@ -885,6 +885,11 @@ var _room_box: BoxShape3D
 ## docs/blender_animation.md "The shield arm"). Off: the swing's "shield" counterweight in code, as
 ## before the clip had one. Switch to compare.
 @export var shield_arm_from_rig: bool = true
+## The shield arm's forearm roll spread along the forearm in the drawn arm (and its shadow), not
+## all at the elbow (WeaponHold.spread_forearm_twist): the roll that turns the shield wrung the
+## sleeve and the elbow pad (2026-10-23, Kirill: "twisted and clipping"). The shield and the hand
+## are where they were either way. Needs weapon_arm_drawn_apart. Switch to compare.
+@export var shield_forearm_twist_spread: bool = true
 ## Seconds one Blender clip cross-fades into the next when chained (the AnimationTree's transitions).
 @export var rig_crossfade: float = 0.1
 @export_group("")
@@ -1490,6 +1495,12 @@ func _pose_shadow_arms() -> void:
 			_weapon_shadow.global_transform = _shadow_skeleton.global_transform * _shadow_skeleton.get_bone_global_pose(_arms["Right"]["hand"]) * WeaponHold.in_hand(_socket_now(), weapon)
 	if _shield_shadow:
 		_shield_shadow.global_transform = _shadow_skeleton.global_transform * _shadow_skeleton.get_bone_global_pose(_shield_bone) * WeaponHold.in_hand(_shield_now, shield)
+	if _shield_node != null and _shield_up > 0.0 and _spreads_shield_twist():
+		WeaponHold.spread_forearm_twist(_shadow_skeleton, "Left")
+
+## See shield_forearm_twist_spread: only for a shield on the forearm, whose roll is what wrings it.
+func _spreads_shield_twist() -> bool:
+	return shield_forearm_twist_spread and _shield_node != null and shield != null and shield.on_forearm
 
 ## The copies of the model that each show one arm alone (weapon_arm_drawn_apart): made once,
 ## as the model is at the end of _ready's own changes to it. One copy an arm, because all the
@@ -1602,6 +1613,8 @@ func _draw_arm_apart() -> void:
 			bones.set_bone_pose_position(bone, _skeleton.get_bone_pose_position(bone))
 			bones.set_bone_pose_rotation(bone, _skeleton.get_bone_pose_rotation(bone))
 			bones.set_bone_pose_scale(bone, _skeleton.get_bone_pose_scale(bone))
+		if side == "Left" and _spreads_shield_twist():
+			WeaponHold.spread_forearm_twist(bones, "Left") # the shield is placed from the body's rolled forearm
 		# The body's own arm: back on its shoulder and shrunk into it (_hold_weapon and
 		# _hold_shield undo this at the start of the next frame's work on the arm).
 		_skeleton.set_bone_pose_position(upper, _skeleton.get_bone_rest(upper).origin)
@@ -1980,7 +1993,7 @@ func _rig_ready() -> bool:
 	add_child(_rig)
 	_rig.visible = false
 	_rig_skeleton = _rig.find_children("*", "Skeleton3D", true, false)[0] as Skeleton3D
-	for bone_name: String in ["Eyes", "RightUpperArm", "RightLowerArm", "RightHand", "Weapon", "LeftUpperArm", "LeftLowerArm", "LeftHand"]:
+	for bone_name: String in ["Eyes", "RightUpperArm", "RightLowerArm", "RightHand", "Weapon", "LeftUpperArm", "LeftLowerArm", "LeftHand", "forearm_roll_l"]:
 		_rig_bones[bone_name] = _rig_skeleton.find_bone(bone_name)
 	var player := _rig.find_children("*", "AnimationPlayer", true, false)[0] as AnimationPlayer
 	player.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
@@ -2022,11 +2035,14 @@ func _shield_from_rig(swing: Dictionary) -> bool:
 	return shield_arm_from_rig and bool(swing.get("shield_from_rig", false)) and not _rig_left_hold.is_empty()
 
 ## The rig's left arm as it stands now, in the eyes' space: the shoulder, elbow and wrist, and the
-## forearm's turn from its rest.
+## forearm's turn from its rest. The turn is read from forearm_roll_l where the rig has it (since
+## 2026-10-23: the rig's LeftLowerArm stays on the elbow's hinge, that bone carries the roll and
+## the shield; its rest is the lower arm's).
 func _rig_left_pose() -> Dictionary:
 	var in_eyes := _rig.global_transform.affine_inverse() * _rig_skeleton.global_transform
-	var lower := in_eyes * _rig_skeleton.get_bone_global_pose(_rig_bones["LeftLowerArm"])
-	var lower_rest := (in_eyes * _rig_skeleton.get_bone_global_rest(_rig_bones["LeftLowerArm"])).basis.orthonormalized()
+	var forearm_bone: int = _rig_bones["forearm_roll_l"] if _rig_bones["forearm_roll_l"] >= 0 else _rig_bones["LeftLowerArm"]
+	var lower := in_eyes * _rig_skeleton.get_bone_global_pose(forearm_bone)
+	var lower_rest := (in_eyes * _rig_skeleton.get_bone_global_rest(forearm_bone)).basis.orthonormalized()
 	return {"shoulder": (in_eyes * _rig_skeleton.get_bone_global_pose(_rig_bones["LeftUpperArm"])).origin, "elbow": lower.origin,
 			"wrist": (in_eyes * _rig_skeleton.get_bone_global_pose(_rig_bones["LeftHand"])).origin, "forearm": lower.basis.orthonormalized() * lower_rest.inverse()}
 

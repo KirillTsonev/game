@@ -131,6 +131,50 @@ static func forearm_socket(skeleton: Skeleton3D, side: String) -> Transform3D:
 	var fist := to_lower * (hand_rest * ((axes["fingers_out"] as Vector3) * (SOCKET_TO_FINGERS * (axes["length"] as float) / REFERENCE_HAND)))
 	return Transform3D(Basis(outward, along, outward.cross(along)), fist)
 
+## How far the lower arm is rolled about its own line past the elbow's hinge (radians): its turn
+## against the lower arm as the upper arm carries it at rest, swung (with no roll) onto the line
+## from the elbow to the wrist. A real forearm has none: it turns along its length, not at the elbow.
+static func forearm_roll(skeleton: Skeleton3D, side: String) -> float:
+	var upper_bone := skeleton.find_bone(side + "UpperArm")
+	var lower_bone := skeleton.find_bone(side + "LowerArm")
+	var hand_bone := skeleton.find_bone(side + "Hand")
+	var lower := skeleton.get_bone_global_pose(lower_bone)
+	var forearm := (skeleton.get_bone_global_pose(hand_bone).origin - lower.origin).normalized()
+	var upper_rest := skeleton.get_bone_global_rest(upper_bone).basis.orthonormalized()
+	var lower_rest := skeleton.get_bone_global_rest(lower_bone)
+	var carried := skeleton.get_bone_global_pose(upper_bone).basis.orthonormalized() * upper_rest.inverse() * lower_rest.basis.orthonormalized()
+	var along := carried * (lower_rest.basis.orthonormalized().inverse() * (skeleton.get_bone_global_rest(hand_bone).origin - lower_rest.origin).normalized())
+	var hinge := Basis(Quaternion(along.normalized(), forearm)) * carried
+	var turn := (lower.basis.orthonormalized() * hinge.inverse()).get_rotation_quaternion()
+	return wrapf(2.0 * atan2(Vector3(turn.x, turn.y, turn.z).dot(forearm), turn.w), -PI, PI)
+
+## The forearm's roll spread along it, for the skin: solve_arm puts the whole roll on the lower
+## arm bone (what is carried on the forearm, a shield, turns with it), and the sleeve and the elbow
+## pad, hung from that bone, were wrung at the elbow (108 deg in the shield's stance). The lower
+## arm goes back onto the elbow's hinge, each twist bone under it ("twist" in its name) takes the
+## roll by how far along the forearm it sits, and the hand stays where it was. For a copy that only
+## DRAWS the arm: place what the forearm carries from the rolled bone first. Returns the roll moved.
+static func spread_forearm_twist(skeleton: Skeleton3D, side: String) -> float:
+	var lower_bone := skeleton.find_bone(side + "LowerArm")
+	var hand_bone := skeleton.find_bone(side + "Hand")
+	var roll := forearm_roll(skeleton, side)
+	var hand := skeleton.get_bone_global_pose(hand_bone)
+	var lower := skeleton.get_bone_global_pose(lower_bone)
+	var forearm := (hand.origin - lower.origin).normalized()
+	lower.basis = Basis(forearm, -roll) * lower.basis
+	skeleton.set_bone_global_pose(lower_bone, lower)
+	var lower_rest := skeleton.get_bone_global_rest(lower_bone).origin
+	var rest_along := skeleton.get_bone_global_rest(hand_bone).origin - lower_rest
+	for bone in skeleton.get_bone_children(lower_bone):
+		if not skeleton.get_bone_name(bone).contains("twist"):
+			continue
+		var share := clampf((skeleton.get_bone_global_rest(bone).origin - lower_rest).dot(rest_along) / rest_along.length_squared(), 0.0, 1.0)
+		var twist := skeleton.get_bone_global_pose(bone)
+		twist.basis = Basis(forearm, roll * share) * twist.basis
+		skeleton.set_bone_global_pose(bone, twist)
+	skeleton.set_bone_global_pose(hand_bone, hand)
+	return roll
+
 ## Where the weapon's model goes in the hand bone's axes, for a socket found by socket() (or in
 ## the lower arm bone's, for one found by forearm_socket()).
 static func in_hand(hand_socket: Transform3D, data: WeaponData) -> Transform3D:

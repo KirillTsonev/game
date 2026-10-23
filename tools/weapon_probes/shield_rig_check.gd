@@ -4,7 +4,8 @@ extends SceneTree
 # whose clip carries the shield arm ("shield_from_rig") as export_shield_source.gd recorded it, and
 # prints the largest differences per bone and of the shield (m, deg) and the frame they fall on.
 # After editing the shield arm in Blender the differences are the edit; with nothing edited they
-# measure the round trip.
+# measure the round trip. Also prints how far the drawn forearm is rolled at the elbow (about 0 with
+# PlayerBody.shield_forearm_twist_spread on; `-- --no-spread` switches it off to compare).
 # Run: Godot_v4.7.2-stable_win64_console.exe --headless --path herald-of-oblivion --script res://tools/weapon_probes/shield_rig_check.gd
 
 func _init() -> void:
@@ -24,6 +25,7 @@ func _run() -> void:
 	body.weapon_breathing = 0.0
 	body.shield_breathing = 0.0
 	body.weapon_raised = true
+	body.shield_forearm_twist_spread = not OS.get_cmdline_user_args().has("--no-spread")
 	var step := func() -> void:
 		body.set_motion(Vector3.ZERO, true, false, false, 1.0 / 60.0)
 		body.advance(1.0 / 60.0, 0.0)
@@ -43,6 +45,7 @@ func _run() -> void:
 		body.call("_start_swing", swing_name, false)
 		body.set("_swing_turn", 0.0)
 		var worst := {}
+		var elbow_roll := 0.0
 		for f in frames.size():
 			if f > 0:
 				step.call()
@@ -67,11 +70,14 @@ func _run() -> void:
 				var shoulder_moved: Vector3 = ((rig_now["shoulder"] as Vector3) - (rig_hold["shoulder"] as Vector3)) if not rig_now.is_empty() else Vector3.INF
 				print("SHIELD_RIG frame %d: the wrist off by %s, the shoulder off by %s; the rig's wrist moved %s, its shoulder %s" % [f, ((now["LeftHand"] as Transform3D).origin - was_hand).snappedf(0.001),
 						((now["LeftUpperArm"] as Transform3D).origin - _transform(frames[f]["LeftUpperArm"]).origin).snappedf(0.001), rig_moved.snappedf(0.001), shoulder_moved.snappedf(0.001)])
+			elbow_roll = maxf(elbow_roll, absf(rad_to_deg(WeaponHold.forearm_roll(arm_skeleton, "Left"))))
 			for part: String in now:
 				var was := _transform(frames[f][part])
 				var is_now: Transform3D = now[part]
 				var moved := was.origin.distance_to(is_now.origin)
 				var turned := rad_to_deg((is_now.basis.orthonormalized() * was.basis.orthonormalized().inverse()).get_rotation_quaternion().get_angle())
+				if part == "LeftLowerArm" and body.shield_forearm_twist_spread:
+					turned = 0.0 # the drawn forearm's roll is spread along it (the twist bones): only its place compares
 				if not worst.has(part) or moved > worst[part][0]:
 					worst[part] = [moved, f, worst[part][2] if worst.has(part) else 0.0, worst[part][3] if worst.has(part) else 0]
 				if turned > worst[part][2]:
@@ -79,6 +85,7 @@ func _run() -> void:
 					worst[part][3] = f
 		for part: String in worst:
 			print("SHIELD_RIG %s %-13s at most %.4f m off (frame %d), %.2f deg (frame %d)" % [swing["rig"], part, worst[part][0], worst[part][1], worst[part][2], worst[part][3]])
+		print("SHIELD_RIG %s the drawn forearm's roll at the elbow at most %.1f deg (spread %s)" % [swing["rig"], elbow_roll, body.shield_forearm_twist_spread])
 		for i in 90:
 			step.call()
 	quit()

@@ -88,6 +88,36 @@ game. Added to the existing scene, not by rebuilding it (the sword arm's hand ed
   forearm then turns toward `CTRL_shield_face_l` (a helper on the hand control) about its own
   length (Locked Track). Blender's IK solver runs after the chain bones' own constraints, so a
   roll on the IK's own forearm was lost (the shield 6.4 deg off through the whole swing).
+- **The forearm's roll is spread along it** (same day, Kirill: the shield arm's elbow "looks kind
+  of twisted and clipping"). The stance rolls the forearm about 108 deg to turn the shield, and it
+  all sat on `LeftLowerArm`, which the sleeve and elbow pad hang from: the skin was wrung at the
+  elbow, in the game as in Blender. Now the roll is on `forearm_roll_l` (a copy of the lower arm
+  parented to it, with the Locked Track; it carries `LeftHand` and the `Shield`), `LeftLowerArm`
+  stays on the elbow's hinge, and the twist bones copy the roll by where they sit
+  (`lowerarm_twist_02_l` 0.34, `_01_l` 0.67; Copy Rotation, target space Local with Owner
+  Orientation, because their own axes lie 95 deg off the forearm's). `add_shield_arm.py`'s
+  `spread_twist()`; the shield, hand and fingers did not move on any frame (0 mm, 0 deg). The
+  bone is marked deforming (no weights) so the exporter keeps it, and the game reads the
+  forearm's turn from it (`_rig_left_pose`). In the game the solver still rolls the body's
+  `LeftLowerArm` (everything that places the shield reads it); only the drawn copy of the arm and
+  the shadow's get the spread (`WeaponHold.spread_forearm_twist`, the Body's
+  `shield_forearm_twist_spread`, on by default). `shield_rig_check.gd` prints the drawn forearm's
+  roll at the elbow: 112.5 deg with `-- --no-spread`, 0.0 with it.
+- **The shield in the down slash, animated** (same day, Kirill: the recorded counterweight was
+  "just down and up"). The shield arm moves as the chest turns, about a vertical line 10 cm
+  behind the eyes (shoulder, elbow pole and wrist control turned together): 5 deg to the right in
+  the cock (the shield 6 cm toward the middle, 2 up, its face 6.5 deg right: it covers the chest
+  while the sword arm is up), back past the stance from frame 16, ahead of the blade's fastest
+  frames (the body leads), to 9 deg left by frame 25 with the arm drawn in (the shield 10 cm left,
+  10 back, 3.5 down, its face 13 deg left, its top tipped 7 deg forward-left: a lane for the
+  blade), then back over the whole recovery (Kirill: the return over 26-32 was too quick; it is
+  now an even ease, 0.3-0.6 m/s, keys at 83 / 50 / 17 % of the peak on 28 / 31 / 34), 0.6 cm
+  past the stance on frame 36, the stance on 38. Keys on 0, 6, 11, 14, 16, 19, 22, 25, 28, 31,
+  34, 36, 38 on the three left controls, made from `hold` by a script through the
+  Blender MCP (not in a tool file: they are hand-editable keys now, and replaced the recording's).
+  Measured: the blade passes the shield 24 cm away at the nearest (19 cm before), the wrist
+  control at most 0.383 m from the shoulder (the arm 0.565), the elbow's twist 0. In the game
+  (`shield_rig_check.gd -- --frames`) the rig's wrist moves as in Blender. Not judged in game.
 - **What it was keyed from:** the game's arm through the swing before the clip had a shield arm
   (the stance plus the swing's `"shield"` counterweight, 2-4 cm): step 1 records it with
   `shield_arm_from_rig` off. Re-running step 2 on a scene that has the shield arm REPLACES the

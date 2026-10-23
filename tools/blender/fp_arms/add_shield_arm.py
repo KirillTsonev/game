@@ -32,6 +32,11 @@ LOCATION_TOLERANCE = 0.002
 ROTATION_TOLERANCE = 0.002
 FINGER_WORDS = ("Thumb", "Index", "Middle", "Ring", "Little")
 LEFT_CONTROLS = ("CTRL_shoulder_l", "CTRL_hand_l", "CTRL_elbow_l")
+# The forearm's roll lives on its own bone (the shield and the hand hang from it), so the lower arm
+# stays on the elbow's hinge and the twist bones take their share of the roll: the whole roll at
+# the elbow wrung the sleeve there (2026-10-23, 108 deg). spread_twist().
+ROLL_BONE = "forearm_roll_l"
+TWIST_BONES = ("lowerarm_twist_02_l", "lowerarm_twist_01_l")
 
 # The game's axes (+X right, +Y up, -Z ahead) -> Blender's (+X right, +Z up, +Y ahead). As build_scene.py.
 C = Matrix(((1, 0, 0), (0, 0, -1), (0, 1, 0)))
@@ -79,6 +84,7 @@ def main():
     if "CTRL_hand_l" in arm.data.bones:
         # Already there: only the swings' shield arm is keyed again from the recording (hand edits
         # of the shield arm in those actions are replaced; the sword arm's keys are not touched).
+        spread_twist(arm)
         key_swings(arm, src)
         arm.animation_data.action = editing
         scene.frame_set(frame_was)
@@ -183,6 +189,7 @@ def main():
     # The forearm's roll: its X axis turned toward the marker on the hand control, about its own
     # length (which the IK set). So turning CTRL_hand_l about the forearm rolls the forearm and the
     # shield on it, as the game's forearm takes the roll of the hand's turn (WeaponHold.solve_arm).
+    # spread_twist() then moves this roll onto ROLL_BONE.
     roll = pb["LeftLowerArm"].constraints.new('LOCKED_TRACK')
     roll.target, roll.subtarget = arm, "CTRL_shield_face_l"
     roll.track_axis, roll.lock_axis = 'TRACK_X', 'LOCK_Y'
@@ -260,6 +267,7 @@ def main():
     shield.matrix_world = world(to_blender(shield_b), gv(shield_at))
     for o in shield_objects:
         o.hide_select = True
+    spread_twist(arm)
 
     # --- the swings, as the game moved the arm through them ---
     key_swings(arm, src)
@@ -277,6 +285,70 @@ def main():
     bpy.ops.object.mode_set(mode='OBJECT')
     left_meshes = [o.name for o in arm.children if o.type == 'MESH' and o.name.endswith("_left")]
     print("FP_ARMS shield arm added (not saved): meshes %s, controls %s" % (", ".join(left_meshes), ", ".join(LEFT_CONTROLS)))
+
+
+def spread_twist(arm):
+    """Moves the forearm's roll off LeftLowerArm (the bone the elbow's skin hangs from) onto
+    ROLL_BONE: a copy of it parented to it, which takes the roll (the Locked Track toward
+    CTRL_shield_face_l) and carries the hand and the shield. The twist bones along the forearm
+    copy the roll by how far along it they sit (about 1/3 and 2/3), as PlayerBody spreads the
+    game's. ROLL_BONE deforms nothing but is marked deforming, so the exporter keeps it: the game
+    reads the forearm's turn from it. Nothing is re-keyed: the shield, the hand and the fingers
+    stay where they were on every frame. Does nothing if ROLL_BONE is there."""
+    if ROLL_BONE in arm.data.bones:
+        return
+    view_layer = bpy.context.view_layer
+    if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+        bpy.ops.object.mode_set(mode='OBJECT')
+    shield = bpy.data.objects.get("Shield")
+    shield_at = shield.matrix_world.copy() if shield else None
+    view_layer.objects.active = arm
+    arm.select_set(True)
+    bpy.ops.object.mode_set(mode='EDIT')
+    eb = arm.data.edit_bones
+    lower = eb["LeftLowerArm"]
+    roll = eb.new(ROLL_BONE)
+    roll.head, roll.tail = lower.head.copy(), lower.tail.copy()
+    roll.roll = lower.roll
+    roll.parent = lower
+    roll.use_deform = True
+    hand = eb["LeftHand"]
+    connected = hand.use_connect
+    hand.parent = roll
+    hand.use_connect = connected
+    along = lower.tail - lower.head
+    shares = {n: (eb[n].head - lower.head).dot(along) / along.length_squared for n in TWIST_BONES if n in eb}
+    bpy.ops.object.mode_set(mode='POSE')
+    pb = arm.pose.bones
+    for c in list(pb["LeftLowerArm"].constraints):
+        if c.type == 'LOCKED_TRACK':
+            pb["LeftLowerArm"].constraints.remove(c)
+    pb[ROLL_BONE].rotation_mode = 'QUATERNION'
+    track = pb[ROLL_BONE].constraints.new('LOCKED_TRACK')
+    track.target, track.subtarget = arm, "CTRL_shield_face_l"
+    track.track_axis, track.lock_axis = 'TRACK_X', 'LOCK_Y'
+    for name, share in shares.items():
+        # In the twist bone's own axes (its length lies 95 deg off the forearm's).
+        copy = pb[name].constraints.new('COPY_ROTATION')
+        copy.target, copy.subtarget = arm, ROLL_BONE
+        copy.owner_space, copy.target_space = 'LOCAL', 'LOCAL_OWNER_ORIENT'
+        copy.mix_mode = 'REPLACE'
+        copy.influence = share
+    by_name = {c.name: c for c in arm.data.collections}
+    if "Arm" in by_name:
+        by_name["Arm"].assign(arm.data.bones[ROLL_BONE])
+    bpy.ops.object.mode_set(mode='OBJECT')
+    if shield:
+        shield.parent_bone = ROLL_BONE
+        view_layer.update()
+        shield.matrix_world = shield_at
+    view_layer.update()
+    print("FP_ARMS the forearm's roll moved onto %s; twist shares %s" % (ROLL_BONE, ", ".join("%s %.2f" % kv for kv in shares.items())))
+
+
+def forearm_bone(arm):
+    """The bone that carries the forearm's whole roll (and the shield)."""
+    return ROLL_BONE if ROLL_BONE in arm.pose.bones else "LeftLowerArm"
 
 
 def make_tools(arm, src):
@@ -326,7 +398,7 @@ def make_tools(arm, src):
         if tools["hold_forearm"] is not None:
             lower_b = gtransform(at["LeftLowerArm"])[0].normalized()
             wanted = to_blender(lower_b @ stance_lower.inverted()) @ tools["hold_forearm"]
-            now = (arm.matrix_world @ pb["LeftLowerArm"].matrix).to_3x3().normalized()
+            now = (arm.matrix_world @ pb[forearm_bone(arm)].matrix).to_3x3().normalized()
             turned = math.degrees((now @ wanted.inverted()).to_quaternion().angle)
         return ((arm.matrix_world @ pb["LeftLowerArm"].head) - elbow).length, ((arm.matrix_world @ pb["LeftLowerArm"].tail) - wrist).length, turned
 
@@ -344,7 +416,7 @@ def key_swings(arm, src):
     hold = bpy.data.actions["hold"]
     arm.animation_data.action = hold
     scene.frame_set(int(round(hold.frame_range[0])))
-    tools["hold_forearm"] = (arm.matrix_world @ pb["LeftLowerArm"].matrix).to_3x3().normalized()
+    tools["hold_forearm"] = (arm.matrix_world @ pb[forearm_bone(arm)].matrix).to_3x3().normalized()
     grip = [n for n in src["bones"] if n in pb and (n == "LeftHand" or any(w in n for w in FINGER_WORDS) or n.endswith("metacarpal_l"))]
     held = {n: pb[n].rotation_quaternion.copy() for n in grip}
     paths = ["pose.bones[\"%s\"]" % n for n in list(LEFT_CONTROLS) + grip]
